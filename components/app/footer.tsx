@@ -1,218 +1,170 @@
 "use client"
 
+import { Send } from "lucide-react"
 import Image from "next/image"
 import { useState } from "react"
 
 type FooterMode = "normal" | "input"
 type AssistantMode = "bot" | "concierge"
 
-function BackIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      className="h-6 w-6"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2.4"
-    >
-      <path d="m15 18-6-6 6-6" />
-    </svg>
-  )
-}
-
-function MenuIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      className="h-5 w-5"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeWidth="2.2"
-    >
-      <path d="M5 7h14" />
-      <path d="M5 12h14" />
-      <path d="M5 17h14" />
-    </svg>
-  )
-}
-
-function SendIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      className="h-5 w-5"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2.2"
-    >
-      <path d="m22 2-7 20-4-9-9-4Z" />
-      <path d="M22 2 11 13" />
-    </svg>
-  )
-}
-
-function UserIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      className="h-5 w-5"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2.1"
-    >
-      <path d="M20 21a8 8 0 0 0-16 0" />
-      <circle cx="12" cy="8" r="4" />
-    </svg>
-  )
-}
-
 function FooterShape() {
   return (
     <svg
       aria-hidden="true"
-      className="absolute inset-x-0 bottom-0 h-[174px] w-full text-[#f3dfc2]"
+      className="absolute inset-x-0 bottom-0 h-[148px] w-full text-[#f3dfc2]"
       preserveAspectRatio="none"
-      viewBox="0 0 390 174"
+      viewBox="0 0 390 148"
     >
       <path
-        d="M0 42C43 22 92 22 132 42C161 57 168 70 195 70C222 70 229 57 258 42C298 22 347 22 390 42V174H0V42Z"
+        d="M0 34C48 16 98 16 142 34C168 46 176 58 195 58C214 58 222 46 248 34C292 16 342 16 390 34V148H0V34Z"
         fill="currentColor"
       />
     </svg>
   )
 }
 
-function PawButton({ onClick }: { onClick: () => void }) {
+function AssistantToggle({
+  assistantMode,
+  onChange,
+}: {
+  assistantMode: AssistantMode
+  onChange: (mode: AssistantMode) => void
+}) {
   return (
-    <button
-      type="button"
-      aria-label="Open message input"
-      onClick={onClick}
-      className="absolute left-1/2 top-0 flex h-[76px] w-[76px] -translate-x-1/2 -translate-y-[20px] items-center justify-center rounded-full bg-[#fffaf2] shadow-[0_12px_24px_rgba(105,67,31,0.24)] ring-[7px] ring-[#f1ddbf]"
+    <div className="mx-auto grid h-8 w-full max-w-[220px] grid-cols-2 rounded-full bg-[#e8d2b3] p-0.5">
+      <button
+        type="button"
+        onClick={() => onChange("bot")}
+        className={[
+          "rounded-full text-[11px] font-semibold tracking-wide",
+          assistantMode === "bot"
+            ? "bg-[#7a4e22] text-white"
+            : "text-[#8b6848]",
+        ].join(" ")}
+      >
+        Bot
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("concierge")}
+        className={[
+          "rounded-full text-[11px] font-semibold tracking-wide",
+          assistantMode === "concierge"
+            ? "bg-[#7a4e22] text-white"
+            : "text-[#8b6848]",
+        ].join(" ")}
+      >
+        Concierge
+      </button>
+    </div>
+  )
+}
+
+function BottomMenuRow() {
+  return (
+    <nav
+      aria-label="Footer menu"
+      className="grid grid-cols-3 items-center px-1 pt-1 text-[11px] font-semibold tracking-wide text-[#7a5430]"
     >
-      <Image
-        src="/images/icon.svg"
-        alt=""
-        width={50}
-        height={50}
-        className="h-[50px] w-[50px]"
-        priority
-      />
-    </button>
+      <button type="button" className="py-2 text-center">
+        My Page
+      </button>
+      <button type="button" className="py-2 text-center">
+        Quick Menu
+      </button>
+      <button type="button" className="py-2 text-center">
+        Menu
+      </button>
+    </nav>
   )
 }
 
 export default function AppFooter() {
   const [footerMode, setFooterMode] = useState<FooterMode>("normal")
   const [assistantMode, setAssistantMode] = useState<AssistantMode>("bot")
+  const isInputMode = footerMode === "input"
 
-  if (footerMode === "input") {
-    return (
-      <footer className="fixed inset-x-0 bottom-0 z-50 pb-[env(safe-area-inset-bottom,0px)]">
-        <div className="relative h-[108px] w-full">
-          <FooterShape />
-          <div className="relative mx-auto flex h-full max-w-[390px] items-end gap-2 px-4 pb-4">
-            <button
-              type="button"
-              aria-label="Back"
-              onClick={() => setFooterMode("normal")}
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#fffaf2] text-[#6a431f] shadow-sm"
-            >
-              <BackIcon />
-            </button>
-
-            <label className="sr-only" htmlFor="app-message-input">
-              Message
-            </label>
-            <input
-              id="app-message-input"
-              type="text"
-              readOnly
-              placeholder="メッセージ"
-              className="h-12 min-w-0 flex-1 rounded-full bg-[#fffaf2] px-5 text-[15px] font-bold text-[#3f2d1d] shadow-sm placeholder:text-[#a98964]"
-            />
-
-            <button
-              type="button"
-              aria-label="Send"
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#7a4e22] text-white shadow-sm"
-            >
-              <SendIcon />
-            </button>
-          </div>
-        </div>
-      </footer>
-    )
+  function toggleFooterMode() {
+    setFooterMode((current) => (current === "normal" ? "input" : "normal"))
   }
 
   return (
     <footer className="fixed inset-x-0 bottom-0 z-50 pb-[env(safe-area-inset-bottom,0px)]">
-      <div className="relative h-[176px] w-full">
+      <div className="relative mx-auto h-[148px] w-full max-w-[390px]">
         <FooterShape />
-        <PawButton onClick={() => setFooterMode("input")} />
 
-        <div className="relative mx-auto flex h-full max-w-[390px] flex-col px-5 pb-3 pt-[58px]">
-          <div className="grid grid-cols-[1fr_92px_1fr] items-start">
-            <button
-              type="button"
-              className="flex h-12 items-center justify-start gap-2 rounded-full px-1 text-[13px] font-black text-[#6a431f]"
-            >
-              <UserIcon />
-              My Page
-            </button>
+        <button
+          type="button"
+          aria-label={isInputMode ? "Close message input" : "Open message input"}
+          aria-pressed={isInputMode}
+          onClick={toggleFooterMode}
+          className="absolute left-3 top-0 z-20 flex h-[62px] w-[62px] -translate-y-[14px] items-center justify-center rounded-full bg-white shadow-[0_8px_20px_rgba(122,78,34,0.18)] ring-[5px] ring-[#f3dfc2]"
+        >
+          <Image
+            src="/icons/paw.svg"
+            alt=""
+            width={38}
+            height={38}
+            className="h-[38px] w-[38px]"
+            priority
+          />
+        </button>
 
-            <div aria-hidden="true" />
-
-            <button
-              type="button"
-              className="flex h-12 items-center justify-end gap-2 rounded-full px-1 text-[13px] font-black text-[#6a431f]"
-            >
-              Menu
-              <MenuIcon />
-            </button>
-          </div>
-
-          <div className="mx-auto mt-2 grid h-9 w-full max-w-[240px] grid-cols-2 rounded-full bg-[#e5caa8] p-1 shadow-inner">
-            <button
-              type="button"
-              onClick={() => setAssistantMode("bot")}
+        <div className="relative flex h-full flex-col justify-end px-4 pb-1 pt-7">
+          <div className="mb-2 min-h-[72px] [perspective:900px]">
+            <div
               className={[
-                "rounded-full text-[12px] font-black",
-                assistantMode === "bot"
-                  ? "bg-[#7a4e22] text-white shadow-sm"
-                  : "text-[#6a431f]",
+                "relative min-h-[72px] transition-transform duration-300 ease-out",
+                "[transform-style:preserve-3d]",
+                isInputMode ? "[transform:rotateX(180deg)]" : "",
               ].join(" ")}
             >
-              Bot
-            </button>
-            <button
-              type="button"
-              onClick={() => setAssistantMode("concierge")}
-              className={[
-                "rounded-full text-[12px] font-black",
-                assistantMode === "concierge"
-                  ? "bg-[#7a4e22] text-white shadow-sm"
-                  : "text-[#6a431f]",
-              ].join(" ")}
-            >
-              Concierge
-            </button>
+              <div
+                className={[
+                  "absolute inset-0 flex flex-col justify-center",
+                  "[backface-visibility:hidden]",
+                ].join(" ")}
+              >
+                <AssistantToggle
+                  assistantMode={assistantMode}
+                  onChange={setAssistantMode}
+                />
+              </div>
+
+              <div
+                className={[
+                  "absolute inset-0 flex flex-col justify-center gap-2",
+                  "[backface-visibility:hidden] [transform:rotateX(180deg)]",
+                ].join(" ")}
+              >
+                <div className="flex items-center gap-2 pl-[58px]">
+                  <label className="sr-only" htmlFor="app-message-input">
+                    Message
+                  </label>
+                  <input
+                    id="app-message-input"
+                    type="text"
+                    readOnly
+                    placeholder="メッセージを入力"
+                    className="h-10 min-w-0 flex-1 rounded-full bg-[#fffaf2] px-4 text-[14px] text-[#3f2d1d] placeholder:text-[#b0987d]"
+                  />
+                  <button
+                    type="button"
+                    aria-label="Send"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#7a4e22] text-white"
+                  >
+                    <Send className="h-4 w-4" strokeWidth={2.2} />
+                  </button>
+                </div>
+                <AssistantToggle
+                  assistantMode={assistantMode}
+                  onChange={setAssistantMode}
+                />
+              </div>
+            </div>
           </div>
 
-          <p className="mt-auto text-center text-[10px] font-bold text-[#9b7951]">
-            Copyright 2026 PET TAXI
-          </p>
+          <BottomMenuRow />
         </div>
       </div>
     </footer>

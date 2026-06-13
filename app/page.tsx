@@ -23,7 +23,7 @@ export default async function Page() {
     <div className="min-h-dvh bg-[#f1ddbf] text-[#3d2a19]">
       <AppHeader />
 
-      <main className="mx-auto w-full max-w-[390px] px-4 pb-[214px] pt-[134px]">
+      <main className="mx-auto w-full max-w-[390px] px-4 pb-[calc(152px+env(safe-area-inset-bottom,0px))] pt-[134px]">
         <section className="rounded-[30px] bg-[#fffaf2] p-5 shadow-[0_12px_28px_rgba(107,74,38,0.13)]">
           <div className="rounded-[24px] bg-white px-4 py-5 shadow-[inset_0_0_0_1px_rgba(122,78,34,0.08)]">
             <p className="text-[12px] font-black tracking-[0.08em] text-[#9b7951]">
