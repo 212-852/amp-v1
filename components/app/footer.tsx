@@ -1,6 +1,6 @@
 "use client"
 
-import { Grid2X2, Menu, Send, User } from "lucide-react"
+import { Grid2X2, Menu, PawPrint, User } from "lucide-react"
 import Image from "next/image"
 import { useState } from "react"
 
@@ -138,7 +138,12 @@ export default function AppFooter() {
         <PawToggle isInputMode={isInputMode} onClick={toggleFooterMode} />
 
         <div className="relative flex h-full flex-col justify-end px-5 pb-2 pt-7">
-          <div className="relative mb-3 min-h-12 overflow-hidden pl-[74px]">
+          <div
+            className={[
+              "relative ml-[82px] min-h-12 overflow-hidden",
+              isInputMode ? "mb-8" : "mb-3",
+            ].join(" ")}
+          >
             <div
               aria-hidden={isInputMode}
               className={[
@@ -179,15 +184,15 @@ export default function AppFooter() {
                 <button
                   type="button"
                   aria-label="Send"
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#7a4e22] text-white"
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#7a4e22] text-white shadow-[0_6px_14px_rgba(122,78,34,0.22)]"
                 >
-                  <Send className="h-5 w-5" strokeWidth={2.1} />
+                  <PawPrint className="h-6 w-6" strokeWidth={2.2} />
                 </button>
               </div>
             </div>
           </div>
 
-          <BottomMenuRow />
+          {isInputMode ? null : <BottomMenuRow />}
         </div>
       </div>
     </footer>
