@@ -10,14 +10,14 @@ type AssistantMode = "bot" | "concierge"
 const footer_shell_class =
   "relative mx-auto h-[186px] w-full max-w-[430px]"
 
-const pink_paw_button_base_class = [
+const fixed_paw_button_class = [
   "absolute left-3 z-30 flex h-[60px] w-[60px]",
   "items-center justify-center rounded-full border border-[#e5cda8]",
   "bg-white shadow-[0_8px_18px_rgba(122,78,34,0.18)]",
   "ring-[5px] ring-[#f1ddbf]",
 ].join(" ")
 
-const pink_paw_button_normal_class = "top-[-10px]"
+const fixed_paw_button_position_class = "top-0"
 
 function FooterShape() {
   return (
@@ -44,6 +44,9 @@ function PinkPawIcon() {
       height={40}
       className="h-10 w-10 object-contain"
       priority
+      onError={(event) => {
+        event.currentTarget.src = "/images/icon.webp"
+      }}
     />
   )
 }
@@ -62,8 +65,8 @@ function PinkPawButton({
       aria-pressed={isInputMode}
       onClick={onClick}
       className={[
-        pink_paw_button_base_class,
-        pink_paw_button_normal_class,
+        fixed_paw_button_class,
+        fixed_paw_button_position_class,
       ].join(" ")}
     >
       <PinkPawIcon />
@@ -125,7 +128,7 @@ function SendPawButton() {
 
 function MessageInputRow() {
   return (
-    <div className="flex w-full items-center gap-1 px-6">
+    <div className="flex w-full items-center gap-4 px-4">
       <label className="sr-only" htmlFor="app-message-input">
         Message
       </label>
@@ -134,7 +137,7 @@ function MessageInputRow() {
         type="text"
         readOnly
         placeholder="メッセージを入力"
-        className="h-[62px] min-w-0 flex-1 rounded-full bg-[#fffaf2] px-5 text-[16px] font-semibold text-[#3f2d1d] placeholder:text-[#a98964]"
+        className="h-[68px] min-w-0 flex-1 rounded-full bg-[#fffaf2] px-5 text-[16px] font-semibold text-[#3f2d1d] placeholder:text-[#a98964]"
       />
       <SendPawButton />
     </div>
@@ -204,7 +207,7 @@ export default function AppFooter() {
             className={[
               "shrink-0 [perspective:1000px]",
               isInputMode
-                ? "absolute inset-x-0 bottom-[10px] z-10 h-[62px]"
+                ? "absolute inset-x-0 bottom-[8px] z-10 h-[68px]"
                 : "h-[76px]",
             ].join(" ")}
           >
@@ -241,18 +244,14 @@ export default function AppFooter() {
           </div>
 
           {!isInputMode ? (
-            <div className="mt-auto h-[72px] shrink-0">
+            <div className="mt-auto h-[86px] shrink-0">
               <BottomMenuRow />
+              <CopyrightText />
             </div>
           ) : null}
         </div>
       </div>
 
-      {isInputMode ? (
-        <div className="mx-auto w-full max-w-[430px] pb-1 pt-1">
-          <CopyrightText />
-        </div>
-      ) : null}
     </footer>
   )
 }
