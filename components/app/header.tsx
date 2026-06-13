@@ -1,64 +1,54 @@
-const mock_header = {
-  brand: "PET TAXI",
-  page_title: "Home",
-  member_label: "Member",
-  linked_label: "Linked",
-  language_label: "JA",
-  user_initials: "MO",
-}
+import { Bell, Globe, User } from "lucide-react"
 
-function BellIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      className="h-5 w-5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-    >
-      <path d="M18 8a6 6 0 10-12 0c0 7-3 7-3 7h18s-3 0-3-7" />
-      <path d="M13.7 21a2 2 0 01-3.4 0" />
-    </svg>
-  )
+const headerState = {
+  brand: "PET TAXI",
+  pageTitle: "Home",
+  memberLabel: "Member",
+  linkedLabel: "Linked",
+  languageLabel: "JA",
 }
 
 export default function AppHeader() {
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-[#e8d8c3] bg-[#f6e5cf]">
-      <div className="mx-auto flex h-24 w-full max-w-[430px] items-center justify-between gap-3 px-4">
-        <div className="min-w-0">
-          <p className="text-[11px] font-bold tracking-[0.12em] text-[#8b6f47]">
-            {mock_header.brand}
+    <header className="fixed inset-x-0 top-0 z-50 h-[118px] bg-[#f3dfc2] text-[#3f2d1d] shadow-[0_1px_0_rgba(118,82,42,0.12)]">
+      <div className="flex h-full w-full items-end justify-between gap-3 px-5 pb-5 pt-[calc(18px+env(safe-area-inset-top,0px))]">
+        <div className="min-w-0 pb-1">
+          <p className="text-[12px] font-black uppercase tracking-[0.14em] text-[#7a4e22]">
+            {headerState.brand}
           </p>
-          <h1 className="truncate text-lg font-bold text-[#3d2f24]">
-            {mock_header.page_title}
+          <h1 className="mt-1 truncate text-[28px] font-black leading-none tracking-normal text-[#3b2818]">
+            {headerState.pageTitle}
           </h1>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1.5">
-          <span className="rounded-full border border-[#d9c5a8] bg-white px-2 py-0.5 text-[10px] font-bold text-[#6f573d]">
-            {mock_header.member_label}
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+          <span className="rounded-full bg-[#8a6538] px-2.5 py-1 text-[11px] font-bold leading-none text-white shadow-sm">
+            {headerState.memberLabel}
           </span>
-          <span className="rounded-full border border-[#d9c5a8] bg-[#fff8ef] px-2 py-0.5 text-[10px] font-bold text-[#6f573d]">
-            {mock_header.linked_label}
+          <span className="rounded-full bg-[#fdf8ef] px-2.5 py-1 text-[11px] font-bold leading-none text-[#7a4e22] shadow-sm ring-1 ring-[#d8bd95]">
+            {headerState.linkedLabel}
           </span>
           <button
             type="button"
             aria-label="Notifications"
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-[#d9c5a8] bg-white text-[#5c4835]"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-[#fff9f0] text-[#6a431f] shadow-sm ring-1 ring-[#d8bd95]"
           >
-            <BellIcon />
+            <Bell className="h-[18px] w-[18px]" strokeWidth={2} />
           </button>
-          <span className="px-1 text-xs font-bold text-[#6f573d]">
-            {mock_header.language_label}
-          </span>
+          <button
+            type="button"
+            aria-label={`Language ${headerState.languageLabel}`}
+            className="flex h-9 items-center gap-1 rounded-full bg-[#fff9f0] px-2.5 text-[#6a431f] shadow-sm ring-1 ring-[#d8bd95]"
+          >
+            <Globe className="h-[16px] w-[16px]" strokeWidth={2} />
+            <span className="text-[11px] font-black">{headerState.languageLabel}</span>
+          </button>
           <button
             type="button"
             aria-label="User profile"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-[#8b6f47] text-xs font-bold text-white"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-[#7a4e22] text-white shadow-sm"
           >
-            {mock_header.user_initials}
+            <User className="h-[18px] w-[18px]" strokeWidth={2} />
           </button>
         </div>
       </div>
