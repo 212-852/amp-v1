@@ -1,6 +1,6 @@
 "use client"
 
-import { Grid2X2, Menu, PawPrint, User } from "lucide-react"
+import { Menu, MessageCircle, PawPrint, User } from "lucide-react"
 import Image from "next/image"
 import { useState } from "react"
 
@@ -63,12 +63,12 @@ function AssistantToggle({
   onChange: (mode: AssistantMode) => void
 }) {
   return (
-    <div className="grid h-10 w-full max-w-[252px] grid-cols-2 rounded-full bg-[#e7cfad] p-1">
+    <div className="grid h-11 w-full max-w-[284px] grid-cols-2 rounded-full bg-[#e7cfad] p-1">
       <button
         type="button"
         onClick={() => onChange("bot")}
         className={[
-          "rounded-full text-[14px] font-semibold transition-opacity duration-150",
+          "rounded-full text-[17px] font-semibold transition-opacity duration-150",
           assistantMode === "bot"
             ? "bg-[#7a4e22] text-white"
             : "text-[#7a5430]",
@@ -80,7 +80,7 @@ function AssistantToggle({
         type="button"
         onClick={() => onChange("concierge")}
         className={[
-          "rounded-full text-[14px] font-semibold transition-opacity duration-150",
+          "rounded-full text-[17px] font-semibold transition-opacity duration-150",
           assistantMode === "concierge"
             ? "bg-[#7a4e22] text-white"
             : "text-[#7a5430]",
@@ -94,7 +94,8 @@ function AssistantToggle({
 
 function MessageInputRow() {
   return (
-    <div className="flex w-full items-center gap-2">
+    <div className="flex w-full items-center gap-3">
+      <div className="h-16 w-16 shrink-0" aria-hidden="true" />
       <label className="sr-only" htmlFor="app-message-input">
         Message
       </label>
@@ -103,14 +104,17 @@ function MessageInputRow() {
         type="text"
         readOnly
         placeholder="メッセージを入力"
-        className="h-14 min-w-0 flex-1 rounded-full bg-[#fffaf2] px-5 text-[15px] font-semibold text-[#3f2d1d] shadow-sm placeholder:text-[#a98964]"
+        className="h-14 min-w-0 flex-1 rounded-full bg-[#fffaf2] px-4 text-[16px] font-semibold text-[#3f2d1d] shadow-sm placeholder:text-[#a98964]"
       />
       <button
         type="button"
         aria-label="Send"
-        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#7a4e22] text-white shadow-[0_7px_16px_rgba(122,78,34,0.24)]"
+        className="flex h-[52px] w-[52px] shrink-0 items-center justify-center bg-transparent p-0 text-[#7a4e22]"
       >
-        <PawPrint className="h-7 w-7" strokeWidth={2.2} />
+        <PawPrint
+          className="h-[52px] w-[52px] fill-[#7a4e22] drop-shadow-[0_4px_8px_rgba(122,78,34,0.18)]"
+          strokeWidth={0}
+        />
       </button>
     </div>
   )
@@ -119,7 +123,7 @@ function MessageInputRow() {
 function BottomMenuRow() {
   const items = [
     { label: "My Page", icon: User },
-    { label: "Quick Menu", icon: Grid2X2 },
+    { label: "Quick Menu", icon: MessageCircle },
     { label: "Menu", icon: Menu },
   ]
 
@@ -169,8 +173,13 @@ export default function AppFooter() {
         <FooterShape />
         <PinkPawButton isInputMode={isInputMode} onClick={toggleFooterMode} />
 
-        <div className="relative flex h-full flex-col justify-end px-5 pb-5 pt-8">
-          <div className="relative mb-4 ml-[82px] min-h-14 overflow-hidden [perspective:900px]">
+        <div className="relative flex h-full flex-col justify-end px-4 pb-5 pt-8">
+          <div
+            className={[
+              "relative min-h-16 overflow-hidden [perspective:900px]",
+              isInputMode ? "mb-4" : "mb-2 ml-[82px]",
+            ].join(" ")}
+          >
             <div
               aria-hidden={isInputMode}
               className={[
