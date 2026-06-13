@@ -18,7 +18,6 @@ const pink_paw_button_base_class = [
 ].join(" ")
 
 const pink_paw_button_normal_class = "top-[-10px]"
-const pink_paw_button_input_class = "top-auto bottom-[35px]"
 
 function FooterShape() {
   return (
@@ -37,21 +36,14 @@ function FooterShape() {
 }
 
 function PinkPawIcon() {
-  const [icon_src, set_icon_src] = useState("/images/icon.svg")
-
   return (
     <Image
-      src={icon_src}
+      src="/images/icon.svg"
       alt=""
       width={40}
       height={40}
       className="h-10 w-10 object-contain"
       priority
-      onError={() => {
-        set_icon_src((current) =>
-          current === "/images/icon.svg" ? "/images/icon.webp" : current,
-        )
-      }}
     />
   )
 }
@@ -71,7 +63,7 @@ function PinkPawButton({
       onClick={onClick}
       className={[
         pink_paw_button_base_class,
-        isInputMode ? pink_paw_button_input_class : pink_paw_button_normal_class,
+        pink_paw_button_normal_class,
       ].join(" ")}
     >
       <PinkPawIcon />
@@ -133,7 +125,8 @@ function SendPawButton() {
 
 function MessageInputRow() {
   return (
-    <div className="flex w-full items-center gap-2">
+    <div className="flex w-full items-center gap-3 px-6">
+      <div className="h-[60px] w-[44px] shrink-0" aria-hidden="true" />
       <label className="sr-only" htmlFor="app-message-input">
         Message
       </label>
@@ -142,7 +135,7 @@ function MessageInputRow() {
         type="text"
         readOnly
         placeholder="メッセージを入力"
-        className="h-[62px] min-w-0 flex-1 rounded-full bg-[#fffaf2] px-4 text-[16px] font-semibold text-[#3f2d1d] placeholder:text-[#a98964]"
+        className="h-[64px] min-w-0 flex-1 rounded-full bg-[#fffaf2] px-5 text-[16px] font-semibold text-[#3f2d1d] placeholder:text-[#a98964]"
       />
       <SendPawButton />
     </div>
@@ -204,28 +197,20 @@ export default function AppFooter() {
 
         <div
           className={[
-            "relative flex h-full flex-col px-6 pb-2",
+            "relative flex h-full flex-col px-0 pb-1",
             isInputMode ? "justify-end" : "pt-[50px]",
           ].join(" ")}
         >
-          <div
-            className={[
-              "shrink-0 [perspective:1000px]",
-              isInputMode ? "h-[62px]" : "h-[76px]",
-            ].join(" ")}
-          >
-            <div
-              className={[
-                "relative h-full w-full",
-                "transition-transform duration-[280ms] ease-in-out",
-                "[transform-style:preserve-3d]",
-                isInputMode ? "[transform:rotateY(180deg)]" : "",
-              ].join(" ")}
-            >
+          <div className="h-[76px] shrink-0 [perspective:1000px]">
+            <div className="relative h-full w-full [transform-style:preserve-3d]">
               <div
                 className={[
                   "absolute inset-0 flex items-start justify-center pt-7",
-                  "[backface-visibility:hidden]",
+                  "transition-[transform,opacity] duration-[280ms] ease-out",
+                  "[backface-visibility:hidden] [transform-style:preserve-3d]",
+                  isInputMode
+                    ? "pointer-events-none opacity-0 [transform:translateX(-38px)_rotateY(-58deg)]"
+                    : "opacity-100 [transform:translateX(0)_rotateY(0deg)]",
                 ].join(" ")}
               >
                 <AssistantToggle
@@ -236,13 +221,15 @@ export default function AppFooter() {
 
               <div
                 className={[
-                  "absolute inset-0 flex items-center justify-end",
-                  "[backface-visibility:hidden] [transform:rotateY(180deg)]",
+                  "absolute inset-0 flex items-end",
+                  "transition-[transform,opacity] duration-[280ms] ease-out",
+                  "[backface-visibility:hidden] [transform-style:preserve-3d]",
+                  isInputMode
+                    ? "opacity-100 [transform:translateX(0)_rotateY(0deg)]"
+                    : "pointer-events-none opacity-0 [transform:translateX(38px)_rotateY(58deg)]",
                 ].join(" ")}
               >
-                <div className="w-full pl-[72px]">
-                  <MessageInputRow />
-                </div>
+                <MessageInputRow />
               </div>
             </div>
           </div>
