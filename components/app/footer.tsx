@@ -17,7 +17,7 @@ const fixed_paw_button_class = [
   "ring-[5px] ring-[#f1ddbf]",
 ].join(" ")
 
-const fixed_paw_button_position_class = "top-[10px]"
+const fixed_paw_button_position_class = "top-[15px]"
 
 function FooterShape() {
   return (
@@ -163,9 +163,9 @@ function BottomMenuRow() {
           <button
             key={item.label}
             type="button"
-            className="flex flex-col items-center justify-center gap-1 py-1 text-[17px] font-semibold leading-tight"
+            className="flex flex-col items-center justify-center gap-1 py-1 text-[16px] font-semibold leading-tight"
           >
-            <Icon className="h-7 w-7" strokeWidth={2} />
+            <Icon className="h-[25px] w-[25px]" strokeWidth={2} />
             <span className="text-center">{item.label}</span>
           </button>
         )
@@ -207,14 +207,14 @@ export default function AppFooter() {
             className={[
               "shrink-0 [perspective:1000px]",
               isInputMode
-                ? "absolute inset-x-0 bottom-[8px] z-10 h-[68px]"
+                ? "absolute inset-x-0 bottom-[13px] z-10 h-[68px]"
                 : "h-[76px]",
             ].join(" ")}
           >
             <div className="relative h-full w-full [transform-style:preserve-3d]">
               <div
                 className={[
-                  "absolute inset-0 flex items-start justify-center pt-7",
+                  "absolute inset-0 flex items-start justify-center pt-[33px]",
                   "transition-[transform,opacity] duration-[280ms] ease-out",
                   "[backface-visibility:hidden] [transform-style:preserve-3d]",
                   isInputMode
