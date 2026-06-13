@@ -240,3 +240,22 @@ Support:
 * Driver
 * Concierge
 * Bot
+
+* Keep code simple
+* Keep file names simple
+* Do not create complex file names
+* Use directories to express responsibility
+
+Good:
+
+admin/user/list.ts
+admin/user/detail.ts
+admin/driver/list.ts
+admin/driver/detail.ts
+
+Bad:
+
+admin_user_list.ts
+admin_user_detail.ts
+admin_driver_list.ts
+admin_driver_detail.ts

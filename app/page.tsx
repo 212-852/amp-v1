@@ -1,31 +1,52 @@
-import { redirect } from "next/navigation"
+import AppFooter from "@/components/app/footer"
+import AppHeader from "@/components/app/header"
 
-import Footer from "@/components/layout/footer"
-import Header from "@/components/layout/header"
-import { resolveAmpRoute } from "@/core/route/rules"
+const quick_menu_items = [
+  "Check availability",
+  "Request a ride",
+  "Review reservation",
+  "Share meetup location",
+  "Cancel reservation",
+]
 
-export default async function Page() {
-  const route = await resolveAmpRoute()
-
-  if (route.path !== "/") {
-    redirect(route.path)
-  }
-
+export default function Page() {
   return (
-    <div className="flex min-h-dvh flex-col bg-neutral-50 text-neutral-900">
-      <Header title={route.title} />
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 px-4 py-8">
-        <section className="rounded-lg border border-neutral-200 bg-white p-6">
-          <p className="text-sm font-medium text-neutral-500">AMP Core</p>
-          <h1 className="mt-2 text-2xl font-semibold text-neutral-950">
-            App Top
-          </h1>
-          <p className="mt-3 text-sm leading-6 text-neutral-600">
-            Shared entrance routing is active for the app domain.
+    <div className="min-h-dvh bg-[#f6e5cf] text-[#3d2f24]">
+      <AppHeader />
+
+      <main className="mx-auto w-full max-w-[430px] px-4 pb-[calc(168px+env(safe-area-inset-bottom,0px))] pt-24">
+        <section className="rounded-[28px] border border-[#eadccc] bg-white p-5">
+          <h2 className="text-base font-bold text-[#3d2f24]">Quick Menu</h2>
+          <p className="mt-1 text-sm text-[#8a7359]">
+            Choose an action to continue.
           </p>
+
+          <div className="mt-4 grid gap-3">
+            {quick_menu_items.map((label) => (
+              <button
+                key={label}
+                type="button"
+                className="h-12 w-full rounded-[20px] bg-[#8b6f47] text-sm font-bold text-white"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="mt-4 rounded-[28px] border border-[#eadccc] bg-white p-5">
+          <h2 className="text-base font-bold text-[#3d2f24]">Meetup support</h2>
+          <p className="mt-2 text-sm leading-6 text-[#8a7359]">
+            Share your meetup location and keep your driver updated during
+            pickup. This section is a UI placeholder only.
+          </p>
+          <div className="mt-4 rounded-[20px] border border-dashed border-[#dcc9ae] bg-[#fff8ef] px-4 py-6 text-center text-sm text-[#9a8468]">
+            Meetup location card area
+          </div>
         </section>
       </main>
-      <Footer />
+
+      <AppFooter />
     </div>
   )
 }
