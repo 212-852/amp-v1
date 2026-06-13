@@ -69,17 +69,17 @@ export default function AppHeader() {
             <button
               type="button"
               aria-label="Notifications"
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-[#fffaf2] text-[#6a431f] ring-1 ring-[#d8bd95]"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-[#fffaf2] text-[#6a431f] ring-1 ring-[#d8bd95]"
             >
-              <Bell className="h-7 w-7" strokeWidth={2} />
+              <Bell className="h-[25px] w-[25px]" strokeWidth={2} />
             </button>
             <button
               type="button"
               aria-label={`Language ${header_state.language_label}`}
-              className="flex h-10 items-center gap-1.5 rounded-full bg-[#fffaf2] px-2.5 text-[#6a431f] ring-1 ring-[#d8bd95]"
+              className="flex h-9 items-center gap-1 rounded-full bg-[#fffaf2] px-2.5 text-[#6a431f] ring-1 ring-[#d8bd95]"
             >
-              <Globe2 className="h-7 w-7" strokeWidth={2} />
-              <span className="text-[17px] font-semibold leading-none">
+              <Globe2 className="h-[25px] w-[25px]" strokeWidth={2} />
+              <span className="text-[16px] font-semibold leading-none">
                 {header_state.language_label}
               </span>
             </button>
@@ -92,9 +92,9 @@ export default function AppHeader() {
             <button
               type="button"
               aria-label="User profile"
-              className="flex h-11 w-11 items-center justify-center rounded-full bg-[#7a4e22] text-white"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-[#7a4e22] text-white"
             >
-              <User className="h-5 w-5" strokeWidth={2} />
+              <User className="h-[18px] w-[18px]" strokeWidth={2} />
             </button>
           </div>
         </div>
