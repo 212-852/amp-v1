@@ -11,19 +11,19 @@ function FooterShape() {
   return (
     <svg
       aria-hidden="true"
-      className="absolute inset-x-0 bottom-0 h-[158px] w-full text-[#f1ddbf]"
+      className="absolute inset-x-0 bottom-0 h-[166px] w-full text-[#f1ddbf]"
       preserveAspectRatio="none"
-      viewBox="0 0 390 158"
+      viewBox="0 0 390 166"
     >
       <path
-        d="M0 36C45 18 94 17 137 36C166 49 174 62 195 62C216 62 224 49 253 36C296 17 345 18 390 36V158H0V36Z"
+        d="M0 40C45 19 94 18 137 40C166 54 174 67 195 67C216 67 224 54 253 40C296 18 345 19 390 40V166H0V40Z"
         fill="currentColor"
       />
     </svg>
   )
 }
 
-function PawToggle({
+function PinkPawButton({
   isInputMode,
   onClick,
 }: {
@@ -37,9 +37,9 @@ function PawToggle({
       aria-pressed={isInputMode}
       onClick={onClick}
       className={[
-        "absolute left-4 top-[-12px] z-20 flex h-[64px] w-[64px]",
-        "items-center justify-center rounded-full",
-        "border border-[#e5cda8] bg-white shadow-[0_8px_18px_rgba(122,78,34,0.18)]",
+        "absolute left-4 top-[-12px] z-20 flex h-16 w-16",
+        "items-center justify-center rounded-full border border-[#e5cda8]",
+        "bg-white shadow-[0_8px_18px_rgba(122,78,34,0.18)]",
         "ring-[5px] ring-[#f1ddbf]",
       ].join(" ")}
     >
@@ -92,6 +92,30 @@ function AssistantToggle({
   )
 }
 
+function MessageInputRow() {
+  return (
+    <div className="flex w-full items-center gap-2">
+      <label className="sr-only" htmlFor="app-message-input">
+        Message
+      </label>
+      <input
+        id="app-message-input"
+        type="text"
+        readOnly
+        placeholder="メッセージを入力"
+        className="h-14 min-w-0 flex-1 rounded-full bg-[#fffaf2] px-5 text-[15px] font-semibold text-[#3f2d1d] shadow-sm placeholder:text-[#a98964]"
+      />
+      <button
+        type="button"
+        aria-label="Send"
+        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#7a4e22] text-white shadow-[0_7px_16px_rgba(122,78,34,0.24)]"
+      >
+        <PawPrint className="h-7 w-7" strokeWidth={2.2} />
+      </button>
+    </div>
+  )
+}
+
 function BottomMenuRow() {
   const items = [
     { label: "My Page", icon: User },
@@ -122,6 +146,14 @@ function BottomMenuRow() {
   )
 }
 
+function CopyrightText() {
+  return (
+    <p className="absolute inset-x-0 bottom-1 text-center text-[10px] font-medium text-[#9b7951]/70">
+      © 2026 Wan Da Nya Inc.
+    </p>
+  )
+}
+
 export default function AppFooter() {
   const [footerMode, setFooterMode] = useState<FooterMode>("normal")
   const [assistantMode, setAssistantMode] = useState<AssistantMode>("bot")
@@ -133,27 +165,21 @@ export default function AppFooter() {
 
   return (
     <footer className="fixed inset-x-0 bottom-0 z-50 pb-[env(safe-area-inset-bottom)]">
-      <div className="relative mx-auto h-[158px] w-full max-w-[390px]">
+      <div className="relative mx-auto h-[166px] w-full max-w-[430px]">
         <FooterShape />
-        <PawToggle isInputMode={isInputMode} onClick={toggleFooterMode} />
+        <PinkPawButton isInputMode={isInputMode} onClick={toggleFooterMode} />
 
-        <div className="relative flex h-full flex-col justify-end px-5 pb-2 pt-7">
-          <div
-            className={[
-              "relative overflow-hidden",
-              isInputMode
-                ? "mb-8 ml-[78px] min-h-14"
-                : "mb-4 ml-[82px] min-h-12",
-            ].join(" ")}
-          >
+        <div className="relative flex h-full flex-col justify-end px-5 pb-5 pt-8">
+          <div className="relative mb-4 ml-[82px] min-h-14 overflow-hidden [perspective:900px]">
             <div
               aria-hidden={isInputMode}
               className={[
                 "absolute inset-0 flex items-center justify-start",
-                "transition-[transform,opacity] duration-200 ease-out",
+                "transition-[transform,opacity] duration-[260ms] ease-out",
+                "[backface-visibility:hidden] [transform-style:preserve-3d]",
                 isInputMode
-                  ? "-translate-x-8 opacity-0 pointer-events-none"
-                  : "translate-x-0 opacity-100",
+                  ? "pointer-events-none opacity-0 [transform:translateX(-42px)_rotateY(-76deg)]"
+                  : "opacity-100 [transform:translateX(0)_rotateY(0deg)]",
               ].join(" ")}
             >
               <AssistantToggle
@@ -166,36 +192,21 @@ export default function AppFooter() {
               aria-hidden={!isInputMode}
               className={[
                 "absolute inset-0 flex items-center",
-                "transition-[transform,opacity] duration-200 ease-out",
+                "transition-[transform,opacity] duration-[260ms] ease-out",
+                "[backface-visibility:hidden] [transform-style:preserve-3d]",
                 isInputMode
-                  ? "translate-x-0 opacity-100"
-                  : "translate-x-8 opacity-0 pointer-events-none",
+                  ? "opacity-100 [transform:translateX(0)_rotateY(0deg)]"
+                  : "pointer-events-none opacity-0 [transform:translateX(42px)_rotateY(76deg)]",
               ].join(" ")}
             >
-              <div className="flex w-full items-center gap-2">
-                <label className="sr-only" htmlFor="app-message-input">
-                  Message
-                </label>
-                <input
-                  id="app-message-input"
-                  type="text"
-                  readOnly
-                  placeholder="メッセージを入力"
-                  className="h-14 min-w-0 flex-1 rounded-full bg-[#fffaf2] px-5 text-[15px] font-semibold text-[#3f2d1d] shadow-sm placeholder:text-[#a98964]"
-                />
-                <button
-                  type="button"
-                  aria-label="Send"
-                  className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#7a4e22] text-white shadow-[0_7px_16px_rgba(122,78,34,0.24)]"
-                >
-                  <PawPrint className="h-7 w-7" strokeWidth={2.2} />
-                </button>
-              </div>
+              <MessageInputRow />
             </div>
           </div>
 
           {isInputMode ? null : <BottomMenuRow />}
         </div>
+
+        <CopyrightText />
       </div>
     </footer>
   )
