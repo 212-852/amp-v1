@@ -10,12 +10,15 @@ type AssistantMode = "bot" | "concierge"
 const footer_shell_class =
   "relative mx-auto h-[186px] w-full max-w-[430px]"
 
-const pink_paw_button_class = [
-  "absolute left-3 top-[-10px] z-30 flex h-[60px] w-[60px]",
+const pink_paw_button_base_class = [
+  "absolute left-3 z-30 flex h-[60px] w-[60px]",
   "items-center justify-center rounded-full border border-[#e5cda8]",
   "bg-white shadow-[0_8px_18px_rgba(122,78,34,0.18)]",
   "ring-[5px] ring-[#f1ddbf]",
 ].join(" ")
+
+const pink_paw_button_normal_class = "top-[-10px]"
+const pink_paw_button_input_class = "top-auto bottom-[35px]"
 
 function FooterShape() {
   return (
@@ -66,7 +69,10 @@ function PinkPawButton({
       aria-label={isInputMode ? "Close message input" : "Open message input"}
       aria-pressed={isInputMode}
       onClick={onClick}
-      className={pink_paw_button_class}
+      className={[
+        pink_paw_button_base_class,
+        isInputMode ? pink_paw_button_input_class : pink_paw_button_normal_class,
+      ].join(" ")}
     >
       <PinkPawIcon />
     </button>
@@ -115,10 +121,10 @@ function SendPawButton() {
     <button
       type="button"
       aria-label="Send"
-      className="flex h-[58px] w-[52px] shrink-0 items-center justify-center bg-transparent p-0 text-[#7a4e22] shadow-none"
+      className="flex h-[62px] w-[56px] shrink-0 items-center justify-center bg-transparent p-0 text-[#7a4e22] shadow-none"
     >
       <PawPrint
-        className="h-[52px] w-[52px] fill-[#7a4e22] text-[#7a4e22]"
+        className="h-[56px] w-[56px] fill-[#7a4e22] text-[#7a4e22]"
         strokeWidth={3}
       />
     </button>
@@ -136,7 +142,7 @@ function MessageInputRow() {
         type="text"
         readOnly
         placeholder="メッセージを入力"
-        className="h-[58px] min-w-0 flex-1 rounded-full bg-[#fffaf2] px-4 text-[16px] font-semibold text-[#3f2d1d] placeholder:text-[#a98964]"
+        className="h-[62px] min-w-0 flex-1 rounded-full bg-[#fffaf2] px-4 text-[16px] font-semibold text-[#3f2d1d] placeholder:text-[#a98964]"
       />
       <SendPawButton />
     </div>
@@ -175,7 +181,7 @@ function BottomMenuRow() {
 
 function CopyrightText() {
   return (
-    <p className="py-2 text-center text-[10px] font-medium text-[#9b7951]/70">
+    <p className="text-center text-[10px] font-medium leading-none text-[#9b7951]/70">
       © 2026 Wan Da Nya Inc.
     </p>
   )
@@ -196,8 +202,18 @@ export default function AppFooter() {
         <FooterShape />
         <PinkPawButton isInputMode={isInputMode} onClick={toggleFooterMode} />
 
-        <div className="relative flex h-full flex-col px-6 pb-2 pt-[50px]">
-          <div className="h-[76px] shrink-0 [perspective:1000px]">
+        <div
+          className={[
+            "relative flex h-full flex-col px-6 pb-2",
+            isInputMode ? "justify-end" : "pt-[50px]",
+          ].join(" ")}
+        >
+          <div
+            className={[
+              "shrink-0 [perspective:1000px]",
+              isInputMode ? "h-[62px]" : "h-[76px]",
+            ].join(" ")}
+          >
             <div
               className={[
                 "relative h-full w-full",
@@ -220,18 +236,23 @@ export default function AppFooter() {
 
               <div
                 className={[
-                  "absolute inset-0 flex items-start justify-start",
+                  "absolute inset-0 flex items-center justify-end",
                   "[backface-visibility:hidden] [transform:rotateY(180deg)]",
                 ].join(" ")}
               >
-                <div className="w-full max-w-[calc(100%-4px)]">
+                <div className="w-full pl-[72px]">
                   <MessageInputRow />
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="mt-auto h-[72px] shrink-0">
+          <div
+            className={[
+              "shrink-0",
+              isInputMode ? "mt-3" : "mt-auto h-[72px]",
+            ].join(" ")}
+          >
             {isInputMode ? <CopyrightText /> : <BottomMenuRow />}
           </div>
         </div>
