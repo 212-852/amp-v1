@@ -113,10 +113,10 @@ function SendPawButton() {
     <button
       type="button"
       aria-label="Send"
-      className="flex h-[62px] w-[56px] shrink-0 items-center justify-center bg-transparent p-0 text-[#7a4e22] shadow-none"
+      className="flex h-[62px] w-[58px] shrink-0 items-center justify-center bg-transparent p-0 text-[#7a4e22] shadow-none"
     >
       <PawPrint
-        className="h-[56px] w-[56px] fill-[#7a4e22] text-[#7a4e22]"
+        className="h-[58px] w-[58px] fill-[#7a4e22] text-[#7a4e22]"
         strokeWidth={3}
       />
     </button>
@@ -125,8 +125,7 @@ function SendPawButton() {
 
 function MessageInputRow() {
   return (
-    <div className="flex w-full items-center gap-3 px-6">
-      <div className="h-[60px] w-[44px] shrink-0" aria-hidden="true" />
+    <div className="flex w-full items-center gap-1 px-6">
       <label className="sr-only" htmlFor="app-message-input">
         Message
       </label>
@@ -135,7 +134,7 @@ function MessageInputRow() {
         type="text"
         readOnly
         placeholder="メッセージを入力"
-        className="h-[64px] min-w-0 flex-1 rounded-full bg-[#fffaf2] px-5 text-[16px] font-semibold text-[#3f2d1d] placeholder:text-[#a98964]"
+        className="h-[62px] min-w-0 flex-1 rounded-full bg-[#fffaf2] px-5 text-[16px] font-semibold text-[#3f2d1d] placeholder:text-[#a98964]"
       />
       <SendPawButton />
     </div>
@@ -197,11 +196,18 @@ export default function AppFooter() {
 
         <div
           className={[
-            "relative flex h-full flex-col px-0 pb-1",
-            isInputMode ? "justify-end" : "pt-[50px]",
+            "relative flex h-full flex-col",
+            isInputMode ? "" : "pt-[50px] pb-1",
           ].join(" ")}
         >
-          <div className="h-[76px] shrink-0 [perspective:1000px]">
+          <div
+            className={[
+              "shrink-0 [perspective:1000px]",
+              isInputMode
+                ? "absolute inset-x-0 bottom-[10px] z-10 h-[62px]"
+                : "h-[76px]",
+            ].join(" ")}
+          >
             <div className="relative h-full w-full [transform-style:preserve-3d]">
               <div
                 className={[
@@ -221,7 +227,7 @@ export default function AppFooter() {
 
               <div
                 className={[
-                  "absolute inset-0 flex items-end",
+                  "absolute inset-0 flex items-center",
                   "transition-[transform,opacity] duration-[280ms] ease-out",
                   "[backface-visibility:hidden] [transform-style:preserve-3d]",
                   isInputMode
@@ -234,16 +240,19 @@ export default function AppFooter() {
             </div>
           </div>
 
-          <div
-            className={[
-              "shrink-0",
-              isInputMode ? "mt-3" : "mt-auto h-[72px]",
-            ].join(" ")}
-          >
-            {isInputMode ? <CopyrightText /> : <BottomMenuRow />}
-          </div>
+          {!isInputMode ? (
+            <div className="mt-auto h-[72px] shrink-0">
+              <BottomMenuRow />
+            </div>
+          ) : null}
         </div>
       </div>
+
+      {isInputMode ? (
+        <div className="mx-auto w-full max-w-[430px] pb-1 pt-1">
+          <CopyrightText />
+        </div>
+      ) : null}
     </footer>
   )
 }
