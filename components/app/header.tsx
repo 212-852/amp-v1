@@ -7,7 +7,7 @@ const mock_auth = {
 
 const header_state = {
   brand: "PET TAXI",
-  breadcrumb: "ホーム",
+  breadcrumb: "Home",
   language_label: "JA",
   user_name: mock_auth.is_logged_in ? "Test User" : "Guest",
 }
@@ -37,18 +37,18 @@ function LinkPill({ label }: { label: string }) {
 
 export default function AppHeader() {
   return (
-    <header className="fixed inset-x-0 top-0 z-50 h-[120px] bg-[#f1ddbf] text-[#3d2a19]">
-      <div className="mx-auto flex h-full w-full max-w-[430px] items-start justify-between gap-3 px-7 pb-3 pt-[env(safe-area-inset-top)]">
-        <div className="min-w-0 pt-3">
-          <h1 className="text-[26px] font-semibold leading-none text-[#3d2a19]">
+    <header className="fixed inset-x-0 top-0 z-50 h-[108px] bg-[#f1ddbf] text-[#3d2a19]">
+      <div className="mx-auto flex h-full w-full max-w-[430px] items-start justify-between gap-2 px-6 pb-2 pt-[calc(6px+env(safe-area-inset-top,0px))]">
+        <div className="min-w-0 pt-1">
+          <h1 className="text-[22px] font-semibold leading-none text-[#3d2a19]">
             {header_state.brand}
           </h1>
-          <p className="mt-1.5 text-[12px] font-medium leading-none text-[#8b6848]">
+          <p className="mt-1 text-[11px] font-medium leading-none text-[#8b6848]">
             {header_state.breadcrumb}
           </p>
         </div>
 
-        <div className="flex min-w-[210px] flex-col items-end pt-2">
+        <div className="flex min-w-[210px] flex-col items-end pt-0.5">
           <div className="flex items-center justify-end gap-1.5">
             {!mock_auth.is_logged_in ? (
               <>
@@ -85,7 +85,7 @@ export default function AppHeader() {
             </button>
           </div>
 
-          <div className="mt-1.5 flex items-center gap-2">
+          <div className="mt-1 flex items-center gap-2">
             <span className="max-w-[120px] truncate text-[16px] font-semibold leading-none text-[#6a431f]">
               {header_state.user_name}
             </span>

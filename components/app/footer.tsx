@@ -7,16 +7,19 @@ import { useState } from "react"
 type FooterMode = "normal" | "input"
 type AssistantMode = "bot" | "concierge"
 
-function FooterShape() {
+function FooterShape({ tall = false }: { tall?: boolean }) {
   return (
     <svg
       aria-hidden="true"
-      className="absolute inset-x-0 bottom-0 h-[166px] w-full text-[#f1ddbf]"
+      className={[
+        "absolute inset-x-0 bottom-0 w-full text-[#f1ddbf]",
+        tall ? "h-[198px]" : "h-[178px]",
+      ].join(" ")}
       preserveAspectRatio="none"
-      viewBox="0 0 390 166"
+      viewBox="0 0 390 198"
     >
       <path
-        d="M0 40C45 19 94 18 137 40C166 54 174 67 195 67C216 67 224 54 253 40C296 18 345 19 390 40V166H0V40Z"
+        d="M0 40C45 19 94 18 137 40C166 54 174 67 195 67C216 67 224 54 253 40C296 18 345 19 390 40V198H0V40Z"
         fill="currentColor"
       />
     </svg>
@@ -37,18 +40,18 @@ function PinkPawButton({
       aria-pressed={isInputMode}
       onClick={onClick}
       className={[
-        "absolute left-4 top-[-12px] z-20 flex h-16 w-16",
-        "items-center justify-center rounded-full border border-[#e5cda8]",
-        "bg-white shadow-[0_8px_18px_rgba(122,78,34,0.18)]",
-        "ring-[5px] ring-[#f1ddbf]",
+        "absolute left-3 top-0 z-30 flex h-[60px] w-[60px]",
+        "-translate-y-[10px] items-center justify-center rounded-full",
+        "border border-[#e5cda8] bg-white",
+        "shadow-[0_8px_18px_rgba(122,78,34,0.18)] ring-[5px] ring-[#f1ddbf]",
       ].join(" ")}
     >
       <Image
-        src="/images/icon.svg"
+        src="/icons/paw.svg"
         alt=""
-        width={42}
-        height={42}
-        className="h-[42px] w-[42px]"
+        width={40}
+        height={40}
+        className="h-10 w-10"
         priority
       />
     </button>
@@ -63,12 +66,12 @@ function AssistantToggle({
   onChange: (mode: AssistantMode) => void
 }) {
   return (
-    <div className="grid h-11 w-full max-w-[284px] grid-cols-2 rounded-full bg-[#e7cfad] p-1">
+    <div className="mx-auto grid h-12 w-full max-w-[320px] grid-cols-2 rounded-full bg-[#e7cfad] p-1">
       <button
         type="button"
         onClick={() => onChange("bot")}
         className={[
-          "rounded-full text-[17px] font-semibold transition-opacity duration-150",
+          "rounded-full text-[18px] font-semibold leading-none",
           assistantMode === "bot"
             ? "bg-[#7a4e22] text-white"
             : "text-[#7a5430]",
@@ -80,7 +83,7 @@ function AssistantToggle({
         type="button"
         onClick={() => onChange("concierge")}
         className={[
-          "rounded-full text-[17px] font-semibold transition-opacity duration-150",
+          "rounded-full text-[18px] font-semibold leading-none",
           assistantMode === "concierge"
             ? "bg-[#7a4e22] text-white"
             : "text-[#7a5430]",
@@ -92,10 +95,24 @@ function AssistantToggle({
   )
 }
 
+function SendPawButton() {
+  return (
+    <button
+      type="button"
+      aria-label="Send"
+      className="flex h-[60px] w-[52px] shrink-0 items-center justify-center bg-transparent p-0 text-[#7a4e22]"
+    >
+      <PawPrint
+        className="h-12 w-12 fill-[#7a4e22] text-[#7a4e22]"
+        strokeWidth={2.8}
+      />
+    </button>
+  )
+}
+
 function MessageInputRow() {
   return (
-    <div className="flex w-full items-center gap-3">
-      <div className="h-16 w-16 shrink-0" aria-hidden="true" />
+    <div className="flex w-full items-center gap-1 px-0.5">
       <label className="sr-only" htmlFor="app-message-input">
         Message
       </label>
@@ -104,18 +121,9 @@ function MessageInputRow() {
         type="text"
         readOnly
         placeholder="メッセージを入力"
-        className="h-14 min-w-0 flex-1 rounded-full bg-[#fffaf2] px-4 text-[16px] font-semibold text-[#3f2d1d] shadow-sm placeholder:text-[#a98964]"
+        className="h-[60px] min-w-0 flex-1 rounded-full bg-[#fffaf2] px-4 text-[16px] font-semibold text-[#3f2d1d] placeholder:text-[#a98964]"
       />
-      <button
-        type="button"
-        aria-label="Send"
-        className="flex h-[52px] w-[52px] shrink-0 items-center justify-center bg-transparent p-0 text-[#7a4e22]"
-      >
-        <PawPrint
-          className="h-[52px] w-[52px] fill-[#7a4e22] drop-shadow-[0_4px_8px_rgba(122,78,34,0.18)]"
-          strokeWidth={0}
-        />
-      </button>
+      <SendPawButton />
     </div>
   )
 }
@@ -130,7 +138,7 @@ function BottomMenuRow() {
   return (
     <nav
       aria-label="Footer menu"
-      className="flex w-full items-end justify-between px-1 text-[#7a5430]"
+      className="grid w-full grid-cols-3 gap-2 px-1 text-[#7a5430]"
     >
       {items.map((item) => {
         const Icon = item.icon
@@ -139,10 +147,10 @@ function BottomMenuRow() {
           <button
             key={item.label}
             type="button"
-            className="flex min-w-[76px] flex-col items-center justify-center gap-1 py-1.5 text-[11px] font-semibold"
+            className="flex flex-col items-center justify-center gap-1 py-2 text-[11px] font-semibold"
           >
             <Icon className="h-5 w-5" strokeWidth={2} />
-            <span>{item.label}</span>
+            <span className="text-center leading-tight">{item.label}</span>
           </button>
         )
       })}
@@ -152,7 +160,7 @@ function BottomMenuRow() {
 
 function CopyrightText() {
   return (
-    <p className="absolute inset-x-0 bottom-1 text-center text-[10px] font-medium text-[#9b7951]/70">
+    <p className="py-1 text-center text-[10px] font-medium text-[#9b7951]">
       © 2026 Wan Da Nya Inc.
     </p>
   )
@@ -169,53 +177,62 @@ export default function AppFooter() {
 
   return (
     <footer className="fixed inset-x-0 bottom-0 z-50 pb-[env(safe-area-inset-bottom)]">
-      <div className="relative mx-auto h-[166px] w-full max-w-[430px]">
-        <FooterShape />
+      <div
+        className={[
+          "relative mx-auto w-full max-w-[430px]",
+          isInputMode ? "h-[198px]" : "h-[178px]",
+        ].join(" ")}
+      >
+        <FooterShape tall={isInputMode} />
         <PinkPawButton isInputMode={isInputMode} onClick={toggleFooterMode} />
 
-        <div className="relative flex h-full flex-col justify-end px-4 pb-5 pt-8">
-          <div
-            className={[
-              "relative min-h-16 overflow-hidden [perspective:900px]",
-              isInputMode ? "mb-4" : "mb-2 ml-[82px]",
-            ].join(" ")}
-          >
+        <div className="relative flex h-full flex-col px-2 pb-1 pt-[52px]">
+          <div className="min-h-[108px] flex-1 [perspective:1000px]">
             <div
-              aria-hidden={isInputMode}
               className={[
-                "absolute inset-0 flex items-center justify-start",
-                "transition-[transform,opacity] duration-[260ms] ease-out",
-                "[backface-visibility:hidden] [transform-style:preserve-3d]",
-                isInputMode
-                  ? "pointer-events-none opacity-0 [transform:translateX(-42px)_rotateY(-76deg)]"
-                  : "opacity-100 [transform:translateX(0)_rotateY(0deg)]",
+                "relative h-full transition-transform duration-300 ease-in-out",
+                "[transform-style:preserve-3d]",
+                isInputMode ? "[transform:rotateY(180deg)]" : "",
               ].join(" ")}
             >
+              <div
+                className={[
+                  "absolute inset-0 flex flex-col justify-start gap-3",
+                  "[backface-visibility:hidden]",
+                ].join(" ")}
+              >
+                <AssistantToggle
+                  assistantMode={assistantMode}
+                  onChange={setAssistantMode}
+                />
+                <BottomMenuRow />
+              </div>
+
+              <div
+                className={[
+                  "absolute inset-0 flex flex-col justify-start",
+                  "[backface-visibility:hidden] [transform:rotateY(180deg)]",
+                ].join(" ")}
+              >
+                <MessageInputRow />
+              </div>
+            </div>
+          </div>
+
+          {isInputMode ? (
+            <div className="mt-auto flex flex-col gap-2">
+              <CopyrightText />
               <AssistantToggle
                 assistantMode={assistantMode}
                 onChange={setAssistantMode}
               />
             </div>
-
-            <div
-              aria-hidden={!isInputMode}
-              className={[
-                "absolute inset-0 flex items-center",
-                "transition-[transform,opacity] duration-[260ms] ease-out",
-                "[backface-visibility:hidden] [transform-style:preserve-3d]",
-                isInputMode
-                  ? "opacity-100 [transform:translateX(0)_rotateY(0deg)]"
-                  : "pointer-events-none opacity-0 [transform:translateX(42px)_rotateY(76deg)]",
-              ].join(" ")}
-            >
-              <MessageInputRow />
+          ) : (
+            <div className="mt-auto">
+              <CopyrightText />
             </div>
-          </div>
-
-          {isInputMode ? null : <BottomMenuRow />}
+          )}
         </div>
-
-        <CopyrightText />
       </div>
     </footer>
   )
