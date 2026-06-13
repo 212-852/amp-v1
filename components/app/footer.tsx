@@ -26,6 +26,26 @@ function FooterShape() {
   )
 }
 
+function PinkPawIcon() {
+  const [icon_src, set_icon_src] = useState("/images/icon.svg")
+
+  return (
+    <Image
+      src={icon_src}
+      alt=""
+      width={40}
+      height={40}
+      className="h-10 w-10 object-contain"
+      priority
+      onError={() => {
+        set_icon_src((current) =>
+          current === "/images/icon.svg" ? "/images/icon.webp" : current,
+        )
+      }}
+    />
+  )
+}
+
 function PinkPawButton({
   isInputMode,
   onClick,
@@ -46,14 +66,7 @@ function PinkPawButton({
         "ring-[5px] ring-[#f1ddbf]",
       ].join(" ")}
     >
-      <Image
-        src="/icons/paw.svg"
-        alt=""
-        width={40}
-        height={40}
-        className="h-10 w-10"
-        priority
-      />
+      <PinkPawIcon />
     </button>
   )
 }
