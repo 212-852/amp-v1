@@ -11,12 +11,12 @@ function FooterShape() {
   return (
     <svg
       aria-hidden="true"
-      className="absolute inset-x-0 bottom-0 h-[150px] w-full text-[#f1ddbf]"
+      className="absolute inset-x-0 bottom-0 h-[158px] w-full text-[#f1ddbf]"
       preserveAspectRatio="none"
-      viewBox="0 0 390 150"
+      viewBox="0 0 390 158"
     >
       <path
-        d="M0 32C45 16 94 15 137 32C166 44 174 56 195 56C216 56 224 44 253 32C296 15 345 16 390 32V150H0V32Z"
+        d="M0 36C45 18 94 17 137 36C166 49 174 62 195 62C216 62 224 49 253 36C296 17 345 18 390 36V158H0V36Z"
         fill="currentColor"
       />
     </svg>
@@ -37,18 +37,18 @@ function PawToggle({
       aria-pressed={isInputMode}
       onClick={onClick}
       className={[
-        "absolute left-4 top-[-14px] z-20 flex h-[62px] w-[62px]",
+        "absolute left-4 top-[-12px] z-20 flex h-[64px] w-[64px]",
         "items-center justify-center rounded-full",
-        "bg-white shadow-[0_8px_18px_rgba(122,78,34,0.16)]",
+        "border border-[#e5cda8] bg-white shadow-[0_8px_18px_rgba(122,78,34,0.18)]",
         "ring-[5px] ring-[#f1ddbf]",
       ].join(" ")}
     >
       <Image
         src="/images/icon.svg"
         alt=""
-        width={40}
-        height={40}
-        className="h-10 w-10"
+        width={42}
+        height={42}
+        className="h-[42px] w-[42px]"
         priority
       />
     </button>
@@ -63,12 +63,12 @@ function AssistantToggle({
   onChange: (mode: AssistantMode) => void
 }) {
   return (
-    <div className="grid h-9 w-full max-w-[218px] grid-cols-2 rounded-full bg-[#e7cfad] p-1">
+    <div className="grid h-10 w-full max-w-[252px] grid-cols-2 rounded-full bg-[#e7cfad] p-1">
       <button
         type="button"
         onClick={() => onChange("bot")}
         className={[
-          "rounded-full text-[12px] font-semibold transition-opacity duration-150",
+          "rounded-full text-[14px] font-semibold transition-opacity duration-150",
           assistantMode === "bot"
             ? "bg-[#7a4e22] text-white"
             : "text-[#7a5430]",
@@ -80,7 +80,7 @@ function AssistantToggle({
         type="button"
         onClick={() => onChange("concierge")}
         className={[
-          "rounded-full text-[12px] font-semibold transition-opacity duration-150",
+          "rounded-full text-[14px] font-semibold transition-opacity duration-150",
           assistantMode === "concierge"
             ? "bg-[#7a4e22] text-white"
             : "text-[#7a5430]",
@@ -102,7 +102,7 @@ function BottomMenuRow() {
   return (
     <nav
       aria-label="Footer menu"
-      className="grid grid-cols-3 items-end text-[#7a5430]"
+      className="flex w-full items-end justify-between px-1 text-[#7a5430]"
     >
       {items.map((item) => {
         const Icon = item.icon
@@ -111,9 +111,9 @@ function BottomMenuRow() {
           <button
             key={item.label}
             type="button"
-            className="flex flex-col items-center justify-center gap-1 py-1.5 text-[11px] font-semibold"
+            className="flex min-w-[76px] flex-col items-center justify-center gap-1 py-1.5 text-[11px] font-semibold"
           >
-            <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
+            <Icon className="h-5 w-5" strokeWidth={2} />
             <span>{item.label}</span>
           </button>
         )
@@ -133,21 +133,23 @@ export default function AppFooter() {
 
   return (
     <footer className="fixed inset-x-0 bottom-0 z-50 pb-[env(safe-area-inset-bottom)]">
-      <div className="relative mx-auto h-[150px] w-full max-w-[390px]">
+      <div className="relative mx-auto h-[158px] w-full max-w-[390px]">
         <FooterShape />
         <PawToggle isInputMode={isInputMode} onClick={toggleFooterMode} />
 
         <div className="relative flex h-full flex-col justify-end px-5 pb-2 pt-7">
           <div
             className={[
-              "relative ml-[82px] min-h-12 overflow-hidden",
-              isInputMode ? "mb-8" : "mb-3",
+              "relative overflow-hidden",
+              isInputMode
+                ? "mb-8 ml-[78px] min-h-14"
+                : "mb-4 ml-[82px] min-h-12",
             ].join(" ")}
           >
             <div
               aria-hidden={isInputMode}
               className={[
-                "absolute inset-0 flex items-center justify-center",
+                "absolute inset-0 flex items-center justify-start",
                 "transition-[transform,opacity] duration-200 ease-out",
                 isInputMode
                   ? "-translate-x-8 opacity-0 pointer-events-none"
@@ -179,14 +181,14 @@ export default function AppFooter() {
                   type="text"
                   readOnly
                   placeholder="メッセージを入力"
-                  className="h-11 min-w-0 flex-1 rounded-full bg-[#fffaf2] px-4 text-[14px] font-medium text-[#3f2d1d] placeholder:text-[#a98964]"
+                  className="h-14 min-w-0 flex-1 rounded-full bg-[#fffaf2] px-5 text-[15px] font-semibold text-[#3f2d1d] shadow-sm placeholder:text-[#a98964]"
                 />
                 <button
                   type="button"
                   aria-label="Send"
-                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#7a4e22] text-white shadow-[0_6px_14px_rgba(122,78,34,0.22)]"
+                  className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#7a4e22] text-white shadow-[0_7px_16px_rgba(122,78,34,0.24)]"
                 >
-                  <PawPrint className="h-6 w-6" strokeWidth={2.2} />
+                  <PawPrint className="h-7 w-7" strokeWidth={2.2} />
                 </button>
               </div>
             </div>
