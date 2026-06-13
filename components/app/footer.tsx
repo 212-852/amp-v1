@@ -1,6 +1,6 @@
 "use client"
 
-import { Send } from "lucide-react"
+import { Grid2X2, Menu, Send, User } from "lucide-react"
 import Image from "next/image"
 import { useState } from "react"
 
@@ -11,15 +11,47 @@ function FooterShape() {
   return (
     <svg
       aria-hidden="true"
-      className="absolute inset-x-0 bottom-0 h-[148px] w-full text-[#f3dfc2]"
+      className="absolute inset-x-0 bottom-0 h-[150px] w-full text-[#f1ddbf]"
       preserveAspectRatio="none"
-      viewBox="0 0 390 148"
+      viewBox="0 0 390 150"
     >
       <path
-        d="M0 34C48 16 98 16 142 34C168 46 176 58 195 58C214 58 222 46 248 34C292 16 342 16 390 34V148H0V34Z"
+        d="M0 32C45 16 94 15 137 32C166 44 174 56 195 56C216 56 224 44 253 32C296 15 345 16 390 32V150H0V32Z"
         fill="currentColor"
       />
     </svg>
+  )
+}
+
+function PawToggle({
+  isInputMode,
+  onClick,
+}: {
+  isInputMode: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={isInputMode ? "Close message input" : "Open message input"}
+      aria-pressed={isInputMode}
+      onClick={onClick}
+      className={[
+        "absolute left-4 top-[-14px] z-20 flex h-[62px] w-[62px]",
+        "items-center justify-center rounded-full",
+        "bg-white shadow-[0_8px_18px_rgba(122,78,34,0.16)]",
+        "ring-[5px] ring-[#f1ddbf]",
+      ].join(" ")}
+    >
+      <Image
+        src="/images/icon.svg"
+        alt=""
+        width={40}
+        height={40}
+        className="h-10 w-10"
+        priority
+      />
+    </button>
   )
 }
 
@@ -31,15 +63,15 @@ function AssistantToggle({
   onChange: (mode: AssistantMode) => void
 }) {
   return (
-    <div className="mx-auto grid h-8 w-full max-w-[220px] grid-cols-2 rounded-full bg-[#e8d2b3] p-0.5">
+    <div className="grid h-9 w-full max-w-[218px] grid-cols-2 rounded-full bg-[#e7cfad] p-1">
       <button
         type="button"
         onClick={() => onChange("bot")}
         className={[
-          "rounded-full text-[11px] font-semibold tracking-wide",
+          "rounded-full text-[12px] font-semibold transition-opacity duration-150",
           assistantMode === "bot"
             ? "bg-[#7a4e22] text-white"
-            : "text-[#8b6848]",
+            : "text-[#7a5430]",
         ].join(" ")}
       >
         Bot
@@ -48,10 +80,10 @@ function AssistantToggle({
         type="button"
         onClick={() => onChange("concierge")}
         className={[
-          "rounded-full text-[11px] font-semibold tracking-wide",
+          "rounded-full text-[12px] font-semibold transition-opacity duration-150",
           assistantMode === "concierge"
             ? "bg-[#7a4e22] text-white"
-            : "text-[#8b6848]",
+            : "text-[#7a5430]",
         ].join(" ")}
       >
         Concierge
@@ -61,20 +93,31 @@ function AssistantToggle({
 }
 
 function BottomMenuRow() {
+  const items = [
+    { label: "My Page", icon: User },
+    { label: "Quick Menu", icon: Grid2X2 },
+    { label: "Menu", icon: Menu },
+  ]
+
   return (
     <nav
       aria-label="Footer menu"
-      className="grid grid-cols-3 items-center px-1 pt-1 text-[11px] font-semibold tracking-wide text-[#7a5430]"
+      className="grid grid-cols-3 items-end text-[#7a5430]"
     >
-      <button type="button" className="py-2 text-center">
-        My Page
-      </button>
-      <button type="button" className="py-2 text-center">
-        Quick Menu
-      </button>
-      <button type="button" className="py-2 text-center">
-        Menu
-      </button>
+      {items.map((item) => {
+        const Icon = item.icon
+
+        return (
+          <button
+            key={item.label}
+            type="button"
+            className="flex flex-col items-center justify-center gap-1 py-1.5 text-[11px] font-semibold"
+          >
+            <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
+            <span>{item.label}</span>
+          </button>
+        )
+      })}
     </nav>
   )
 }
@@ -89,77 +132,57 @@ export default function AppFooter() {
   }
 
   return (
-    <footer className="fixed inset-x-0 bottom-0 z-50 pb-[env(safe-area-inset-bottom,0px)]">
-      <div className="relative mx-auto h-[148px] w-full max-w-[390px]">
+    <footer className="fixed inset-x-0 bottom-0 z-50 pb-[env(safe-area-inset-bottom)]">
+      <div className="relative mx-auto h-[150px] w-full max-w-[390px]">
         <FooterShape />
+        <PawToggle isInputMode={isInputMode} onClick={toggleFooterMode} />
 
-        <button
-          type="button"
-          aria-label={isInputMode ? "Close message input" : "Open message input"}
-          aria-pressed={isInputMode}
-          onClick={toggleFooterMode}
-          className="absolute left-3 top-0 z-20 flex h-[62px] w-[62px] -translate-y-[14px] items-center justify-center rounded-full bg-white shadow-[0_8px_20px_rgba(122,78,34,0.18)] ring-[5px] ring-[#f3dfc2]"
-        >
-          <Image
-            src="/icons/paw.svg"
-            alt=""
-            width={38}
-            height={38}
-            className="h-[38px] w-[38px]"
-            priority
-          />
-        </button>
-
-        <div className="relative flex h-full flex-col justify-end px-4 pb-1 pt-7">
-          <div className="mb-2 min-h-[72px] [perspective:900px]">
+        <div className="relative flex h-full flex-col justify-end px-5 pb-2 pt-7">
+          <div className="relative mb-3 min-h-12 overflow-hidden pl-[74px]">
             <div
+              aria-hidden={isInputMode}
               className={[
-                "relative min-h-[72px] transition-transform duration-300 ease-out",
-                "[transform-style:preserve-3d]",
-                isInputMode ? "[transform:rotateX(180deg)]" : "",
+                "absolute inset-0 flex items-center justify-center",
+                "transition-[transform,opacity] duration-200 ease-out",
+                isInputMode
+                  ? "-translate-x-8 opacity-0 pointer-events-none"
+                  : "translate-x-0 opacity-100",
               ].join(" ")}
             >
-              <div
-                className={[
-                  "absolute inset-0 flex flex-col justify-center",
-                  "[backface-visibility:hidden]",
-                ].join(" ")}
-              >
-                <AssistantToggle
-                  assistantMode={assistantMode}
-                  onChange={setAssistantMode}
-                />
-              </div>
+              <AssistantToggle
+                assistantMode={assistantMode}
+                onChange={setAssistantMode}
+              />
+            </div>
 
-              <div
-                className={[
-                  "absolute inset-0 flex flex-col justify-center gap-2",
-                  "[backface-visibility:hidden] [transform:rotateX(180deg)]",
-                ].join(" ")}
-              >
-                <div className="flex items-center gap-2 pl-[58px]">
-                  <label className="sr-only" htmlFor="app-message-input">
-                    Message
-                  </label>
-                  <input
-                    id="app-message-input"
-                    type="text"
-                    readOnly
-                    placeholder="メッセージを入力"
-                    className="h-10 min-w-0 flex-1 rounded-full bg-[#fffaf2] px-4 text-[14px] text-[#3f2d1d] placeholder:text-[#b0987d]"
-                  />
-                  <button
-                    type="button"
-                    aria-label="Send"
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#7a4e22] text-white"
-                  >
-                    <Send className="h-4 w-4" strokeWidth={2.2} />
-                  </button>
-                </div>
-                <AssistantToggle
-                  assistantMode={assistantMode}
-                  onChange={setAssistantMode}
+            <div
+              aria-hidden={!isInputMode}
+              className={[
+                "absolute inset-0 flex items-center",
+                "transition-[transform,opacity] duration-200 ease-out",
+                isInputMode
+                  ? "translate-x-0 opacity-100"
+                  : "translate-x-8 opacity-0 pointer-events-none",
+              ].join(" ")}
+            >
+              <div className="flex w-full items-center gap-2">
+                <label className="sr-only" htmlFor="app-message-input">
+                  Message
+                </label>
+                <input
+                  id="app-message-input"
+                  type="text"
+                  readOnly
+                  placeholder="メッセージを入力"
+                  className="h-11 min-w-0 flex-1 rounded-full bg-[#fffaf2] px-4 text-[14px] font-medium text-[#3f2d1d] placeholder:text-[#a98964]"
                 />
+                <button
+                  type="button"
+                  aria-label="Send"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#7a4e22] text-white"
+                >
+                  <Send className="h-5 w-5" strokeWidth={2.1} />
+                </button>
               </div>
             </div>
           </div>
