@@ -17,7 +17,7 @@ const fixed_paw_button_class = [
   "ring-[5px] ring-[#f1ddbf]",
 ].join(" ")
 
-const fixed_paw_button_position_class = "top-[5px]"
+const fixed_paw_button_position_class = "top-[10px]"
 
 function FooterShape() {
   return (
