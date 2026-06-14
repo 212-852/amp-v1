@@ -99,6 +99,7 @@ type PostgrestError = {
   code?: string
   message?: string
   details?: string
+  hint?: string
 }
 
 type VisitorUpsertBody = {
@@ -438,6 +439,22 @@ const supabaseVisitorStore: VisitorStore = {
     }
     const result = await upsertVisitorRow(config, body)
     let visitor = result.visitor
+    let upsertError = result.error
+
+    await send_auth_debug(
+      "visitor_upsert_result",
+      {
+        pathname: debug.pathname,
+        visitor_uuid,
+        source_channel: context.source_channel,
+        data: result.visitor,
+        error_code: result.error?.code ?? null,
+        error_message: result.error?.message ?? null,
+        error_details: result.error?.details ?? null,
+        error_hint: result.error?.hint ?? null,
+      },
+      debug.request_id,
+    )
 
     if (!visitor && result.error?.code === "42703") {
       await send_auth_debug(
@@ -458,10 +475,45 @@ const supabaseVisitorStore: VisitorStore = {
         user_uuid: null,
       })
       visitor = fallbackResult.visitor
+      upsertError = fallbackResult.error
+
+      await send_auth_debug(
+        "visitor_upsert_result",
+        {
+          pathname: debug.pathname,
+          visitor_uuid,
+          source_channel: context.source_channel,
+          data: fallbackResult.visitor,
+          error_code: fallbackResult.error?.code ?? null,
+          error_message: fallbackResult.error?.message ?? null,
+          error_details: fallbackResult.error?.details ?? null,
+          error_hint: fallbackResult.error?.hint ?? null,
+          fallback_without_debug_columns: true,
+        },
+        debug.request_id,
+      )
     }
 
     if (!visitor) {
-      throw new Error("Failed to upsert visitor record.")
+      await send_auth_debug(
+        "visitor_upsert_failed",
+        {
+          pathname: debug.pathname,
+          visitor_uuid,
+          source_channel: context.source_channel,
+          error_code: upsertError?.code ?? null,
+          error_message: upsertError?.message ?? null,
+          error_details: upsertError?.details ?? null,
+          error_hint: upsertError?.hint ?? null,
+        },
+        debug.request_id,
+      )
+
+      throw new Error(
+        `Failed to upsert visitor record: ${upsertError?.code ?? "unknown"} ${
+          upsertError?.message ?? "No PostgREST error returned"
+        }`,
+      )
     }
 
     return visitor
@@ -533,7 +585,7 @@ const runtimeVisitorStore: VisitorStore = {
     }
   },
 
-  async upsertVisitor(context, visitor_uuid, _debug) {
+  async upsertVisitor(context, visitor_uuid) {
     const visitor: VisitorRecord = {
       visitor_uuid,
       user_uuid: null,
