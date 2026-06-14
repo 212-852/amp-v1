@@ -497,6 +497,7 @@ async function resolveVisitorRecord(
 
       await send_auth_debug("visitor_reused", {
         visitor_uuid: existingVisitor.visitor_uuid,
+        created_new_visitor: false,
       })
 
       return {
@@ -521,10 +522,12 @@ async function resolveVisitorRecord(
     await send_auth_debug("visitor_repaired", {
       old_cookie_value: cookie_value,
       visitor_uuid: visitor.visitor_uuid,
+      created_new_visitor: false,
     })
   } else {
     await send_auth_debug("visitor_created", {
       visitor_uuid: visitor.visitor_uuid,
+      created_new_visitor: true,
     })
   }
 
@@ -533,7 +536,7 @@ async function resolveVisitorRecord(
     action: cookie_found ? "repair" : "create",
     cookie_found,
     cookie_value: cookie_found ? cookie_value : null,
-    created_new_visitor: true,
+    created_new_visitor: !cookie_found,
   }
 }
 
@@ -629,7 +632,6 @@ async function resolve_session_context_core(
     resolved_visitor_uuid: session.visitor_uuid,
     visitor_action: visitorResolution.action,
     created_new_visitor: visitorResolution.created_new_visitor,
-    request_cache_hit: false,
     secure_cookie: visitorCookieOptions.secure,
     user_uuid: session.user_uuid,
     source_channel: session.source_channel,
