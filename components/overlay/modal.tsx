@@ -1,9 +1,29 @@
 import {
-  getOverlayDurationClass,
+  getOverlayDurationClassForAnimation,
   getOverlayPanelTransform,
   overlay_ease_class,
 } from "@/components/overlay/animations"
 import type { OverlayPhase, OverlayRule } from "@/components/overlay/types"
+
+function getModalSizeClass(rule: OverlayRule) {
+  if (rule.placement === "bottom") {
+    return "w-full max-w-[390px]"
+  }
+
+  if (rule.placement === "left") {
+    return "w-full max-w-[340px]"
+  }
+
+  return "w-full max-w-[420px]"
+}
+
+function getModalRadiusClass(rule: OverlayRule) {
+  if (rule.placement === "bottom") {
+    return "rounded-[28px]"
+  }
+
+  return "rounded-[28px]"
+}
 
 export default function OverlayModal({
   rule,
@@ -20,11 +40,13 @@ export default function OverlayModal({
       aria-modal="true"
       aria-labelledby="overlay-title"
       className={[
-        "w-[calc(100%-32px)] max-w-[420px] border border-[#e5e5e5]",
-        "rounded-[28px] bg-white p-5 text-[#111111]",
+        getModalSizeClass(rule),
+        "border border-[#e5e5e5]",
+        getModalRadiusClass(rule),
+        "bg-white p-5 text-[#111111]",
         "shadow-[0_18px_50px_rgba(0,0,0,0.12)]",
         "transition-[opacity,transform]",
-        getOverlayDurationClass(phase),
+        getOverlayDurationClassForAnimation(rule.animation, phase),
         overlay_ease_class,
         getOverlayPanelTransform(rule.animation, phase),
       ].join(" ")}

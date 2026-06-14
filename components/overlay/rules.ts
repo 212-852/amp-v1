@@ -1,6 +1,7 @@
 import type {
   OverlayAnimation,
   OverlayContext,
+  OverlayPlacement,
   OverlayRule,
   OverlayType,
 } from "@/components/overlay/types"
@@ -8,9 +9,17 @@ import type {
 const animationByType: Record<OverlayType, OverlayAnimation> = {
   my_page: "from_bottom",
   menu: "from_left",
-  link: "from_bottom_compact",
-  notice: "from_bottom_compact",
-  language: "from_bottom_compact",
+  link: "from_top",
+  notice: "from_top",
+  language: "from_top",
+}
+
+const placementByType: Record<OverlayType, OverlayPlacement> = {
+  my_page: "bottom",
+  menu: "left",
+  link: "top",
+  notice: "top",
+  language: "top",
 }
 
 const contentByType: Record<
@@ -55,6 +64,7 @@ export function resolveOverlayRule(context: OverlayContext): OverlayRule {
     type: context.type,
     source: context.source,
     animation: animationByType[context.type],
+    placement: placementByType[context.type],
     ...content,
   }
 }

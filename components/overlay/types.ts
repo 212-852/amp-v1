@@ -18,8 +18,10 @@ export type OverlayContext = OverlayRequest & {
 
 export type OverlayAnimation =
   | "from_bottom"
-  | "from_bottom_compact"
+  | "from_top"
   | "from_left"
+
+export type OverlayPlacement = "bottom" | "left" | "top"
 
 export type OverlayRule = {
   type: OverlayType
@@ -27,6 +29,7 @@ export type OverlayRule = {
   title: string
   description: string
   animation: OverlayAnimation
+  placement: OverlayPlacement
   items: string[]
 }
 

@@ -85,6 +85,7 @@ function AssistantToggle({
 }) {
   const isConcierge = assistantMode === "concierge"
   const [is_sliding, set_is_sliding] = useState(false)
+  const [is_pressed, set_is_pressed] = useState(false)
 
   useEffect(() => {
     if (!is_sliding) {
@@ -93,7 +94,7 @@ function AssistantToggle({
 
     const timer = window.setTimeout(() => {
       set_is_sliding(false)
-    }, 320)
+    }, 520)
 
     return () => {
       window.clearTimeout(timer)
@@ -110,25 +111,47 @@ function AssistantToggle({
   }
 
   return (
-    <div className="relative mx-auto grid h-12 w-full max-w-[340px] grid-cols-2 overflow-hidden rounded-full bg-[#E6D4B8] p-1">
-      <span
+    <div
+      className={[
+        "relative mx-auto grid h-12 w-full max-w-[340px] translate-y-[2px]",
+        "grid-cols-2 overflow-hidden rounded-full bg-[#E6D4B8] p-1",
+        "transition-transform duration-[90ms] ease-out",
+        is_pressed ? "scale-[0.985]" : "scale-100",
+      ].join(" ")}
+      onPointerDown={() => set_is_pressed(true)}
+      onPointerLeave={() => set_is_pressed(false)}
+      onPointerCancel={() => set_is_pressed(false)}
+      onPointerUp={() => set_is_pressed(false)}
+    >
+      <div
         aria-hidden="true"
         className={[
-          "absolute bottom-1 left-1 top-1 w-[calc(50%-4px)] rounded-full bg-[#A06A2A]",
-          "shadow-[0_4px_14px_rgba(160,106,42,0.22)]",
-          "transition-[transform,box-shadow] duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
+          "absolute bottom-1 left-1 top-1 w-[calc(50%-4px)]",
+          "transition-transform duration-[520ms] ease-[cubic-bezier(0.16,1.25,0.32,1)]",
           isConcierge ? "translate-x-full" : "translate-x-0",
-          is_sliding ? "scale-x-[1.06] scale-y-[0.96]" : "scale-x-100 scale-y-100",
         ].join(" ")}
-      />
+      >
+        <span
+          className={[
+            "block h-full w-full rounded-full bg-[#A06A2A]",
+            "shadow-[0_8px_18px_rgba(126,78,32,0.22)]",
+            "origin-center",
+            is_sliding
+              ? "animate-[bot-concierge-thumb-squish_520ms_cubic-bezier(0.16,1.25,0.32,1)]"
+              : "",
+          ].join(" ")}
+        />
+      </div>
       <button
         type="button"
         onClick={() => handleChange("bot")}
         aria-pressed={assistantMode === "bot"}
         className={[
           "relative z-10 rounded-full text-[19px] font-semibold leading-none",
-          "transition-[color] duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
-          assistantMode === "bot" ? "text-white" : "text-[#8f5d28]",
+          "transition-colors delay-[90ms] duration-[220ms] ease-out",
+          assistantMode === "bot"
+            ? "text-white"
+            : "text-[rgba(120,85,55,0.72)]",
         ].join(" ")}
       >
         Bot
@@ -139,12 +162,33 @@ function AssistantToggle({
         aria-pressed={assistantMode === "concierge"}
         className={[
           "relative z-10 rounded-full text-[19px] font-semibold leading-none",
-          "transition-[color] duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
-          assistantMode === "concierge" ? "text-white" : "text-[#8f5d28]",
+          "transition-colors delay-[90ms] duration-[220ms] ease-out",
+          assistantMode === "concierge"
+            ? "text-white"
+            : "text-[rgba(120,85,55,0.72)]",
         ].join(" ")}
       >
         Concierge
       </button>
+      <style jsx>{`
+        @keyframes bot-concierge-thumb-squish {
+          0% {
+            transform: scaleX(1);
+          }
+
+          45% {
+            transform: scaleX(1.18);
+          }
+
+          78% {
+            transform: scaleX(0.96);
+          }
+
+          100% {
+            transform: scaleX(1);
+          }
+        }
+      `}</style>
     </div>
   )
 }
