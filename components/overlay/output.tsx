@@ -13,11 +13,7 @@ function getOverlayPlacementClass(action: OverlayAction) {
     return "items-stretch justify-start"
   }
 
-  return [
-    "items-start justify-center",
-    "px-4 pt-[calc(20px+env(safe-area-inset-top,0px))]",
-    "pb-[calc(20px+env(safe-area-inset-bottom,0px))]",
-  ].join(" ")
+  return "items-center justify-center"
 }
 
 function getOverlayContentClass(action: OverlayAction) {
@@ -27,6 +23,10 @@ function getOverlayContentClass(action: OverlayAction) {
 
   if (action.rule.placement === "left") {
     return "relative z-[1010] flex h-full"
+  }
+
+  if (action.rule.placement === "center") {
+    return "relative z-[1010] flex w-full justify-center px-5"
   }
 
   return "relative z-[1010] flex w-full justify-center"
@@ -98,14 +98,13 @@ export default function OverlayOutput({
             cubic-bezier(0.16, 1.15, 0.32, 1) both;
         }
 
-        .modal_float_enter {
-          animation: modal_float_enter 420ms
-            cubic-bezier(0.16, 1.15, 0.32, 1) both;
+        .modal_center_drop_enter {
+          animation: modal_center_drop_enter 520ms
+            cubic-bezier(0.16, 1.25, 0.32, 1) both;
         }
 
-        .modal_float_exit {
-          animation: modal_float_exit 420ms
-            cubic-bezier(0.16, 1.15, 0.32, 1) both;
+        .modal_center_drop_exit {
+          animation: modal_center_drop_exit 220ms ease-out both;
         }
 
         @keyframes overlay_backdrop_enter {
@@ -184,19 +183,28 @@ export default function OverlayOutput({
           }
         }
 
-        @keyframes modal_float_enter {
-          from {
+        @keyframes modal_center_drop_enter {
+          0% {
             opacity: 0;
-            transform: translateY(24px) scale(0.98);
+            transform: translateY(-20%) scale(0.94);
           }
 
-          to {
+          48% {
+            opacity: 1;
+            transform: translateY(3%) scale(1.04);
+          }
+
+          74% {
+            transform: translateY(-2%) scale(0.98);
+          }
+
+          100% {
             opacity: 1;
             transform: translateY(0) scale(1);
           }
         }
 
-        @keyframes modal_float_exit {
+        @keyframes modal_center_drop_exit {
           from {
             opacity: 1;
             transform: translateY(0) scale(1);
@@ -204,7 +212,7 @@ export default function OverlayOutput({
 
           to {
             opacity: 0;
-            transform: translateY(24px) scale(0.98);
+            transform: translateY(-6%) scale(0.96);
           }
         }
       `}</style>

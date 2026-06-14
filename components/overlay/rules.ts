@@ -9,17 +9,17 @@ import type {
 const animationByType: Record<OverlayType, OverlayAnimation> = {
   my_page: "from_bottom",
   menu: "from_left",
-  link: "from_top",
-  notice: "from_top",
-  language: "from_top",
+  link: "center_drop",
+  notice: "center_drop",
+  language: "center_drop",
 }
 
 const placementByType: Record<OverlayType, OverlayPlacement> = {
   my_page: "bottom",
   menu: "left",
-  link: "top",
-  notice: "top",
-  language: "top",
+  link: "center",
+  notice: "center",
+  language: "center",
 }
 
 const contentByType: Record<
