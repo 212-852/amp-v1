@@ -48,12 +48,9 @@ export default function OverlayModal({
     >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#777777]">
-            {rule.source}
-          </p>
           <h2
             id="overlay-title"
-            className="mt-2 text-[22px] font-semibold tracking-[-0.03em]"
+            className="mb-4 text-[24px] font-bold tracking-[-0.03em]"
           >
             {rule.title}
           </h2>
