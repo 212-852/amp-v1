@@ -129,7 +129,7 @@ function SendPawButton() {
 function MessageInputRow() {
   return (
     <div className="flex w-full items-center gap-4 px-4">
-      <div className="min-w-0 flex-1 translate-y-[8px]">
+      <div className="min-w-0 flex-1 translate-y-[11px]">
         <label className="sr-only" htmlFor="app-message-input">
           Message
         </label>
@@ -178,7 +178,7 @@ function BottomMenuRow() {
 
 function CopyrightText() {
   return (
-    <p className="mt-3 text-center text-[11px] font-normal leading-none text-[#9b7951] opacity-[0.45]">
+    <p className="mt-3 translate-y-[3px] text-center text-[11px] font-normal leading-none text-[#9b7951] opacity-[0.45]">
       © 2026 Wan Da Nya Inc.
     </p>
   )
