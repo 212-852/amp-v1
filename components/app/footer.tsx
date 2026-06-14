@@ -9,7 +9,7 @@ type AssistantMode = "bot" | "concierge"
 
 const footer_shell_class = [
   "relative mx-auto h-[186px] w-full max-w-[430px]",
-  "rounded-t-[26px] bg-[#ead7c3]",
+  "rounded-tl-[38px] rounded-tr-[18px] bg-[#ead7c3]",
 ].join(" ")
 
 const fixed_paw_button_class = [
@@ -19,7 +19,7 @@ const fixed_paw_button_class = [
   "ring-[5px] ring-[#ead7c3]",
 ].join(" ")
 
-const fixed_paw_button_position_class = "top-[15px]"
+const fixed_paw_button_position_class = "top-[20px]"
 
 function PinkPawIcon() {
   return (
@@ -194,7 +194,7 @@ export default function AppFooter() {
             className={[
               "shrink-0 [perspective:1000px]",
               isInputMode
-                ? "absolute inset-x-0 bottom-[23px] z-10 h-[92px]"
+                ? "absolute inset-x-0 bottom-[18px] z-10 h-[92px]"
                 : "h-[76px]",
             ].join(" ")}
           >
