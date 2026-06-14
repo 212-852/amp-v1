@@ -28,7 +28,7 @@ function FooterCurve() {
       viewBox="0 0 430 186"
     >
       <path
-        d="M0 42 C62 20 128 34 215 46 C302 36 368 28 430 36 V186 H0 Z"
+        d="M0 86C51 88 72 70 116 68C159 66 184 82 216 83C251 84 279 72 315 67C358 61 389 69 430 64V186H0Z"
         fill="currentColor"
       />
     </svg>
