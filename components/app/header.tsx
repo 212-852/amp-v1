@@ -35,6 +35,22 @@ function LinkPill({ label }: { label: string }) {
   )
 }
 
+function HeaderBottomCurve() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-x-0 bottom-[-1px] h-[18px] w-full text-[#f5e8d5]"
+      preserveAspectRatio="none"
+      viewBox="0 0 390 18"
+    >
+      <path
+        d="M0 18H150C164 18 174 8 185 6C190 5 194 7 195 10C196 7 200 5 205 6C216 8 226 18 240 18H390V18H0Z"
+        fill="currentColor"
+      />
+    </svg>
+  )
+}
+
 export default function AppHeader() {
   return (
     <header className="fixed inset-x-0 top-0 z-50 h-[108px] bg-[#ead7c3] text-[#3d2a19]">
@@ -99,6 +115,7 @@ export default function AppHeader() {
           </div>
         </div>
       </div>
+      <HeaderBottomCurve />
     </header>
   )
 }
