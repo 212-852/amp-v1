@@ -7,10 +7,8 @@ import { useState } from "react"
 type FooterMode = "normal" | "input"
 type AssistantMode = "bot" | "concierge"
 
-const footer_shell_class = [
-  "relative mx-auto h-[186px] w-full max-w-[430px]",
-  "rounded-tl-[44px] rounded-tr-[16px] bg-[#ead7c3]",
-].join(" ")
+const footer_shell_class =
+  "relative mx-auto h-[186px] w-full max-w-[430px]"
 
 const fixed_paw_button_class = [
   "absolute left-3 z-30 flex h-[60px] w-[60px]",
@@ -20,6 +18,22 @@ const fixed_paw_button_class = [
 ].join(" ")
 
 const fixed_paw_button_position_class = "top-[20px]"
+
+function FooterCurve() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 z-0 h-full w-full text-[#ead7c3]"
+      preserveAspectRatio="none"
+      viewBox="0 0 430 186"
+    >
+      <path
+        d="M0 42 C62 20 128 34 215 46 C302 36 368 28 430 36 V186 H0 Z"
+        fill="currentColor"
+      />
+    </svg>
+  )
+}
 
 function PinkPawIcon() {
   return (
@@ -182,11 +196,12 @@ export default function AppFooter() {
   return (
     <footer className="fixed inset-x-0 bottom-0 z-50 pb-[env(safe-area-inset-bottom)]">
       <div className={footer_shell_class}>
+        <FooterCurve />
         <PinkPawButton isInputMode={isInputMode} onClick={toggleFooterMode} />
 
         <div
           className={[
-            "relative flex h-full flex-col",
+            "relative z-10 flex h-full flex-col",
             isInputMode ? "" : "pt-[50px] pb-1",
           ].join(" ")}
         >

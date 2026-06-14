@@ -35,10 +35,27 @@ function LinkPill({ label }: { label: string }) {
   )
 }
 
+function HeaderCurve() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 z-0 h-full w-full text-[#ead7c3]"
+      preserveAspectRatio="none"
+      viewBox="0 0 430 108"
+    >
+      <path
+        d="M0 0 H430 V79 C430 91 352 86 218 70 C92 97 0 104 0 87 Z"
+        fill="currentColor"
+      />
+    </svg>
+  )
+}
+
 export default function AppHeader() {
   return (
-    <header className="fixed inset-x-0 top-0 z-50 h-[108px] rounded-bl-[34px] rounded-br-[13px] bg-[#ead7c3] text-[#3d2a19]">
-      <div className="mx-auto flex h-full w-full max-w-[430px] items-start justify-between gap-2 px-6 pb-2 pt-[calc(12px+env(safe-area-inset-top,0px))]">
+    <header className="fixed inset-x-0 top-0 z-50 h-[108px] text-[#3d2a19]">
+      <HeaderCurve />
+      <div className="relative z-10 mx-auto flex h-full w-full max-w-[430px] items-start justify-between gap-2 px-6 pb-2 pt-[calc(12px+env(safe-area-inset-top,0px))]">
         <div className="min-w-0 pt-1">
           <h1 className="text-[20px] font-semibold leading-none text-[#3d2a19]">
             {header_state.brand}
