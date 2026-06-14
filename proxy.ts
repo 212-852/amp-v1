@@ -53,8 +53,14 @@ function resolveAuthContext(request: NextRequest): AuthContext {
 export async function proxy(request: NextRequest) {
   let pendingCookie: PendingCookie | null = null
   const context = resolveAuthContext(request)
+  const requestVisitorUuid =
+    request.cookies.get(VISITOR_COOKIE_NAME)?.value ?? null
+  const visitorUuidHint = requestVisitorUuid ?? crypto.randomUUID()
   const session = await resolve_session_context(context, undefined, {
-    cookie_value: request.cookies.get(VISITOR_COOKIE_NAME)?.value ?? null,
+    cookie_value: requestVisitorUuid,
+    cookie_was_found: Boolean(requestVisitorUuid),
+    visitor_uuid_hint: visitorUuidHint,
+    request_cache_key: visitorUuidHint,
     pathname: request.nextUrl.pathname,
     set_cookie(name, value, options) {
       pendingCookie = { name, value, options }
