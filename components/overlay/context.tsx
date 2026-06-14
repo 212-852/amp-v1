@@ -10,6 +10,7 @@ import {
   useState,
 } from "react"
 
+import { overlay_close_duration_ms } from "@/components/overlay/animations"
 import { createOverlayAction } from "@/components/overlay/action"
 import OverlayOutput from "@/components/overlay/output"
 import type {
@@ -50,7 +51,7 @@ export function OverlayProvider({
     closeTimerRef.current = window.setTimeout(() => {
       setAction(null)
       setPhase("opening")
-    }, 220)
+    }, overlay_close_duration_ms)
   }, [action, phase])
 
   const openOverlay = useCallback((request: OverlayRequest) => {

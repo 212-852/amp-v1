@@ -1,26 +1,24 @@
-import {
-  getOverlayModalAnimationClass,
-} from "@/components/overlay/animations"
+import { getOverlayModalAnimationClass } from "@/components/overlay/animations"
 import type { OverlayPhase, OverlayRule } from "@/components/overlay/types"
 
-function getModalSizeClass(rule: OverlayRule) {
+function getModalLayoutClass(rule: OverlayRule) {
   if (rule.placement === "bottom") {
-    return "w-full max-w-[390px]"
+    return [
+      "w-full max-w-none rounded-t-[28px] rounded-b-none border-b-0",
+      "pb-[calc(env(safe-area-inset-bottom)+16px)]",
+    ].join(" ")
   }
 
   if (rule.placement === "left") {
-    return "w-full max-w-[340px]"
+    return [
+      "h-dvh w-[min(82vw,360px)] max-w-none rounded-none rounded-r-[28px] border-l-0",
+      "overflow-y-auto",
+      "pt-[calc(env(safe-area-inset-top)+24px)]",
+      "pb-[calc(env(safe-area-inset-bottom)+24px)]",
+    ].join(" ")
   }
 
-  return "w-full max-w-[420px]"
-}
-
-function getModalRadiusClass(rule: OverlayRule) {
-  if (rule.placement === "bottom") {
-    return "rounded-[28px]"
-  }
-
-  return "rounded-[28px]"
+  return "w-full max-w-[420px] rounded-[28px]"
 }
 
 export default function OverlayModal({
@@ -38,10 +36,8 @@ export default function OverlayModal({
       aria-modal="true"
       aria-labelledby="overlay-title"
       className={[
-        getModalSizeClass(rule),
-        "border border-[#e5e5e5]",
-        getModalRadiusClass(rule),
-        "bg-white p-5 text-[#111111]",
+        getModalLayoutClass(rule),
+        "border border-[#e5e5e5] bg-white px-5 text-[#111111]",
         "shadow-[0_18px_50px_rgba(0,0,0,0.12)]",
         "will-change-transform",
         getOverlayModalAnimationClass(rule.animation, phase),

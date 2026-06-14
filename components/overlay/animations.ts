@@ -1,11 +1,11 @@
 import type { OverlayAnimation, OverlayPhase } from "@/components/overlay/types"
 
-const overlay_easing = "cubic-bezier(0.22, 1, 0.36, 1)"
+export const overlay_backdrop_duration_ms = 360
+export const overlay_sheet_duration_ms = 420
+export const overlay_close_duration_ms = 420
+export const overlay_open_duration_ms = 420
 
-export const overlay_open_duration_ms = 360
-export const overlay_close_duration_ms = 220
-
-export const overlay_ease_class = "ease-[cubic-bezier(0.22,1,0.36,1)]"
+export const overlay_ease_class = "ease-[cubic-bezier(0.16,1.15,0.32,1)]"
 
 export function getOverlayModalAnimationClass(
   animation: OverlayAnimation,
@@ -39,24 +39,3 @@ export function getOverlayBackdropAnimationClass(phase: OverlayPhase) {
     ? "overlay_backdrop_exit"
     : "overlay_backdrop_enter"
 }
-
-export function getOverlayDurationClassForAnimation(
-  animation: OverlayAnimation,
-  phase: OverlayPhase,
-) {
-  if (phase === "closing") {
-    return "duration-[220ms]"
-  }
-
-  if (animation === "from_bottom") {
-    return "duration-[480ms]"
-  }
-
-  if (animation === "from_left") {
-    return "duration-[460ms]"
-  }
-
-  return "duration-[440ms]"
-}
-
-export { overlay_easing }
