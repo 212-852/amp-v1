@@ -260,7 +260,9 @@ admin_user_detail.ts
 admin_driver_list.ts
 admin_driver_detail.ts
 
-HEADER_FOOTER_LOCK = true
+Header Color : LOCK
+Footer Color : LOCK
+Background Color : LOCK
 
 While this flag is true:
 

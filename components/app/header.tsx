@@ -18,8 +18,8 @@ function MemberPill({ label, filled = false }: { label: string; filled?: boolean
       className={[
         "inline-flex h-7 items-center rounded-full px-2.5 text-[12px] font-semibold leading-none",
         filled
-          ? "bg-[#7a4e22] text-white"
-          : "bg-[#fffaf2] text-[#7a4e22] ring-1 ring-[#d8bd95]",
+          ? "bg-[#8f5d28] text-[#fdfaf6]"
+          : "bg-[#fdfaf6] text-[#8f5d28] ring-1 ring-[#dcc7aa]",
       ].join(" ")}
     >
       {label}
@@ -29,7 +29,7 @@ function MemberPill({ label, filled = false }: { label: string; filled?: boolean
 
 function LinkPill({ label }: { label: string }) {
   return (
-    <span className="inline-flex h-[30px] items-center rounded-full bg-[#fffaf2] px-3 text-[14px] font-semibold leading-none text-[#7a4e22] ring-1 ring-[#d8bd95]">
+    <span className="inline-flex h-[30px] items-center rounded-full bg-[#fdfaf6] px-3 text-[14px] font-semibold leading-none text-[#8f5d28] ring-1 ring-[#dcc7aa]">
       {label}
     </span>
   )
@@ -37,13 +37,13 @@ function LinkPill({ label }: { label: string }) {
 
 export default function AppHeader() {
   return (
-    <header className="fixed inset-x-0 top-0 z-50 h-[108px] bg-[#f1ddbf] text-[#3d2a19]">
+    <header className="fixed inset-x-0 top-0 z-50 h-[108px] bg-[#ead7c3] text-[#3d2a19]">
       <div className="mx-auto flex h-full w-full max-w-[430px] items-start justify-between gap-2 px-6 pb-2 pt-[calc(12px+env(safe-area-inset-top,0px))]">
         <div className="min-w-0 pt-1">
           <h1 className="text-[20px] font-semibold leading-none text-[#3d2a19]">
             {header_state.brand}
           </h1>
-          <p className="mt-2.5 text-[11px] font-medium leading-none text-[#8b6848]">
+          <p className="mt-2.5 text-[11px] font-medium leading-none text-[#8c7358]">
             {header_state.breadcrumb}
           </p>
         </div>
@@ -69,14 +69,14 @@ export default function AppHeader() {
             <button
               type="button"
               aria-label="Notifications"
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-[#fffaf2] text-[#6a431f] ring-1 ring-[#d8bd95]"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-[#fdfaf6] text-[#8f5d28] ring-1 ring-[#dcc7aa]"
             >
               <Bell className="h-[22px] w-[22px]" strokeWidth={2} />
             </button>
             <button
               type="button"
               aria-label={`Language ${header_state.language_label}`}
-              className="flex h-8 items-center gap-1 rounded-full bg-[#fffaf2] px-2 text-[#6a431f] ring-1 ring-[#d8bd95]"
+              className="flex h-8 items-center gap-1 rounded-full bg-[#fdfaf6] px-2 text-[#8f5d28] ring-1 ring-[#dcc7aa]"
             >
               <Globe2 className="h-[22px] w-[22px]" strokeWidth={2} />
               <span className="text-[14px] font-semibold leading-none">
@@ -86,13 +86,13 @@ export default function AppHeader() {
           </div>
 
           <div className="mt-1 flex items-center gap-2">
-            <span className="max-w-[112px] truncate text-[14px] font-semibold leading-none text-[#6a431f]">
+            <span className="max-w-[112px] truncate text-[14px] font-semibold leading-none text-[#8c7358]">
               {header_state.user_name}
             </span>
             <button
               type="button"
               aria-label="User profile"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-[#7a4e22] text-white"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-[#8f5d28] text-[#fdfaf6]"
             >
               <User className="h-4 w-4" strokeWidth={2} />
             </button>

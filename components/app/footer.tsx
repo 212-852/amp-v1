@@ -12,9 +12,9 @@ const footer_shell_class =
 
 const fixed_paw_button_class = [
   "absolute left-3 z-30 flex h-[60px] w-[60px]",
-  "items-center justify-center rounded-full border border-[#e5cda8]",
-  "bg-white shadow-[0_8px_18px_rgba(122,78,34,0.18)]",
-  "ring-[5px] ring-[#f1ddbf]",
+  "items-center justify-center rounded-full border border-[#dcc7aa]",
+  "bg-[#fdfaf6] shadow-[0_8px_18px_rgba(122,78,34,0.18)]",
+  "ring-[5px] ring-[#ead7c3]",
 ].join(" ")
 
 const fixed_paw_button_position_class = "top-[15px]"
@@ -23,7 +23,7 @@ function FooterShape() {
   return (
     <svg
       aria-hidden="true"
-      className="absolute inset-x-0 bottom-0 h-[186px] w-full text-[#f1ddbf]"
+      className="absolute inset-x-0 bottom-0 h-[186px] w-full text-[#ead7c3]"
       preserveAspectRatio="none"
       viewBox="0 0 390 186"
     >
@@ -82,15 +82,15 @@ function AssistantToggle({
   onChange: (mode: AssistantMode) => void
 }) {
   return (
-    <div className="mx-auto grid h-12 w-full max-w-[340px] grid-cols-2 rounded-full bg-[#e7cfad] p-1">
+    <div className="mx-auto grid h-12 w-full max-w-[340px] grid-cols-2 rounded-full bg-[#e8d2b3] p-1">
       <button
         type="button"
         onClick={() => onChange("bot")}
         className={[
           "rounded-full text-[19px] font-semibold leading-none",
           assistantMode === "bot"
-            ? "bg-[#7a4e22] text-white"
-            : "text-[#7a5430]",
+            ? "bg-[#8f5d28] text-[#fdfaf6]"
+            : "text-[#8c7358]",
         ].join(" ")}
       >
         Bot
@@ -101,8 +101,8 @@ function AssistantToggle({
         className={[
           "rounded-full text-[19px] font-semibold leading-none",
           assistantMode === "concierge"
-            ? "bg-[#7a4e22] text-white"
-            : "text-[#7a5430]",
+            ? "bg-[#8f5d28] text-[#fdfaf6]"
+            : "text-[#8c7358]",
         ].join(" ")}
       >
         Concierge
@@ -116,10 +116,10 @@ function SendPawButton() {
     <button
       type="button"
       aria-label="Send"
-      className="flex h-[62px] w-[58px] shrink-0 items-center justify-center bg-transparent p-0 text-[#7a4e22] shadow-none"
+      className="flex h-[62px] w-[58px] shrink-0 items-center justify-center bg-transparent p-0 text-[#8f5d28] shadow-none"
     >
       <PawPrint
-        className="h-[58px] w-[58px] fill-[#7a4e22] text-[#7a4e22]"
+        className="h-[58px] w-[58px] fill-[#8f5d28] text-[#8f5d28]"
         strokeWidth={3}
       />
     </button>
@@ -138,7 +138,7 @@ function MessageInputRow() {
           type="text"
           readOnly
           placeholder="メッセージを入力"
-          className="h-[68px] w-full min-w-0 rounded-full bg-[#fffaf2] px-5 text-[16px] font-semibold text-[#3f2d1d] placeholder:text-[#a98964]"
+          className="h-[68px] w-full min-w-0 rounded-full bg-[#fdfaf6] px-5 text-[16px] font-semibold text-[#3d2a19] placeholder:text-[#8c7358]"
         />
       </div>
       <SendPawButton />
@@ -156,7 +156,7 @@ function BottomMenuRow() {
   return (
     <nav
       aria-label="Footer menu"
-      className="grid w-full grid-cols-3 gap-1 pb-[calc(env(safe-area-inset-bottom,0px)+16px)] text-[#7a5430]"
+      className="grid w-full grid-cols-3 gap-1 pb-[calc(env(safe-area-inset-bottom,0px)+16px)] text-[#8f5d28]"
     >
       {items.map((item) => {
         const Icon = item.icon
@@ -178,7 +178,7 @@ function BottomMenuRow() {
 
 function CopyrightText() {
   return (
-    <p className="mt-3 translate-y-[3px] text-center text-[11px] font-normal leading-none text-[#9b7951] opacity-[0.45]">
+    <p className="mt-3 translate-y-[3px] text-center text-[11px] font-normal leading-none text-[#8c7358] opacity-[0.45]">
       © 2026 Wan Da Nya Inc.
     </p>
   )
