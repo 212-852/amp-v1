@@ -1,3 +1,6 @@
+import { cache } from "react"
+
+import { resolveAuthContext } from "@/core/auth/context"
 import type { AppSession, AuthContext, SourceChannel } from "@/core/auth/types"
 
 const VISITOR_COOKIE_NAME = "amp_visitor_uuid"
@@ -31,10 +34,10 @@ type CookieOptions = {
 type SessionRuntime = {
   cookie_value?: string | null
   cookie_was_found?: boolean
-  visitor_uuid_hint?: string | null
   request_cache_key?: string | null
   search?: string | null
   user_agent_contains_line?: boolean
+  cookie_set_done?: boolean
   set_cookie?: (
     name: string,
     value: string,
@@ -44,12 +47,20 @@ type SessionRuntime = {
   resolved_session?: AppSession | null
 }
 
+type SessionCacheEntry = {
+  session: AppSession
+  visitor_action: VisitorAction
+  created_new_visitor: boolean
+  cookie_found: boolean
+  cookie_value: string | null
+}
+
 type VisitorStore = {
   findVisitorByUuid: (visitor_uuid: string) => Promise<VisitorRecord | null>
   touchVisitor: (visitor_uuid: string) => Promise<void>
   upsertVisitor: (
     context: AuthContext,
-    visitor_uuid?: string | null,
+    visitor_uuid: string,
   ) => Promise<VisitorRecord>
   resolveUserUuidFromAuth: (context: AuthContext) => Promise<string | null>
   linkVisitorUser: (visitor_uuid: string, user_uuid: string) => Promise<void>
@@ -69,7 +80,7 @@ type UserUuidRow = {
 }
 
 const runtimeVisitors = new Map<string, VisitorRecord>()
-const requestSessionPromises = new Map<string, Promise<AppSession>>()
+const requestSessionPromises = new Map<string, Promise<SessionCacheEntry>>()
 
 const visitorCookieOptions: CookieOptions = {
   httpOnly: true,
@@ -283,21 +294,6 @@ const supabaseVisitorStore: VisitorStore = {
       return runtimeVisitorStore.upsertVisitor(context, visitor_uuid)
     }
 
-    const body: {
-      source_channel: SourceChannel
-      updated_at: string
-      user_uuid: null
-      visitor_uuid?: string
-    } = {
-      source_channel: context.source_channel,
-      updated_at: new Date().toISOString(),
-      user_uuid: null,
-    }
-
-    if (visitor_uuid) {
-      body.visitor_uuid = visitor_uuid
-    }
-
     const response = await fetch(
       restUrl(
         config,
@@ -310,7 +306,12 @@ const supabaseVisitorStore: VisitorStore = {
           ...restHeaders(config),
           Prefer: "resolution=merge-duplicates,return=representation",
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          visitor_uuid,
+          source_channel: context.source_channel,
+          updated_at: new Date().toISOString(),
+          user_uuid: null,
+        }),
         cache: "no-store",
       },
     )
@@ -383,7 +384,7 @@ const runtimeVisitorStore: VisitorStore = {
 
   async upsertVisitor(context, visitor_uuid) {
     const visitor: VisitorRecord = {
-      visitor_uuid: visitor_uuid ?? crypto.randomUUID(),
+      visitor_uuid,
       user_uuid: null,
       source_channel: context.source_channel,
     }
@@ -433,13 +434,21 @@ async function getRequestVisitorCookie(runtime?: SessionRuntime) {
   }
 }
 
-async function setVisitorCookie(visitor_uuid: string, runtime?: SessionRuntime) {
+async function setVisitorCookie(
+  visitor_uuid: string,
+  runtime?: SessionRuntime,
+) {
+  if (runtime?.cookie_set_done) {
+    return
+  }
+
   if (runtime?.set_cookie) {
     await runtime.set_cookie(
       VISITOR_COOKIE_NAME,
       visitor_uuid,
       visitorCookieOptions,
     )
+    runtime.cookie_set_done = true
     await send_auth_debug("visitor_cookie_set", {
       visitor_uuid,
       cookie_name: VISITOR_COOKIE_NAME,
@@ -455,6 +464,9 @@ async function setVisitorCookie(visitor_uuid: string, runtime?: SessionRuntime) 
     const cookieStore = await cookies()
 
     cookieStore.set(VISITOR_COOKIE_NAME, visitor_uuid, visitorCookieOptions)
+    if (runtime) {
+      runtime.cookie_set_done = true
+    }
     await send_auth_debug("visitor_cookie_set", {
       visitor_uuid,
       cookie_name: VISITOR_COOKIE_NAME,
@@ -473,22 +485,19 @@ async function resolveVisitorRecord(
   runtime?: SessionRuntime,
 ): Promise<VisitorResolution> {
   const cookie_value = await getRequestVisitorCookie(runtime)
-  const cookie_found = runtime?.cookie_was_found ?? Boolean(cookie_value)
-  const visitor_uuid_hint = cookie_value ?? runtime?.visitor_uuid_hint ?? null
+  const cookie_found = Boolean(cookie_value)
 
   await send_auth_debug("visitor_cookie_read", {
     cookie_found,
     cookie_value: cookie_found ? cookie_value : null,
   })
 
-  if (visitor_uuid_hint) {
-    const existingVisitor = await visitorStore.findVisitorByUuid(
-      visitor_uuid_hint,
-    )
+  if (cookie_value) {
+    const existingVisitor = await visitorStore.findVisitorByUuid(cookie_value)
     const found = Boolean(existingVisitor)
 
     await send_auth_debug("visitor_lookup", {
-      visitor_uuid: visitor_uuid_hint,
+      visitor_uuid: cookie_value,
       found,
     })
 
@@ -504,13 +513,35 @@ async function resolveVisitorRecord(
         visitor: existingVisitor,
         action: "reuse",
         cookie_found,
-        cookie_value: cookie_found ? cookie_value : null,
+        cookie_value,
         created_new_visitor: false,
       }
     }
+
+    const visitor = await visitorStore.upsertVisitor(context, cookie_value)
+
+    await send_auth_debug("visitor_upserted", {
+      visitor_uuid: visitor.visitor_uuid,
+      source_channel: visitor.source_channel,
+    })
+
+    await send_auth_debug("visitor_repaired", {
+      old_cookie_value: cookie_value,
+      visitor_uuid: visitor.visitor_uuid,
+      created_new_visitor: false,
+    })
+
+    return {
+      visitor,
+      action: "repair",
+      cookie_found,
+      cookie_value,
+      created_new_visitor: false,
+    }
   }
 
-  const visitor = await visitorStore.upsertVisitor(context, visitor_uuid_hint)
+  const visitor_uuid = crypto.randomUUID()
+  const visitor = await visitorStore.upsertVisitor(context, visitor_uuid)
   await setVisitorCookie(visitor.visitor_uuid, runtime)
 
   await send_auth_debug("visitor_upserted", {
@@ -518,83 +549,43 @@ async function resolveVisitorRecord(
     source_channel: visitor.source_channel,
   })
 
-  if (cookie_found) {
-    await send_auth_debug("visitor_repaired", {
-      old_cookie_value: cookie_value,
-      visitor_uuid: visitor.visitor_uuid,
-      created_new_visitor: false,
-    })
-  } else {
-    await send_auth_debug("visitor_created", {
-      visitor_uuid: visitor.visitor_uuid,
-      created_new_visitor: true,
-    })
-  }
+  await send_auth_debug("visitor_created", {
+    visitor_uuid: visitor.visitor_uuid,
+    created_new_visitor: true,
+  })
 
   return {
     visitor,
-    action: cookie_found ? "repair" : "create",
+    action: "create",
     cookie_found,
-    cookie_value: cookie_found ? cookie_value : null,
-    created_new_visitor: !cookie_found,
+    cookie_value: null,
+    created_new_visitor: true,
   }
 }
 
-export async function resolve_session_context(
-  context: AuthContext,
-  visitorStore: VisitorStore = supabaseVisitorStore,
+function buildRequestSummary(
+  session: AppSession,
+  resolution: VisitorResolution,
   runtime?: SessionRuntime,
-): Promise<AppSession> {
-  if (runtime?.resolved_session) {
-    return runtime.resolved_session
+  context?: AuthContext,
+) {
+  return {
+    visitor_action: resolution.action,
+    created_new_visitor: resolution.created_new_visitor,
+    visitor_uuid: session.visitor_uuid,
+    source_channel: session.source_channel,
+    cookie_found: resolution.cookie_found,
+    cookie_value: resolution.cookie_value,
+    pathname: runtime?.pathname ?? context?.requested_route ?? null,
+    user_uuid: session.user_uuid,
   }
-
-  if (runtime?.request_cache_key) {
-    const existingPromise = requestSessionPromises.get(runtime.request_cache_key)
-
-    if (existingPromise) {
-      const session = await existingPromise
-
-      await send_auth_debug("visitor_request_cache_hit", {
-        visitor_uuid: session.visitor_uuid,
-      })
-
-      await send_auth_debug("request_summary", {
-        pathname: runtime.pathname ?? context.requested_route,
-        search: runtime.search ?? null,
-        user_agent_contains_line: runtime.user_agent_contains_line ?? false,
-        cookie_found: runtime.cookie_was_found ?? Boolean(runtime.cookie_value),
-        cookie_value: runtime.cookie_value ?? null,
-        resolved_visitor_uuid: session.visitor_uuid,
-        visitor_action: "reuse",
-        created_new_visitor: false,
-        request_cache_hit: true,
-        secure_cookie: visitorCookieOptions.secure,
-        user_uuid: session.user_uuid,
-        source_channel: session.source_channel,
-      })
-
-      return session
-    }
-
-    const promise = resolve_session_context_core(context, visitorStore, runtime)
-    requestSessionPromises.set(runtime.request_cache_key, promise)
-
-    try {
-      return await promise
-    } finally {
-      requestSessionPromises.delete(runtime.request_cache_key)
-    }
-  }
-
-  return resolve_session_context_core(context, visitorStore, runtime)
 }
 
 async function resolve_session_context_core(
   context: AuthContext,
   visitorStore: VisitorStore,
   runtime?: SessionRuntime,
-): Promise<AppSession> {
+): Promise<SessionCacheEntry> {
   const visitorResolution = await resolveVisitorRecord(
     context,
     visitorStore,
@@ -623,21 +614,88 @@ async function resolve_session_context_core(
     source_channel: session.source_channel,
   })
 
-  await send_auth_debug("request_summary", {
-    pathname: runtime?.pathname ?? context.requested_route,
-    search: runtime?.search ?? null,
-    user_agent_contains_line: runtime?.user_agent_contains_line ?? false,
-    cookie_found: visitorResolution.cookie_found,
-    cookie_value: visitorResolution.cookie_value,
-    resolved_visitor_uuid: session.visitor_uuid,
+  await send_auth_debug(
+    "request_summary",
+    buildRequestSummary(session, visitorResolution, runtime, context),
+  )
+
+  return {
+    session,
     visitor_action: visitorResolution.action,
     created_new_visitor: visitorResolution.created_new_visitor,
-    secure_cookie: visitorCookieOptions.secure,
-    user_uuid: session.user_uuid,
-    source_channel: session.source_channel,
-  })
+    cookie_found: visitorResolution.cookie_found,
+    cookie_value: visitorResolution.cookie_value,
+  }
+}
 
-  return session
+const resolve_session_context_rsc = cache(
+  async (): Promise<SessionCacheEntry> => {
+    const context = await resolveAuthContext()
+    return resolve_session_context_core(context, supabaseVisitorStore)
+  },
+)
+
+const resolveSessionCached = cache(async (): Promise<AppSession> => {
+  const cached = await resolve_session_context_rsc()
+  return cached.session
+})
+
+export async function resolve_session_context(
+  context: AuthContext,
+  visitorStore: VisitorStore = supabaseVisitorStore,
+  runtime?: SessionRuntime,
+): Promise<AppSession> {
+  if (runtime?.resolved_session) {
+    return runtime.resolved_session
+  }
+
+  if (runtime?.request_cache_key) {
+    const existingPromise = requestSessionPromises.get(runtime.request_cache_key)
+
+    if (existingPromise) {
+      const cached = await existingPromise
+
+      await send_auth_debug("request_summary", {
+        ...buildRequestSummary(
+          cached.session,
+          {
+            visitor: {
+              visitor_uuid: cached.session.visitor_uuid,
+              user_uuid: cached.session.user_uuid,
+              source_channel: cached.session.source_channel,
+            },
+            action: cached.visitor_action,
+            cookie_found: cached.cookie_found,
+            cookie_value: cached.cookie_value,
+            created_new_visitor: cached.created_new_visitor,
+          },
+          runtime,
+          context,
+        ),
+        request_cache_hit: true,
+      })
+
+      return cached.session
+    }
+
+    const promise = resolve_session_context_core(context, visitorStore, runtime)
+    requestSessionPromises.set(runtime.request_cache_key, promise)
+
+    try {
+      const cached = await promise
+      return cached.session
+    } finally {
+      requestSessionPromises.delete(runtime.request_cache_key)
+    }
+  }
+
+  if (visitorStore !== supabaseVisitorStore) {
+    const cached = await resolve_session_context_core(context, visitorStore, runtime)
+    return cached.session
+  }
+
+  const cached = await resolve_session_context_rsc()
+  return cached.session
 }
 
 export async function resolveSession(
@@ -650,7 +708,11 @@ export async function resolveSession(
     return session
   }
 
-  return resolve_session_context(context, visitorStore)
+  if (visitorStore !== supabaseVisitorStore) {
+    return resolve_session_context(context, visitorStore)
+  }
+
+  return resolveSessionCached()
 }
 
 async function getResolvedSessionFromRequestHeaders(): Promise<AppSession | null> {

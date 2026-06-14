@@ -76,15 +76,14 @@ export async function proxy(request: NextRequest) {
   const context = resolveAuthContext(request)
   const requestVisitorUuid =
     request.cookies.get(VISITOR_COOKIE_NAME)?.value ?? null
-  const visitorUuidHint = requestVisitorUuid ?? crypto.randomUUID()
+  const requestCacheKey = crypto.randomUUID()
   const userAgentContainsLine = (
     request.headers.get("user-agent") ?? ""
   ).toLowerCase().includes("line")
   const session = await resolve_session_context(context, undefined, {
     cookie_value: requestVisitorUuid,
     cookie_was_found: Boolean(requestVisitorUuid),
-    visitor_uuid_hint: visitorUuidHint,
-    request_cache_key: visitorUuidHint,
+    request_cache_key: requestCacheKey,
     pathname: request.nextUrl.pathname,
     search: request.nextUrl.search,
     user_agent_contains_line: userAgentContainsLine,
