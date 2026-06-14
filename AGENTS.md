@@ -259,3 +259,15 @@ admin_user_list.ts
 admin_user_detail.ts
 admin_driver_list.ts
 admin_driver_detail.ts
+
+HEADER_FOOTER_LOCK = true
+
+While this flag is true:
+
+- No header changes
+- No footer changes
+- No color changes
+- No spacing changes
+- No animation changes
+
+Only bug fixes are allowed.
