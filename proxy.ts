@@ -77,10 +77,12 @@ export async function proxy(request: NextRequest) {
   const requestVisitorUuid =
     request.cookies.get(VISITOR_COOKIE_NAME)?.value ?? null
   const requestCacheKey = crypto.randomUUID()
+  const requestId = crypto.randomUUID()
   const userAgentContainsLine = (
     request.headers.get("user-agent") ?? ""
   ).toLowerCase().includes("line")
   const session = await resolve_session_context(context, undefined, {
+    request_id: requestId,
     cookie_value: requestVisitorUuid,
     cookie_was_found: Boolean(requestVisitorUuid),
     request_cache_key: requestCacheKey,
@@ -93,6 +95,7 @@ export async function proxy(request: NextRequest) {
   })
 
   const requestHeaders = new Headers(request.headers)
+  requestHeaders.set("x-amp-request-id", requestId)
   requestHeaders.set("x-amp-session-visitor-uuid", session.visitor_uuid)
   requestHeaders.set("x-amp-session-source-channel", session.source_channel)
   requestHeaders.set("x-amp-source-channel", session.source_channel)
