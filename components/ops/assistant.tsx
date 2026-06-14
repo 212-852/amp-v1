@@ -4,11 +4,11 @@ export default function OpsAssistant() {
   return (
     <section
       aria-label="AI assistant"
-      className="fixed inset-x-0 bottom-0 z-50 bg-neutral-50 px-5 pb-[calc(4px+env(safe-area-inset-bottom,0px))] pt-1"
+      className="fixed inset-x-0 bottom-0 z-50 bg-neutral-50 px-5 pb-[env(safe-area-inset-bottom)] pt-1"
     >
       <div className="relative mx-auto w-full max-w-[430px]">
         <div className="relative min-h-[178px] overflow-visible rounded-[32px] border border-neutral-200 bg-white px-5 py-5 shadow-[0_-10px_30px_rgba(0,0,0,0.06)]">
-          <div className="grid min-h-[138px] grid-cols-[98px_1fr_auto] items-end gap-3">
+          <div className="grid min-h-[138px] grid-cols-[108px_1fr_auto] items-end gap-3">
             <div aria-hidden="true" />
             <div className="min-w-0 pb-1">
               <p className="text-[18px] font-semibold tracking-[-0.02em] text-neutral-950">
@@ -40,7 +40,7 @@ export default function OpsAssistant() {
           </div>
         </div>
 
-        <div className="pointer-events-none absolute bottom-0 left-0 origin-bottom-left translate-y-[48%] scale-[0.88]">
+        <div className="pointer-events-none absolute bottom-0 left-0 origin-bottom-left translate-y-[26%] scale-[1]">
           <OpsNeko />
         </div>
       </div>
