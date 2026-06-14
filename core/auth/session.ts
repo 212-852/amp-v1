@@ -1,5 +1,3 @@
-import { cookies } from "next/headers"
-
 import type { AppSession, AuthContext, SourceChannel } from "@/core/auth/types"
 
 const VISITOR_COOKIE_NAME = "amp_visitor_uuid"
@@ -14,8 +12,31 @@ type VisitorRecord = {
 
 type VisitorResolution = {
   visitor: VisitorRecord
-  action: "create" | "reuse"
+  action: VisitorAction
   cookie_found: boolean
+  cookie_value: string | null
+  created_new_visitor: boolean
+}
+
+type VisitorAction = "create" | "reuse" | "repair"
+
+type CookieOptions = {
+  httpOnly: boolean
+  maxAge: number
+  path: string
+  sameSite: "lax"
+  secure: boolean
+}
+
+type SessionRuntime = {
+  cookie_value?: string | null
+  set_cookie?: (
+    name: string,
+    value: string,
+    options: CookieOptions,
+  ) => void | Promise<void>
+  pathname?: string | null
+  resolved_session?: AppSession | null
 }
 
 type VisitorStore = {
@@ -40,6 +61,14 @@ type UserUuidRow = {
 }
 
 const runtimeVisitors = new Map<string, VisitorRecord>()
+
+const visitorCookieOptions: CookieOptions = {
+  httpOnly: true,
+  maxAge: VISITOR_COOKIE_MAX_AGE,
+  path: "/",
+  sameSite: "lax",
+  secure: process.env.NODE_ENV === "production",
+}
 
 // TEMP_AUTH_DEBUG
 async function send_auth_debug(
@@ -354,46 +383,67 @@ const runtimeVisitorStore: VisitorStore = {
   },
 }
 
-async function setVisitorCookie(visitor_uuid: string) {
-  try {
-    const cookieStore = await cookies()
+async function getRequestVisitorCookie(runtime?: SessionRuntime) {
+  if (runtime && "cookie_value" in runtime) {
+    return runtime.cookie_value ?? null
+  }
 
-    cookieStore.set(VISITOR_COOKIE_NAME, visitor_uuid, {
-      httpOnly: true,
-      maxAge: VISITOR_COOKIE_MAX_AGE,
-      path: "/",
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-    })
+  try {
+    const { cookies, headers } = await import("next/headers")
+    const [cookieStore, requestHeaders] = await Promise.all([
+      cookies(),
+      headers(),
+    ])
+
+    return (
+      cookieStore.get(VISITOR_COOKIE_NAME)?.value ??
+      requestHeaders.get("x-amp-session-visitor-uuid") ??
+      null
+    )
   } catch {
-    // Cookie writes are only available in response-capable server contexts.
+    return null
   }
 }
 
-async function getVisitorCookie() {
-  const cookieStore = await cookies()
+async function setVisitorCookie(visitor_uuid: string, runtime?: SessionRuntime) {
+  if (runtime?.set_cookie) {
+    await runtime.set_cookie(
+      VISITOR_COOKIE_NAME,
+      visitor_uuid,
+      visitorCookieOptions,
+    )
+    return
+  }
 
-  return cookieStore.get(VISITOR_COOKIE_NAME)?.value ?? null
+  try {
+    const { cookies } = await import("next/headers")
+    const cookieStore = await cookies()
+
+    cookieStore.set(VISITOR_COOKIE_NAME, visitor_uuid, visitorCookieOptions)
+  } catch {
+    // TEMP_AUTH_DEBUG Cookie writes require a response-capable server context.
+  }
 }
 
 async function resolveVisitorRecord(
   context: AuthContext,
   visitorStore: VisitorStore,
+  runtime?: SessionRuntime,
 ): Promise<VisitorResolution> {
-  const visitor_uuid = await getVisitorCookie()
-  const cookie_found = Boolean(visitor_uuid)
+  const cookie_value = await getRequestVisitorCookie(runtime)
+  const cookie_found = Boolean(cookie_value)
 
   await send_auth_debug("visitor_cookie_read", {
     cookie_found,
-    cookie_value: visitor_uuid,
+    cookie_value,
   })
 
-  if (visitor_uuid) {
-    const existingVisitor = await visitorStore.findVisitorByUuid(visitor_uuid)
+  if (cookie_value) {
+    const existingVisitor = await visitorStore.findVisitorByUuid(cookie_value)
     const found = Boolean(existingVisitor)
 
     await send_auth_debug("visitor_lookup", {
-      visitor_uuid,
+      visitor_uuid: cookie_value,
       found,
     })
 
@@ -408,34 +458,58 @@ async function resolveVisitorRecord(
         visitor: existingVisitor,
         action: "reuse",
         cookie_found,
+        cookie_value,
+        created_new_visitor: false,
       }
     }
   }
 
   const visitor = await visitorStore.createVisitor(context)
-  await setVisitorCookie(visitor.visitor_uuid)
+  await setVisitorCookie(visitor.visitor_uuid, runtime)
 
-  await send_auth_debug("visitor_created", {
-    visitor_uuid: visitor.visitor_uuid,
-  })
+  if (cookie_found) {
+    await send_auth_debug("visitor_repaired", {
+      old_cookie_value: cookie_value,
+      visitor_uuid: visitor.visitor_uuid,
+    })
+  } else {
+    await send_auth_debug("visitor_created", {
+      visitor_uuid: visitor.visitor_uuid,
+    })
+  }
 
   return {
     visitor,
-    action: "create",
+    action: cookie_found ? "repair" : "create",
     cookie_found,
+    cookie_value,
+    created_new_visitor: true,
   }
 }
 
-export async function resolveSession(
+export async function resolve_session_context(
   context: AuthContext,
   visitorStore: VisitorStore = supabaseVisitorStore,
+  runtime?: SessionRuntime,
 ): Promise<AppSession> {
-  const visitorResolution = await resolveVisitorRecord(context, visitorStore)
+  if (runtime?.resolved_session) {
+    return runtime.resolved_session
+  }
+
+  const visitorResolution = await resolveVisitorRecord(
+    context,
+    visitorStore,
+    runtime,
+  )
   const visitor = visitorResolution.visitor
   const user_uuid = await visitorStore.resolveUserUuidFromAuth(context)
 
   if (user_uuid && visitor.user_uuid !== user_uuid) {
     await visitorStore.linkVisitorUser(visitor.visitor_uuid, user_uuid)
+    await send_auth_debug("visitor_user_linked", {
+      visitor_uuid: visitor.visitor_uuid,
+      user_uuid,
+    })
   }
 
   const session: AppSession = {
@@ -451,17 +525,57 @@ export async function resolveSession(
   })
 
   await send_auth_debug("request_summary", {
-    pathname: context.requested_route,
-    visitor_uuid: session.visitor_uuid,
-    user_uuid: session.user_uuid,
+    pathname: runtime?.pathname ?? context.requested_route,
     cookie_found: visitorResolution.cookie_found,
-    action: visitorResolution.action,
+    cookie_value: visitorResolution.cookie_value,
+    resolved_visitor_uuid: session.visitor_uuid,
+    visitor_action: visitorResolution.action,
+    created_new_visitor: visitorResolution.created_new_visitor,
+    user_uuid: session.user_uuid,
+    source_channel: session.source_channel,
   })
 
   return session
 }
 
-export type { AppSession, VisitorStore }
+export async function resolveSession(
+  context: AuthContext,
+  visitorStore: VisitorStore = supabaseVisitorStore,
+): Promise<AppSession> {
+  const session = await getResolvedSessionFromRequestHeaders()
+
+  if (session) {
+    return session
+  }
+
+  return resolve_session_context(context, visitorStore)
+}
+
+async function getResolvedSessionFromRequestHeaders(): Promise<AppSession | null> {
+  try {
+    const { headers } = await import("next/headers")
+    const requestHeaders = await headers()
+    const visitor_uuid = requestHeaders.get("x-amp-session-visitor-uuid")
+    const source_channel = requestHeaders.get(
+      "x-amp-session-source-channel",
+    ) as SourceChannel | null
+
+    if (!visitor_uuid || !source_channel) {
+      return null
+    }
+
+    return {
+      visitor_uuid,
+      user_uuid: requestHeaders.get("x-amp-session-user-uuid"),
+      source_channel,
+    }
+  } catch {
+    return null
+  }
+}
+
+export { VISITOR_COOKIE_NAME, visitorCookieOptions }
+export type { AppSession, CookieOptions, SessionRuntime, VisitorStore }
 export type { Session } from "@/core/auth/types"
 
 /** @deprecated Use resolveSession instead */
