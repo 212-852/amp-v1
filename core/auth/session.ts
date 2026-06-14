@@ -23,6 +23,19 @@ type VisitorResolution = {
 
 type VisitorAction = "create" | "reuse" | "repair"
 
+type VisitorLookupResult = {
+  visitor: VisitorRecord | null
+  data: VisitorRecord | null
+  error_code: string | null
+  error_message: string | null
+  error_details: string | null
+}
+
+type VisitorDebugContext = {
+  pathname: string | null
+  request_id: string | null
+}
+
 type CookieOptions = {
   httpOnly: boolean
   maxAge: number
@@ -57,11 +70,12 @@ type SessionCacheEntry = {
 }
 
 type VisitorStore = {
-  findVisitorByUuid: (visitor_uuid: string) => Promise<VisitorRecord | null>
+  findVisitorByUuid: (visitor_uuid: string) => Promise<VisitorLookupResult>
   touchVisitor: (visitor_uuid: string) => Promise<void>
   upsertVisitor: (
     context: AuthContext,
     visitor_uuid: string,
+    debug: VisitorDebugContext,
   ) => Promise<VisitorRecord>
   resolveUserUuidFromAuth: (context: AuthContext) => Promise<string | null>
   linkVisitorUser: (visitor_uuid: string, user_uuid: string) => Promise<void>
@@ -78,6 +92,23 @@ type AuthUserResponse = {
 
 type UserUuidRow = {
   user_uuid?: string | null
+}
+
+type PostgrestError = {
+  code?: string
+  message?: string
+  details?: string
+}
+
+type VisitorUpsertBody = {
+  visitor_uuid: string
+  source_channel: SourceChannel
+  updated_at: string
+  user_uuid: null
+  debug_source?: string
+  debug_path?: string | null
+  debug_request_id?: string | null
+  debug_source_channel?: SourceChannel
 }
 
 const runtimeVisitors = new Map<string, VisitorRecord>()
@@ -211,6 +242,83 @@ async function fetchFirstRow<T>(
   return readFirstRow<T>(response)
 }
 
+async function fetchVisitorLookupResult(
+  config: SupabaseConfig,
+  visitor_uuid: string,
+): Promise<VisitorLookupResult> {
+  const response = await fetch(
+    restUrl(config, "visitors", visitorQuery(visitor_uuid)),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = (await response.json().catch(() => ({}))) as PostgrestError
+
+    return {
+      visitor: null,
+      data: null,
+      error_code: error.code ?? null,
+      error_message: error.message ?? null,
+      error_details: error.details ?? null,
+    }
+  }
+
+  const rows = (await response.json()) as VisitorRecord[]
+  const visitor = rows[0] ?? null
+
+  return {
+    visitor,
+    data: visitor,
+    error_code: null,
+    error_message: null,
+    error_details: null,
+  }
+}
+
+async function upsertVisitorRow(
+  config: SupabaseConfig,
+  body: VisitorUpsertBody,
+): Promise<{
+  visitor: VisitorRecord | null
+  error: PostgrestError | null
+}> {
+  const response = await fetch(
+    restUrl(
+      config,
+      "visitors",
+      "on_conflict=visitor_uuid&select=visitor_uuid,user_uuid,source_channel",
+    ),
+    {
+      method: "POST",
+      headers: {
+        ...restHeaders(config),
+        Prefer: "resolution=merge-duplicates,return=representation",
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = (await response.json().catch(() => ({}))) as PostgrestError
+
+    return {
+      visitor: null,
+      error,
+    }
+  }
+
+  const rows = (await response.json()) as VisitorRecord[]
+
+  return {
+    visitor: rows[0] ?? null,
+    error: null,
+  }
+}
+
 function visitorQuery(visitor_uuid: string) {
   return [
     `visitor_uuid=eq.${encodeURIComponent(visitor_uuid)}`,
@@ -285,7 +393,7 @@ const supabaseVisitorStore: VisitorStore = {
       return runtimeVisitorStore.findVisitorByUuid(visitor_uuid)
     }
 
-    return fetchFirstRow<VisitorRecord>(config, "visitors", visitorQuery(visitor_uuid))
+    return fetchVisitorLookupResult(config, visitor_uuid)
   },
 
   async touchVisitor(visitor_uuid) {
@@ -310,35 +418,46 @@ const supabaseVisitorStore: VisitorStore = {
     )
   },
 
-  async upsertVisitor(context, visitor_uuid) {
+  async upsertVisitor(context, visitor_uuid, debug) {
     const config = getSupabaseConfig()
 
     if (!config) {
-      return runtimeVisitorStore.upsertVisitor(context, visitor_uuid)
+      return runtimeVisitorStore.upsertVisitor(context, visitor_uuid, debug)
     }
 
-    const response = await fetch(
-      restUrl(
-        config,
-        "visitors",
-        "on_conflict=visitor_uuid&select=visitor_uuid,user_uuid,source_channel",
-      ),
-      {
-        method: "POST",
-        headers: {
-          ...restHeaders(config),
-          Prefer: "resolution=merge-duplicates,return=representation",
-        },
-        body: JSON.stringify({
+    const body: VisitorUpsertBody = {
+      visitor_uuid,
+      source_channel: context.source_channel,
+      updated_at: new Date().toISOString(),
+      user_uuid: null,
+      debug_source: "auth/session",
+      debug_path: debug.pathname,
+      debug_request_id: debug.request_id,
+      debug_source_channel: context.source_channel,
+    }
+    const result = await upsertVisitorRow(config, body)
+    let visitor = result.visitor
+
+    if (!visitor && result.error?.code === "42703") {
+      await send_auth_debug(
+        "visitor_debug_columns_missing",
+        {
           visitor_uuid,
-          source_channel: context.source_channel,
-          updated_at: new Date().toISOString(),
-          user_uuid: null,
-        }),
-        cache: "no-store",
-      },
-    )
-    const visitor = await readFirstRow<VisitorRecord>(response)
+          error_code: result.error.code ?? null,
+          error_message: result.error.message ?? null,
+          error_details: result.error.details ?? null,
+        },
+        debug.request_id,
+      )
+
+      const fallbackResult = await upsertVisitorRow(config, {
+        visitor_uuid,
+        source_channel: context.source_channel,
+        updated_at: body.updated_at,
+        user_uuid: null,
+      })
+      visitor = fallbackResult.visitor
+    }
 
     if (!visitor) {
       throw new Error("Failed to upsert visitor record.")
@@ -394,7 +513,15 @@ const supabaseVisitorStore: VisitorStore = {
 
 const runtimeVisitorStore: VisitorStore = {
   async findVisitorByUuid(visitor_uuid) {
-    return runtimeVisitors.get(visitor_uuid) ?? null
+    const visitor = runtimeVisitors.get(visitor_uuid) ?? null
+
+    return {
+      visitor,
+      data: visitor,
+      error_code: null,
+      error_message: null,
+      error_details: null,
+    }
   },
 
   async touchVisitor(visitor_uuid) {
@@ -534,7 +661,8 @@ async function resolveVisitorRecord(
   )
 
   if (cookie_value) {
-    const existingVisitor = await visitorStore.findVisitorByUuid(cookie_value)
+    const lookupResult = await visitorStore.findVisitorByUuid(cookie_value)
+    const existingVisitor = lookupResult.visitor
     const found = Boolean(existingVisitor)
 
     await send_auth_debug(
@@ -546,6 +674,21 @@ async function resolveVisitorRecord(
       },
       request_id,
     )
+
+    if (!found) {
+      await send_auth_debug(
+        "visitor_lookup_result",
+        {
+          pathname,
+          visitor_uuid: cookie_value,
+          data: lookupResult.data,
+          error_code: lookupResult.error_code,
+          error_message: lookupResult.error_message,
+          error_details: lookupResult.error_details,
+        },
+        request_id,
+      )
+    }
 
     if (existingVisitor) {
       await visitorStore.touchVisitor(existingVisitor.visitor_uuid)
@@ -569,7 +712,10 @@ async function resolveVisitorRecord(
       }
     }
 
-    const visitor = await visitorStore.upsertVisitor(context, cookie_value)
+    const visitor = await visitorStore.upsertVisitor(context, cookie_value, {
+      pathname,
+      request_id: request_id ?? null,
+    })
 
     await send_auth_debug(
       "visitor_upserted",
@@ -592,6 +738,21 @@ async function resolveVisitorRecord(
       request_id,
     )
 
+    const repairLookup = await visitorStore.findVisitorByUuid(cookie_value)
+
+    await send_auth_debug(
+      "visitor_repair_verify",
+      {
+        visitor_uuid: cookie_value,
+        found_after_repair: Boolean(repairLookup.visitor),
+        error_code: repairLookup.error_code,
+        error_message: repairLookup.error_message,
+        error_details: repairLookup.error_details,
+        error: repairLookup.error_message,
+      },
+      request_id,
+    )
+
     return {
       visitor,
       action: "repair",
@@ -610,7 +771,10 @@ async function resolveVisitorRecord(
   )
 
   const visitor_uuid = crypto.randomUUID()
-  const visitor = await visitorStore.upsertVisitor(context, visitor_uuid)
+  const visitor = await visitorStore.upsertVisitor(context, visitor_uuid, {
+    pathname,
+    request_id: request_id ?? null,
+  })
   await setVisitorCookie(visitor.visitor_uuid, runtime, request_id)
 
   await send_auth_debug(
