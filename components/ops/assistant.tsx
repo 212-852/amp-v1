@@ -19,16 +19,16 @@ export default function OpsAssistant() {
   return (
     <section
       aria-label="AI assistant"
-      className="fixed inset-x-0 bottom-0 z-50 bg-neutral-50 px-5 pb-[env(safe-area-inset-bottom)]"
+      className="fixed inset-x-0 bottom-0 z-50 px-5 pb-[env(safe-area-inset-bottom)]"
     >
       <div className="relative mx-auto w-full max-w-[430px]">
-        <div className="relative overflow-visible rounded-[24px] border border-neutral-200 bg-white px-3 py-2.5 shadow-[0_-6px_20px_rgba(0,0,0,0.05)]">
-          <div className="flex items-center gap-2.5">
-            <div className="relative h-[84px] w-[68px] shrink-0">
-              <div className="pointer-events-none absolute bottom-[-8px] left-0">
-                <div className="h-[72px] w-[68px] overflow-hidden">
-                  <OpsNeko className="h-[92px] w-[68px] object-contain object-top" />
-                </div>
+        <div className="pointer-events-none absolute inset-x-0 bottom-[-1px] h-10 bg-gradient-to-b from-white to-white/0" />
+
+        <div className="relative overflow-visible rounded-t-[28px] rounded-b-[6px] border border-b-0 border-neutral-200 bg-white px-3 pb-4 pt-3 shadow-[0_-6px_18px_rgba(0,0,0,0.045)]">
+          <div className="flex items-end gap-2.5">
+            <div className="relative h-[92px] w-[72px] shrink-0 overflow-visible">
+              <div className="pointer-events-none absolute bottom-[-20px] left-0 z-10">
+                <OpsNeko className="h-[104px] w-[76px] object-contain object-top" />
               </div>
             </div>
 
@@ -43,7 +43,9 @@ export default function OpsAssistant() {
                     key={item.label}
                     className="grid grid-cols-[40px_1fr] items-baseline gap-2 text-[11px] leading-tight"
                   >
-                    <p className="font-semibold text-neutral-950">{item.label}</p>
+                    <p className="font-semibold text-neutral-950">
+                      {item.label}
+                    </p>
                     <p className="truncate font-medium text-neutral-500">
                       {item.message}
                     </p>
