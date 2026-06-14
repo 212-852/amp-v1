@@ -29,23 +29,23 @@ export default function OpsHeader() {
   const pageLabel = pageLabels[pathname] ?? "ダッシュボード"
 
   return (
-    <header className="border-b border-neutral-200 bg-white px-5 pb-4 pt-[calc(14px+env(safe-area-inset-top,0px))]">
-      <div className="mx-auto flex min-h-[88px] w-full max-w-[430px] items-center justify-between gap-3">
+    <header className="border-b border-neutral-200 bg-white px-5 pb-3 pt-[calc(10px+env(safe-area-inset-top,0px))]">
+      <div className="mx-auto flex w-full max-w-[430px] items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="relative h-[56px] w-[56px] shrink-0 overflow-hidden rounded-full border border-neutral-200 bg-neutral-50">
-            <div className="absolute left-1/2 top-2 origin-top -translate-x-1/2 scale-[0.42]">
+          <div className="relative h-[52px] w-[52px] shrink-0 overflow-hidden rounded-full border border-neutral-200 bg-neutral-50">
+            <div className="absolute left-1/2 top-1.5 origin-top -translate-x-1/2 scale-[0.38]">
               <OpsNeko />
             </div>
           </div>
 
           <div className="min-w-0">
-            <p className="truncate text-[17px] font-semibold tracking-[-0.03em] text-neutral-950">
+            <p className="truncate text-[17px] font-semibold leading-tight tracking-[-0.03em] text-neutral-950">
               {displayName}
             </p>
-            <p className="mt-1 text-[13px] font-medium text-neutral-500">
+            <p className="mt-0.5 text-[12px] font-medium leading-tight text-neutral-500">
               admin
             </p>
-            <p className="mt-2 text-[13px] font-semibold tracking-[-0.02em] text-neutral-950">
+            <p className="mt-1 truncate text-[11px] font-medium leading-tight text-neutral-500">
               {pageLabel}
             </p>
           </div>

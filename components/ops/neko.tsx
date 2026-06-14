@@ -1,14 +1,20 @@
 import Image from "next/image"
 
-export default function OpsNeko() {
+type OpsNekoProps = {
+  className?: string
+}
+
+export default function OpsNeko({
+  className = "h-[124px] w-[96px] object-contain object-top",
+}: Readonly<OpsNekoProps>) {
   return (
     <Image
       src="/images/robo_neko.svg"
       alt="roboNeko"
-      width={112}
-      height={144}
+      width={96}
+      height={124}
       unoptimized
-      className="h-[144px] w-[112px] object-contain object-top"
+      className={className}
     />
   )
 }
