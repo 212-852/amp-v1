@@ -20,7 +20,7 @@ export function getOverlayModalAnimationClass(
       return "modal_left_exit"
     }
 
-    return "modal_center_drop_exit"
+    return "modal_center_drop_bounce_exit"
   }
 
   if (animation === "from_bottom") {
@@ -31,7 +31,7 @@ export function getOverlayModalAnimationClass(
     return "modal_left_enter"
   }
 
-  return "modal_center_drop_enter"
+  return "modal_center_drop_bounce"
 }
 
 export function getOverlayBackdropAnimationClass(phase: OverlayPhase) {

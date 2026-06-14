@@ -54,6 +54,7 @@ export default function OverlayOutput({
     >
       <div
         aria-hidden="true"
+        onMouseDown={onClose}
         className={["absolute inset-0", getOverlayBackdropAnimationClass(phase)].join(
           " ",
         )}
@@ -98,13 +99,12 @@ export default function OverlayOutput({
             cubic-bezier(0.16, 1.15, 0.32, 1) both;
         }
 
-        .modal_center_drop_enter {
-          animation: modal_center_drop_enter 520ms
-            cubic-bezier(0.16, 1.25, 0.32, 1) both;
+        .modal_center_drop_bounce {
+          animation: modal_center_drop_bounce 720ms linear both;
         }
 
-        .modal_center_drop_exit {
-          animation: modal_center_drop_exit 220ms ease-out both;
+        .modal_center_drop_bounce_exit {
+          animation: modal_center_drop_bounce_exit 220ms ease-out both;
         }
 
         @keyframes overlay_backdrop_enter {
@@ -183,36 +183,44 @@ export default function OverlayOutput({
           }
         }
 
-        @keyframes modal_center_drop_enter {
+        @keyframes modal_center_drop_bounce {
           0% {
             opacity: 0;
-            transform: translateY(-20%) scale(0.94);
+            transform: translate(-50%, -120%) scale(0.92);
           }
 
-          48% {
+          45% {
             opacity: 1;
-            transform: translateY(3%) scale(1.04);
+            transform: translate(-50%, -44%) scale(1.04);
+          }
+
+          60% {
+            transform: translate(-50%, -56%) scale(0.98);
           }
 
           74% {
-            transform: translateY(-2%) scale(0.98);
+            transform: translate(-50%, -48%) scale(1.015);
+          }
+
+          86% {
+            transform: translate(-50%, -51%) scale(0.995);
           }
 
           100% {
             opacity: 1;
-            transform: translateY(0) scale(1);
+            transform: translate(-50%, -50%) scale(1);
           }
         }
 
-        @keyframes modal_center_drop_exit {
-          from {
+        @keyframes modal_center_drop_bounce_exit {
+          0% {
             opacity: 1;
-            transform: translateY(0) scale(1);
+            transform: translate(-50%, -50%) scale(1);
           }
 
-          to {
+          100% {
             opacity: 0;
-            transform: translateY(-6%) scale(0.96);
+            transform: translate(-50%, -68%) scale(0.96);
           }
         }
       `}</style>

@@ -18,7 +18,10 @@ function getModalLayoutClass(rule: OverlayRule) {
     ].join(" ")
   }
 
-  return "w-full max-w-[360px] rounded-[28px] py-5"
+  return [
+    "fixed left-1/2 top-1/2 w-[calc(100%-40px)]",
+    "max-w-[360px] rounded-[28px] py-5",
+  ].join(" ")
 }
 
 export default function OverlayModal({
