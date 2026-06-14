@@ -642,6 +642,17 @@ async function resolveVisitorRecord(
     request_id,
   )
 
+  await send_auth_debug(
+    "visitor_created_forensic",
+    {
+      visitor_uuid: visitor.visitor_uuid,
+      pathname,
+      request_id: request_id ?? null,
+      stack: new Error("TEMP_AUTH_DEBUG_VISITOR_CREATED").stack ?? null,
+    },
+    request_id,
+  )
+
   return {
     visitor,
     action: "create",
