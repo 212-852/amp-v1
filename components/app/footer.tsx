@@ -9,7 +9,7 @@ type AssistantMode = "bot" | "concierge"
 
 const footer_shell_class = [
   "relative mx-auto h-[186px] w-full max-w-[430px]",
-  "rounded-tl-[38px] rounded-tr-[18px] bg-[#ead7c3]",
+  "rounded-tl-[44px] rounded-tr-[16px] bg-[#ead7c3]",
 ].join(" ")
 
 const fixed_paw_button_class = [
@@ -114,8 +114,8 @@ function SendPawButton() {
 
 function MessageInputRow() {
   return (
-    <div className="flex w-full items-center gap-4 px-4">
-      <div className="min-w-0 flex-1 translate-y-[11px]">
+    <div className="flex w-full translate-y-[4px] items-center gap-4 px-4">
+      <div className="min-w-0 flex-1">
         <label className="sr-only" htmlFor="app-message-input">
           Message
         </label>
@@ -164,7 +164,7 @@ function BottomMenuRow() {
 
 function CopyrightText() {
   return (
-    <p className="mt-3 translate-y-[3px] text-center text-[11px] font-normal leading-none text-[#8c7358] opacity-[0.45]">
+    <p className="mt-3 translate-y-[7px] text-center text-[11px] font-normal leading-none text-[#8c7358] opacity-[0.45]">
       © 2026 Wan Da Nya Inc.
     </p>
   )
@@ -194,7 +194,7 @@ export default function AppFooter() {
             className={[
               "shrink-0 [perspective:1000px]",
               isInputMode
-                ? "absolute inset-x-0 bottom-[18px] z-10 h-[92px]"
+                ? "absolute inset-x-0 bottom-[14px] z-10 h-[92px]"
                 : "h-[76px]",
             ].join(" ")}
           >
