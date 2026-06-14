@@ -1,15 +1,15 @@
 "use client"
 
-import { Bell, ChevronDown, MessageCircle, Settings } from "lucide-react"
+import { Menu, MessageCircle, Settings } from "lucide-react"
+import Link from "next/link"
 import { usePathname } from "next/navigation"
 
 import OpsNeko from "@/components/ops/neko"
 
 const headerActions = [
   { label: "Chat", icon: MessageCircle },
-  { label: "Notifications", icon: Bell },
   { label: "Settings", icon: Settings },
-  { label: "Open", icon: ChevronDown },
+  { label: "Menu", icon: Menu },
 ]
 
 const pageLabels: Record<string, string> = {
@@ -27,6 +27,10 @@ export default function OpsHeader() {
   const pathname = usePathname()
   const displayName = "Guest"
   const pageLabel = pageLabels[pathname] ?? "ダッシュボード"
+  const breadcrumbs = [
+    { label: "ホーム", href: "/admin" },
+    { label: pageLabel, href: pathname },
+  ]
 
   return (
     <header className="border-b border-neutral-200 bg-white px-5 pb-3 pt-[calc(10px+env(safe-area-inset-top,0px))]">
@@ -45,9 +49,29 @@ export default function OpsHeader() {
             <p className="mt-0.5 text-[12px] font-medium leading-tight text-neutral-500">
               admin
             </p>
-            <p className="mt-1 truncate text-[11px] font-medium leading-tight text-neutral-500">
-              {pageLabel}
-            </p>
+            <nav
+              aria-label="Breadcrumb"
+              className="mt-1 flex min-w-0 items-center overflow-hidden text-[11px] font-medium leading-tight text-neutral-500"
+            >
+              {breadcrumbs.map((item, index) => (
+                <span key={`${item.href}-${item.label}`} className="min-w-0">
+                  {index > 0 ? (
+                    <span className="px-1 text-neutral-400" aria-hidden="true">
+                      &gt;
+                    </span>
+                  ) : null}
+                  <Link
+                    href={item.href}
+                    aria-current={
+                      index === breadcrumbs.length - 1 ? "page" : undefined
+                    }
+                    className="truncate text-neutral-500"
+                  >
+                    {item.label}
+                  </Link>
+                </span>
+              ))}
+            </nav>
           </div>
         </div>
 
