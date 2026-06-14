@@ -26,14 +26,25 @@ function resolveSourceChannel(
   return "web"
 }
 
+function resolveBearerToken(authorization: string | null) {
+  if (!authorization?.startsWith("Bearer ")) {
+    return null
+  }
+
+  return authorization.slice("Bearer ".length).trim() || null
+}
+
 export async function resolveAuthContext(): Promise<AuthContext> {
   const entrance = await resolveEntranceContext()
   const requestHeaders = await headers()
   const cookieStore = await cookies()
 
   return {
-    visitor_uuid: cookieStore.get("visitor_uuid")?.value ?? null,
-    session_token: cookieStore.get("session_token")?.value ?? null,
+    auth_token:
+      resolveBearerToken(requestHeaders.get("authorization")) ??
+      cookieStore.get("sb-access-token")?.value ??
+      cookieStore.get("supabase-auth-token")?.value ??
+      null,
     requested_route: requestHeaders.get("x-amp-route"),
     source_channel: resolveSourceChannel(
       entrance.surface,

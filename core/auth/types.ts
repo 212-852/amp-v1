@@ -32,11 +32,12 @@ export type Session = {
   source_channel: SourceChannel
 }
 
+export type AppSession = Session
+
 export type AmpSession = Session
 
 export type AuthContext = {
-  visitor_uuid: string | null
-  session_token: string | null
+  auth_token: string | null
   requested_route: string | null
   source_channel: SourceChannel
   locale: string | null
