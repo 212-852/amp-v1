@@ -44,7 +44,7 @@ function HeaderCurve() {
       viewBox="0 0 430 108"
     >
       <path
-        d="M0 0H430V88C342 104 274 54 196 68C123 81 60 97 0 86Z"
+        d="M0 0H430V86C350 87 302 87 262 87C226 87 206 75 176 66C132 53 88 62 0 92Z"
         fill="currentColor"
       />
     </svg>
