@@ -1,14 +1,14 @@
 import Image from "next/image"
 
-export default function RoboNekoCharacter() {
+export default function OpsNeko() {
   return (
     <Image
       src="/images/robo_neko.svg"
       alt="roboNeko"
-      width={90}
-      height={108}
+      width={112}
+      height={144}
       unoptimized
-      className="h-[108px] w-[90px] object-contain"
+      className="h-[144px] w-[112px] object-contain object-top"
     />
   )
 }
