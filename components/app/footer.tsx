@@ -129,16 +129,18 @@ function SendPawButton() {
 function MessageInputRow() {
   return (
     <div className="flex w-full items-center gap-4 px-4">
-      <label className="sr-only" htmlFor="app-message-input">
-        Message
-      </label>
-      <input
-        id="app-message-input"
-        type="text"
-        readOnly
-        placeholder="メッセージを入力"
-        className="h-[68px] min-w-0 flex-1 rounded-full bg-[#fffaf2] px-5 text-[16px] font-semibold text-[#3f2d1d] placeholder:text-[#a98964]"
-      />
+      <div className="min-w-0 flex-1 translate-y-[8px]">
+        <label className="sr-only" htmlFor="app-message-input">
+          Message
+        </label>
+        <input
+          id="app-message-input"
+          type="text"
+          readOnly
+          placeholder="メッセージを入力"
+          className="h-[68px] w-full min-w-0 rounded-full bg-[#fffaf2] px-5 text-[16px] font-semibold text-[#3f2d1d] placeholder:text-[#a98964]"
+        />
+      </div>
       <SendPawButton />
     </div>
   )
