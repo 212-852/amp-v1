@@ -263,13 +263,35 @@ admin_driver_detail.ts
 Header Color : LOCK
 Footer Color : LOCK
 Background Color : LOCK
+Header Footer UI : LOCK
 
-While this flag is true:
+App Shell Decoration Rules
 
-- No header changes
-- No footer changes
+Header and footer shape:
+
+- border-radius only
+- pseudo elements allowed when needed
+- no SVG for shell decoration
+- no clip-path
+- no decorative images
+- no ear or tail shapes
+
+World view is expressed only through:
+
+- beige color
+- brown accent
+- pink paw button (icon.svg or icon.webp)
+- brown paw send button
+- rounded UI
+- dog and cat characters in content areas
+
+While Header Footer UI lock is true:
+
+- No header UI changes
+- No footer UI changes
 - No color changes
-- No spacing changes
+- No size changes
+- No position changes
 - No animation changes
 
 Only bug fixes are allowed.

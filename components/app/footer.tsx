@@ -7,8 +7,10 @@ import { useState } from "react"
 type FooterMode = "normal" | "input"
 type AssistantMode = "bot" | "concierge"
 
-const footer_shell_class =
-  "relative mx-auto h-[186px] w-full max-w-[430px]"
+const footer_shell_class = [
+  "relative mx-auto h-[186px] w-full max-w-[430px]",
+  "rounded-t-[26px] bg-[#ead7c3]",
+].join(" ")
 
 const fixed_paw_button_class = [
   "absolute left-3 z-30 flex h-[60px] w-[60px]",
@@ -18,22 +20,6 @@ const fixed_paw_button_class = [
 ].join(" ")
 
 const fixed_paw_button_position_class = "top-[15px]"
-
-function FooterShape() {
-  return (
-    <svg
-      aria-hidden="true"
-      className="absolute inset-x-0 bottom-0 h-[186px] w-full text-[#ead7c3]"
-      preserveAspectRatio="none"
-      viewBox="0 0 390 186"
-    >
-      <path
-        d="M0 40C38 24 74 25 100 42C112 50 118 62 130 68C146 76 160 62 154 45C150 34 158 27 170 32C184 38 189 51 195 61C209 44 232 37 256 43C272 47 286 53 301 49C316 45 322 31 315 23C309 16 297 19 296 29C295 38 306 43 316 37C334 27 353 27 390 40V186H0V40Z"
-        fill="currentColor"
-      />
-    </svg>
-  )
-}
 
 function PinkPawIcon() {
   return (
@@ -196,7 +182,6 @@ export default function AppFooter() {
   return (
     <footer className="fixed inset-x-0 bottom-0 z-50 pb-[env(safe-area-inset-bottom)]">
       <div className={footer_shell_class}>
-        <FooterShape />
         <PinkPawButton isInputMode={isInputMode} onClick={toggleFooterMode} />
 
         <div
