@@ -39,12 +39,12 @@ function HeaderBottomCurve() {
   return (
     <svg
       aria-hidden="true"
-      className="pointer-events-none absolute inset-x-0 bottom-[-1px] h-[18px] w-full text-[#f5e8d5]"
+      className="pointer-events-none absolute inset-x-0 bottom-[-16px] h-[18px] w-full text-[#ead7c3]"
       preserveAspectRatio="none"
       viewBox="0 0 390 18"
     >
       <path
-        d="M0 18H124C139 18 147 12 158 10C166 8 172 11 178 14C184 17 190 15 195 10C200 15 206 17 212 14C218 11 224 8 232 10C243 12 251 18 266 18H390V18H0Z"
+        d="M0 0H157C166 0 171 5 174 12C176 17 181 17 183 12C186 5 190 2 195 2C200 2 204 5 207 12C209 17 214 17 216 12C219 5 224 0 233 0H390V0H0Z"
         fill="currentColor"
       />
     </svg>
