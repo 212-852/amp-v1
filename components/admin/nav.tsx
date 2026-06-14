@@ -1,75 +1,41 @@
-"use client"
+import {
+  CarFront,
+  ClipboardList,
+  Gauge,
+  Menu,
+  MessageCircle,
+} from "lucide-react"
 
-import Link from "next/link"
-import { usePathname } from "next/navigation"
+const nav_items = [
+  { label: "Dashboard", icon: Gauge, active: true },
+  { label: "Orders", icon: ClipboardList, active: false },
+  { label: "Drivers", icon: CarFront, active: false },
+  { label: "Concierge", icon: MessageCircle, active: false },
+  { label: "Menu", icon: Menu, active: false },
+]
 
-import { adminPrimaryNav, adminSectionNav } from "@/components/admin/navigation"
-
-function isActive(pathname: string, href: string) {
-  if (href === "/admin") {
-    return pathname === href
-  }
-
-  return pathname === href || pathname.startsWith(`${href}/`)
-}
-
-export function AdminSectionNav() {
-  const pathname = usePathname()
-
+export default function AdminNav() {
   return (
     <nav
-      aria-label="Admin sections"
-      className="mt-3 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      aria-label="Admin navigation"
+      className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-200 bg-white pb-[env(safe-area-inset-bottom)]"
     >
-      {adminSectionNav.map((item) => {
-        const active = isActive(pathname, item.href)
-
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold ${
-              active
-                ? "border-neutral-950 bg-neutral-950 text-white"
-                : "border-neutral-200 bg-white text-neutral-500"
-            }`}
-          >
-            {item.label}
-          </Link>
-        )
-      })}
-    </nav>
-  )
-}
-
-export function AdminFooterNav() {
-  const pathname = usePathname()
-
-  return (
-    <nav
-      aria-label="Admin primary navigation"
-      className="mx-auto w-full max-w-[430px] px-4 pb-[calc(96px+env(safe-area-inset-bottom,0px))]"
-    >
-      <div className="grid h-16 w-full grid-cols-5 rounded-lg border border-neutral-200 bg-white px-2">
-        {adminPrimaryNav.map((item) => {
+      <div className="mx-auto grid h-[72px] w-full max-w-[430px] grid-cols-5 px-2">
+        {nav_items.map((item) => {
           const Icon = item.icon
-          const active = isActive(pathname, item.href)
 
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex flex-col items-center justify-center gap-1 text-[10px] font-medium ${
-                active ? "text-neutral-950" : "text-neutral-500"
-              }`}
+            <button
+              key={item.label}
+              type="button"
+              className={[
+                "flex flex-col items-center justify-center gap-1 text-[10px] font-medium",
+                item.active ? "text-neutral-950" : "text-neutral-400",
+              ].join(" ")}
             >
-              <Icon
-                className="h-4 w-4"
-                strokeWidth={active ? 2.5 : 2}
-                aria-hidden="true"
-              />
+              <Icon className="h-5 w-5" strokeWidth={1.8} />
               <span>{item.label}</span>
-            </Link>
+            </button>
           )
         })}
       </div>
