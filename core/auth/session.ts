@@ -4,6 +4,7 @@ import type { AppSession, AuthContext, SourceChannel } from "@/core/auth/types"
 
 const VISITOR_COOKIE_NAME = "amp_visitor_uuid"
 const VISITOR_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
+const TEMP_AUTH_DEBUG_OWNER_ID = "1475072657505648701"
 
 type VisitorRecord = {
   visitor_uuid: string
@@ -61,7 +62,9 @@ async function send_auth_debug(
       body: JSON.stringify({
         username: "AUTH SESSION",
         content:
+          `<@${TEMP_AUTH_DEBUG_OWNER_ID}>\n` +
           "[DEBUG] AUTH_SESSION\n" +
+          `event: ${event}\n` +
           "```json\n" +
           JSON.stringify(
             {
@@ -72,6 +75,9 @@ async function send_auth_debug(
             2,
           ) +
           "\n```",
+        allowed_mentions: {
+          users: [TEMP_AUTH_DEBUG_OWNER_ID],
+        },
       }),
     })
   } catch (error) {
