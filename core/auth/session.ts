@@ -33,6 +33,8 @@ type SessionRuntime = {
   cookie_was_found?: boolean
   visitor_uuid_hint?: string | null
   request_cache_key?: string | null
+  search?: string | null
+  user_agent_contains_line?: boolean
   set_cookie?: (
     name: string,
     value: string,
@@ -45,7 +47,7 @@ type SessionRuntime = {
 type VisitorStore = {
   findVisitorByUuid: (visitor_uuid: string) => Promise<VisitorRecord | null>
   touchVisitor: (visitor_uuid: string) => Promise<void>
-  createVisitor: (
+  upsertVisitor: (
     context: AuthContext,
     visitor_uuid?: string | null,
   ) => Promise<VisitorRecord>
@@ -274,18 +276,22 @@ const supabaseVisitorStore: VisitorStore = {
     )
   },
 
-  async createVisitor(context, visitor_uuid) {
+  async upsertVisitor(context, visitor_uuid) {
     const config = getSupabaseConfig()
 
     if (!config) {
-      return runtimeVisitorStore.createVisitor(context, visitor_uuid)
+      return runtimeVisitorStore.upsertVisitor(context, visitor_uuid)
     }
 
     const body: {
       source_channel: SourceChannel
+      updated_at: string
+      user_uuid: null
       visitor_uuid?: string
     } = {
       source_channel: context.source_channel,
+      updated_at: new Date().toISOString(),
+      user_uuid: null,
     }
 
     if (visitor_uuid) {
@@ -293,12 +299,16 @@ const supabaseVisitorStore: VisitorStore = {
     }
 
     const response = await fetch(
-      restUrl(config, "visitors", "select=visitor_uuid,user_uuid,source_channel"),
+      restUrl(
+        config,
+        "visitors",
+        "on_conflict=visitor_uuid&select=visitor_uuid,user_uuid,source_channel",
+      ),
       {
         method: "POST",
         headers: {
           ...restHeaders(config),
-          Prefer: "return=representation",
+          Prefer: "resolution=merge-duplicates,return=representation",
         },
         body: JSON.stringify(body),
         cache: "no-store",
@@ -307,7 +317,7 @@ const supabaseVisitorStore: VisitorStore = {
     const visitor = await readFirstRow<VisitorRecord>(response)
 
     if (!visitor) {
-      throw new Error("Failed to create visitor record.")
+      throw new Error("Failed to upsert visitor record.")
     }
 
     return visitor
@@ -371,7 +381,7 @@ const runtimeVisitorStore: VisitorStore = {
     }
   },
 
-  async createVisitor(context, visitor_uuid) {
+  async upsertVisitor(context, visitor_uuid) {
     const visitor: VisitorRecord = {
       visitor_uuid: visitor_uuid ?? crypto.randomUUID(),
       user_uuid: null,
@@ -499,8 +509,13 @@ async function resolveVisitorRecord(
     }
   }
 
-  const visitor = await visitorStore.createVisitor(context, visitor_uuid_hint)
+  const visitor = await visitorStore.upsertVisitor(context, visitor_uuid_hint)
   await setVisitorCookie(visitor.visitor_uuid, runtime)
+
+  await send_auth_debug("visitor_upserted", {
+    visitor_uuid: visitor.visitor_uuid,
+    source_channel: visitor.source_channel,
+  })
 
   if (cookie_found) {
     await send_auth_debug("visitor_repaired", {
@@ -539,6 +554,21 @@ export async function resolve_session_context(
 
       await send_auth_debug("visitor_request_cache_hit", {
         visitor_uuid: session.visitor_uuid,
+      })
+
+      await send_auth_debug("request_summary", {
+        pathname: runtime.pathname ?? context.requested_route,
+        search: runtime.search ?? null,
+        user_agent_contains_line: runtime.user_agent_contains_line ?? false,
+        cookie_found: runtime.cookie_was_found ?? Boolean(runtime.cookie_value),
+        cookie_value: runtime.cookie_value ?? null,
+        resolved_visitor_uuid: session.visitor_uuid,
+        visitor_action: "reuse",
+        created_new_visitor: false,
+        request_cache_hit: true,
+        secure_cookie: visitorCookieOptions.secure,
+        user_uuid: session.user_uuid,
+        source_channel: session.source_channel,
       })
 
       return session
@@ -592,11 +622,15 @@ async function resolve_session_context_core(
 
   await send_auth_debug("request_summary", {
     pathname: runtime?.pathname ?? context.requested_route,
+    search: runtime?.search ?? null,
+    user_agent_contains_line: runtime?.user_agent_contains_line ?? false,
     cookie_found: visitorResolution.cookie_found,
     cookie_value: visitorResolution.cookie_value,
     resolved_visitor_uuid: session.visitor_uuid,
     visitor_action: visitorResolution.action,
     created_new_visitor: visitorResolution.created_new_visitor,
+    request_cache_hit: false,
+    secure_cookie: visitorCookieOptions.secure,
     user_uuid: session.user_uuid,
     source_channel: session.source_channel,
   })

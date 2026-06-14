@@ -24,6 +24,8 @@ function resolveBearerToken(authorization: string | null) {
 
 function resolveSourceChannel(request: NextRequest): SourceChannel {
   const channel = request.headers.get("x-amp-channel")
+  const sourceChannel = request.nextUrl.searchParams.get("source_channel")
+  const userAgent = request.headers.get("user-agent") ?? ""
 
   if (
     channel === "web" ||
@@ -32,6 +34,25 @@ function resolveSourceChannel(request: NextRequest): SourceChannel {
     channel === "line"
   ) {
     return channel
+  }
+
+  if (sourceChannel === "liff") {
+    return "liff"
+  }
+
+  if (
+    request.nextUrl.searchParams.has("liff") ||
+    request.nextUrl.searchParams.has("liff_state")
+  ) {
+    return "liff"
+  }
+
+  if (userAgent.toLowerCase().includes("line")) {
+    return "liff"
+  }
+
+  if (request.nextUrl.pathname.startsWith("/line")) {
+    return "line"
   }
 
   return "web"
@@ -56,12 +77,17 @@ export async function proxy(request: NextRequest) {
   const requestVisitorUuid =
     request.cookies.get(VISITOR_COOKIE_NAME)?.value ?? null
   const visitorUuidHint = requestVisitorUuid ?? crypto.randomUUID()
+  const userAgentContainsLine = (
+    request.headers.get("user-agent") ?? ""
+  ).toLowerCase().includes("line")
   const session = await resolve_session_context(context, undefined, {
     cookie_value: requestVisitorUuid,
     cookie_was_found: Boolean(requestVisitorUuid),
     visitor_uuid_hint: visitorUuidHint,
     request_cache_key: visitorUuidHint,
     pathname: request.nextUrl.pathname,
+    search: request.nextUrl.search,
+    user_agent_contains_line: userAgentContainsLine,
     set_cookie(name, value, options) {
       pendingCookie = { name, value, options }
     },
@@ -70,6 +96,13 @@ export async function proxy(request: NextRequest) {
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set("x-amp-session-visitor-uuid", session.visitor_uuid)
   requestHeaders.set("x-amp-session-source-channel", session.source_channel)
+  requestHeaders.set("x-amp-source-channel", session.source_channel)
+  requestHeaders.set("x-amp-pathname", request.nextUrl.pathname)
+  requestHeaders.set("x-amp-search", request.nextUrl.search)
+  requestHeaders.set(
+    "x-amp-user-agent-contains-line",
+    String(userAgentContainsLine),
+  )
 
   if (session.user_uuid) {
     requestHeaders.set("x-amp-session-user-uuid", session.user_uuid)
