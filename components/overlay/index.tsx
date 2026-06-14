@@ -1,7 +1,8 @@
 export { OverlayProvider, useOverlay } from "@/components/overlay/context"
 export {
-  getOverlayDurationClass,
-  getOverlayPanelTransform,
+  getOverlayBackdropAnimationClass,
+  getOverlayDurationClassForAnimation,
+  getOverlayModalAnimationClass,
   overlay_close_duration_ms,
   overlay_ease_class,
   overlay_open_duration_ms,

@@ -1,7 +1,5 @@
 import {
-  getOverlayDurationClassForAnimation,
-  getOverlayPanelTransform,
-  overlay_ease_class,
+  getOverlayModalAnimationClass,
 } from "@/components/overlay/animations"
 import type { OverlayPhase, OverlayRule } from "@/components/overlay/types"
 
@@ -45,10 +43,8 @@ export default function OverlayModal({
         getModalRadiusClass(rule),
         "bg-white p-5 text-[#111111]",
         "shadow-[0_18px_50px_rgba(0,0,0,0.12)]",
-        "transition-[opacity,transform]",
-        getOverlayDurationClassForAnimation(rule.animation, phase),
-        overlay_ease_class,
-        getOverlayPanelTransform(rule.animation, phase),
+        "will-change-transform",
+        getOverlayModalAnimationClass(rule.animation, phase),
       ].join(" ")}
     >
       <div className="flex items-start justify-between gap-4">

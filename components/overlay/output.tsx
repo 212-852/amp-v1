@@ -1,8 +1,7 @@
 "use client"
 
 import {
-  getOverlayDurationClassForAnimation,
-  overlay_ease_class,
+  getOverlayBackdropAnimationClass,
 } from "@/components/overlay/animations"
 import OverlayModal from "@/components/overlay/modal"
 import type { OverlayAction, OverlayPhase } from "@/components/overlay/types"
@@ -49,8 +48,6 @@ export default function OverlayOutput({
   phase: OverlayPhase
   onClose: () => void
 }>) {
-  const is_visible = phase === "open"
-
   return (
     <div
       className={[
@@ -66,11 +63,8 @@ export default function OverlayOutput({
       <div
         aria-hidden="true"
         className={[
-          "absolute inset-0 bg-[rgba(0,0,0,0.42)] backdrop-blur-[8px]",
-          "transition-opacity",
-          getOverlayDurationClassForAnimation(action.rule.animation, phase),
-          overlay_ease_class,
-          is_visible ? "opacity-100" : "opacity-0",
+          "absolute inset-0",
+          getOverlayBackdropAnimationClass(phase),
         ].join(" ")}
       />
 
@@ -81,6 +75,160 @@ export default function OverlayOutput({
           onClose={onClose}
         />
       </div>
+
+      <style jsx global>{`
+        .overlay_backdrop_enter {
+          animation: overlay_backdrop_enter 360ms
+            cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+
+        .overlay_backdrop_exit {
+          animation: overlay_backdrop_exit 220ms
+            cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+
+        .modal_bottom_enter {
+          animation: modal_bottom_enter 480ms
+            cubic-bezier(0.16, 1.2, 0.32, 1) both;
+        }
+
+        .modal_bottom_exit {
+          animation: modal_bottom_exit 220ms
+            cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+
+        .modal_left_enter {
+          animation: modal_left_enter 460ms
+            cubic-bezier(0.16, 1.2, 0.32, 1) both;
+        }
+
+        .modal_left_exit {
+          animation: modal_left_exit 220ms
+            cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+
+        .modal_float_enter {
+          animation: modal_float_enter 440ms
+            cubic-bezier(0.16, 1.16, 0.32, 1) both;
+        }
+
+        .modal_float_exit {
+          animation: modal_float_exit 220ms
+            cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+
+        @keyframes overlay_backdrop_enter {
+          from {
+            opacity: 0;
+            background: rgba(0, 0, 0, 0);
+            backdrop-filter: blur(0);
+          }
+
+          to {
+            opacity: 1;
+            background: rgba(0, 0, 0, 0.34);
+            backdrop-filter: blur(10px);
+          }
+        }
+
+        @keyframes overlay_backdrop_exit {
+          from {
+            opacity: 1;
+            background: rgba(0, 0, 0, 0.34);
+            backdrop-filter: blur(10px);
+          }
+
+          to {
+            opacity: 0;
+            background: rgba(0, 0, 0, 0);
+            backdrop-filter: blur(0);
+          }
+        }
+
+        @keyframes modal_bottom_enter {
+          0% {
+            opacity: 0;
+            transform: translateY(72px) scale(0.96);
+          }
+
+          62% {
+            transform: translateY(-6px) scale(1.015);
+          }
+
+          100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+
+        @keyframes modal_bottom_exit {
+          from {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+
+          to {
+            opacity: 0;
+            transform: translateY(40px) scale(0.98);
+          }
+        }
+
+        @keyframes modal_left_enter {
+          0% {
+            opacity: 0;
+            transform: translateX(-72px) scale(0.96);
+          }
+
+          62% {
+            transform: translateX(6px) scale(1.01);
+          }
+
+          100% {
+            opacity: 1;
+            transform: translateX(0) scale(1);
+          }
+        }
+
+        @keyframes modal_left_exit {
+          from {
+            opacity: 1;
+            transform: translateX(0) scale(1);
+          }
+
+          to {
+            opacity: 0;
+            transform: translateX(-40px) scale(0.98);
+          }
+        }
+
+        @keyframes modal_float_enter {
+          0% {
+            opacity: 0;
+            transform: translateY(48px) scale(0.97);
+          }
+
+          62% {
+            transform: translateY(-4px) scale(1.01);
+          }
+
+          100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+
+        @keyframes modal_float_exit {
+          from {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+
+          to {
+            opacity: 0;
+            transform: translateY(32px) scale(0.98);
+          }
+        }
+      `}</style>
     </div>
   )
 }

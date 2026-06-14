@@ -50,7 +50,7 @@ export function OverlayProvider({
     closeTimerRef.current = window.setTimeout(() => {
       setAction(null)
       setPhase("opening")
-    }, 180)
+    }, 220)
   }, [action, phase])
 
   const openOverlay = useCallback((request: OverlayRequest) => {
