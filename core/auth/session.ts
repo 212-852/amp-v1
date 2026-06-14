@@ -11,6 +11,12 @@ type VisitorRecord = {
   source_channel: SourceChannel
 }
 
+type VisitorResolution = {
+  visitor: VisitorRecord
+  action: "create" | "reuse"
+  cookie_found: boolean
+}
+
 type VisitorStore = {
   findVisitorByUuid: (visitor_uuid: string) => Promise<VisitorRecord | null>
   touchVisitor: (visitor_uuid: string) => Promise<void>
@@ -33,6 +39,45 @@ type UserUuidRow = {
 }
 
 const runtimeVisitors = new Map<string, VisitorRecord>()
+
+// TEMP_AUTH_DEBUG
+async function send_auth_debug(
+  event: string,
+  payload: Record<string, unknown>,
+) {
+  if (
+    process.env.DEBUG_CAT_SWITCH !== "true" ||
+    !process.env.DEBUG_CAT_WEBHOOK
+  ) {
+    return
+  }
+
+  try {
+    await fetch(process.env.DEBUG_CAT_WEBHOOK, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username: "AUTH SESSION",
+        content:
+          "[DEBUG] AUTH_SESSION\n" +
+          "```json\n" +
+          JSON.stringify(
+            {
+              event,
+              ...payload,
+            },
+            null,
+            2,
+          ) +
+          "\n```",
+      }),
+    })
+  } catch (error) {
+    console.error("TEMP_AUTH_DEBUG_FAILED", error)
+  }
+}
 
 function getSupabaseConfig(): SupabaseConfig | null {
   const url =
@@ -328,40 +373,86 @@ async function getVisitorCookie() {
 async function resolveVisitorRecord(
   context: AuthContext,
   visitorStore: VisitorStore,
-) {
+): Promise<VisitorResolution> {
   const visitor_uuid = await getVisitorCookie()
+  const cookie_found = Boolean(visitor_uuid)
+
+  await send_auth_debug("visitor_cookie_read", {
+    cookie_found,
+    cookie_value: visitor_uuid,
+  })
 
   if (visitor_uuid) {
     const existingVisitor = await visitorStore.findVisitorByUuid(visitor_uuid)
+    const found = Boolean(existingVisitor)
+
+    await send_auth_debug("visitor_lookup", {
+      visitor_uuid,
+      found,
+    })
 
     if (existingVisitor) {
       await visitorStore.touchVisitor(existingVisitor.visitor_uuid)
-      return existingVisitor
+
+      await send_auth_debug("visitor_reused", {
+        visitor_uuid: existingVisitor.visitor_uuid,
+      })
+
+      return {
+        visitor: existingVisitor,
+        action: "reuse",
+        cookie_found,
+      }
     }
   }
 
   const visitor = await visitorStore.createVisitor(context)
   await setVisitorCookie(visitor.visitor_uuid)
 
-  return visitor
+  await send_auth_debug("visitor_created", {
+    visitor_uuid: visitor.visitor_uuid,
+  })
+
+  return {
+    visitor,
+    action: "create",
+    cookie_found,
+  }
 }
 
 export async function resolveSession(
   context: AuthContext,
   visitorStore: VisitorStore = supabaseVisitorStore,
 ): Promise<AppSession> {
-  const visitor = await resolveVisitorRecord(context, visitorStore)
+  const visitorResolution = await resolveVisitorRecord(context, visitorStore)
+  const visitor = visitorResolution.visitor
   const user_uuid = await visitorStore.resolveUserUuidFromAuth(context)
 
   if (user_uuid && visitor.user_uuid !== user_uuid) {
     await visitorStore.linkVisitorUser(visitor.visitor_uuid, user_uuid)
   }
 
-  return {
+  const session: AppSession = {
     visitor_uuid: visitor.visitor_uuid,
     user_uuid: user_uuid ?? visitor.user_uuid,
     source_channel: context.source_channel,
   }
+
+  await send_auth_debug("session_built", {
+    visitor_uuid: session.visitor_uuid,
+    user_uuid: session.user_uuid,
+    source_channel: session.source_channel,
+  })
+
+  await send_auth_debug("request_summary", {
+    pathname: context.requested_route,
+    visitor_uuid: session.visitor_uuid,
+    user_uuid: session.user_uuid,
+    cookie_found: visitorResolution.cookie_found,
+    action: visitorResolution.action,
+  })
+
+  return session
 }
 
 export type { AppSession, VisitorStore }
