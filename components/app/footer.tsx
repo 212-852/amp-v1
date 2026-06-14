@@ -4,6 +4,8 @@ import { Menu, MessageCircle, PawPrint, User } from "lucide-react"
 import Image from "next/image"
 import { useState } from "react"
 
+import { useOverlay, type OverlayType } from "@/components/overlay"
+
 type FooterMode = "normal" | "input"
 type AssistantMode = "bot" | "concierge"
 
@@ -81,16 +83,29 @@ function AssistantToggle({
   assistantMode: AssistantMode
   onChange: (mode: AssistantMode) => void
 }) {
+  const isConcierge = assistantMode === "concierge"
+
   return (
-    <div className="mx-auto grid h-12 w-full max-w-[340px] grid-cols-2 rounded-full bg-[#e8d2b3] p-1">
+    <div className="relative mx-auto grid h-12 w-full max-w-[340px] grid-cols-2 overflow-hidden rounded-full bg-[#E6D4B8] p-1">
+      <span
+        aria-hidden="true"
+        className={[
+          "absolute bottom-1 left-1 top-1 w-[calc(50%-4px)] rounded-full",
+          "bg-[#A06A2A] shadow-[0_4px_12px_rgba(160,106,42,0.18)]",
+          "transition-transform duration-[300ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
+          isConcierge ? "translate-x-full" : "translate-x-0",
+        ].join(" ")}
+      />
       <button
         type="button"
         onClick={() => onChange("bot")}
+        aria-pressed={assistantMode === "bot"}
         className={[
-          "rounded-full text-[19px] font-semibold leading-none",
+          "relative z-10 rounded-full text-[19px] font-semibold leading-none",
+          "transition-[color,transform] duration-[300ms] ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.98]",
           assistantMode === "bot"
-            ? "bg-[#8f5d28] text-[#fdfaf6]"
-            : "text-[#8c7358]",
+            ? "text-white"
+            : "text-[#8f5d28]",
         ].join(" ")}
       >
         Bot
@@ -98,11 +113,13 @@ function AssistantToggle({
       <button
         type="button"
         onClick={() => onChange("concierge")}
+        aria-pressed={assistantMode === "concierge"}
         className={[
-          "rounded-full text-[19px] font-semibold leading-none",
+          "relative z-10 rounded-full text-[19px] font-semibold leading-none",
+          "transition-[color,transform] duration-[300ms] ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.98]",
           assistantMode === "concierge"
-            ? "bg-[#8f5d28] text-[#fdfaf6]"
-            : "text-[#8c7358]",
+            ? "text-white"
+            : "text-[#8f5d28]",
         ].join(" ")}
       >
         Concierge
@@ -147,10 +164,11 @@ function MessageInputRow() {
 }
 
 function BottomMenuRow() {
+  const { openOverlay } = useOverlay()
   const items = [
-    { label: "My Page", icon: User },
+    { label: "My Page", icon: User, overlayType: "my_page" },
     { label: "Quick Menu", icon: MessageCircle },
-    { label: "Menu", icon: Menu },
+    { label: "Menu", icon: Menu, overlayType: "menu" },
   ]
 
   return (
@@ -165,6 +183,14 @@ function BottomMenuRow() {
           <button
             key={item.label}
             type="button"
+            onClick={() => {
+              if (item.overlayType) {
+                openOverlay({
+                  type: item.overlayType as OverlayType,
+                  source: "user",
+                })
+              }
+            }}
             className="flex flex-col items-center justify-center gap-1 py-1 text-[16px] font-semibold leading-tight"
           >
             <Icon className="h-[25px] w-[25px]" strokeWidth={2} />

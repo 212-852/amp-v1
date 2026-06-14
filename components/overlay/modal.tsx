@@ -1,0 +1,87 @@
+import type { OverlayPhase, OverlayRule } from "@/components/overlay/types"
+
+function getPanelTransform(rule: OverlayRule, phase: OverlayPhase) {
+  const isHidden = phase === "opening" || phase === "closing"
+
+  if (!isHidden) {
+    return "translate-x-0 translate-y-0 opacity-100"
+  }
+
+  if (rule.animation === "from_left") {
+    return "-translate-x-6 translate-y-0 opacity-0"
+  }
+
+  if (rule.animation === "from_top") {
+    return "translate-x-0 -translate-y-6 opacity-0"
+  }
+
+  return "translate-x-0 translate-y-6 opacity-0"
+}
+
+export default function OverlayModal({
+  rule,
+  phase,
+  onClose,
+}: Readonly<{
+  rule: OverlayRule
+  phase: OverlayPhase
+  onClose: () => void
+}>) {
+  const duration = phase === "closing" ? "duration-[180ms]" : "duration-[260ms]"
+
+  return (
+    <section
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="overlay-title"
+      className={[
+        "w-[calc(100%-32px)] max-w-[420px] border border-[#e5e5e5]",
+        "rounded-[28px] bg-white p-5 text-[#111111]",
+        "shadow-[0_18px_50px_rgba(0,0,0,0.12)]",
+        "transition-[opacity,transform]",
+        duration,
+        "ease-[cubic-bezier(0.22,1,0.36,1)]",
+        getPanelTransform(rule, phase),
+      ].join(" ")}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#777777]">
+            {rule.source}
+          </p>
+          <h2
+            id="overlay-title"
+            className="mt-2 text-[22px] font-semibold tracking-[-0.03em]"
+          >
+            {rule.title}
+          </h2>
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-[#e5e5e5] text-[18px] leading-none text-[#777777]"
+          aria-label="Close overlay"
+        >
+          ×
+        </button>
+      </div>
+
+      <p className="mt-3 text-[13px] font-medium leading-6 text-[#777777]">
+        {rule.description}
+      </p>
+
+      <div className="mt-5 grid gap-2">
+        {rule.items.map((item) => (
+          <button
+            key={item}
+            type="button"
+            className="rounded-2xl border border-[#e5e5e5] px-4 py-3 text-left text-[14px] font-semibold text-[#111111]"
+          >
+            {item}
+          </button>
+        ))}
+      </div>
+    </section>
+  )
+}

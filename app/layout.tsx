@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
+import { OverlayProvider } from "@/components/overlay";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -19,7 +20,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${geistSans.variable} h-full antialiased`}>
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        <OverlayProvider>{children}</OverlayProvider>
+      </body>
     </html>
   );
 }

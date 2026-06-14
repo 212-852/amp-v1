@@ -5,11 +5,12 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 
 import OpsNeko from "@/components/ops/neko"
+import { useOverlay, type OverlayType } from "@/components/overlay"
 
 const headerActions = [
   { label: "Chat", icon: MessageCircle },
-  { label: "Settings", icon: Settings },
-  { label: "Menu", icon: Menu },
+  { label: "Settings", icon: Settings, overlayType: "menu" },
+  { label: "Menu", icon: Menu, overlayType: "menu" },
 ]
 
 const pageLabels: Record<string, string> = {
@@ -25,6 +26,7 @@ const pageLabels: Record<string, string> = {
 
 export default function OpsHeader() {
   const pathname = usePathname()
+  const { openOverlay } = useOverlay()
   const displayName = "Guest"
   const pageLabel = pageLabels[pathname] ?? "ダッシュボード"
   const breadcrumbs = [
@@ -84,6 +86,14 @@ export default function OpsHeader() {
                 key={item.label}
                 type="button"
                 aria-label={item.label}
+                onClick={() => {
+                  if (item.overlayType) {
+                    openOverlay({
+                      type: item.overlayType as OverlayType,
+                      source: "admin",
+                    })
+                  }
+                }}
                 className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-900"
               >
                 <Icon className="h-4 w-4" strokeWidth={1.8} />
