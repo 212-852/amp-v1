@@ -4,11 +4,11 @@ export default function AdminComingSoon({
   title: string
 }>) {
   return (
-    <section className="rounded-2xl border border-[#e5e5e5] bg-[#ffffff] p-6 shadow-[0_8px_22px_rgba(17,17,17,0.04)]">
-      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#777777]">
+    <section className="w-full rounded-lg border border-neutral-200 bg-white p-6">
+      <p className="text-sm font-medium text-neutral-500">
         {title}
       </p>
-      <h2 className="mt-3 text-[24px] font-bold tracking-[-0.03em] text-[#111111]">
+      <h2 className="mt-2 text-2xl font-semibold text-neutral-950">
         Coming Soon
       </h2>
     </section>

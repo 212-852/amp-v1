@@ -7,20 +7,20 @@ export default function AdminHeader() {
   const AccountIcon = AdminAccountIcon
 
   return (
-    <header className="sticky top-0 z-40 border-b border-[#e5e5e5] bg-[#ffffff] px-4 pt-[calc(14px+env(safe-area-inset-top,0px))]">
-      <div className="mx-auto w-full max-w-6xl pb-3">
-        <div className="flex items-center justify-between gap-4">
+    <header className="border-b border-neutral-200 bg-white pt-[env(safe-area-inset-top)]">
+      <div className="mx-auto w-full max-w-[430px] px-4 py-3">
+        <div className="flex h-12 items-center justify-between gap-4">
           <Link href="/admin" className="min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#777777]">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">
               AMP Admin
             </p>
-            <h1 className="mt-1 truncate text-[22px] font-bold tracking-[-0.03em] text-[#111111]">
-              Operations Console
+            <h1 className="mt-1 truncate text-sm font-semibold text-neutral-950">
+              Admin App
             </h1>
           </Link>
           <button
             type="button"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#111111] text-[#ffffff]"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-900"
             aria-label="Admin account"
           >
             <AccountIcon className="h-4 w-4" strokeWidth={2} />

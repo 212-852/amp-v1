@@ -19,7 +19,7 @@ export function AdminSectionNav() {
   return (
     <nav
       aria-label="Admin sections"
-      className="mt-4 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="mt-3 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {adminSectionNav.map((item) => {
         const active = isActive(pathname, item.href)
@@ -28,10 +28,10 @@ export function AdminSectionNav() {
           <Link
             key={item.href}
             href={item.href}
-            className={`shrink-0 rounded-full border px-3 py-2 text-[12px] font-bold ${
+            className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold ${
               active
-                ? "border-[#111111] bg-[#111111] text-[#ffffff]"
-                : "border-[#e5e5e5] bg-[#ffffff] text-[#777777]"
+                ? "border-neutral-950 bg-neutral-950 text-white"
+                : "border-neutral-200 bg-white text-neutral-500"
             }`}
           >
             {item.label}
@@ -48,9 +48,9 @@ export function AdminFooterNav() {
   return (
     <nav
       aria-label="Admin primary navigation"
-      className="fixed inset-x-0 bottom-0 z-50 border-t border-[#e5e5e5] bg-[#ffffff] pb-[env(safe-area-inset-bottom)]"
+      className="mx-auto w-full max-w-[430px] px-4 pb-[calc(96px+env(safe-area-inset-bottom,0px))]"
     >
-      <div className="mx-auto grid h-16 w-full max-w-[430px] grid-cols-5 px-2 md:max-w-3xl">
+      <div className="grid h-16 w-full grid-cols-5 rounded-lg border border-neutral-200 bg-white px-2">
         {adminPrimaryNav.map((item) => {
           const Icon = item.icon
           const active = isActive(pathname, item.href)
@@ -59,8 +59,8 @@ export function AdminFooterNav() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center justify-center gap-1 text-[10px] font-semibold ${
-                active ? "text-[#111111]" : "text-[#777777]"
+              className={`flex flex-col items-center justify-center gap-1 text-[10px] font-medium ${
+                active ? "text-neutral-950" : "text-neutral-500"
               }`}
             >
               <Icon

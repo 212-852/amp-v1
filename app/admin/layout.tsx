@@ -1,6 +1,6 @@
 import AdminFooter from "@/components/admin/footer"
 import AdminHeader from "@/components/admin/header"
-import RoboNekoAssistant from "@/components/admin/robo-neko-assistant"
+import AdminAssistant from "@/components/admin/assistant"
 
 export default function AdminLayout({
   children,
@@ -8,13 +8,16 @@ export default function AdminLayout({
   children: React.ReactNode
 }>) {
   return (
-    <div className="min-h-dvh bg-[#f5f5f5] text-[#111111]">
+    <div className="flex min-h-dvh flex-col bg-neutral-50 text-neutral-900">
       <AdminHeader />
-      <main className="mx-auto w-full max-w-6xl px-4 pb-[calc(176px+env(safe-area-inset-bottom,0px))] pt-4 md:pb-24">
+      <main className="mx-auto flex w-full max-w-[430px] flex-1 flex-col gap-4 px-4 pb-[calc(112px+env(safe-area-inset-bottom,0px))] pt-4">
         {children}
       </main>
-      <RoboNekoAssistant />
       <AdminFooter />
+      <AdminAssistant
+        latest_notification="Admin foundation is ready. Operational tools will be added later."
+        status="notification"
+      />
     </div>
   )
 }
