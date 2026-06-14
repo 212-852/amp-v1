@@ -14,14 +14,15 @@ type VisitorRecord = {
 }
 
 type VisitorResolution = {
-  visitor: VisitorRecord
+  visitor: VisitorRecord | null
+  visitor_uuid: string | null
   action: VisitorAction
   cookie_found: boolean
   cookie_value: string | null
   created_new_visitor: boolean
 }
 
-type VisitorAction = "create" | "reuse" | "repair"
+type VisitorAction = "reuse" | "repair" | "cookie_only" | "skipped"
 
 type VisitorLookupResult = {
   visitor: VisitorRecord | null
@@ -532,7 +533,7 @@ const runtimeVisitorStore: VisitorStore = {
     }
   },
 
-  async upsertVisitor(context, visitor_uuid) {
+  async upsertVisitor(context, visitor_uuid, _debug) {
     const visitor: VisitorRecord = {
       visitor_uuid,
       user_uuid: null,
@@ -640,6 +641,30 @@ async function setVisitorCookie(
   }
 }
 
+function isProxyRuntime(runtime?: SessionRuntime) {
+  return Boolean(runtime?.set_cookie)
+}
+
+function buildAnonymousSession(context: AuthContext): AppSession {
+  return {
+    visitor_uuid: null,
+    user_uuid: null,
+    source_channel: context.source_channel ?? "web",
+  }
+}
+
+function buildFailedSessionCacheEntry(context: AuthContext): SessionCacheEntry {
+  const session = buildAnonymousSession(context)
+
+  return {
+    session,
+    visitor_action: "skipped",
+    created_new_visitor: false,
+    cookie_found: false,
+    cookie_value: null,
+  }
+}
+
 async function resolveVisitorRecord(
   context: AuthContext,
   visitorStore: VisitorStore,
@@ -705,6 +730,7 @@ async function resolveVisitorRecord(
 
       return {
         visitor: existingVisitor,
+        visitor_uuid: existingVisitor.visitor_uuid,
         action: "reuse",
         cookie_found,
         cookie_value,
@@ -755,6 +781,7 @@ async function resolveVisitorRecord(
 
     return {
       visitor,
+      visitor_uuid: visitor.visitor_uuid,
       action: "repair",
       cookie_found,
       cookie_value,
@@ -762,67 +789,48 @@ async function resolveVisitorRecord(
     }
   }
 
-  await send_auth_debug(
-    "visitor_create_start",
-    {
-      pathname,
-    },
-    request_id,
-  )
+  if (isProxyRuntime(runtime)) {
+    const visitor_uuid = crypto.randomUUID()
+    await setVisitorCookie(visitor_uuid, runtime, request_id)
 
-  const visitor_uuid = crypto.randomUUID()
-  const visitor = await visitorStore.upsertVisitor(context, visitor_uuid, {
-    pathname,
-    request_id: request_id ?? null,
-  })
-  await setVisitorCookie(visitor.visitor_uuid, runtime, request_id)
+    await send_auth_debug(
+      "visitor_cookie_only",
+      {
+        pathname,
+        visitor_uuid,
+        reason: "safari_parallel_first_request",
+        created_new_visitor: false,
+      },
+      request_id,
+    )
 
-  await send_auth_debug(
-    "visitor_upserted",
-    {
-      pathname,
-      visitor_uuid: visitor.visitor_uuid,
-      source_channel: visitor.source_channel,
-    },
-    request_id,
-  )
-
-  await send_auth_debug(
-    "visitor_create_finish",
-    {
-      pathname,
-      visitor_uuid: visitor.visitor_uuid,
-    },
-    request_id,
-  )
+    return {
+      visitor: null,
+      visitor_uuid,
+      action: "cookie_only",
+      cookie_found: false,
+      cookie_value: null,
+      created_new_visitor: false,
+    }
+  }
 
   await send_auth_debug(
-    "visitor_created",
+    "visitor_skipped_no_cookie",
     {
       pathname,
-      visitor_uuid: visitor.visitor_uuid,
-      created_new_visitor: true,
-    },
-    request_id,
-  )
-
-  await send_auth_debug(
-    "visitor_created_forensic",
-    {
-      visitor_uuid: visitor.visitor_uuid,
-      pathname,
-      request_id: request_id ?? null,
-      stack: new Error("TEMP_AUTH_DEBUG_VISITOR_CREATED").stack ?? null,
+      reason: "cookie_missing_no_db_write",
+      created_new_visitor: false,
     },
     request_id,
   )
 
   return {
-    visitor,
-    action: "create",
-    cookie_found,
+    visitor: null,
+    visitor_uuid: null,
+    action: "skipped",
+    cookie_found: false,
     cookie_value: null,
-    created_new_visitor: true,
+    created_new_visitor: false,
   }
 }
 
@@ -844,64 +852,95 @@ function buildRequestSummary(
   }
 }
 
+function resolutionFromCacheEntry(cached: SessionCacheEntry): VisitorResolution {
+  return {
+    visitor: cached.session.visitor_uuid
+      ? {
+          visitor_uuid: cached.session.visitor_uuid,
+          user_uuid: cached.session.user_uuid,
+          source_channel: cached.session.source_channel,
+        }
+      : null,
+    visitor_uuid: cached.session.visitor_uuid,
+    action: cached.visitor_action,
+    cookie_found: cached.cookie_found,
+    cookie_value: cached.cookie_value,
+    created_new_visitor: cached.created_new_visitor,
+  }
+}
+
 async function resolve_session_context_core(
   context: AuthContext,
   visitorStore: VisitorStore,
   runtime?: SessionRuntime,
   request_id?: string | null,
 ): Promise<SessionCacheEntry> {
-  const visitorResolution = await resolveVisitorRecord(
-    context,
-    visitorStore,
-    runtime,
-    request_id,
-  )
-  const visitor = visitorResolution.visitor
-  const user_uuid = await visitorStore.resolveUserUuidFromAuth(context)
   const pathname = runtime?.pathname ?? context.requested_route ?? null
 
-  if (user_uuid && visitor.user_uuid !== user_uuid) {
-    await visitorStore.linkVisitorUser(visitor.visitor_uuid, user_uuid)
+  try {
+    const visitorResolution = await resolveVisitorRecord(
+      context,
+      visitorStore,
+      runtime,
+      request_id,
+    )
+    const visitor = visitorResolution.visitor
+    const user_uuid = await visitorStore.resolveUserUuidFromAuth(context)
+
+    if (visitor && user_uuid && visitor.user_uuid !== user_uuid) {
+      await visitorStore.linkVisitorUser(visitor.visitor_uuid, user_uuid)
+      await send_auth_debug(
+        "visitor_user_linked",
+        {
+          pathname,
+          visitor_uuid: visitor.visitor_uuid,
+          user_uuid,
+        },
+        request_id,
+      )
+    }
+
+    const session: AppSession = {
+      visitor_uuid: visitorResolution.visitor_uuid,
+      user_uuid: user_uuid ?? visitor?.user_uuid ?? null,
+      source_channel: context.source_channel,
+    }
+
     await send_auth_debug(
-      "visitor_user_linked",
+      "session_built",
       {
         pathname,
-        visitor_uuid: visitor.visitor_uuid,
-        user_uuid,
+        visitor_uuid: session.visitor_uuid,
+        user_uuid: session.user_uuid,
+        source_channel: session.source_channel,
       },
       request_id,
     )
-  }
 
-  const session: AppSession = {
-    visitor_uuid: visitor.visitor_uuid,
-    user_uuid: user_uuid ?? visitor.user_uuid,
-    source_channel: context.source_channel,
-  }
+    await send_auth_debug(
+      "request_summary",
+      buildRequestSummary(session, visitorResolution, runtime, context),
+      request_id,
+    )
 
-  await send_auth_debug(
-    "session_built",
-    {
-      pathname,
-      visitor_uuid: session.visitor_uuid,
-      user_uuid: session.user_uuid,
-      source_channel: session.source_channel,
-    },
-    request_id,
-  )
+    return {
+      session,
+      visitor_action: visitorResolution.action,
+      created_new_visitor: visitorResolution.created_new_visitor,
+      cookie_found: visitorResolution.cookie_found,
+      cookie_value: visitorResolution.cookie_value,
+    }
+  } catch (error) {
+    await send_auth_debug(
+      "session_failed",
+      {
+        pathname,
+        error_message: error instanceof Error ? error.message : String(error),
+      },
+      request_id,
+    )
 
-  await send_auth_debug(
-    "request_summary",
-    buildRequestSummary(session, visitorResolution, runtime, context),
-    request_id,
-  )
-
-  return {
-    session,
-    visitor_action: visitorResolution.action,
-    created_new_visitor: visitorResolution.created_new_visitor,
-    cookie_found: visitorResolution.cookie_found,
-    cookie_value: visitorResolution.cookie_value,
+    return buildFailedSessionCacheEntry(context)
   }
 }
 
@@ -971,56 +1010,97 @@ export async function resolve_session_context(
     request_id,
   )
 
-  if (runtime?.resolved_session) {
-    await send_auth_debug(
-      "resolve_session_exit",
-      {
-        pathname,
-        visitor_uuid: runtime.resolved_session.visitor_uuid,
-        source_channel: runtime.resolved_session.source_channel,
-        entry: "resolved_session_short_circuit",
-      },
-      request_id,
-    )
-    return runtime.resolved_session
-  }
-
-  if (runtime?.request_cache_key) {
-    const existingPromise = requestSessionPromises.get(runtime.request_cache_key)
-
-    if (existingPromise) {
+  try {
+    if (runtime?.resolved_session) {
       await send_auth_debug(
-        "request_cache_hit",
+        "resolve_session_exit",
         {
           pathname,
-          request_cache_key: runtime.request_cache_key,
+          visitor_uuid: runtime.resolved_session.visitor_uuid,
+          source_channel: runtime.resolved_session.source_channel,
+          entry: "resolved_session_short_circuit",
         },
         request_id,
       )
+      return runtime.resolved_session
+    }
 
-      const cached = await existingPromise
+    if (runtime?.request_cache_key) {
+      const existingPromise = requestSessionPromises.get(runtime.request_cache_key)
 
-      await send_auth_debug(
-        "request_summary",
-        {
-          ...buildRequestSummary(
-            cached.session,
-            {
-              visitor: {
-                visitor_uuid: cached.session.visitor_uuid,
-                user_uuid: cached.session.user_uuid,
-                source_channel: cached.session.source_channel,
-              },
-              action: cached.visitor_action,
-              cookie_found: cached.cookie_found,
-              cookie_value: cached.cookie_value,
-              created_new_visitor: cached.created_new_visitor,
-            },
-            runtime,
-            context,
-          ),
-          request_cache_hit: true,
-        },
+      if (existingPromise) {
+        await send_auth_debug(
+          "request_cache_hit",
+          {
+            pathname,
+            request_cache_key: runtime.request_cache_key,
+          },
+          request_id,
+        )
+
+        const cached = await existingPromise
+
+        await send_auth_debug(
+          "request_summary",
+          {
+            ...buildRequestSummary(
+              cached.session,
+              resolutionFromCacheEntry(cached),
+              runtime,
+              context,
+            ),
+            request_cache_hit: true,
+          },
+          request_id,
+        )
+
+        await send_auth_debug(
+          "resolve_session_exit",
+          {
+            pathname,
+            visitor_uuid: cached.session.visitor_uuid,
+            source_channel: cached.session.source_channel,
+            entry: "request_cache_hit",
+          },
+          request_id,
+        )
+
+        return cached.session
+      }
+
+      const promise = resolve_session_context_core(
+        context,
+        visitorStore,
+        runtime,
+        request_id,
+      )
+      requestSessionPromises.set(runtime.request_cache_key, promise)
+
+      try {
+        const cached = await promise
+
+        await send_auth_debug(
+          "resolve_session_exit",
+          {
+            pathname,
+            visitor_uuid: cached.session.visitor_uuid,
+            source_channel: cached.session.source_channel,
+            entry: "proxy_core",
+          },
+          request_id,
+        )
+
+        return cached.session
+      } finally {
+        requestSessionPromises.delete(runtime.request_cache_key)
+      }
+    }
+
+    if (visitorStore !== supabaseVisitorStore) {
+      const cached = await resolve_session_context_core(
+        context,
+        visitorStore,
+        runtime,
         request_id,
       )
 
@@ -1030,7 +1110,7 @@ export async function resolve_session_context(
           pathname,
           visitor_uuid: cached.session.visitor_uuid,
           source_channel: cached.session.source_channel,
-          entry: "request_cache_hit",
+          entry: "custom_visitor_store",
         },
         request_id,
       )
@@ -1038,41 +1118,7 @@ export async function resolve_session_context(
       return cached.session
     }
 
-    const promise = resolve_session_context_core(
-      context,
-      visitorStore,
-      runtime,
-      request_id,
-    )
-    requestSessionPromises.set(runtime.request_cache_key, promise)
-
-    try {
-      const cached = await promise
-
-      await send_auth_debug(
-        "resolve_session_exit",
-        {
-          pathname,
-          visitor_uuid: cached.session.visitor_uuid,
-          source_channel: cached.session.source_channel,
-          entry: "proxy_core",
-        },
-        request_id,
-      )
-
-      return cached.session
-    } finally {
-      requestSessionPromises.delete(runtime.request_cache_key)
-    }
-  }
-
-  if (visitorStore !== supabaseVisitorStore) {
-    const cached = await resolve_session_context_core(
-      context,
-      visitorStore,
-      runtime,
-      request_id,
-    )
+    const cached = await resolve_session_context_rsc(request_id)
 
     await send_auth_debug(
       "resolve_session_exit",
@@ -1080,28 +1126,24 @@ export async function resolve_session_context(
         pathname,
         visitor_uuid: cached.session.visitor_uuid,
         source_channel: cached.session.source_channel,
-        entry: "custom_visitor_store",
+        entry: "rsc_cache",
       },
       request_id,
     )
 
     return cached.session
+  } catch (error) {
+    await send_auth_debug(
+      "session_failed",
+      {
+        pathname,
+        error_message: error instanceof Error ? error.message : String(error),
+      },
+      request_id,
+    )
+
+    return buildAnonymousSession(context)
   }
-
-  const cached = await resolve_session_context_rsc(request_id)
-
-  await send_auth_debug(
-    "resolve_session_exit",
-    {
-      pathname,
-      visitor_uuid: cached.session.visitor_uuid,
-      source_channel: cached.session.source_channel,
-      entry: "rsc_cache",
-    },
-    request_id,
-  )
-
-  return cached.session
 }
 
 export async function resolveSession(
@@ -1109,27 +1151,41 @@ export async function resolveSession(
   visitorStore: VisitorStore = supabaseVisitorStore,
 ): Promise<AppSession> {
   const request_id = await resolveRequestId()
-  const session = await getResolvedSessionFromRequestHeaders()
 
-  if (session) {
+  try {
+    const session = await getResolvedSessionFromRequestHeaders()
+
+    if (session) {
+      await send_auth_debug(
+        "resolve_session_exit",
+        {
+          pathname: context.requested_route,
+          visitor_uuid: session.visitor_uuid,
+          source_channel: session.source_channel,
+          entry: "resolveSession_header_hit",
+        },
+        request_id,
+      )
+      return session
+    }
+
+    if (visitorStore !== supabaseVisitorStore) {
+      return resolve_session_context(context, visitorStore)
+    }
+
+    return resolveSessionCached(request_id)
+  } catch (error) {
     await send_auth_debug(
-      "resolve_session_exit",
+      "session_failed",
       {
         pathname: context.requested_route,
-        visitor_uuid: session.visitor_uuid,
-        source_channel: session.source_channel,
-        entry: "resolveSession_header_hit",
+        error_message: error instanceof Error ? error.message : String(error),
       },
       request_id,
     )
-    return session
-  }
 
-  if (visitorStore !== supabaseVisitorStore) {
-    return resolve_session_context(context, visitorStore)
+    return buildAnonymousSession(context)
   }
-
-  return resolveSessionCached(request_id)
 }
 
 async function getResolvedSessionFromRequestHeaders(): Promise<AppSession | null> {

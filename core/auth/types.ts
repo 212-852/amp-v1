@@ -27,7 +27,7 @@ export type AssistantState =
   | "notification"
 
 export type Session = {
-  visitor_uuid: string
+  visitor_uuid: string | null
   user_uuid: string | null
   source_channel: SourceChannel
 }

@@ -96,8 +96,11 @@ export async function proxy(request: NextRequest) {
 
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set("x-amp-request-id", requestId)
-  requestHeaders.set("x-amp-session-visitor-uuid", session.visitor_uuid)
   requestHeaders.set("x-amp-session-source-channel", session.source_channel)
+
+  if (session.visitor_uuid) {
+    requestHeaders.set("x-amp-session-visitor-uuid", session.visitor_uuid)
+  }
   requestHeaders.set("x-amp-source-channel", session.source_channel)
   requestHeaders.set("x-amp-pathname", request.nextUrl.pathname)
   requestHeaders.set("x-amp-search", request.nextUrl.search)
