@@ -154,7 +154,7 @@ function BottomMenuRow() {
   return (
     <nav
       aria-label="Footer menu"
-      className="grid w-full grid-cols-3 gap-1 text-[#7a5430]"
+      className="grid w-full grid-cols-3 gap-1 pb-[calc(env(safe-area-inset-bottom,0px)+16px)] text-[#7a5430]"
     >
       {items.map((item) => {
         const Icon = item.icon
@@ -176,7 +176,7 @@ function BottomMenuRow() {
 
 function CopyrightText() {
   return (
-    <p className="text-center text-[10px] font-medium leading-none text-[#9b7951]/70">
+    <p className="mt-3 text-center text-[11px] font-normal leading-none text-[#9b7951] opacity-[0.45]">
       © 2026 Wan Da Nya Inc.
     </p>
   )
@@ -207,14 +207,14 @@ export default function AppFooter() {
             className={[
               "shrink-0 [perspective:1000px]",
               isInputMode
-                ? "absolute inset-x-0 bottom-[13px] z-10 h-[68px]"
+                ? "absolute inset-x-0 bottom-[23px] z-10 h-[92px]"
                 : "h-[76px]",
             ].join(" ")}
           >
             <div className="relative h-full w-full [transform-style:preserve-3d]">
               <div
                 className={[
-                  "absolute inset-0 flex items-start justify-center pt-[33px]",
+                  "absolute inset-0 flex items-start justify-center pt-[23px]",
                   "transition-[transform,opacity] duration-[280ms] ease-out",
                   "[backface-visibility:hidden] [transform-style:preserve-3d]",
                   isInputMode
@@ -230,7 +230,7 @@ export default function AppFooter() {
 
               <div
                 className={[
-                  "absolute inset-0 flex items-center",
+                  "absolute inset-0 flex flex-col justify-end",
                   "transition-[transform,opacity] duration-[280ms] ease-out",
                   "[backface-visibility:hidden] [transform-style:preserve-3d]",
                   isInputMode
@@ -239,14 +239,14 @@ export default function AppFooter() {
                 ].join(" ")}
               >
                 <MessageInputRow />
+                <CopyrightText />
               </div>
             </div>
           </div>
 
           {!isInputMode ? (
-            <div className="mt-auto h-[86px] shrink-0">
+            <div className="mt-auto h-[102px] shrink-0">
               <BottomMenuRow />
-              <CopyrightText />
             </div>
           ) : null}
         </div>
