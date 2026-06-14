@@ -1,5 +1,9 @@
 "use client"
 
+import {
+  getOverlayDurationClass,
+  overlay_ease_class,
+} from "@/components/overlay/animations"
 import OverlayModal from "@/components/overlay/modal"
 import type { OverlayAction, OverlayPhase } from "@/components/overlay/types"
 
@@ -12,9 +16,7 @@ export default function OverlayOutput({
   phase: OverlayPhase
   onClose: () => void
 }>) {
-  const backdropDuration =
-    phase === "closing" ? "duration-[180ms]" : "duration-[260ms]"
-  const isVisible = phase === "open"
+  const is_visible = phase === "open"
 
   return (
     <div
@@ -34,9 +36,9 @@ export default function OverlayOutput({
         className={[
           "absolute inset-0 bg-black/35 backdrop-blur-sm",
           "transition-opacity",
-          backdropDuration,
-          "ease-[cubic-bezier(0.22,1,0.36,1)]",
-          isVisible ? "opacity-100" : "opacity-0",
+          getOverlayDurationClass(phase),
+          overlay_ease_class,
+          is_visible ? "opacity-100" : "opacity-0",
         ].join(" ")}
       />
 

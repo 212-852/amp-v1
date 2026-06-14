@@ -16,7 +16,10 @@ export type OverlayContext = OverlayRequest & {
   requestedAt: number
 }
 
-export type OverlayAnimation = "from_bottom" | "from_left" | "from_top"
+export type OverlayAnimation =
+  | "from_bottom"
+  | "from_bottom_compact"
+  | "from_left"
 
 export type OverlayRule = {
   type: OverlayType

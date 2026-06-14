@@ -8,9 +8,9 @@ import type {
 const animationByType: Record<OverlayType, OverlayAnimation> = {
   my_page: "from_bottom",
   menu: "from_left",
-  link: "from_top",
-  notice: "from_top",
-  language: "from_top",
+  link: "from_bottom_compact",
+  notice: "from_bottom_compact",
+  language: "from_bottom_compact",
 }
 
 const contentByType: Record<

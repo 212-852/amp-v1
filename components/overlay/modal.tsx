@@ -1,22 +1,9 @@
+import {
+  getOverlayDurationClass,
+  getOverlayPanelTransform,
+  overlay_ease_class,
+} from "@/components/overlay/animations"
 import type { OverlayPhase, OverlayRule } from "@/components/overlay/types"
-
-function getPanelTransform(rule: OverlayRule, phase: OverlayPhase) {
-  const isHidden = phase === "opening" || phase === "closing"
-
-  if (!isHidden) {
-    return "translate-x-0 translate-y-0 opacity-100"
-  }
-
-  if (rule.animation === "from_left") {
-    return "-translate-x-6 translate-y-0 opacity-0"
-  }
-
-  if (rule.animation === "from_top") {
-    return "translate-x-0 -translate-y-6 opacity-0"
-  }
-
-  return "translate-x-0 translate-y-6 opacity-0"
-}
 
 export default function OverlayModal({
   rule,
@@ -27,8 +14,6 @@ export default function OverlayModal({
   phase: OverlayPhase
   onClose: () => void
 }>) {
-  const duration = phase === "closing" ? "duration-[180ms]" : "duration-[260ms]"
-
   return (
     <section
       role="dialog"
@@ -39,9 +24,9 @@ export default function OverlayModal({
         "rounded-[28px] bg-white p-5 text-[#111111]",
         "shadow-[0_18px_50px_rgba(0,0,0,0.12)]",
         "transition-[opacity,transform]",
-        duration,
-        "ease-[cubic-bezier(0.22,1,0.36,1)]",
-        getPanelTransform(rule, phase),
+        getOverlayDurationClass(phase),
+        overlay_ease_class,
+        getOverlayPanelTransform(rule.animation, phase),
       ].join(" ")}
     >
       <div className="flex items-start justify-between gap-4">

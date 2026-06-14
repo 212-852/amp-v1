@@ -2,7 +2,7 @@
 
 import { Menu, MessageCircle, PawPrint, User } from "lucide-react"
 import Image from "next/image"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 import { useOverlay, type OverlayType } from "@/components/overlay"
 
@@ -84,42 +84,63 @@ function AssistantToggle({
   onChange: (mode: AssistantMode) => void
 }) {
   const isConcierge = assistantMode === "concierge"
+  const [is_sliding, set_is_sliding] = useState(false)
+
+  useEffect(() => {
+    if (!is_sliding) {
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      set_is_sliding(false)
+    }, 320)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [is_sliding])
+
+  function handleChange(mode: AssistantMode) {
+    if (mode === assistantMode) {
+      return
+    }
+
+    set_is_sliding(true)
+    onChange(mode)
+  }
 
   return (
     <div className="relative mx-auto grid h-12 w-full max-w-[340px] grid-cols-2 overflow-hidden rounded-full bg-[#E6D4B8] p-1">
       <span
         aria-hidden="true"
         className={[
-          "absolute bottom-1 left-1 top-1 w-[calc(50%-4px)] rounded-full",
-          "bg-[#A06A2A] shadow-[0_4px_12px_rgba(160,106,42,0.18)]",
-          "transition-transform duration-[300ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
+          "absolute bottom-1 left-1 top-1 w-[calc(50%-4px)] rounded-full bg-[#A06A2A]",
+          "shadow-[0_4px_14px_rgba(160,106,42,0.22)]",
+          "transition-[transform,box-shadow] duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
           isConcierge ? "translate-x-full" : "translate-x-0",
+          is_sliding ? "scale-x-[1.06] scale-y-[0.96]" : "scale-x-100 scale-y-100",
         ].join(" ")}
       />
       <button
         type="button"
-        onClick={() => onChange("bot")}
+        onClick={() => handleChange("bot")}
         aria-pressed={assistantMode === "bot"}
         className={[
           "relative z-10 rounded-full text-[19px] font-semibold leading-none",
-          "transition-[color,transform] duration-[300ms] ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.98]",
-          assistantMode === "bot"
-            ? "text-white"
-            : "text-[#8f5d28]",
+          "transition-[color] duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
+          assistantMode === "bot" ? "text-white" : "text-[#8f5d28]",
         ].join(" ")}
       >
         Bot
       </button>
       <button
         type="button"
-        onClick={() => onChange("concierge")}
+        onClick={() => handleChange("concierge")}
         aria-pressed={assistantMode === "concierge"}
         className={[
           "relative z-10 rounded-full text-[19px] font-semibold leading-none",
-          "transition-[color,transform] duration-[300ms] ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.98]",
-          assistantMode === "concierge"
-            ? "text-white"
-            : "text-[#8f5d28]",
+          "transition-[color] duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
+          assistantMode === "concierge" ? "text-white" : "text-[#8f5d28]",
         ].join(" ")}
       >
         Concierge
@@ -220,7 +241,7 @@ export default function AppFooter() {
   }
 
   return (
-    <footer className="fixed inset-x-0 bottom-0 z-50 pb-[env(safe-area-inset-bottom)]">
+    <footer className="fixed inset-x-0 bottom-[-2px] z-50 pb-[env(safe-area-inset-bottom)]">
       <div className={footer_shell_class}>
         <FooterCurve />
         <PinkPawButton isInputMode={isInputMode} onClick={toggleFooterMode} />
