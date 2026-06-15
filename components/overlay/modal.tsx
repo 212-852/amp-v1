@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 
 import { ChevronRight, LogOut, Mail, PawPrint, User } from "lucide-react"
 import { SiGoogle, SiLine } from "react-icons/si"
@@ -90,6 +91,36 @@ const content = {
     ja: "メールアドレスでログイン",
     en: "Log in with your email address",
     es: "Inicia sesion con tu correo electronico",
+  },
+  email_step_description: {
+    ja: "メールアドレスに6桁のコードを送ります。",
+    en: "We will send a 6 digit code to your email address.",
+    es: "Enviaremos un codigo de 6 digitos a tu correo.",
+  },
+  email_input_label: {
+    ja: "メールアドレス",
+    en: "Email address",
+    es: "Correo electronico",
+  },
+  email_code_label: {
+    ja: "認証コード",
+    en: "Verification code",
+    es: "Codigo de verificacion",
+  },
+  send_code: {
+    ja: "コードを送信",
+    en: "Send code",
+    es: "Enviar codigo",
+  },
+  verify_code: {
+    ja: "認証する",
+    en: "Verify",
+    es: "Verificar",
+  },
+  back_to_link: {
+    ja: "戻る",
+    en: "Back",
+    es: "Volver",
   },
   language_title: {
     ja: "言語",
@@ -242,8 +273,12 @@ async function handleLinkOption(item: OverlayItem) {
     return
   }
 
+  if (item.action === "email") {
+    return
+  }
+
   await send_identity_link_started(item.action)
-  window.location.href = `/api/auth/${item.action}`
+  window.location.href = "/api/auth/line"
 }
 
 function get_modal_title(rule: OverlayRule, locale: Locale) {
@@ -569,6 +604,148 @@ function LinkOption({
   )
 }
 
+type EmailStep = "email" | "code"
+
+function EmailLoginPanel({
+  locale,
+  onBack,
+  onSuccess,
+}: Readonly<{
+  locale: Locale
+  onBack: () => void
+  onSuccess: () => void
+}>) {
+  const [step, set_step] = useState<EmailStep>("email")
+  const [email, set_email] = useState("")
+  const [code, set_code] = useState("")
+  const [error, set_error] = useState<string | null>(null)
+  const [loading, set_loading] = useState(false)
+
+  async function post_json(path: string, body: Record<string, string>) {
+    const response = await fetch(path, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    })
+    const result = (await response.json().catch(() => ({}))) as {
+      ok?: boolean
+      error?: string
+    }
+
+    if (!response.ok || result.ok === false) {
+      throw new Error(result.error ?? "Email verification failed")
+    }
+
+    return result
+  }
+
+  function handle_send_code() {
+    if (loading) {
+      return
+    }
+
+    set_error(null)
+    set_loading(true)
+    post_json("/api/auth/email/start", { email })
+      .then(() => {
+        set_step("code")
+      })
+      .catch((send_error) => {
+        set_error(send_error instanceof Error ? send_error.message : "Failed to send code")
+      })
+      .finally(() => {
+        set_loading(false)
+      })
+  }
+
+  function handle_verify_code() {
+    if (loading) {
+      return
+    }
+
+    set_error(null)
+    set_loading(true)
+    post_json("/api/auth/email/verify", { email, code })
+      .then(() => {
+        onSuccess()
+      })
+      .catch((verify_error) => {
+        set_error(
+          verify_error instanceof Error ? verify_error.message : "Failed to verify code",
+        )
+      })
+      .finally(() => {
+        set_loading(false)
+      })
+  }
+
+  return (
+    <div className="grid gap-3">
+      <p className="text-[13px] font-medium leading-6 text-[#777777]">
+        {content.email_step_description[locale]}
+      </p>
+
+      <label className="grid gap-1.5 text-[12px] font-bold text-[#777777]">
+        {content.email_input_label[locale]}
+        <input
+          type="email"
+          value={email}
+          disabled={loading || step === "code"}
+          onChange={(event) => set_email(event.target.value)}
+          className="h-12 rounded-2xl border border-[#e5e5e5] px-4 text-[15px] font-semibold text-[#111111] outline-none focus:border-[#8f5d28]"
+          autoComplete="email"
+        />
+      </label>
+
+      {step === "code" ? (
+        <label className="grid gap-1.5 text-[12px] font-bold text-[#777777]">
+          {content.email_code_label[locale]}
+          <input
+            type="text"
+            inputMode="numeric"
+            value={code}
+            disabled={loading}
+            onChange={(event) => set_code(event.target.value.replace(/\D/g, "").slice(0, 6))}
+            className="h-12 rounded-2xl border border-[#e5e5e5] px-4 text-[20px] font-bold tracking-[0.2em] text-[#111111] outline-none focus:border-[#8f5d28]"
+            autoComplete="one-time-code"
+          />
+        </label>
+      ) : null}
+
+      {error ? (
+        <p className="rounded-2xl border border-[#f1c7c7] bg-[#fff6f6] px-4 py-3 text-[12px] font-semibold leading-5 text-[#9a3333]">
+          {error}
+        </p>
+      ) : null}
+
+      <button
+        type="button"
+        disabled={loading}
+        onClick={step === "email" ? handle_send_code : handle_verify_code}
+        className={[
+          "flex min-h-[54px] items-center justify-center rounded-2xl",
+          "border border-[#e5e5e5] bg-[#8f5d28] px-4 py-3 text-center",
+          "text-[14px] font-semibold text-white",
+          loading ? "cursor-wait opacity-75" : "",
+        ].join(" ")}
+      >
+        {step === "email" ? content.send_code[locale] : content.verify_code[locale]}
+      </button>
+
+      <button
+        type="button"
+        disabled={loading}
+        onClick={onBack}
+        className="min-h-[48px] rounded-2xl border border-[#e5e5e5] px-4 py-3 text-[14px] font-semibold text-[#111111]"
+      >
+        {content.back_to_link[locale]}
+      </button>
+    </div>
+  )
+}
+
 function LanguageOption({
   item,
   locale,
@@ -636,12 +813,19 @@ export default function OverlayModal({
   onClose: () => void
 }>) {
   const { locale, set_locale } = useLocale()
+  const router = useRouter()
   const [loading_action, set_loading_action] = useState<OverlayItem["action"] | null>(null)
+  const [link_step, set_link_step] = useState<"options" | "email">("options")
   const modal_title = get_modal_title(rule, locale)
   const modal_description = get_modal_description(rule, locale)
 
   function handle_link_click(item: OverlayItem) {
     if (!item.action || loading_action) {
+      return
+    }
+
+    if (item.action === "email") {
+      set_link_step("email")
       return
     }
 
@@ -684,13 +868,24 @@ export default function OverlayModal({
         </button>
       </div>
 
-      <p className="mt-3 text-[13px] font-medium leading-6 text-[#777777]">
-        {modal_description}
-      </p>
+      {rule.type === "link" && link_step === "email" ? null : (
+        <p className="mt-3 text-[13px] font-medium leading-6 text-[#777777]">
+          {modal_description}
+        </p>
+      )}
 
       <div className="mt-5 grid gap-2">
         {rule.type === "account" ? (
           <AccountPanel rule={rule} locale={locale} onClose={onClose} />
+        ) : rule.type === "link" && link_step === "email" ? (
+          <EmailLoginPanel
+            locale={locale}
+            onBack={() => set_link_step("options")}
+            onSuccess={() => {
+              onClose()
+              router.refresh()
+            }}
+          />
         ) : (
           rule.items.map((item) => (
             rule.type === "link" ? (
