@@ -189,6 +189,7 @@ export async function sendIdentityDebug(
     | "auth_callback_received"
     | "contact_upsert_failed"
     | "email_otp_sent"
+    | "email_auth_client_config"
     | "email_provider_config"
     | "email_send_method"
     | "email_send_request"
