@@ -1,4 +1,4 @@
-import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
+import { getRestConfig, restHeaders, restUrl } from "@/core/db/rest"
 import type { AccessContext } from "@/core/access/context"
 import { assertAccessContext, type AccessRecord } from "@/core/access/rules"
 
@@ -10,12 +10,6 @@ type AccessBody = {
   source_channel: AccessContext["source_channel"]
   state: AccessContext["state"]
   receive: boolean
-  last_seen_at: string
-  updated_at: string
-}
-
-type AccessHeartbeatBody = {
-  visitor_uuid: string
   last_seen_at: string
   updated_at: string
 }
@@ -39,20 +33,14 @@ export async function updateAccess(
   }
 
   const now = new Date().toISOString()
-  const body = context.heartbeat
-    ? {
-        visitor_uuid: context.visitor_uuid,
-        last_seen_at: now,
-        updated_at: now,
-      } satisfies AccessHeartbeatBody
-    : {
-        visitor_uuid: context.visitor_uuid,
-        source_channel: context.source_channel,
-        state: context.state,
-        receive: context.receive,
-        last_seen_at: now,
-        updated_at: now,
-      } satisfies AccessBody
+  const body: AccessBody = {
+    visitor_uuid: context.visitor_uuid,
+    source_channel: context.source_channel,
+    state: context.state,
+    receive: context.receive,
+    last_seen_at: now,
+    updated_at: now,
+  }
   const response = await fetch(
     restUrl(
       config,
@@ -71,12 +59,7 @@ export async function updateAccess(
   )
 
   if (!response.ok) {
-    const error = await readRestError(response)
-    throw new Error(
-      `Failed to update access: ${error.code ?? "unknown"} ${
-        error.message ?? "No PostgREST error returned"
-      }`,
-    )
+    return null
   }
 
   const rows = (await response.json()) as AccessRecord[]

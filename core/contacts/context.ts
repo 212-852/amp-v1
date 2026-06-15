@@ -19,12 +19,16 @@ function normalizeString(value: unknown) {
 }
 
 function normalizeType(value: unknown): ContactType {
-  return value === "line" ||
+  if (
+    value === "line" ||
     value === "email" ||
     value === "push" ||
     value === "discord"
-    ? value
-    : "push"
+  ) {
+    return value
+  }
+
+  throw new Error("Contact requires a real delivery destination type")
 }
 
 export function normalizeContactContext(input: ContactInput): ContactContext {
@@ -35,6 +39,10 @@ export function normalizeContactContext(input: ContactInput): ContactContext {
 
   if (!value) {
     throw new Error("Contact requires a real destination value")
+  }
+
+  if (value.startsWith("push:visitor:")) {
+    throw new Error("Contact requires a real delivery destination")
   }
 
   return {

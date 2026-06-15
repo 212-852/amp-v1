@@ -1,21 +1,30 @@
 import { resolveAuthContext } from "@/core/auth/context"
 import { resolveSession } from "@/core/auth/session"
-import { updateAccess } from "@/core/access/action"
+import { updateVisitorState } from "@/core/visitors/action"
 import { normalizeAccessContext } from "@/core/access/context"
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
-  const authContext = await resolveAuthContext()
-  const session = await resolveSession(authContext)
+  try {
+    const body = (await request.json().catch(() => ({}))) as Record<
+      string,
+      unknown
+    >
+    const authContext = await resolveAuthContext()
+    const session = await resolveSession(authContext)
 
-  const access = session.visitor_uuid
-    ? await updateAccess(
-        normalizeAccessContext({
-          ...body,
-          visitor_uuid: session.visitor_uuid,
-        }),
-      )
-    : null
+    if (!session.visitor_uuid) {
+      return Response.json({ access: null })
+    }
 
-  return Response.json({ access })
+    const access = await updateVisitorState(
+      normalizeAccessContext({
+        ...body,
+        visitor_uuid: session.visitor_uuid,
+      }),
+    )
+
+    return Response.json({ access })
+  } catch {
+    return Response.json({ access: null })
+  }
 }
