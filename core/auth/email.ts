@@ -14,6 +14,9 @@ import {
   set_amp_auth_cookies,
 } from "@/src/lib/supabase/server"
 
+const supabase_sdk_version = "2.108.2"
+const email_verify_types = ["email", "magiclink"] as const
+
 function normalizeEmail(value: unknown) {
   return typeof value === "string" && value.trim()
     ? value.trim().toLowerCase()
@@ -83,6 +86,19 @@ export async function startEmailOtpLogin(request: NextRequest) {
       visitor_uuid: session.visitor_uuid,
       user_uuid: session.user_uuid,
       email,
+      source_channel: context.source_channel,
+    })
+    await sendIdentityDebug("email_provider_config", {
+      provider: "email",
+      email,
+      email_provider_enabled: true,
+      source_channel: context.source_channel,
+    })
+    await sendIdentityDebug("email_send_method", {
+      provider: "email",
+      send_function: "signInWithOtp",
+      email,
+      supabase_sdk_version,
       source_channel: context.source_channel,
     })
 
@@ -169,46 +185,87 @@ export async function verifyEmailOtpLogin(request: NextRequest) {
 
     const cookieStore = await cookies()
     const supabase = create_server_supabase_client(cookieStore, authResponse)
-    const type = "email"
+    let verified_data: Awaited<ReturnType<typeof supabase.auth.verifyOtp>>["data"] | null =
+      null
+    let verify_error: Awaited<ReturnType<typeof supabase.auth.verifyOtp>>["error"] | null =
+      null
+    let successful_type: (typeof email_verify_types)[number] | null = null
 
     await sendIdentityDebug("email_verify_attempt", {
       provider: "email",
       visitor_uuid: session.visitor_uuid,
       email,
       token: normalized_token,
-      type,
+      type: "email",
+      supabase_sdk_version,
       source_channel: context.source_channel,
     })
 
-    const { data, error } = await supabase.auth.verifyOtp({
-      email,
-      token: normalized_token,
-      type,
-    })
+    for (const verify_type of email_verify_types) {
+      await sendIdentityDebug("email_verify_payload", {
+        provider: "email",
+        visitor_uuid: session.visitor_uuid,
+        email,
+        token: normalized_token,
+        type: verify_type,
+        supabase_sdk_version,
+        source_channel: context.source_channel,
+      })
+
+      const result = await supabase.auth.verifyOtp({
+        email,
+        token: normalized_token,
+        type: verify_type,
+      })
+
+      await sendIdentityDebug("email_verify_attempt_result", {
+        provider: "email",
+        visitor_uuid: session.visitor_uuid,
+        email,
+        verify_type,
+        success: !result.error,
+        auth_user_id: result.data.user?.id ?? null,
+        session_exists: !!result.data.session,
+        error_message: result.error?.message ?? null,
+        error_status: result.error?.status ?? null,
+        supabase_sdk_version,
+        source_channel: context.source_channel,
+      })
+
+      verified_data = result.data
+      verify_error = result.error
+
+      if (!result.error) {
+        successful_type = verify_type
+        break
+      }
+    }
 
     await sendIdentityDebug("email_verify_result", {
       provider: "email",
       visitor_uuid: session.visitor_uuid,
       email,
       token_length: normalized_token.length,
-      type,
-      success: !error,
-      auth_user_id: data.user?.id ?? null,
-      user_id: data.user?.id ?? null,
-      session_exists: !!data.session,
-      error_message: error?.message ?? null,
-      error_status: error?.status ?? null,
+      type: successful_type ?? email_verify_types[email_verify_types.length - 1],
+      successful_type,
+      success: !verify_error,
+      auth_user_id: verified_data?.user?.id ?? null,
+      user_id: verified_data?.user?.id ?? null,
+      session_exists: !!verified_data?.session,
+      error_message: verify_error?.message ?? null,
+      error_status: verify_error?.status ?? null,
+      supabase_sdk_version,
       source_channel: context.source_channel,
     })
 
-    if (error) {
+    if (verify_error) {
       return jsonFailure({
         reason: "email_verify_failed",
-        message: error.message,
+        message: verify_error.message,
       })
     }
 
-    if (!data.user?.id) {
+    if (!verified_data?.user?.id) {
       throw new Error("Email OTP did not return an auth user")
     }
 
@@ -216,7 +273,7 @@ export async function verifyEmailOtpLogin(request: NextRequest) {
       provider: "email",
       provider_user_id: email,
       email,
-      display_name: data.user.user_metadata?.name ?? email,
+      display_name: verified_data.user.user_metadata?.name ?? email,
     })
     const profile = await resolveAuthUserProfile(result.user_uuid)
     const payload = {
@@ -247,7 +304,7 @@ export async function verifyEmailOtpLogin(request: NextRequest) {
       session: payload,
     })
 
-    set_amp_auth_cookies(response, data.session)
+    set_amp_auth_cookies(response, verified_data.session)
 
     return response
   } catch (error) {
