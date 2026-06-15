@@ -1,3 +1,7 @@
+"use client"
+
+import { useState } from "react"
+
 import { ChevronRight, Mail, PawPrint } from "lucide-react"
 import { SiGoogle, SiLine } from "react-icons/si"
 
@@ -186,16 +190,16 @@ function getModalLayoutClass(rule: OverlayRule) {
   ].join(" ")
 }
 
-function getLinkHref(action: NonNullable<OverlayItem["action"]>) {
-  return `/api/auth/${action}`
+function getLinkHref(action: NonNullable<OverlayItem["action"]>, locale: Locale) {
+  return `/api/auth/${action}?locale=${encodeURIComponent(locale)}`
 }
 
-function handleLinkOption(item: OverlayItem) {
+function handleLinkOption(item: OverlayItem, locale: Locale) {
   if (!item.action) {
     return
   }
 
-  window.location.href = getLinkHref(item.action)
+  window.location.href = getLinkHref(item.action, locale)
 }
 
 function get_modal_title(rule: OverlayRule, locale: Locale) {
@@ -337,22 +341,29 @@ function LinkOptionIcon({ action }: Readonly<{ action: OverlayItem["action"] }>)
 function LinkOption({
   item,
   locale,
+  loading_action,
+  on_link_click,
 }: Readonly<{
   item: OverlayItem
   locale: Locale
+  loading_action: OverlayItem["action"] | null
+  on_link_click: (item: OverlayItem) => void
 }>) {
   const link_item = get_link_item(item, locale)
+  const is_loading = loading_action === item.action
 
   return (
     <button
       type="button"
-      onClick={() => handleLinkOption(item)}
+      disabled={Boolean(loading_action)}
+      onClick={() => on_link_click(item)}
       className={[
         "grid min-h-[86px] w-full grid-cols-[44px_minmax(0,1fr)_24px]",
         "items-center gap-3 rounded-[18px] border border-[#e5e5e5]",
         "bg-white px-4 py-3 text-left text-[#111111]",
         "transition-colors hover:bg-[#fdfaf6] focus-visible:outline",
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8f5d28]",
+        loading_action ? "cursor-wait opacity-75" : "",
       ].join(" ")}
     >
       <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#f8f8f8]">
@@ -377,11 +388,18 @@ function LinkOption({
         ) : null}
       </span>
 
-      <ChevronRight
-        className="h-5 w-5 justify-self-end text-[#9a9a9a]"
-        strokeWidth={2.4}
-        aria-hidden="true"
-      />
+      {is_loading ? (
+        <span
+          className="h-4 w-4 justify-self-end rounded-full border-2 border-[#dcc7aa] border-t-[#8f5d28]"
+          aria-hidden="true"
+        />
+      ) : (
+        <ChevronRight
+          className="h-5 w-5 justify-self-end text-[#9a9a9a]"
+          strokeWidth={2.4}
+          aria-hidden="true"
+        />
+      )}
     </button>
   )
 }
@@ -453,8 +471,18 @@ export default function OverlayModal({
   onClose: () => void
 }>) {
   const { locale, set_locale } = useLocale()
+  const [loading_action, set_loading_action] = useState<OverlayItem["action"] | null>(null)
   const modal_title = get_modal_title(rule, locale)
   const modal_description = get_modal_description(rule, locale)
+
+  function handle_link_click(item: OverlayItem) {
+    if (!item.action || loading_action) {
+      return
+    }
+
+    set_loading_action(item.action)
+    handleLinkOption(item, locale)
+  }
 
   return (
     <section
@@ -496,7 +524,13 @@ export default function OverlayModal({
       <div className="mt-5 grid gap-2">
         {rule.items.map((item) => (
           rule.type === "link" ? (
-            <LinkOption key={item.id} item={item} locale={locale} />
+            <LinkOption
+              key={item.id}
+              item={item}
+              locale={locale}
+              loading_action={loading_action}
+              on_link_click={handle_link_click}
+            />
           ) : rule.type === "language" ? (
             <LanguageOption
               key={item.id}

@@ -54,6 +54,17 @@ export type IdentityLinkInput = {
   locale?: string | null
 }
 
+export type SupabaseAuthUser = {
+  id?: string
+  email?: string | null
+  user_metadata?: {
+    sub?: string | null
+    email?: string | null
+    full_name?: string | null
+    name?: string | null
+  } | null
+}
+
 type IdentityRow = {
   user_uuid?: string | null
 }
@@ -115,14 +126,33 @@ export function contactInputFromIdentity(
     }
   }
 
-  if (input.provider === "email") {
+  if (input.provider === "email" || (input.provider === "google" && input.email)) {
     return {
       type: "email",
-      value,
+      value: input.email ?? value,
     }
   }
 
   return null
+}
+
+export function normalizeGoogleIdentityInput(
+  user: SupabaseAuthUser,
+  locale?: string | null,
+): IdentityLinkInput {
+  const provider_user_id = normalizeString(user.user_metadata?.sub) ?? normalizeString(user.id)
+
+  if (!provider_user_id) {
+    throw new Error("Google identity requires provider_user_id")
+  }
+
+  return normalizeIdentityLinkInput({
+    provider: "google",
+    provider_user_id,
+    email: user.email ?? user.user_metadata?.email ?? null,
+    display_name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? null,
+    locale,
+  })
 }
 
 function identityLookupQuery(input: IdentityLinkInput) {
@@ -233,7 +263,7 @@ export async function upsertIdentityLink(
 
   if (existingUserUuid && existingUserUuid !== user_uuid) {
     await sendAuthDebug(
-      "identity_conflict",
+      input.provider === "google" ? "google_identity_conflict" : "identity_conflict",
       {
         provider: input.provider,
         provider_user_id: input.provider_user_id ?? null,
