@@ -63,6 +63,8 @@ function jsonError(error: unknown, fallback: string, status = 400) {
   )
 }
 
+const email_verify_types = ["email", "magiclink"] as const
+
 function summarizeAuthState(input: {
   session: Awaited<ReturnType<ReturnType<typeof create_auth_supabase_client>["auth"]["getSession"]>>
   user: Awaited<ReturnType<ReturnType<typeof create_auth_supabase_client>["auth"]["getUser"]>>
@@ -207,12 +209,6 @@ export async function verifyEmailOtpLogin(request: NextRequest) {
       return jsonError(new Error("Verification code must be 6 digits"), "", 403)
     }
 
-    const payload = {
-      email,
-      token,
-      type: "email" as const,
-    }
-
     const supabase = get_shared_auth_supabase_client()
     const preSession = await supabase.auth.getSession()
     const preUser = await supabase.auth.getUser()
@@ -222,7 +218,9 @@ export async function verifyEmailOtpLogin(request: NextRequest) {
     await sendIdentityDebug("email_verify_payload", {
       provider: "email",
       visitor_uuid: session.visitor_uuid,
-      payload,
+      email,
+      token_length: token.length,
+      attempted_types: email_verify_types,
       auth_state_before_verify: summarizeAuthState({
         session: preSession,
         user: preUser,
@@ -238,21 +236,61 @@ export async function verifyEmailOtpLogin(request: NextRequest) {
       source_channel: context.source_channel,
     })
 
-    const result = await supabase.auth.verifyOtp(payload)
+    let verifiedData: Awaited<ReturnType<typeof supabase.auth.verifyOtp>>["data"] | null =
+      null
+    let lastError: Awaited<ReturnType<typeof supabase.auth.verifyOtp>>["error"] | null =
+      null
+    let successfulType: (typeof email_verify_types)[number] | null = null
+
+    for (const verify_type of email_verify_types) {
+      const result = await supabase.auth.verifyOtp({
+        email,
+        token,
+        type: verify_type,
+      })
+
+      await sendIdentityDebug("email_verify_attempt_result", {
+        provider: "email",
+        visitor_uuid: session.visitor_uuid,
+        email,
+        verify_type,
+        success: !result.error,
+        auth_user_id: result.data.user?.id ?? null,
+        session_exists: !!result.data.session,
+        error_message: result.error?.message ?? null,
+        error_status: result.error?.status ?? null,
+        error_code:
+          result.error && typeof result.error === "object"
+            ? (((result.error as unknown) as Record<string, unknown>).code ?? null)
+            : null,
+        source_channel: context.source_channel,
+      })
+
+      verifiedData = result.data
+      lastError = result.error
+
+      if (!result.error) {
+        successfulType = verify_type
+        break
+      }
+    }
+
     const postSession = await supabase.auth.getSession()
     const postUser = await supabase.auth.getUser()
 
     await sendIdentityDebug("email_verify_result", {
       provider: "email",
       visitor_uuid: session.visitor_uuid,
-      payload,
-      success: !result.error,
+      email,
+      attempted_types: email_verify_types,
+      successful_type: successfulType,
+      success: !lastError,
       data: {
-        user_id: result.data.user?.id ?? null,
-        user_email: result.data.user?.email ?? null,
-        session_exists: !!result.data.session,
+        user_id: verifiedData?.user?.id ?? null,
+        user_email: verifiedData?.user?.email ?? null,
+        session_exists: !!verifiedData?.session,
       },
-      error: serializeError(result.error),
+      error: serializeError(lastError),
       auth_state_after_verify: summarizeAuthState({
         session: postSession,
         user: postUser,
@@ -261,27 +299,28 @@ export async function verifyEmailOtpLogin(request: NextRequest) {
         email,
         exists: !!authUser,
         auth_user_id: authUser?.id ?? null,
-        verify_user_id: result.data.user?.id ?? null,
-        same_user: !!authUser?.id && authUser.id === result.data.user?.id,
+        verify_user_id: verifiedData?.user?.id ?? null,
+        same_user: !!authUser?.id && authUser.id === verifiedData?.user?.id,
       },
       source_channel: context.source_channel,
     })
 
-    if (result.error) {
+    if (lastError) {
       return NextResponse.json(
         {
           ok: false,
           success: false,
-          error: result.error.message,
-          message: result.error.message,
-          payload,
-          supabase_error: serializeError(result.error),
+          reason: "supabase_email_otp_invalid",
+          attempted_types: email_verify_types,
+          last_error: serializeError(lastError),
+          error: lastError.message,
+          message: lastError.message,
         },
-        { status: result.error.status ?? 403 },
+        { status: lastError.status ?? 403 },
       )
     }
 
-    if (!result.data.user?.id) {
+    if (!verifiedData?.user?.id) {
       throw new Error("Email OTP did not return an auth user")
     }
 
@@ -289,7 +328,7 @@ export async function verifyEmailOtpLogin(request: NextRequest) {
       provider: "email",
       provider_user_id: email,
       email,
-      display_name: result.data.user.email ?? email,
+      display_name: verifiedData.user.email ?? email,
     })
     const profile = await resolveAuthUserProfile(linkResult.user_uuid)
     const sessionPayload = {
@@ -321,7 +360,7 @@ export async function verifyEmailOtpLogin(request: NextRequest) {
       session: sessionPayload,
     })
 
-    set_amp_auth_cookies(response, result.data.session)
+    set_amp_auth_cookies(response, verifiedData.session)
 
     return response
   } catch (error) {
