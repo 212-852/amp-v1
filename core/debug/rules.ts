@@ -3,7 +3,6 @@ import { AUTH_SESSION_DEBUG } from "@/core/control"
 const identityEvents = new Set([
   "auth_callback_received",
   "contact_upsert_failed",
-  "email_code_created",
   "email_otp_sent",
   "email_auth_client_config",
   "email_provider_config",

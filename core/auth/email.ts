@@ -1,4 +1,3 @@
-import { createHash, randomInt, timingSafeEqual } from "node:crypto"
 import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
 
@@ -9,17 +8,8 @@ import {
 } from "@/core/auth/identity"
 import { linkCurrentVisitorToIdentity } from "@/core/auth/link"
 import { resolveSession } from "@/core/auth/session"
-import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
-import { sendMail } from "@/core/mail/action"
-
-const EMAIL_CODE_TTL_MS = 10 * 60 * 1000
-
-type EmailCodeRow = {
-  code_uuid?: string | null
-  code_hash?: string | null
-  expires_at?: string | null
-  consumed_at?: string | null
-}
+import { create_auth_supabase_client } from "@/core/auth/supabase"
+import { set_amp_auth_cookies } from "@/src/lib/supabase/server"
 
 function normalizeEmail(value: unknown) {
   return typeof value === "string" && value.trim()
@@ -37,6 +27,23 @@ async function readRequestBody(request: NextRequest) {
   return (await request.json().catch(() => ({}))) as Record<string, unknown>
 }
 
+function serializeError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return error
+  }
+
+  const record = error as Record<string, unknown>
+
+  return {
+    name: record.name ?? null,
+    message: record.message ?? null,
+    status: record.status ?? null,
+    code: record.code ?? null,
+    details: record.details ?? null,
+    hint: record.hint ?? null,
+  }
+}
+
 function jsonError(error: unknown, fallback: string, status = 400) {
   const message = error instanceof Error ? error.message : fallback
 
@@ -46,198 +53,10 @@ function jsonError(error: unknown, fallback: string, status = 400) {
       success: false,
       error: message,
       message,
+      details: serializeError(error),
     },
     { status },
   )
-}
-
-function createEmailCode() {
-  return String(randomInt(0, 1000000)).padStart(6, "0")
-}
-
-function emailCodeSecret() {
-  return (
-    process.env.EMAIL_CODE_SECRET ??
-    process.env.AUTH_SECRET ??
-    process.env.NEXTAUTH_SECRET ??
-    process.env.SUPABASE_SERVICE_ROLE_KEY ??
-    "amp-email-code-dev"
-  )
-}
-
-function hashEmailCode(input: {
-  visitor_uuid: string
-  email: string
-  code: string
-}) {
-  return createHash("sha256")
-    .update(`${input.visitor_uuid}:${input.email}:${input.code}:${emailCodeSecret()}`)
-    .digest("hex")
-}
-
-function hashesMatch(left: string, right: string) {
-  const leftBuffer = Buffer.from(left, "hex")
-  const rightBuffer = Buffer.from(right, "hex")
-
-  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer)
-}
-
-async function expirePreviousCodes(input: {
-  visitor_uuid: string
-  email: string
-}) {
-  const config = getRestConfig()
-
-  if (!config) {
-    throw new Error("Database config is missing")
-  }
-
-  const response = await fetch(
-    restUrl(
-      config,
-      "email_codes",
-      [
-        `visitor_uuid=eq.${encodeURIComponent(input.visitor_uuid)}`,
-        `email=eq.${encodeURIComponent(input.email)}`,
-        "consumed_at=is.null",
-      ].join("&"),
-    ),
-    {
-      method: "PATCH",
-      headers: {
-        ...restHeaders(config),
-        Prefer: "return=minimal",
-      },
-      body: JSON.stringify({
-        consumed_at: new Date().toISOString(),
-      }),
-      cache: "no-store",
-    },
-  )
-
-  if (!response.ok) {
-    const error = await readRestError(response)
-
-    throw new Error(
-      `Failed to expire email codes: ${error.code ?? "unknown"} ${
-        error.message ?? "No PostgREST error returned"
-      }`,
-    )
-  }
-}
-
-async function insertEmailCode(input: {
-  visitor_uuid: string
-  email: string
-  code_hash: string
-  expires_at: string
-}) {
-  const config = getRestConfig()
-
-  if (!config) {
-    throw new Error("Database config is missing")
-  }
-
-  const response = await fetch(restUrl(config, "email_codes", "select=code_uuid"), {
-    method: "POST",
-    headers: {
-      ...restHeaders(config),
-      Prefer: "return=representation",
-    },
-    body: JSON.stringify(input),
-    cache: "no-store",
-  })
-
-  if (!response.ok) {
-    const error = await readRestError(response)
-
-    throw new Error(
-      `Failed to create email code: ${error.code ?? "unknown"} ${
-        error.message ?? "No PostgREST error returned"
-      }`,
-    )
-  }
-
-  const rows = (await response.json()) as EmailCodeRow[]
-
-  return rows[0]?.code_uuid ?? null
-}
-
-async function loadLatestEmailCode(input: {
-  visitor_uuid: string
-  email: string
-}) {
-  const config = getRestConfig()
-
-  if (!config) {
-    throw new Error("Database config is missing")
-  }
-
-  const response = await fetch(
-    restUrl(
-      config,
-      "email_codes",
-      [
-        `visitor_uuid=eq.${encodeURIComponent(input.visitor_uuid)}`,
-        `email=eq.${encodeURIComponent(input.email)}`,
-        "consumed_at=is.null",
-        "select=code_uuid,code_hash,expires_at,consumed_at",
-        "order=created_at.desc",
-        "limit=1",
-      ].join("&"),
-    ),
-    {
-      headers: restHeaders(config),
-      cache: "no-store",
-    },
-  )
-
-  if (!response.ok) {
-    const error = await readRestError(response)
-
-    throw new Error(
-      `Failed to load email code: ${error.code ?? "unknown"} ${
-        error.message ?? "No PostgREST error returned"
-      }`,
-    )
-  }
-
-  const rows = (await response.json()) as EmailCodeRow[]
-
-  return rows[0] ?? null
-}
-
-async function consumeEmailCode(code_uuid: string) {
-  const config = getRestConfig()
-
-  if (!config) {
-    throw new Error("Database config is missing")
-  }
-
-  const response = await fetch(
-    restUrl(config, "email_codes", `code_uuid=eq.${encodeURIComponent(code_uuid)}`),
-    {
-      method: "PATCH",
-      headers: {
-        ...restHeaders(config),
-        Prefer: "return=minimal",
-      },
-      body: JSON.stringify({
-        consumed_at: new Date().toISOString(),
-      }),
-      cache: "no-store",
-    },
-  )
-
-  if (!response.ok) {
-    const error = await readRestError(response)
-
-    throw new Error(
-      `Failed to consume email code: ${error.code ?? "unknown"} ${
-        error.message ?? "No PostgREST error returned"
-      }`,
-    )
-  }
 }
 
 export async function startEmailOtpLogin(request: NextRequest) {
@@ -255,39 +74,39 @@ export async function startEmailOtpLogin(request: NextRequest) {
       throw new Error("Email is required")
     }
 
-    const code = createEmailCode()
-    const code_hash = hashEmailCode({
-      visitor_uuid: session.visitor_uuid,
+    const payload = {
       email,
-      code,
-    })
-    const expires_at = new Date(Date.now() + EMAIL_CODE_TTL_MS).toISOString()
+      options: {
+        shouldCreateUser: true,
+      },
+    }
 
-    await expirePreviousCodes({
-      visitor_uuid: session.visitor_uuid,
-      email,
-    })
-    const code_uuid = await insertEmailCode({
-      visitor_uuid: session.visitor_uuid,
-      email,
-      code_hash,
-      expires_at,
-    })
-    await sendMail({
-      to: email,
-      subject: "AMP verification code",
-      text: `Your AMP verification code is ${code}. It expires in 10 minutes.`,
-    })
-
-    await sendIdentityDebug("email_code_created", {
+    await sendIdentityDebug("email_send_request", {
       provider: "email",
       visitor_uuid: session.visitor_uuid,
       user_uuid: session.user_uuid,
-      code_uuid,
-      email,
-      expires_at,
+      payload,
       source_channel: context.source_channel,
     })
+
+    const supabase = create_auth_supabase_client()
+    const result = await supabase.auth.signInWithOtp(payload)
+
+    await sendIdentityDebug("email_send_result", {
+      provider: "email",
+      visitor_uuid: session.visitor_uuid,
+      user_uuid: session.user_uuid,
+      payload,
+      success: !result.error,
+      data: result.data,
+      error: serializeError(result.error),
+      source_channel: context.source_channel,
+    })
+
+    if (result.error) {
+      throw new Error(result.error.message)
+    }
+
     await sendIdentityDebug("email_otp_sent", {
       provider: "email",
       visitor_uuid: session.visitor_uuid,
@@ -300,10 +119,9 @@ export async function startEmailOtpLogin(request: NextRequest) {
       ok: true,
       success: true,
       email,
-      expires_at,
     })
   } catch (error) {
-    return jsonError(error, "Failed to send email code")
+    return jsonError(error, "Failed to send email OTP")
   }
 }
 
@@ -336,99 +154,97 @@ export async function verifyEmailOtpLogin(request: NextRequest) {
       return jsonError(new Error("Verification code must be 6 digits"), "", 403)
     }
 
-    const row = await loadLatestEmailCode({
-      visitor_uuid: session.visitor_uuid,
+    const payload = {
       email,
+      token,
+      type: "email" as const,
+    }
+
+    await sendIdentityDebug("email_verify_payload", {
+      provider: "email",
+      visitor_uuid: session.visitor_uuid,
+      payload,
+      source_channel: context.source_channel,
     })
 
-    if (!row?.code_uuid || !row.code_hash || !row.expires_at) {
-      await sendIdentityDebug("email_verify_result", {
-        provider: "email",
-        visitor_uuid: session.visitor_uuid,
-        email,
-        success: false,
-        reason: "code_missing",
-        source_channel: context.source_channel,
-      })
+    const supabase = create_auth_supabase_client()
+    const result = await supabase.auth.verifyOtp(payload)
 
-      return jsonError(new Error("Verification code is invalid"), "", 403)
-    }
-
-    if (Date.parse(row.expires_at) <= Date.now()) {
-      await sendIdentityDebug("email_verify_result", {
-        provider: "email",
-        visitor_uuid: session.visitor_uuid,
-        email,
-        success: false,
-        reason: "code_expired",
-        code_uuid: row.code_uuid,
-        source_channel: context.source_channel,
-      })
-
-      return jsonError(new Error("Verification code has expired"), "", 403)
-    }
-
-    const expected_hash = hashEmailCode({
+    await sendIdentityDebug("email_verify_result", {
+      provider: "email",
       visitor_uuid: session.visitor_uuid,
-      email,
-      code: token,
+      payload,
+      success: !result.error,
+      data: {
+        user_id: result.data.user?.id ?? null,
+        user_email: result.data.user?.email ?? null,
+        session_exists: !!result.data.session,
+      },
+      error: serializeError(result.error),
+      source_channel: context.source_channel,
     })
 
-    if (!hashesMatch(expected_hash, row.code_hash)) {
-      await sendIdentityDebug("email_verify_result", {
-        provider: "email",
-        visitor_uuid: session.visitor_uuid,
-        email,
-        success: false,
-        reason: "code_mismatch",
-        code_uuid: row.code_uuid,
-        source_channel: context.source_channel,
-      })
-
-      return jsonError(new Error("Verification code is invalid"), "", 403)
+    if (result.error) {
+      return NextResponse.json(
+        {
+          ok: false,
+          success: false,
+          error: result.error.message,
+          message: result.error.message,
+          payload,
+          supabase_error: serializeError(result.error),
+        },
+        { status: result.error.status ?? 403 },
+      )
     }
 
-    await consumeEmailCode(row.code_uuid)
+    if (!result.data.user?.id) {
+      throw new Error("Email OTP did not return an auth user")
+    }
 
-    const result = await linkCurrentVisitorToIdentity({
+    const linkResult = await linkCurrentVisitorToIdentity({
       provider: "email",
       provider_user_id: email,
       email,
-      display_name: email,
+      display_name: result.data.user.email ?? email,
     })
-    const profile = await resolveAuthUserProfile(result.user_uuid)
-    const payload = {
-      visitor_uuid: result.visitor_uuid,
-      user_uuid: result.user_uuid,
+    const profile = await resolveAuthUserProfile(linkResult.user_uuid)
+    const sessionPayload = {
+      visitor_uuid: linkResult.visitor_uuid,
+      user_uuid: linkResult.user_uuid,
       role: profile.role,
       tier: profile.tier,
       display_name: profile.display_name,
       provider: "email",
       provider_user_id: email,
       email,
-      source_channel: result.source_channel,
+      source_channel: linkResult.source_channel,
     }
 
     await sendIdentityDebug("identity_link_success", {
       provider: "email",
-      visitor_uuid: result.visitor_uuid,
-      user_uuid: result.user_uuid,
-      identity_uuid: result.identity_uuid,
+      visitor_uuid: linkResult.visitor_uuid,
+      user_uuid: linkResult.user_uuid,
+      identity_uuid: linkResult.identity_uuid,
       email,
-      display_name: result.display_name,
-      source_channel: result.source_channel,
+      display_name: linkResult.display_name,
+      source_channel: linkResult.source_channel,
     })
-    await sendIdentityDebug("session_after_identity_link", payload)
+    await sendIdentityDebug("session_after_identity_link", sessionPayload)
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       ok: true,
       success: true,
-      session: payload,
+      session: sessionPayload,
     })
+
+    set_amp_auth_cookies(response, result.data.session)
+
+    return response
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to verify email code"
+    const message = error instanceof Error ? error.message : "Failed to verify email OTP"
     const status = message.includes("already linked") ? 409 : 500
 
-    return jsonError(error, "Failed to verify email code", status)
+    return jsonError(error, "Failed to verify email OTP", status)
   }
 }
