@@ -13,6 +13,7 @@ import type {
 } from "@/components/overlay/types"
 import { useLocale } from "@/src/components/locale/provider"
 import type { Locale } from "@/src/lib/locale"
+import { create_browser_supabase_client } from "@/src/lib/supabase/client"
 
 const content = {
   close_label: {
@@ -190,16 +191,52 @@ function getModalLayoutClass(rule: OverlayRule) {
   ].join(" ")
 }
 
-function getLinkHref(action: NonNullable<OverlayItem["action"]>, locale: Locale) {
-  return `/api/auth/${action}?locale=${encodeURIComponent(locale)}`
+async function send_identity_link_started(action: NonNullable<OverlayItem["action"]>) {
+  await fetch("/api/auth/identity/start", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      provider: action,
+    }),
+  })
 }
 
-function handleLinkOption(item: OverlayItem, locale: Locale) {
+async function start_google_link() {
+  const supabase = create_browser_supabase_client()
+  const redirectTo = `${window.location.origin}/auth/callback`
+
+  await send_identity_link_started("google")
+
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo,
+      queryParams: {
+        access_type: "offline",
+        prompt: "consent",
+      },
+    },
+  })
+
+  if (error) {
+    throw error
+  }
+}
+
+async function handleLinkOption(item: OverlayItem) {
   if (!item.action) {
     return
   }
 
-  window.location.href = getLinkHref(item.action, locale)
+  if (item.action === "google") {
+    await start_google_link()
+    return
+  }
+
+  await send_identity_link_started(item.action)
+  window.location.href = `/api/auth/${item.action}`
 }
 
 function get_modal_title(rule: OverlayRule, locale: Locale) {
@@ -481,7 +518,9 @@ export default function OverlayModal({
     }
 
     set_loading_action(item.action)
-    handleLinkOption(item, locale)
+    handleLinkOption(item).catch(() => {
+      set_loading_action(null)
+    })
   }
 
   return (

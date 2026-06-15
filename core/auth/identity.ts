@@ -4,6 +4,8 @@ import type {
   IdentityState,
   Session,
 } from "@/core/auth/types"
+import { resolveAuthContext } from "@/core/auth/context"
+import { resolveSession } from "@/core/auth/session"
 import type { ContactInput } from "@/core/contacts/context"
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
 import { sendAuthDebug } from "@/core/debug"
@@ -164,6 +166,8 @@ export function normalizeGoogleIdentityInput(
 export async function sendIdentityDebug(
   event:
     | "auth_callback_received"
+    | "google_code_exchange_failed"
+    | "google_code_exchange_success"
     | "identity_link_failed"
     | "identity_link_started"
     | "identity_link_success"
@@ -172,6 +176,30 @@ export async function sendIdentityDebug(
   request_id?: string | null,
 ) {
   await sendAuthDebug(event, payload, request_id)
+}
+
+export async function sendCurrentIdentityLinkStarted(provider: IdentityProvider) {
+  const context = await resolveAuthContext()
+  const session = await resolveSession(context)
+
+  await sendIdentityDebug("identity_link_started", {
+    provider,
+    visitor_uuid: session.visitor_uuid,
+    user_uuid: session.user_uuid,
+    source_channel: context.source_channel,
+  })
+}
+
+export async function sendIdentityLinkStartedFromInput(
+  input: Record<string, unknown>,
+) {
+  const provider = input.provider
+
+  if (provider !== "google" && provider !== "line" && provider !== "email") {
+    throw new Error("Identity provider must be google, line, or email")
+  }
+
+  await sendCurrentIdentityLinkStarted(provider)
 }
 
 function identityLookupQuery(input: IdentityLinkInput) {

@@ -1,50 +1,18 @@
 import { cookies } from "next/headers"
+import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
 
 import { resolveAuthContext } from "@/core/auth/context"
-import { linkCurrentVisitorToIdentity } from "@/core/auth/link"
 import {
   normalizeGoogleIdentityInput,
   sendIdentityDebug,
-  type SupabaseAuthUser,
 } from "@/core/auth/identity"
+import { linkCurrentVisitorToIdentity } from "@/core/auth/link"
 import { resolveSession } from "@/core/auth/session"
-import { getRestConfig } from "@/core/db/rest"
-import { normalize_locale } from "@/src/lib/locale"
-
-const google_code_verifier_cookie = "amp_google_code_verifier"
-const google_state_cookie = "amp_google_oauth_state"
-const google_locale_cookie = "amp_google_locale"
-const auth_cookie_max_age = 60 * 60 * 24 * 7
-const oauth_cookie_max_age = 60 * 10
-
-type GoogleTokenResponse = {
-  access_token?: string
-  refresh_token?: string
-  expires_in?: number
-  token_type?: string
-}
-
-function base64url(bytes: ArrayBuffer | Uint8Array) {
-  const byteArray = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
-
-  return Buffer.from(byteArray)
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "")
-}
-
-function randomBase64Url(byteLength: number) {
-  return base64url(crypto.getRandomValues(new Uint8Array(byteLength)))
-}
-
-async function codeChallenge(verifier: string) {
-  const bytes = new TextEncoder().encode(verifier)
-  const digest = await crypto.subtle.digest("SHA-256", bytes)
-
-  return base64url(digest)
-}
+import {
+  create_server_supabase_client,
+  set_amp_auth_cookies,
+} from "@/src/lib/supabase/server"
 
 function appBaseUrl(request: Request) {
   const requestUrl = new URL(request.url)
@@ -56,237 +24,15 @@ function appBaseUrl(request: Request) {
   return (process.env.NEXT_PUBLIC_APP_URL ?? requestUrl.origin).replace(/\/$/, "")
 }
 
-function callbackUrl(request: Request) {
-  return `${appBaseUrl(request)}/auth/callback`
-}
-
-function googleAuthorizeUrl(config: NonNullable<ReturnType<typeof getRestConfig>>) {
-  return `${config.url.replace(/\/$/, "")}/auth/v1/authorize`
-}
-
-function googleTokenUrl(config: NonNullable<ReturnType<typeof getRestConfig>>) {
-  return `${config.url.replace(/\/$/, "")}/auth/v1/token?grant_type=pkce`
-}
-
-function googleUserUrl(config: NonNullable<ReturnType<typeof getRestConfig>>) {
-  return `${config.url.replace(/\/$/, "")}/auth/v1/user`
-}
-
-function authCookieOptions(maxAge: number) {
-  return {
-    httpOnly: true,
-    maxAge,
-    path: "/",
-    sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
-  }
-}
-
-async function exchangeGoogleCode(code: string, verifier: string) {
-  const config = getRestConfig()
-
-  if (!config) {
-    throw new Error("Supabase config is missing")
-  }
-
-  const response = await fetch(googleTokenUrl(config), {
-    method: "POST",
-    headers: {
-      apikey: config.key,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      auth_code: code,
-      code_verifier: verifier,
-    }),
-    cache: "no-store",
-  })
-
-  if (!response.ok) {
-    const error = (await response.json().catch(() => ({}))) as {
-      error?: string
-      error_description?: string
-      msg?: string
-    }
-
-    throw new Error(
-      `Google code exchange failed: ${
-        error.error_description ?? error.msg ?? error.error ?? response.statusText
-      }`,
-    )
-  }
-
-  return (await response.json()) as GoogleTokenResponse
-}
-
-async function getGoogleAuthUser(accessToken: string) {
-  const config = getRestConfig()
-
-  if (!config) {
-    throw new Error("Supabase config is missing")
-  }
-
-  const response = await fetch(googleUserUrl(config), {
-    headers: {
-      apikey: config.key,
-      Authorization: `Bearer ${accessToken}`,
-    },
-    cache: "no-store",
-  })
-
-  if (!response.ok) {
-    throw new Error(`Failed to load Google auth user: ${response.statusText}`)
-  }
-
-  return (await response.json()) as SupabaseAuthUser
-}
-
 function redirectHome(request: Request) {
   return NextResponse.redirect(new URL("/", appBaseUrl(request)))
 }
 
-export async function startGoogleOAuth(request: Request) {
-  const config = getRestConfig()
-
-  if (!config) {
-    await sendIdentityDebug("identity_link_failed", {
-      provider: "google",
-      visitor_uuid: null,
-      user_uuid: null,
-      reason: "missing_supabase_config",
-      error: "Supabase config is missing",
-      source_channel: null,
-    })
-
-    return redirectHome(request)
-  }
-
-  const verifier = randomBase64Url(64)
-  const state = randomBase64Url(32)
-  const challenge = await codeChallenge(verifier)
-  const requestUrl = new URL(request.url)
-  const locale = normalize_locale(requestUrl.searchParams.get("locale"))
-  const authorizeUrl = new URL(googleAuthorizeUrl(config))
-  const context = await resolveAuthContext()
-  const session = await resolveSession(context)
-
-  await sendIdentityDebug("identity_link_started", {
-    provider: "google",
-    visitor_uuid: session.visitor_uuid,
-    user_uuid: session.user_uuid,
-    source_channel: context.source_channel,
-  })
-
-  authorizeUrl.searchParams.set("provider", "google")
-  authorizeUrl.searchParams.set("redirect_to", callbackUrl(request))
-  authorizeUrl.searchParams.set("code_challenge", challenge)
-  authorizeUrl.searchParams.set("code_challenge_method", "s256")
-  authorizeUrl.searchParams.set("state", state)
-
-  const response = NextResponse.redirect(authorizeUrl)
-
-  response.cookies.set(
-    google_code_verifier_cookie,
-    verifier,
-    authCookieOptions(oauth_cookie_max_age),
-  )
-  response.cookies.set(
-    google_state_cookie,
-    state,
-    authCookieOptions(oauth_cookie_max_age),
-  )
-  response.cookies.set(
-    google_locale_cookie,
-    locale,
-    authCookieOptions(oauth_cookie_max_age),
-  )
-
-  return response
+function redirectGoogleError(request: Request) {
+  return NextResponse.redirect(new URL("/?auth_error=google", appBaseUrl(request)))
 }
 
-export async function completeGoogleOAuthCallback(request: Request) {
-  const requestUrl = new URL(request.url)
-  const code = requestUrl.searchParams.get("code")
-  const state = requestUrl.searchParams.get("state")
-  const cookieStore = await cookies()
-  const verifier = cookieStore.get(google_code_verifier_cookie)?.value ?? null
-  const expectedState = cookieStore.get(google_state_cookie)?.value ?? null
-  const locale = cookieStore.get(google_locale_cookie)?.value ?? null
-  const response = redirectHome(request)
-
-  response.cookies.delete(google_code_verifier_cookie)
-  response.cookies.delete(google_state_cookie)
-  response.cookies.delete(google_locale_cookie)
-
-  await sendIdentityDebug("auth_callback_received", {
-    provider: "google",
-    code_exists: Boolean(code),
-    state_exists: Boolean(state),
-    pathname: requestUrl.pathname,
-  })
-
-  const failureContext = await resolveGoogleFailureContext()
-
-  try {
-    if (!code || !verifier || !state || state !== expectedState) {
-      throw new Error("Google callback is missing valid OAuth state")
-    }
-
-    const token = await exchangeGoogleCode(code, verifier)
-
-    if (!token.access_token) {
-      throw new Error("Google callback did not return access_token")
-    }
-
-    const user = await getGoogleAuthUser(token.access_token)
-    const identityInput = normalizeGoogleIdentityInput(user, locale)
-
-    const result = await linkCurrentVisitorToIdentity(identityInput)
-
-    await sendIdentityDebug("identity_link_success", {
-      provider: "google",
-      visitor_uuid: result.visitor_uuid,
-      user_uuid: result.user_uuid,
-      identity_uuid: result.identity_uuid,
-      email: result.email,
-      display_name: result.display_name,
-      source_channel: result.source_channel,
-    })
-
-    response.cookies.set(
-      "sb-access-token",
-      token.access_token,
-      authCookieOptions(token.expires_in ?? auth_cookie_max_age),
-    )
-
-    if (token.refresh_token) {
-      response.cookies.set(
-        "sb-refresh-token",
-        token.refresh_token,
-        authCookieOptions(auth_cookie_max_age),
-      )
-    }
-
-    return response
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-
-    await sendIdentityDebug("identity_link_failed", {
-      provider: "google",
-      visitor_uuid: failureContext.visitor_uuid,
-      user_uuid: failureContext.user_uuid,
-      reason: message.includes("visitor") || message.includes("Visitor")
-        ? "visitor_missing"
-        : "google_callback_failed",
-      error: message,
-      source_channel: failureContext.source_channel,
-    })
-
-    return response
-  }
-}
-
-async function resolveGoogleFailureContext() {
+async function resolveFailureContext() {
   try {
     const context = await resolveAuthContext()
     const session = await resolveSession(context)
@@ -302,5 +48,122 @@ async function resolveGoogleFailureContext() {
       user_uuid: null,
       source_channel: null,
     }
+  }
+}
+
+export async function completeGoogleOAuthCallback(request: NextRequest) {
+  const requestUrl = request.nextUrl
+  const code = requestUrl.searchParams.get("code")
+  const error = requestUrl.searchParams.get("error")
+  const error_code = requestUrl.searchParams.get("error_code")
+  const error_description = requestUrl.searchParams.get("error_description")
+
+  await sendIdentityDebug("auth_callback_received", {
+    provider: "google",
+    code_exists: Boolean(code),
+    error,
+    error_code,
+    error_description,
+  })
+
+  const failureContext = await resolveFailureContext()
+
+  if (error) {
+    await sendIdentityDebug("identity_link_failed", {
+      provider: "google",
+      visitor_uuid: failureContext.visitor_uuid,
+      user_uuid: failureContext.user_uuid,
+      reason: "oauth_error_before_exchange",
+      error,
+      error_code,
+      error_description,
+      source_channel: failureContext.source_channel,
+    })
+
+    return redirectGoogleError(request)
+  }
+
+  if (!code) {
+    await sendIdentityDebug("identity_link_failed", {
+      provider: "google",
+      visitor_uuid: failureContext.visitor_uuid,
+      user_uuid: failureContext.user_uuid,
+      reason: "missing_code",
+      error: "Google callback did not include code",
+      error_code: null,
+      error_description: null,
+      source_channel: failureContext.source_channel,
+    })
+
+    return NextResponse.redirect(new URL("/?auth_error=missing_code", appBaseUrl(request)))
+  }
+
+  const response = redirectHome(request)
+
+  try {
+    const cookieStore = await cookies()
+    const supabase = create_server_supabase_client(cookieStore, response)
+    const { data, error: exchangeError } = await supabase.auth
+      .exchangeCodeForSession(code)
+      .catch((exchangeError: unknown) => {
+        const message =
+          exchangeError instanceof Error ? exchangeError.message : String(exchangeError)
+
+        return {
+          data: { session: null },
+          error: { message },
+        }
+      })
+
+    if (exchangeError || !data.session?.user) {
+      await sendIdentityDebug("google_code_exchange_failed", {
+        provider: "google",
+        visitor_uuid: failureContext.visitor_uuid,
+        user_uuid: failureContext.user_uuid,
+        error: exchangeError?.message ?? "Google session exchange failed",
+        source_channel: failureContext.source_channel,
+      })
+      throw new Error(exchangeError?.message ?? "Google session exchange failed")
+    }
+
+    await sendIdentityDebug("google_code_exchange_success", {
+      provider: "google",
+      visitor_uuid: failureContext.visitor_uuid,
+      user_uuid: failureContext.user_uuid,
+      source_channel: failureContext.source_channel,
+    })
+
+    const identityInput = normalizeGoogleIdentityInput(data.session.user)
+    const result = await linkCurrentVisitorToIdentity(identityInput)
+
+    set_amp_auth_cookies(response, data.session)
+
+    await sendIdentityDebug("identity_link_success", {
+      provider: "google",
+      visitor_uuid: result.visitor_uuid,
+      user_uuid: result.user_uuid,
+      identity_uuid: result.identity_uuid,
+      email: result.email,
+      display_name: result.display_name,
+      source_channel: result.source_channel,
+    })
+
+    return response
+  } catch (callbackError) {
+    const message =
+      callbackError instanceof Error ? callbackError.message : String(callbackError)
+
+    await sendIdentityDebug("identity_link_failed", {
+      provider: "google",
+      visitor_uuid: failureContext.visitor_uuid,
+      user_uuid: failureContext.user_uuid,
+      reason: "exchange_or_link_failed",
+      error: message,
+      error_code: null,
+      error_description: null,
+      source_channel: failureContext.source_channel,
+    })
+
+    return redirectGoogleError(request)
   }
 }
