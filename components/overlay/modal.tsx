@@ -417,7 +417,7 @@ function LanguageOption({
       <span>{get_language_label(item, locale)}</span>
       {item.locale === locale ? (
         <PawPrint
-          className="h-4 w-4 fill-[#8f5d28] text-[#8f5d28]"
+          className="h-5 w-5 fill-[#f48ca8] text-[#f48ca8]"
           strokeWidth={2.5}
           aria-hidden="true"
         />
