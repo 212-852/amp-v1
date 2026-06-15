@@ -92,7 +92,17 @@ async function buildLinkedEmailSession(input: {
   return session
 }
 
-export async function startEmailOtpLogin(request: NextRequest) {
+function getEmailRedirectTo() {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL
+
+  if (!appUrl) {
+    throw new Error("NEXT_PUBLIC_APP_URL is required for email magic link login")
+  }
+
+  return `${appUrl.replace(/\/$/, "")}/auth/callback?provider=email`
+}
+
+export async function startEmailMagicLinkLogin(request: NextRequest) {
   const response = NextResponse.json({
     ok: true,
     success: true,
@@ -116,7 +126,7 @@ export async function startEmailOtpLogin(request: NextRequest) {
       email,
       options: {
         shouldCreateUser: true,
-        emailRedirectTo: `${request.nextUrl.origin}/auth/callback`,
+        emailRedirectTo: getEmailRedirectTo(),
       },
     }
 
@@ -227,7 +237,7 @@ export async function completeEmailMagicLinkCallback(request: NextRequest) {
     })
 
     set_amp_auth_cookies(response, data.session)
-    await sendIdentityDebug("email_verify_success", {
+    await sendIdentityDebug("email_magic_link_success", {
       provider: "email",
       visitor_uuid: session.visitor_uuid,
       user_uuid: session.user_uuid,

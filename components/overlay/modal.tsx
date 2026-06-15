@@ -101,13 +101,13 @@ const content = {
     en: "Email address",
     es: "Correo electronico",
   },
-  send_code: {
+  send_link: {
     ja: "リンクを送信",
     en: "Send link",
     es: "Enviar enlace",
   },
   email_link_sent: {
-    ja: "メールに届いたリンクを開いてログインしてください。",
+    ja: "ログインリンクをメールに送信しました。メールを開いてログインしてください。",
     en: "Open the link in your email to log in.",
     es: "Abre el enlace en tu correo para iniciar sesion.",
   },
@@ -626,13 +626,13 @@ function EmailLoginPanel({
     }
 
     if (!response.ok || result.ok === false) {
-      throw new Error(result.message ?? result.error ?? "Email verification failed")
+      throw new Error(result.message ?? result.error ?? "Failed to send login link")
     }
 
     return result
   }
 
-  function handle_send_code() {
+  function handle_send_link() {
     if (loading) {
       return
     }
@@ -645,7 +645,9 @@ function EmailLoginPanel({
         set_sent(true)
       })
       .catch((send_error) => {
-        set_error(send_error instanceof Error ? send_error.message : "Failed to send code")
+        set_error(
+          send_error instanceof Error ? send_error.message : "Failed to send login link",
+        )
       })
       .finally(() => {
         set_loading(false)
@@ -688,7 +690,7 @@ function EmailLoginPanel({
       <button
         type="button"
         disabled={loading}
-        onClick={handle_send_code}
+        onClick={handle_send_link}
         className={[
           "flex min-h-[54px] items-center justify-center rounded-2xl",
           "border border-[#e5e5e5] bg-[#8f5d28] px-4 py-3 text-center",
@@ -696,7 +698,7 @@ function EmailLoginPanel({
           loading ? "cursor-not-allowed opacity-75" : "",
         ].join(" ")}
       >
-        {content.send_code[locale]}
+        {content.send_link[locale]}
       </button>
 
       <button

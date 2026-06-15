@@ -8,7 +8,7 @@ const identityEvents = new Set([
   "email_magic_link_sent",
   "email_magic_callback_received",
   "email_magic_exchange_result",
-  "email_verify_success",
+  "email_magic_link_success",
   "email_session_update",
   "email_ui_session_refreshed",
   "google_code_exchange_failed",
