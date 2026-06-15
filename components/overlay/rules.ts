@@ -50,27 +50,19 @@ const contentByType: Record<
     ],
   },
   link: {
-    title: "Link",
-    description:
-      "Connect your account to continue across devices and receive notifications.",
+    title: "",
+    description: "",
     items: [
       {
         id: "line",
-        title: "LINE連携",
-        badge: "おすすめ",
-        description: "通知やログインが簡単になります",
         action: "line",
       },
       {
         id: "google",
-        title: "Google",
-        description: "Googleアカウントでログイン",
         action: "google",
       },
       {
         id: "email",
-        title: "eMail",
-        description: "メールアドレスでログイン",
         action: "email",
       },
     ],
@@ -85,12 +77,12 @@ const contentByType: Record<
     ],
   },
   language: {
-    title: "Language",
-    description: "Choose display language.",
+    title: "",
+    description: "",
     items: [
-      { id: "ja", title: "日本語" },
-      { id: "en", title: "English" },
-      { id: "zh", title: "中文" },
+      { id: "ja", locale: "ja" },
+      { id: "en", locale: "en" },
+      { id: "es", locale: "es" },
     ],
   },
 }

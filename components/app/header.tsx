@@ -12,7 +12,6 @@ const mock_auth = {
 const header_state = {
   brand: "PET TAXI",
   breadcrumb: "ホーム",
-  language_label: "JA",
   user_name: mock_auth.is_logged_in ? "Test User" : "Guest",
 }
 
@@ -60,7 +59,8 @@ function HeaderCurve() {
 }
 
 export default function AppHeader() {
-  const { openOverlay } = useOverlay()
+  const { locale, openOverlay } = useOverlay()
+  const language_label = locale.toUpperCase()
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 h-[108px] text-[#3d2a19]">
@@ -112,7 +112,7 @@ export default function AppHeader() {
             </button>
             <button
               type="button"
-              aria-label={`Language ${header_state.language_label}`}
+              aria-label={`Language ${language_label}`}
               onClick={() =>
                 openOverlay({ type: "language", source: "user" })
               }
@@ -120,7 +120,7 @@ export default function AppHeader() {
             >
               <Globe2 className="h-[22px] w-[22px]" strokeWidth={2} />
               <span className="text-[14px] font-semibold leading-none">
-                {header_state.language_label}
+                {language_label}
               </span>
             </button>
           </div>

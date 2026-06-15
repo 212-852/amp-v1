@@ -1,3 +1,5 @@
+import type { AmpLocale } from "@/src/lib/locale"
+
 export type OverlayType =
   | "my_page"
   | "menu"
@@ -25,17 +27,18 @@ export type OverlayPlacement = "bottom" | "left" | "center"
 
 export type OverlayItem = {
   id: string
-  title: string
+  title?: string
   description?: string
   badge?: string
   action?: "line" | "google" | "email"
+  locale?: AmpLocale
 }
 
 export type OverlayRule = {
   type: OverlayType
   source: OverlaySource
-  title: string
-  description: string
+  title?: string
+  description?: string
   animation: OverlayAnimation
   placement: OverlayPlacement
   items: OverlayItem[]

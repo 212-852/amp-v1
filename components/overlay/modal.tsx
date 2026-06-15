@@ -7,6 +7,85 @@ import type {
   OverlayPhase,
   OverlayRule,
 } from "@/components/overlay/types"
+import type { AmpLocale } from "@/src/lib/locale"
+
+const content = {
+  close_label: {
+    ja: "閉じる",
+    en: "Close overlay",
+    es: "Cerrar",
+  },
+  link_title: {
+    ja: "Link",
+    en: "Link",
+    es: "Vincular",
+  },
+  link_description: {
+    ja: "アカウントを連携すると、別の端末でも続けて使えて通知も受け取れます。",
+    en: "Connect your account to continue across devices and receive notifications.",
+    es: "Conecta tu cuenta para continuar en otros dispositivos y recibir notificaciones.",
+  },
+  line_title: {
+    ja: "LINE連携",
+    en: "LINE Link",
+    es: "Vincular LINE",
+  },
+  line_badge: {
+    ja: "おすすめ",
+    en: "Recommended",
+    es: "Recomendado",
+  },
+  line_description: {
+    ja: "通知やログインが簡単になります",
+    en: "Makes notifications and login easier",
+    es: "Facilita las notificaciones y el inicio de sesion",
+  },
+  google_title: {
+    ja: "Google",
+    en: "Google",
+    es: "Google",
+  },
+  google_description: {
+    ja: "Googleアカウントでログイン",
+    en: "Log in with your Google account",
+    es: "Inicia sesion con tu cuenta de Google",
+  },
+  email_title: {
+    ja: "eMail",
+    en: "eMail",
+    es: "eMail",
+  },
+  email_description: {
+    ja: "メールアドレスでログイン",
+    en: "Log in with your email address",
+    es: "Inicia sesion con tu correo electronico",
+  },
+  language_title: {
+    ja: "言語",
+    en: "Language",
+    es: "Idioma",
+  },
+  language_description: {
+    ja: "表示言語を選択してください。",
+    en: "Choose display language.",
+    es: "Elige el idioma de visualizacion.",
+  },
+  language_ja: {
+    ja: "日本語",
+    en: "日本語",
+    es: "日本語",
+  },
+  language_en: {
+    ja: "English",
+    en: "English",
+    es: "English",
+  },
+  language_es: {
+    ja: "Español",
+    en: "Español",
+    es: "Español",
+  },
+}
 
 function getModalLayoutClass(rule: OverlayRule) {
   if (rule.placement === "bottom") {
@@ -43,6 +122,66 @@ function handleLinkOption(item: OverlayItem) {
   window.location.href = getLinkHref(item.action)
 }
 
+function get_modal_title(rule: OverlayRule, locale: AmpLocale) {
+  if (rule.type === "link") {
+    return content.link_title[locale]
+  }
+
+  if (rule.type === "language") {
+    return content.language_title[locale]
+  }
+
+  return rule.title ?? ""
+}
+
+function get_modal_description(rule: OverlayRule, locale: AmpLocale) {
+  if (rule.type === "link") {
+    return content.link_description[locale]
+  }
+
+  if (rule.type === "language") {
+    return content.language_description[locale]
+  }
+
+  return rule.description ?? ""
+}
+
+function get_link_item(item: OverlayItem, locale: AmpLocale) {
+  if (item.action === "line") {
+    return {
+      title: content.line_title[locale],
+      badge: content.line_badge[locale],
+      description: content.line_description[locale],
+    }
+  }
+
+  if (item.action === "google") {
+    return {
+      title: content.google_title[locale],
+      badge: null,
+      description: content.google_description[locale],
+    }
+  }
+
+  return {
+    title: content.email_title[locale],
+    badge: null,
+    description: content.email_description[locale],
+  }
+}
+
+function get_language_label(item: OverlayItem, locale: AmpLocale) {
+  if (item.locale === "ja") {
+    return content.language_ja[locale]
+  }
+
+  if (item.locale === "es") {
+    return content.language_es[locale]
+  }
+
+  return content.language_en[locale]
+}
+
 function LinkOptionIcon({ action }: Readonly<{ action: OverlayItem["action"] }>) {
   if (action === "line") {
     return <SiLine className="h-7 w-7 text-[#06c755]" aria-hidden="true" />
@@ -55,7 +194,15 @@ function LinkOptionIcon({ action }: Readonly<{ action: OverlayItem["action"] }>)
   return <Mail className="h-7 w-7 text-[#8f5d28]" strokeWidth={2} aria-hidden="true" />
 }
 
-function LinkOption({ item }: Readonly<{ item: OverlayItem }>) {
+function LinkOption({
+  item,
+  locale,
+}: Readonly<{
+  item: OverlayItem
+  locale: AmpLocale
+}>) {
+  const link_item = get_link_item(item, locale)
+
   return (
     <button
       type="button"
@@ -75,17 +222,17 @@ function LinkOption({ item }: Readonly<{ item: OverlayItem }>) {
       <span className="min-w-0">
         <span className="flex min-w-0 items-center gap-2">
           <span className="truncate text-[15px] font-bold leading-5">
-            {item.title}
+            {link_item.title}
           </span>
-          {item.badge ? (
+          {link_item.badge ? (
             <span className="shrink-0 rounded-full bg-[#06c755] px-2 py-0.5 text-[11px] font-bold leading-none text-white">
-              {item.badge}
+              {link_item.badge}
             </span>
           ) : null}
         </span>
-        {item.description ? (
+        {link_item.description ? (
           <span className="mt-1 block text-[12px] font-semibold leading-5 text-[#777777]">
-            {item.description}
+            {link_item.description}
           </span>
         ) : null}
       </span>
@@ -99,13 +246,51 @@ function LinkOption({ item }: Readonly<{ item: OverlayItem }>) {
   )
 }
 
+function LanguageOption({
+  item,
+  locale,
+  set_locale,
+  onClose,
+}: Readonly<{
+  item: OverlayItem
+  locale: AmpLocale
+  set_locale: (locale: AmpLocale) => void
+  onClose: () => void
+}>) {
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (item.locale) {
+          set_locale(item.locale)
+          onClose()
+        }
+      }}
+      className={[
+        "flex min-h-[54px] items-center justify-between rounded-2xl",
+        "border border-[#e5e5e5] px-4 py-3 text-left",
+        "text-[14px] font-semibold text-[#111111]",
+        "transition-colors hover:bg-[#fdfaf6] focus-visible:outline",
+        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8f5d28]",
+      ].join(" ")}
+    >
+      <span>{get_language_label(item, locale)}</span>
+      {item.locale === locale ? (
+        <span className="rounded-full bg-[#8f5d28] px-2 py-0.5 text-[11px] font-bold leading-none text-white">
+          {locale.toUpperCase()}
+        </span>
+      ) : null}
+    </button>
+  )
+}
+
 function DefaultOption({ item }: Readonly<{ item: OverlayItem }>) {
   return (
     <button
       type="button"
       className="rounded-2xl border border-[#e5e5e5] px-4 py-3 text-left text-[14px] font-semibold text-[#111111]"
     >
-      {item.title}
+      {item.title ?? ""}
     </button>
   )
 }
@@ -114,11 +299,18 @@ export default function OverlayModal({
   rule,
   phase,
   onClose,
+  locale,
+  set_locale,
 }: Readonly<{
   rule: OverlayRule
   phase: OverlayPhase
   onClose: () => void
+  locale: AmpLocale
+  set_locale: (locale: AmpLocale) => void
 }>) {
+  const modal_title = get_modal_title(rule, locale)
+  const modal_description = get_modal_description(rule, locale)
+
   return (
     <section
       role="dialog"
@@ -138,7 +330,7 @@ export default function OverlayModal({
             id="overlay-title"
             className="mb-4 text-[24px] font-bold tracking-[-0.03em]"
           >
-            {rule.title}
+            {modal_title}
           </h2>
         </div>
 
@@ -146,20 +338,28 @@ export default function OverlayModal({
           type="button"
           onClick={onClose}
           className="flex h-9 w-9 items-center justify-center rounded-full border border-[#e5e5e5] text-[18px] leading-none text-[#777777]"
-          aria-label="Close overlay"
+          aria-label={content.close_label[locale]}
         >
           ×
         </button>
       </div>
 
       <p className="mt-3 text-[13px] font-medium leading-6 text-[#777777]">
-        {rule.description}
+        {modal_description}
       </p>
 
       <div className="mt-5 grid gap-2">
         {rule.items.map((item) => (
           rule.type === "link" ? (
-            <LinkOption key={item.id} item={item} />
+            <LinkOption key={item.id} item={item} locale={locale} />
+          ) : rule.type === "language" ? (
+            <LanguageOption
+              key={item.id}
+              item={item}
+              locale={locale}
+              set_locale={set_locale}
+              onClose={onClose}
+            />
           ) : (
             <DefaultOption key={item.id} item={item} />
           )
