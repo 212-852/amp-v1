@@ -12,10 +12,7 @@ type ContactUpsertBody = {
   type: ContactRecord["type"]
   value: string
   channel: ContactRecord["channel"]
-  state: ContactRecord["state"]
   receive: boolean
-  last_seen_at: string
-  updated_at: string
 }
 
 type ContactAccessBody = {
@@ -69,9 +66,9 @@ export async function upsertContact(context: ContactContext): Promise<ContactRec
   if (!config) {
     return {
       ...context,
-      channel: context.type === "line" ? "line" : "web",
+      channel: context.channel,
       state: "active",
-      receive: true,
+      receive: context.receive,
       last_seen_at: now,
     }
   }
@@ -80,11 +77,8 @@ export async function upsertContact(context: ContactContext): Promise<ContactRec
     ...contactUpsertIdentity(context),
     type: context.type,
     value: context.value,
-    channel: context.type === "line" ? "line" : "web",
-    state: "active",
-    receive: true,
-    last_seen_at: now,
-    updated_at: now,
+    channel: context.channel,
+    receive: context.receive,
   }
 
   const response = await fetch(

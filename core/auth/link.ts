@@ -128,20 +128,62 @@ async function linkParticipantsToUser(visitor_uuid: string, user_uuid: string) {
   }
 }
 
-async function upsertRealContact(input: AuthLinkInput, visitor_uuid: string, user_uuid: string) {
+async function upsertRealContact(
+  input: AuthLinkInput,
+  visitor_uuid: string,
+  user_uuid: string,
+  source_channel: AuthLinkResult["source_channel"],
+) {
   const contact = input.contact ?? contactInputFromIdentity(input)
 
   if (!contact) {
     return
   }
 
-  await upsertContact(
-    normalizeContactContext({
-      ...contact,
+  try {
+    await upsertContact(
+      normalizeContactContext({
+        ...contact,
+        user_uuid,
+        visitor_uuid,
+        channel: source_channel,
+        receive: true,
+      }),
+    )
+  } catch (error) {
+    const error_message = error instanceof Error ? error.message : String(error)
+
+    await sendIdentityDebug("contact_upsert_failed", {
+      provider: input.provider,
       user_uuid,
       visitor_uuid,
-    }),
-  )
+      type: contact.type,
+      value: contact.value,
+      channel: source_channel,
+      reason: "contact_upsert_failed",
+      error_message,
+    })
+  }
+}
+
+async function linkExistingVisitorContacts(
+  visitor_uuid: string,
+  user_uuid: string,
+  input: AuthLinkInput,
+) {
+  try {
+    await linkVisitorContactsToUser(visitor_uuid, user_uuid)
+  } catch (error) {
+    const error_message = error instanceof Error ? error.message : String(error)
+
+    await sendIdentityDebug("contact_upsert_failed", {
+      provider: input.provider,
+      user_uuid,
+      visitor_uuid,
+      reason: "contact_link_failed",
+      error_message,
+    })
+  }
 }
 
 export async function linkCurrentVisitorToIdentity(
@@ -175,8 +217,8 @@ export async function linkCurrentVisitorToIdentity(
   try {
     identity = await upsertIdentityLink(input, user_uuid)
     await linkVisitorToUser(visitor_uuid, user_uuid)
-    await linkVisitorContactsToUser(visitor_uuid, user_uuid)
-    await upsertRealContact(input, visitor_uuid, user_uuid)
+    await linkExistingVisitorContacts(visitor_uuid, user_uuid, input)
+    await upsertRealContact(input, visitor_uuid, user_uuid, context.source_channel)
     await linkParticipantsToUser(visitor_uuid, user_uuid)
   } catch (error) {
     const error_message = error instanceof Error ? error.message : String(error)

@@ -2,6 +2,7 @@ import { AUTH_SESSION_DEBUG } from "@/core/control"
 
 const identityEvents = new Set([
   "auth_callback_received",
+  "contact_upsert_failed",
   "google_code_exchange_failed",
   "google_code_exchange_success",
   "google_oauth_callback_received",

@@ -19,6 +19,8 @@ export type ContactContext = {
   visitor_uuid: string | null
   type: ContactType
   value: string
+  channel: SourceChannel
+  receive: boolean
 }
 
 export type ContactAccessContext = {
@@ -47,9 +49,11 @@ function normalizeType(value: unknown): ContactType {
   throw new Error("Contact requires a real delivery destination type")
 }
 
-function normalizeChannel(value: unknown): SourceChannel {
+function normalizeChannel(value: unknown, type?: ContactType): SourceChannel {
   return value === "pwa" || value === "liff" || value === "line"
     ? value
+    : type === "line"
+      ? "line"
     : "web"
 }
 
@@ -78,6 +82,8 @@ export function normalizeContactContext(input: ContactInput): ContactContext {
     visitor_uuid,
     type,
     value,
+    channel: normalizeChannel(input.channel, type),
+    receive: input.receive === false ? false : true,
   }
 }
 

@@ -187,6 +187,7 @@ export function normalizeGoogleIdentityInput(
 export async function sendIdentityDebug(
   event:
     | "auth_callback_received"
+    | "contact_upsert_failed"
     | "google_oauth_callback_received"
     | "google_oauth_start"
     | "google_oauth_state_failed"
