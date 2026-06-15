@@ -7,7 +7,8 @@ import type {
   OverlayPhase,
   OverlayRule,
 } from "@/components/overlay/types"
-import type { AmpLocale } from "@/src/lib/locale"
+import { useLocale } from "@/src/components/locale/provider"
+import type { Locale } from "@/src/lib/locale"
 
 const content = {
   close_label: {
@@ -81,9 +82,84 @@ const content = {
     es: "English",
   },
   language_es: {
-    ja: "Español",
-    en: "Español",
-    es: "Español",
+    ja: "Espanol",
+    en: "Espanol",
+    es: "Espanol",
+  },
+  my_page_title: {
+    ja: "My Page",
+    en: "My Page",
+    es: "Mi pagina",
+  },
+  my_page_description: {
+    ja: "アカウントとプロフィールの操作。",
+    en: "Account and profile actions.",
+    es: "Acciones de cuenta y perfil.",
+  },
+  profile: {
+    ja: "プロフィール",
+    en: "Profile",
+    es: "Perfil",
+  },
+  reservations: {
+    ja: "予約",
+    en: "Reservations",
+    es: "Reservas",
+  },
+  linked_identity: {
+    ja: "連携済みID",
+    en: "Linked identity",
+    es: "Identidad vinculada",
+  },
+  menu_title: {
+    ja: "Menu",
+    en: "Menu",
+    es: "Menu",
+  },
+  menu_description: {
+    ja: "ナビゲーションとアプリ操作。",
+    en: "Navigation and app actions.",
+    es: "Navegacion y acciones de la app.",
+  },
+  dashboard: {
+    ja: "Dashboard",
+    en: "Dashboard",
+    es: "Panel",
+  },
+  support: {
+    ja: "サポート",
+    en: "Support",
+    es: "Soporte",
+  },
+  settings: {
+    ja: "設定",
+    en: "Settings",
+    es: "Ajustes",
+  },
+  notice_title: {
+    ja: "Notice",
+    en: "Notice",
+    es: "Avisos",
+  },
+  notice_description: {
+    ja: "最新通知と必要な操作。",
+    en: "Latest notifications and required actions.",
+    es: "Notificaciones recientes y acciones necesarias.",
+  },
+  reservation_updates: {
+    ja: "予約の更新",
+    en: "Reservation updates",
+    es: "Actualizaciones de reserva",
+  },
+  driver_messages: {
+    ja: "ドライバーからのメッセージ",
+    en: "Driver messages",
+    es: "Mensajes del conductor",
+  },
+  system_notices: {
+    ja: "システム通知",
+    en: "System notices",
+    es: "Avisos del sistema",
   },
 }
 
@@ -122,7 +198,7 @@ function handleLinkOption(item: OverlayItem) {
   window.location.href = getLinkHref(item.action)
 }
 
-function get_modal_title(rule: OverlayRule, locale: AmpLocale) {
+function get_modal_title(rule: OverlayRule, locale: Locale) {
   if (rule.type === "link") {
     return content.link_title[locale]
   }
@@ -131,10 +207,22 @@ function get_modal_title(rule: OverlayRule, locale: AmpLocale) {
     return content.language_title[locale]
   }
 
+  if (rule.type === "my_page") {
+    return content.my_page_title[locale]
+  }
+
+  if (rule.type === "menu") {
+    return content.menu_title[locale]
+  }
+
+  if (rule.type === "notice") {
+    return content.notice_title[locale]
+  }
+
   return rule.title ?? ""
 }
 
-function get_modal_description(rule: OverlayRule, locale: AmpLocale) {
+function get_modal_description(rule: OverlayRule, locale: Locale) {
   if (rule.type === "link") {
     return content.link_description[locale]
   }
@@ -143,10 +231,22 @@ function get_modal_description(rule: OverlayRule, locale: AmpLocale) {
     return content.language_description[locale]
   }
 
+  if (rule.type === "my_page") {
+    return content.my_page_description[locale]
+  }
+
+  if (rule.type === "menu") {
+    return content.menu_description[locale]
+  }
+
+  if (rule.type === "notice") {
+    return content.notice_description[locale]
+  }
+
   return rule.description ?? ""
 }
 
-function get_link_item(item: OverlayItem, locale: AmpLocale) {
+function get_link_item(item: OverlayItem, locale: Locale) {
   if (item.action === "line") {
     return {
       title: content.line_title[locale],
@@ -170,7 +270,7 @@ function get_link_item(item: OverlayItem, locale: AmpLocale) {
   }
 }
 
-function get_language_label(item: OverlayItem, locale: AmpLocale) {
+function get_language_label(item: OverlayItem, locale: Locale) {
   if (item.locale === "ja") {
     return content.language_ja[locale]
   }
@@ -180,6 +280,46 @@ function get_language_label(item: OverlayItem, locale: AmpLocale) {
   }
 
   return content.language_en[locale]
+}
+
+function get_default_label(item: OverlayItem, locale: Locale) {
+  if (item.id === "profile") {
+    return content.profile[locale]
+  }
+
+  if (item.id === "reservations") {
+    return content.reservations[locale]
+  }
+
+  if (item.id === "linked_identity") {
+    return content.linked_identity[locale]
+  }
+
+  if (item.id === "dashboard") {
+    return content.dashboard[locale]
+  }
+
+  if (item.id === "support") {
+    return content.support[locale]
+  }
+
+  if (item.id === "settings") {
+    return content.settings[locale]
+  }
+
+  if (item.id === "reservation_updates") {
+    return content.reservation_updates[locale]
+  }
+
+  if (item.id === "driver_messages") {
+    return content.driver_messages[locale]
+  }
+
+  if (item.id === "system_notices") {
+    return content.system_notices[locale]
+  }
+
+  return item.title ?? ""
 }
 
 function LinkOptionIcon({ action }: Readonly<{ action: OverlayItem["action"] }>) {
@@ -199,7 +339,7 @@ function LinkOption({
   locale,
 }: Readonly<{
   item: OverlayItem
-  locale: AmpLocale
+  locale: Locale
 }>) {
   const link_item = get_link_item(item, locale)
 
@@ -253,8 +393,8 @@ function LanguageOption({
   onClose,
 }: Readonly<{
   item: OverlayItem
-  locale: AmpLocale
-  set_locale: (locale: AmpLocale) => void
+  locale: Locale
+  set_locale: (locale: Locale) => void
   onClose: () => void
 }>) {
   return (
@@ -288,13 +428,19 @@ function LanguageOption({
   )
 }
 
-function DefaultOption({ item }: Readonly<{ item: OverlayItem }>) {
+function DefaultOption({
+  item,
+  locale,
+}: Readonly<{
+  item: OverlayItem
+  locale: Locale
+}>) {
   return (
     <button
       type="button"
       className="rounded-2xl border border-[#e5e5e5] px-4 py-3 text-left text-[14px] font-semibold text-[#111111]"
     >
-      {item.title ?? ""}
+      {get_default_label(item, locale)}
     </button>
   )
 }
@@ -303,15 +449,12 @@ export default function OverlayModal({
   rule,
   phase,
   onClose,
-  locale,
-  set_locale,
 }: Readonly<{
   rule: OverlayRule
   phase: OverlayPhase
   onClose: () => void
-  locale: AmpLocale
-  set_locale: (locale: AmpLocale) => void
 }>) {
+  const { locale, set_locale } = useLocale()
   const modal_title = get_modal_title(rule, locale)
   const modal_description = get_modal_description(rule, locale)
 
@@ -365,7 +508,7 @@ export default function OverlayModal({
               onClose={onClose}
             />
           ) : (
-            <DefaultOption key={item.id} item={item} />
+            <DefaultOption key={item.id} item={item} locale={locale} />
           )
         ))}
       </div>

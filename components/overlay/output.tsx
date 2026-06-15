@@ -3,7 +3,6 @@
 import { getOverlayBackdropAnimationClass } from "@/components/overlay/animations"
 import OverlayModal from "@/components/overlay/modal"
 import type { OverlayAction, OverlayPhase } from "@/components/overlay/types"
-import type { AmpLocale } from "@/src/lib/locale"
 
 function getOverlayPlacementClass(action: OverlayAction) {
   if (action.rule.placement === "bottom") {
@@ -37,14 +36,10 @@ export default function OverlayOutput({
   action,
   phase,
   onClose,
-  locale,
-  set_locale,
 }: Readonly<{
   action: OverlayAction
   phase: OverlayPhase
   onClose: () => void
-  locale: AmpLocale
-  set_locale: (locale: AmpLocale) => void
 }>) {
   return (
     <div
@@ -70,8 +65,6 @@ export default function OverlayOutput({
           rule={action.rule}
           phase={phase}
           onClose={onClose}
-          locale={locale}
-          set_locale={set_locale}
         />
       </div>
 

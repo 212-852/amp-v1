@@ -1,20 +1,6 @@
-<!-- BEGIN:nextjs-agent-rules -->
-
-Next.js Rule
-
-This project may use a newer Next.js version.
-
-Always check:
-
-node_modules/next/dist/docs/
-
-before implementing framework specific features.
-
-Do not rely on outdated Next.js assumptions.
-
-<!-- END:nextjs-agent-rules -->
-
+#########################
 AMP v1
+#########################
 
 Core Principle
 
@@ -26,37 +12,17 @@ Core Principle
 * Every feature must pass through the core
 * Do not duplicate business logic
 
-⸻
-
-Common Rules
+#########################
+COMMON RULE
+#########################
 
 * Use English only for code comments
 * Use ASCII characters only in code comments
 * Do not use emojis in code comments
 
-⸻
-
-Shared Core Rules
-
-* All domains use the same database
-* All domains use the same authentication system
-* All domains use the same chat system
-* All domains use the same match engine
-
-Domains:
-
-* app.da-nya.com
-* test.da-nya.com
-* test.pet-taxi-airport.com
-* www.pet-taxi.tokyo
-
-Multiple entrances.
-
-Single AMP Core.
-
-⸻
-
-Architecture Rules
+#########################
+CORE RULE
+#########################
 
 Centralize all business logic.
 
@@ -89,9 +55,9 @@ api
 component
 -> custom logic
 
-⸻
-
-Core Usage Rules
+#########################
+SHARED CORE RULE
+#########################
 
 * Shared logic is mandatory
 * Every entry point must call the same core
@@ -99,16 +65,44 @@ Core Usage Rules
 * Do not implement fallback logic outside the core
 * Do not copy logic into UI, API, or channel handlers
 
-⸻
+#########################
+ENTRANCE RULE
+#########################
 
-Authentication Flow
+Multiple entrances.
+
+Single AMP Core.
+
+Domains:
+
+* app.da-nya.com
+* test.da-nya.com
+* test.pet-taxi-airport.com
+* www.pet-taxi.tokyo
+
+Do not create domain specific business logic.
+
+Flow:
+
+request
+-> entrance/context.ts
+-> auth
+-> route
+-> core
+-> output
+
+#########################
+AUTH RULE
+#########################
+
+Flow:
 
 request
 -> auth/context.ts
 -> auth/session.ts
 -> auth/identity.ts
 -> auth/route.ts
--> output
+-> response
 
 Rules:
 
@@ -117,9 +111,36 @@ Rules:
 * Resolve visitor_uuid before user_uuid
 * Never create visitor_uuid from user_uuid
 * Identity mapping must be centralized
-* UI and API must not decide role or tier
+* UI must not decide role
+* UI must not decide tier
+* API must not decide role
+* API must not decide tier
 
-Session Design
+#########################
+SESSION RULE
+#########################
+
+Important
+
+AMP does NOT use a sessions table.
+
+Session exists only in runtime code.
+
+Do not create:
+
+* sessions table
+* session repository
+* session persistence layer
+
+unless explicitly required.
+
+Session is runtime state.
+
+Database stores identity.
+
+Code builds session.
+
+Database does not store session.
 
 Session maintains only:
 
@@ -138,7 +159,7 @@ Session maintains only:
 
 Session must not store business data.
 
-Forbidden in session:
+Forbidden:
 
 * reservation records
 * driver application records
@@ -149,95 +170,271 @@ Forbidden in session:
 * UI fixed copy
 * business rule outcomes
 
-Business data comes from DB / core / archive.
+Business data comes from DB and core.
 
-Resolution order:
-
-request
--> auth/context.ts
--> auth/session.ts
--> auth/identity.ts
--> auth/route.ts
--> response
-
-Responsibilities:
+#########################
+AUTH RESPONSIBILITY RULE
+#########################
 
 auth/context.ts
-* read cookie / header / liff / pwa / url
+
+Responsibility:
+
+* read cookie
+* read header
+* read liff
+* read pwa
+* read url
 * normalize input only
-* no decisions
+
+Must not decide:
+
+* role
+* tier
+* route
 
 auth/session.ts
-* restore or create visitor_uuid first
-* restore session record
-* attach user_uuid when logged in
+
+Responsibility:
+
+* restore visitor_uuid
+* create visitor_uuid
+* restore runtime session
+* attach user_uuid
 
 auth/identity.ts
-* resolve line / google / email identities
-* do not leak provider logic to business code
+
+Responsibility:
+
+* resolve line
+* resolve google
+* resolve email
+
+Use identities table.
+
+Do not leak provider logic.
 
 auth/route.ts
-* decide role, tier, entry point, redirect
 
-Storage:
+Responsibility:
 
-cookie:
+* role
+* tier
+* redirect
+* entry routing
+
+#########################
+IDENTITY RULE
+#########################
+
+visitors = anonymous identity
+
+users = authenticated identity
+
+identities = provider mapping
+
+session = runtime only
+
+#########################
+VISITOR RULE
+#########################
+
+visitors table stores only:
+
 * visitor_uuid
-* session_token
+* user_uuid
+* source_channel
+* created_at
+* updated_at
 
-DB:
-* sessions
-* visitors
-* users
-* identities
-* room_participants
+Visitors table is identity only.
 
-localStorage:
-* avoid by default
-* UI assist only if needed
-* never use for auth or permission decisions
+Forbidden:
 
-Session purpose:
+* state
+* status
+* role
+* tier
+* locale
+* notification settings
+* business flags
+* reservation state
+* chat state
 
-Maintain who, from which entrance, with which role,
-in which room, and in which UI state.
+#########################
+USER RULE
+#########################
 
-Session does not perform business decisions.
-Business decisions belong in rules / core only.
+users table stores:
 
-Types live in core/auth/types.ts
-Session record type is AmpSession
+* role
+* tier
+* locale
+* display_name
 
-⸻
+Do not duplicate these into session storage.
 
-Entrance Flow
+#########################
+LOCALE RULE
+#########################
 
-request
--> entrance/context.ts
--> auth
--> route
--> core
--> output
+* Supported locales are ja, en, es.
+* Do not create locale routes.
+* Do not create separate components per locale.
+* Do not scatter translated text across JSX.
+* Keep component text in one content object.
+* Group text by key, not by locale.
+* Use content.key[locale].
+* Example:
+  const content = {
+    breadcrumb_home: {
+      ja: 'ホーム',
+      en: 'Home',
+      es: 'Inicio',
+    },
+  }
+* Render:
+  content.breadcrumb_home[locale]
+* Browser language is only used after client mount.
+* Use stored locale first, browser language second, ja fallback third.
+* Prevent hydration mismatch by using a stable initial locale before mount.
 
-Domain Responsibilities:
+Supported locales:
 
-app.da-nya.com
-= application
+* ja
+* en
+* es
 
-test.da-nya.com
-= corporate
+Do not create locale routes.
 
-test.pet-taxi-airport.com
-= airport
+Do not create locale specific pages.
 
-www.pet-taxi.tokyo
-= seo
+Do not create separate components per locale.
 
-Do not create domain specific business logic.
+Use a single component and switch text by locale.
 
-⸻
+Bad:
 
-Chat Rules
+home-ja.tsx
+home-en.tsx
+home-es.tsx
+
+Good:
+
+home/page.tsx
+
+#########################
+LOCALE CONTENT RULE
+#########################
+
+Group text by key.
+
+Do not group by locale.
+
+Keep locale text together.
+
+Do not scatter translated strings across JSX.
+
+Use:
+
+const content = {
+home: {
+ja: ‘ホーム’,
+en: ‘Home’,
+es: ‘Inicio’,
+},
+}
+
+Render:
+
+content.home[locale]
+
+Never use:
+
+locale === ‘ja’
+? ‘ホーム’
+: locale === ‘en’
+? ‘Home’
+: ‘Inicio’
+
+#########################
+LOCALE FLOW RULE
+#########################
+
+browser language
+-> locale utility
+-> locale provider
+-> component
+-> content.key[locale]
+
+Do not bypass this flow.
+
+#########################
+LOCALE STORAGE RULE
+#########################
+
+Priority:
+
+1. saved locale
+2. browser locale
+3. ja
+
+Storage key:
+
+amp_locale
+
+#########################
+HYDRATION RULE
+#########################
+
+Never read navigator.language during server render.
+
+Never read localStorage during server render.
+
+Browser locale detection must occur after client mount.
+
+Prevent server/client text mismatch.
+
+Never render locale dependent text on server if locale comes from browser state.
+
+Use:
+
+mounted
+-> locale
+-> render
+
+Avoid:
+
+server render
+-> navigator.language
+
+#########################
+LOCALE RESPONSIBILITY RULE
+#########################
+
+locale utility
+
+* resolves locale
+
+locale provider
+
+* stores locale state
+
+component
+
+* renders text only
+
+API
+
+* must not decide locale
+
+business logic
+
+* must not decide locale
+
+#########################
+CHAT RULE
+#########################
 
 All chats belong to a room.
 
@@ -255,9 +452,9 @@ message
 -> message_bundle
 -> output
 
-⸻
-
-Database Rules
+#########################
+DATABASE RULE
+#########################
 
 Keep schema minimal.
 
@@ -281,19 +478,29 @@ vehicles
 documents
 = uploaded files
 
-⸻
+#########################
+OUTPUT RULE
+#########################
 
-Development Rules
+All outgoing messages must go through output core.
 
-* Optimize for simplicity
-* Optimize for maintainability
-* Optimize for performance
-* Optimize for future automation
-* Prefer lazy loading when possible
+Flow:
 
-⸻
+message_bundle
+-> output/rules.ts
+-> output/index.ts
+-> output/web.ts
+-> output/line.ts
 
-Naming Rules
+Do not send messages directly from:
+
+* UI
+* API
+* chat logic
+
+#########################
+NAMING RULE
+#########################
 
 Use directory structure to express responsibility.
 
@@ -302,20 +509,40 @@ Do not repeat context in file names.
 Good:
 
 chat/action.ts
-
 chat/rules.ts
-
 driver/schedule.ts
 
 Bad:
 
 chat_action.ts
-
 driver_schedule.ts
 
-⸻
+#########################
+UI LOCK RULE
+#########################
 
-Goal
+Header Color : LOCK
+
+Footer Color : LOCK
+
+Background Color : LOCK
+
+Header Footer UI : LOCK
+
+While lock is enabled:
+
+* No header UI changes
+* No footer UI changes
+* No color changes
+* No size changes
+* No position changes
+* No animation changes
+
+Only bug fixes are allowed.
+
+#########################
+GOAL
+#########################
 
 Build once.
 
@@ -332,212 +559,8 @@ Support:
 * Concierge
 * Bot
 
-* Keep code simple
-* Keep file names simple
-* Do not create complex file names
-* Use directories to express responsibility
+Keep code simple.
 
-Good:
+Keep file names simple.
 
-admin/user/list.ts
-admin/user/detail.ts
-admin/driver/list.ts
-admin/driver/detail.ts
-
-Bad:
-
-admin_user_list.ts
-admin_user_detail.ts
-admin_driver_list.ts
-admin_driver_detail.ts
-
-Header Color : LOCK
-Footer Color : LOCK
-Background Color : LOCK
-Header Footer UI : LOCK
-
-App Shell Decoration Rules
-
-Header and footer shape:
-
-- border-radius only
-- pseudo elements allowed when needed
-- no SVG for shell decoration
-- no clip-path
-- no decorative images
-- no ear or tail shapes
-
-World view is expressed only through:
-
-- beige color
-- brown accent
-- pink paw button (icon.svg or icon.webp)
-- brown paw send button
-- rounded UI
-- dog and cat characters in content areas
-
-While Header Footer UI lock is true:
-
-- No header UI changes
-- No footer UI changes
-- No color changes
-- No size changes
-- No position changes
-- No animation changes
-
-Only bug fixes are allowed.
-
-SESSION DESIGN
-
-Important
-
-AMP does NOT use a sessions table.
-
-Session exists only in code.
-
-Database:
-
-* visitors
-* users
-* identities
-* profiles
-
-are the source of truth.
-
-Do not create:
-
-* sessions table
-* session repository
-* session persistence layer
-
-unless explicitly required.
-
-⸻
-
-Session Flow
-
-request
--> auth/context.ts
--> auth/session.ts
--> auth/identity.ts
--> auth/route.ts
--> response
-
-⸻
-
-auth/context.ts
-
-Responsibility:
-
-Normalize request only.
-
-Input:
-
-* cookie
-* header
-* liff
-* pwa
-* url
-
-Do not decide:
-
-* role
-* tier
-* route
-
-⸻
-
-auth/session.ts
-
-Responsibility:
-
-Build runtime session object.
-
-Session is created per request.
-
-Example:
-
-type Session = {
-visitor_uuid: string
-user_uuid: string | null
-source_channel: string
-}
-
-Do not persist session.
-
-Do not write session records to database.
-
-⸻
-
-auth/identity.ts
-
-Responsibility:
-
-Resolve identity.
-
-Sources:
-
-* line
-* google
-* email
-
-Use identities table.
-
-Do not leak provider logic into business logic.
-
-⸻
-
-auth/route.ts
-
-Responsibility:
-
-Resolve:
-
-* role
-* tier
-* redirect
-
-Use users table.
-
-Do not decide role in UI.
-
-Do not decide role in API.
-
-⸻
-
-Visitors
-
-visitors table stores:
-
-* visitor_uuid
-* user_uuid
-* source_channel
-* created_at
-* updated_at
-
-Nothing more.
-
-⸻
-
-Users
-
-users table stores:
-
-* role
-* tier
-* locale
-* display_name
-
-These values must not be duplicated into session storage.
-
-⸻
-
-Rule
-
-Session is runtime state.
-
-Database stores identity.
-
-Code builds session.
-
-Database does not store session.
+Use directories to express responsibility.

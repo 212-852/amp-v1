@@ -1,10 +1,12 @@
-export type AmpLocale = "ja" | "en" | "es"
+export type Locale = "ja" | "en" | "es"
 
 const locale_storage_key = "amp_locale"
 
-export function normalize_locale(value: unknown): AmpLocale {
+export const default_locale: Locale = "ja"
+
+export function normalize_locale(value: unknown): Locale {
   if (typeof value !== "string") {
-    return "ja"
+    return default_locale
   }
 
   const normalized_value = value.toLowerCase()
@@ -24,21 +26,29 @@ export function normalize_locale(value: unknown): AmpLocale {
   return "en"
 }
 
-export function get_initial_locale(): AmpLocale {
+export function get_browser_locale(): Locale {
   if (typeof window === "undefined") {
-    return "ja"
-  }
-
-  const saved_locale = window.localStorage.getItem(locale_storage_key)
-
-  if (saved_locale) {
-    return normalize_locale(saved_locale)
+    return default_locale
   }
 
   return normalize_locale(window.navigator.language)
 }
 
-export function save_locale(locale: AmpLocale) {
+export function get_stored_locale(): Locale | null {
+  if (typeof window === "undefined") {
+    return null
+  }
+
+  const stored_locale = window.localStorage.getItem(locale_storage_key)
+
+  if (!stored_locale) {
+    return null
+  }
+
+  return normalize_locale(stored_locale)
+}
+
+export function save_locale(locale: Locale): void {
   if (typeof window === "undefined") {
     return
   }

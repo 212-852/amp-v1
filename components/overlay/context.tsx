@@ -13,11 +13,6 @@ import {
 import { overlay_close_duration_ms } from "@/components/overlay/animations"
 import { createOverlayAction } from "@/components/overlay/action"
 import OverlayOutput from "@/components/overlay/output"
-import {
-  get_initial_locale,
-  save_locale,
-  type AmpLocale,
-} from "@/src/lib/locale"
 import type {
   OverlayAction,
   OverlayPhase,
@@ -28,8 +23,6 @@ type OverlayController = {
   openOverlay: (request: OverlayRequest) => void
   open_overlay: (request: OverlayRequest) => void
   closeOverlay: () => void
-  locale: AmpLocale
-  set_locale: (locale: AmpLocale) => void
 }
 
 const OverlayContext = createContext<OverlayController | null>(null)
@@ -41,14 +34,8 @@ export function OverlayProvider({
 }>) {
   const [action, setAction] = useState<OverlayAction | null>(null)
   const [phase, setPhase] = useState<OverlayPhase>("opening")
-  const [locale, setLocale] = useState<AmpLocale>(() => get_initial_locale())
   const closeTimerRef = useRef<number | null>(null)
   const frameRef = useRef<number | null>(null)
-
-  const set_locale = useCallback((next_locale: AmpLocale) => {
-    setLocale(next_locale)
-    save_locale(next_locale)
-  }, [])
 
   const closeOverlay = useCallback(() => {
     if (!action || phase === "closing") {
@@ -123,10 +110,8 @@ export function OverlayProvider({
       openOverlay,
       open_overlay: openOverlay,
       closeOverlay,
-      locale,
-      set_locale,
     }),
-    [closeOverlay, locale, openOverlay, set_locale],
+    [closeOverlay, openOverlay],
   )
 
   return (
@@ -137,8 +122,6 @@ export function OverlayProvider({
           action={action}
           phase={phase}
           onClose={closeOverlay}
-          locale={locale}
-          set_locale={set_locale}
         />
       ) : null}
     </OverlayContext.Provider>

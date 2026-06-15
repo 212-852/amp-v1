@@ -3,16 +3,64 @@
 import { Bell, Globe2, User } from "lucide-react"
 
 import { useOverlay } from "@/components/overlay"
+import { useLocale } from "@/src/components/locale/provider"
 
 const mock_auth = {
   is_logged_in: false,
   is_linked: false,
 }
 
-const header_state = {
-  brand: "PET TAXI",
-  breadcrumb: "ホーム",
-  user_name: mock_auth.is_logged_in ? "Test User" : "Guest",
+const content = {
+  brand: {
+    ja: "PET TAXI",
+    en: "PET TAXI",
+    es: "PET TAXI",
+  },
+  breadcrumb_home: {
+    ja: "ホーム",
+    en: "Home",
+    es: "Inicio",
+  },
+  guest: {
+    ja: "Guest",
+    en: "Guest",
+    es: "Invitado",
+  },
+  member: {
+    ja: "メンバー",
+    en: "Member",
+    es: "Miembro",
+  },
+  link: {
+    ja: "連携",
+    en: "Link",
+    es: "Vincular",
+  },
+  linked: {
+    ja: "連携済み",
+    en: "Linked",
+    es: "Vinculado",
+  },
+  test_user: {
+    ja: "Test User",
+    en: "Test User",
+    es: "Usuario de prueba",
+  },
+  notifications_label: {
+    ja: "通知",
+    en: "Notifications",
+    es: "Notificaciones",
+  },
+  language_label: {
+    ja: "Language JA",
+    en: "Language EN",
+    es: "Language ES",
+  },
+  user_profile_label: {
+    ja: "ユーザープロフィール",
+    en: "User profile",
+    es: "Perfil de usuario",
+  },
 }
 
 function MemberPill({ label, filled = false }: { label: string; filled?: boolean }) {
@@ -59,8 +107,12 @@ function HeaderCurve() {
 }
 
 export default function AppHeader() {
-  const { locale, openOverlay } = useOverlay()
+  const { openOverlay } = useOverlay()
+  const { locale } = useLocale()
   const language_label = locale.toUpperCase()
+  const user_name = mock_auth.is_logged_in
+    ? content.test_user[locale]
+    : content.guest[locale]
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 h-[108px] text-[#3d2a19]">
@@ -68,10 +120,10 @@ export default function AppHeader() {
       <div className="relative z-10 mx-auto flex h-full w-full max-w-[430px] items-start justify-between gap-2 px-6 pb-2 pt-[calc(12px+env(safe-area-inset-top,0px))]">
         <div className="min-w-0 pt-1">
           <h1 className="text-[20px] font-semibold leading-none text-[#3d2a19]">
-            {header_state.brand}
+            {content.brand[locale]}
           </h1>
           <p className="mt-2.5 text-[11px] font-medium leading-none text-[#8c7358]">
-            {header_state.breadcrumb}
+            {content.breadcrumb_home[locale]}
           </p>
         </div>
 
@@ -79,32 +131,32 @@ export default function AppHeader() {
           <div className="flex items-center justify-end gap-1.5">
             {!mock_auth.is_logged_in ? (
               <>
-                <MemberPill label="Guest" />
+                <MemberPill label={content.guest[locale]} />
                 <LinkPill
-                  label="連携"
+                  label={content.link[locale]}
                   onClick={() => openOverlay({ type: "link", source: "user" })}
                 />
               </>
             ) : mock_auth.is_linked ? (
               <>
-                <MemberPill label="メンバー" filled />
+                <MemberPill label={content.member[locale]} filled />
                 <LinkPill
-                  label="連携済み"
+                  label={content.linked[locale]}
                   onClick={() => openOverlay({ type: "link", source: "user" })}
                 />
               </>
             ) : (
               <>
-                <MemberPill label="メンバー" filled />
+                <MemberPill label={content.member[locale]} filled />
                 <LinkPill
-                  label="連携"
+                  label={content.link[locale]}
                   onClick={() => openOverlay({ type: "link", source: "user" })}
                 />
               </>
             )}
             <button
               type="button"
-              aria-label="Notifications"
+              aria-label={content.notifications_label[locale]}
               onClick={() => openOverlay({ type: "notice", source: "user" })}
               className="flex h-8 w-8 items-center justify-center rounded-full bg-[#fdfaf6] text-[#8f5d28] ring-1 ring-[#dcc7aa]"
             >
@@ -112,7 +164,7 @@ export default function AppHeader() {
             </button>
             <button
               type="button"
-              aria-label={`Language ${language_label}`}
+              aria-label={content.language_label[locale]}
               onClick={() =>
                 openOverlay({ type: "language", source: "user" })
               }
@@ -127,11 +179,11 @@ export default function AppHeader() {
 
           <div className="mt-1 flex items-center gap-2">
             <span className="max-w-[112px] truncate text-[14px] font-semibold leading-none text-[#8c7358]">
-              {header_state.user_name}
+              {user_name}
             </span>
             <button
               type="button"
-              aria-label="User profile"
+              aria-label={content.user_profile_label[locale]}
               className="flex h-9 w-9 items-center justify-center rounded-full bg-[#8f5d28] text-[#fdfaf6]"
             >
               <User className="h-4 w-4" strokeWidth={2} />

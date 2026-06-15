@@ -32,21 +32,21 @@ const contentByType: Record<
   }
 > = {
   my_page: {
-    title: "My Page",
-    description: "Account and profile actions.",
+    title: "",
+    description: "",
     items: [
-      { id: "profile", title: "Profile" },
-      { id: "reservations", title: "Reservations" },
-      { id: "linked_identity", title: "Linked identity" },
+      { id: "profile" },
+      { id: "reservations" },
+      { id: "linked_identity" },
     ],
   },
   menu: {
-    title: "Menu",
-    description: "Navigation and app actions.",
+    title: "",
+    description: "",
     items: [
-      { id: "dashboard", title: "Dashboard" },
-      { id: "support", title: "Support" },
-      { id: "settings", title: "Settings" },
+      { id: "dashboard" },
+      { id: "support" },
+      { id: "settings" },
     ],
   },
   link: {
@@ -68,12 +68,12 @@ const contentByType: Record<
     ],
   },
   notice: {
-    title: "Notice",
-    description: "Latest notifications and required actions.",
+    title: "",
+    description: "",
     items: [
-      { id: "reservation_updates", title: "Reservation updates" },
-      { id: "driver_messages", title: "Driver messages" },
-      { id: "system_notices", title: "System notices" },
+      { id: "reservation_updates" },
+      { id: "driver_messages" },
+      { id: "system_notices" },
     ],
   },
   language: {

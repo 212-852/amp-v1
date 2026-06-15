@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { AccessPresence } from "@/components/access/presence";
 import { OverlayProvider } from "@/components/overlay";
+import { LocaleProvider } from "@/src/components/locale/provider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -28,10 +29,12 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${geistSans.variable} h-full antialiased`}>
       <body className="min-h-full">
-        <OverlayProvider>
-          <AccessPresence />
-          {children}
-        </OverlayProvider>
+        <LocaleProvider>
+          <OverlayProvider>
+            <AccessPresence />
+            {children}
+          </OverlayProvider>
+        </LocaleProvider>
       </body>
     </html>
   );

@@ -5,9 +5,69 @@ import Image from "next/image"
 import { useEffect, useState } from "react"
 
 import { useOverlay, type OverlayType } from "@/components/overlay"
+import { useLocale } from "@/src/components/locale/provider"
+import type { Locale } from "@/src/lib/locale"
 
 type FooterMode = "normal" | "input"
 type AssistantMode = "bot" | "concierge"
+
+const content = {
+  open_message_input: {
+    ja: "メッセージ入力を開く",
+    en: "Open message input",
+    es: "Abrir mensaje",
+  },
+  close_message_input: {
+    ja: "メッセージ入力を閉じる",
+    en: "Close message input",
+    es: "Cerrar mensaje",
+  },
+  bot: {
+    ja: "Bot",
+    en: "Bot",
+    es: "Bot",
+  },
+  concierge: {
+    ja: "Concierge",
+    en: "Concierge",
+    es: "Conserje",
+  },
+  send: {
+    ja: "送信",
+    en: "Send",
+    es: "Enviar",
+  },
+  message: {
+    ja: "メッセージ",
+    en: "Message",
+    es: "Mensaje",
+  },
+  message_placeholder: {
+    ja: "メッセージを入力",
+    en: "Type a message",
+    es: "Escribe un mensaje",
+  },
+  footer_menu: {
+    ja: "フッターメニュー",
+    en: "Footer menu",
+    es: "Menu inferior",
+  },
+  my_page: {
+    ja: "My Page",
+    en: "My Page",
+    es: "Mi pagina",
+  },
+  quick_menu: {
+    ja: "Quick Menu",
+    en: "Quick Menu",
+    es: "Menu rapido",
+  },
+  menu: {
+    ja: "Menu",
+    en: "Menu",
+    es: "Menu",
+  },
+}
 
 const footer_shell_class =
   "relative mx-auto h-[186px] w-full max-w-[430px]"
@@ -56,14 +116,20 @@ function PinkPawIcon() {
 function PinkPawButton({
   isInputMode,
   onClick,
+  locale,
 }: {
   isInputMode: boolean
   onClick: () => void
+  locale: Locale
 }) {
   return (
     <button
       type="button"
-      aria-label={isInputMode ? "Close message input" : "Open message input"}
+      aria-label={
+        isInputMode
+          ? content.close_message_input[locale]
+          : content.open_message_input[locale]
+      }
       aria-pressed={isInputMode}
       onClick={onClick}
       className={[
@@ -79,9 +145,11 @@ function PinkPawButton({
 function AssistantToggle({
   assistantMode,
   onChange,
+  locale,
 }: {
   assistantMode: AssistantMode
   onChange: (mode: AssistantMode) => void
+  locale: Locale
 }) {
   const isConcierge = assistantMode === "concierge"
   const [is_sliding, set_is_sliding] = useState(false)
@@ -154,7 +222,7 @@ function AssistantToggle({
             : "text-[rgba(120,85,55,0.72)]",
         ].join(" ")}
       >
-        Bot
+        {content.bot[locale]}
       </button>
       <button
         type="button"
@@ -168,7 +236,7 @@ function AssistantToggle({
             : "text-[rgba(120,85,55,0.72)]",
         ].join(" ")}
       >
-        Concierge
+        {content.concierge[locale]}
       </button>
       <style jsx>{`
         @keyframes bot-concierge-thumb-squish {
@@ -193,11 +261,11 @@ function AssistantToggle({
   )
 }
 
-function SendPawButton() {
+function SendPawButton({ locale }: Readonly<{ locale: Locale }>) {
   return (
     <button
       type="button"
-      aria-label="Send"
+      aria-label={content.send[locale]}
       className="flex h-[62px] w-[58px] shrink-0 items-center justify-center bg-transparent p-0 text-[#8f5d28] shadow-none"
     >
       <PawPrint
@@ -208,37 +276,38 @@ function SendPawButton() {
   )
 }
 
-function MessageInputRow() {
+function MessageInputRow({ locale }: Readonly<{ locale: Locale }>) {
   return (
     <div className="flex w-full translate-y-[4px] items-center gap-4 px-4">
       <div className="min-w-0 flex-1">
         <label className="sr-only" htmlFor="app-message-input">
-          Message
+          {content.message[locale]}
         </label>
         <input
           id="app-message-input"
           type="text"
           readOnly
-          placeholder="メッセージを入力"
+          placeholder={content.message_placeholder[locale]}
           className="h-[68px] w-full min-w-0 rounded-full bg-[#fdfaf6] px-5 text-[16px] font-semibold text-[#3d2a19] placeholder:text-[#8c7358]"
         />
       </div>
-      <SendPawButton />
+      <SendPawButton locale={locale} />
     </div>
   )
 }
 
 function BottomMenuRow() {
   const { openOverlay } = useOverlay()
+  const { locale } = useLocale()
   const items = [
-    { label: "My Page", icon: User, overlayType: "my_page" },
-    { label: "Quick Menu", icon: MessageCircle },
-    { label: "Menu", icon: Menu, overlayType: "menu" },
+    { label: content.my_page[locale], icon: User, overlayType: "my_page" },
+    { label: content.quick_menu[locale], icon: MessageCircle },
+    { label: content.menu[locale], icon: Menu, overlayType: "menu" },
   ]
 
   return (
     <nav
-      aria-label="Footer menu"
+      aria-label={content.footer_menu[locale]}
       className="grid w-full grid-cols-3 gap-1 pb-[calc(env(safe-area-inset-bottom,0px)+16px)] text-[#8f5d28]"
     >
       {items.map((item) => {
@@ -278,6 +347,7 @@ function CopyrightText() {
 export default function AppFooter() {
   const [footerMode, setFooterMode] = useState<FooterMode>("normal")
   const [assistantMode, setAssistantMode] = useState<AssistantMode>("bot")
+  const { locale } = useLocale()
   const isInputMode = footerMode === "input"
 
   function toggleFooterMode() {
@@ -288,7 +358,11 @@ export default function AppFooter() {
     <footer className="fixed inset-x-0 bottom-[-2px] z-50 pb-[env(safe-area-inset-bottom)]">
       <div className={footer_shell_class}>
         <FooterCurve />
-        <PinkPawButton isInputMode={isInputMode} onClick={toggleFooterMode} />
+        <PinkPawButton
+          isInputMode={isInputMode}
+          locale={locale}
+          onClick={toggleFooterMode}
+        />
 
         <div
           className={[
@@ -317,6 +391,7 @@ export default function AppFooter() {
               >
                 <AssistantToggle
                   assistantMode={assistantMode}
+                  locale={locale}
                   onChange={setAssistantMode}
                 />
               </div>
@@ -331,7 +406,7 @@ export default function AppFooter() {
                     : "pointer-events-none opacity-0 [transform:translateX(38px)_rotateY(58deg)]",
                 ].join(" ")}
               >
-                <MessageInputRow />
+                <MessageInputRow locale={locale} />
                 <CopyrightText />
               </div>
             </div>

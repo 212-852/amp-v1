@@ -1,4 +1,4 @@
-import type { AmpLocale } from "@/src/lib/locale"
+import type { Locale } from "@/src/lib/locale"
 
 export type OverlayType =
   | "my_page"
@@ -31,7 +31,7 @@ export type OverlayItem = {
   description?: string
   badge?: string
   action?: "line" | "google" | "email"
-  locale?: AmpLocale
+  locale?: Locale
 }
 
 export type OverlayRule = {
