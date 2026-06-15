@@ -58,7 +58,56 @@ async function resolveFailureContext() {
   }
 }
 
+async function sendGoogleCallbackFailure(input: {
+  reason: string
+  visitor_uuid: string | null
+  user_uuid: string | null
+  auth_user_id?: string | null
+  email?: string | null
+  error_message: string
+  error_code?: string | null
+  error_description?: string | null
+  source_channel: string | null
+}) {
+  await sendIdentityDebug("identity_link_failed", {
+    provider: "google",
+    reason: input.reason,
+    visitor_uuid: input.visitor_uuid,
+    user_uuid: input.user_uuid,
+    auth_user_id: input.auth_user_id ?? null,
+    email: input.email ?? null,
+    error_message: input.error_message,
+    error_code: input.error_code ?? null,
+    error_description: input.error_description ?? null,
+    source_channel: input.source_channel,
+  })
+}
+
 export async function completeGoogleOAuthCallback(request: NextRequest) {
+  try {
+    return await completeGoogleOAuthCallbackCore(request)
+  } catch (callbackError) {
+    const message =
+      callbackError instanceof Error ? callbackError.message : String(callbackError)
+    const failureContext = await resolveFailureContext()
+
+    await sendGoogleCallbackFailure({
+      visitor_uuid: failureContext.visitor_uuid,
+      user_uuid: failureContext.user_uuid,
+      reason: "unexpected_exception",
+      auth_user_id: null,
+      email: null,
+      error_message: message,
+      error_code: null,
+      error_description: null,
+      source_channel: failureContext.source_channel,
+    })
+
+    return redirectAuthError(request, "unexpected_exception")
+  }
+}
+
+async function completeGoogleOAuthCallbackCore(request: NextRequest) {
   const requestUrl = request.nextUrl
   const code = requestUrl.searchParams.get("code")
   const error = requestUrl.searchParams.get("error")
@@ -83,12 +132,11 @@ export async function completeGoogleOAuthCallback(request: NextRequest) {
   const failureContext = await resolveFailureContext()
 
   if (error) {
-    await sendIdentityDebug("identity_link_failed", {
-      provider: "google",
+    await sendGoogleCallbackFailure({
       visitor_uuid: failureContext.visitor_uuid,
       user_uuid: failureContext.user_uuid,
       reason: "oauth_error_before_exchange",
-      error,
+      error_message: error,
       error_code,
       error_description,
       source_channel: failureContext.source_channel,
@@ -104,12 +152,11 @@ export async function completeGoogleOAuthCallback(request: NextRequest) {
       user_uuid: failureContext.user_uuid,
       source_channel: failureContext.source_channel,
     })
-    await sendIdentityDebug("identity_link_failed", {
-      provider: "google",
+    await sendGoogleCallbackFailure({
       visitor_uuid: failureContext.visitor_uuid,
       user_uuid: failureContext.user_uuid,
       reason: "missing_code",
-      error: "Google callback did not include code",
+      error_message: "Google callback did not include code",
       error_code: null,
       error_description: null,
       source_channel: failureContext.source_channel,
@@ -158,12 +205,13 @@ export async function completeGoogleOAuthCallback(request: NextRequest) {
       error: message,
       source_channel: failureContext.source_channel,
     })
-    await sendIdentityDebug("identity_link_failed", {
-      provider: "google",
+    await sendGoogleCallbackFailure({
       visitor_uuid: failureContext.visitor_uuid,
       user_uuid: failureContext.user_uuid,
-      reason: "exchange_failed",
-      error: message,
+      reason: data.session?.user ? "oauth_exchange_failed" : "auth_user_missing",
+      auth_user_id: data.session?.user?.id ?? null,
+      email: data.session?.user?.email ?? null,
+      error_message: message,
       error_code: null,
       error_description: null,
       source_channel: failureContext.source_channel,
@@ -185,8 +233,30 @@ export async function completeGoogleOAuthCallback(request: NextRequest) {
     source_channel: failureContext.source_channel,
   })
 
+  let identityInput: ReturnType<typeof normalizeGoogleIdentityInput>
+
   try {
-    const identityInput = normalizeGoogleIdentityInput(data.session.user)
+    identityInput = normalizeGoogleIdentityInput(data.session.user)
+  } catch (normalizeError) {
+    const message =
+      normalizeError instanceof Error ? normalizeError.message : String(normalizeError)
+
+    await sendGoogleCallbackFailure({
+      visitor_uuid: failureContext.visitor_uuid,
+      user_uuid: failureContext.user_uuid,
+      reason: "identity_normalize_failed",
+      auth_user_id: data.session.user.id ?? null,
+      email: data.session.user.email ?? null,
+      error_message: message,
+      error_code: null,
+      error_description: null,
+      source_channel: failureContext.source_channel,
+    })
+
+    return redirectAuthError(request, "link_failed")
+  }
+
+  try {
     const result = await linkCurrentVisitorToIdentity(identityInput)
     const context = await resolveAuthContext()
     const entrance = await resolveEntranceContext()
@@ -211,17 +281,48 @@ export async function completeGoogleOAuthCallback(request: NextRequest) {
   } catch (callbackError) {
     const message =
       callbackError instanceof Error ? callbackError.message : String(callbackError)
-
-    await sendIdentityDebug("identity_link_failed", {
+    const reason =
+      message.includes("visitor") || message.includes("Visitor")
+        ? "visitor_missing"
+        : "link_failed"
+    const payload = {
       provider: "google",
+      reason: "link_failed",
       visitor_uuid: failureContext.visitor_uuid,
       user_uuid: failureContext.user_uuid,
-      reason: "exchange_or_link_failed",
-      error: message,
+      auth_user_id: data.session.user.id ?? null,
+      email: data.session.user.email ?? identityInput.email ?? null,
+      error_message: message,
       error_code: null,
-      error_description: null,
       source_channel: failureContext.source_channel,
+    }
+
+    if (reason === "visitor_missing") {
+      await sendGoogleCallbackFailure({
+        visitor_uuid: failureContext.visitor_uuid,
+        user_uuid: failureContext.user_uuid,
+        reason,
+        auth_user_id: data.session.user.id ?? null,
+        email: data.session.user.email ?? identityInput.email ?? null,
+        error_message: message,
+        error_code: null,
+        error_description: null,
+        source_channel: failureContext.source_channel,
+      })
+    }
+
+    await sendGoogleCallbackFailure({
+      visitor_uuid: payload.visitor_uuid,
+      user_uuid: payload.user_uuid,
+      reason: payload.reason,
+      auth_user_id: payload.auth_user_id,
+      email: payload.email,
+      error_message: payload.error_message,
+      error_code: payload.error_code,
+      error_description: null,
+      source_channel: payload.source_channel,
     })
+    console.error("[GOOGLE_OAUTH_LINK_FAILED]", payload)
 
     return redirectAuthError(request, "link_failed")
   }

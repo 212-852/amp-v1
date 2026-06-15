@@ -33,12 +33,18 @@ function isUnexpectedEvent(event: string) {
 }
 
 export function shouldSendAuthSessionDebug(event: string) {
-  return (
-    AUTH_SESSION_DEBUG &&
-    (authSessionEvents.has(event) ||
-      identityEvents.has(event) ||
-      isUnexpectedEvent(event))
-  )
+  if (identityEvents.has(event)) {
+    if (!AUTH_SESSION_DEBUG) {
+      console.warn("[IDENTITY_DEBUG_AUTH_SESSION_DEBUG_FALSE]", {
+        event,
+        reason: "IDENTITY debug is allowed while AUTH_SESSION_DEBUG is false",
+      })
+    }
+
+    return true
+  }
+
+  return AUTH_SESSION_DEBUG && (authSessionEvents.has(event) || isUnexpectedEvent(event))
 }
 
 export function resolveDebugTitle(event: string) {
