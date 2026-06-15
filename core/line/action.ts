@@ -28,8 +28,6 @@ export async function upsertLineContactFromEvent(event: LineEvent) {
       user_uuid,
       type: "line",
       value: lineUserId,
-      channel: "line",
-      state: "active",
     }),
   )
 }

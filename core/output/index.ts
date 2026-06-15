@@ -1,5 +1,9 @@
 import type { OutputMessage, OutputTarget } from "@/core/output/rules"
-import { loadOutputContacts, resolveOutputDestinations } from "@/core/output/rules"
+import {
+  loadOutputContacts,
+  loadOutputVisitor,
+  resolveOutputDestinations,
+} from "@/core/output/rules"
 import { deliverDiscord } from "@/core/output/discord"
 import { deliverLine } from "@/core/output/line"
 import { deliverPush } from "@/core/output/push"
@@ -14,25 +18,34 @@ export async function deliverOutput(
   target: OutputTarget,
   message: OutputMessage,
 ): Promise<DeliveryResult[]> {
-  const contacts = await loadOutputContacts(target)
-  const destinations = resolveOutputDestinations(contacts)
+  const [visitor, contacts] = await Promise.all([
+    loadOutputVisitor(target),
+    loadOutputContacts(target),
+  ])
+  const destinations = resolveOutputDestinations(visitor, contacts)
 
   return Promise.all(
     destinations.map(async (destination) => {
       if (destination.transport === "line") {
-        return deliverLine(destination.contact, message)
+        return destination.contact
+          ? deliverLine(destination.contact, message)
+          : { transport: "line", delivered: false }
       }
 
       if (destination.transport === "web") {
-        return deliverWeb(destination.contact, message)
+        return deliverWeb(destination.visitor, message)
       }
 
       if (destination.transport === "push") {
-        return deliverPush(destination.contact, message)
+        return destination.contact
+          ? deliverPush(destination.contact, message)
+          : { transport: "push", delivered: false }
       }
 
       if (destination.transport === "discord") {
-        return deliverDiscord(destination.contact, message)
+        return destination.contact
+          ? deliverDiscord(destination.contact, message)
+          : { transport: "discord", delivered: false }
       }
 
       return {

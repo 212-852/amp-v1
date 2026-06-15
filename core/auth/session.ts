@@ -377,10 +377,11 @@ const supabaseVisitorStore: VisitorStore = {
       return runtimeVisitorStore.upsertVisitor(context, visitor_uuid, debug)
     }
 
+    const now = new Date().toISOString()
     const body: VisitorUpsertBody = {
       visitor_uuid,
       source_channel: context.source_channel,
-      updated_at: new Date().toISOString(),
+      updated_at: now,
       user_uuid: null,
     }
     const result = await upsertVisitorRow(config, body)

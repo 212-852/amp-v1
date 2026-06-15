@@ -1,20 +1,21 @@
-import { normalizeContactContext } from "@/core/contacts/context"
-import { updateContactLastSeen } from "@/core/contacts/action"
 import { resolveAuthContext } from "@/core/auth/context"
 import { resolveSession } from "@/core/auth/session"
+import { updateAccess } from "@/core/access/action"
+import { normalizeAccessContext } from "@/core/access/context"
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
   const authContext = await resolveAuthContext()
   const session = await resolveSession(authContext)
 
-  await updateContactLastSeen(
-    normalizeContactContext({
-      ...body,
-      user_uuid: session.user_uuid,
-      visitor_uuid: session.visitor_uuid,
-    }),
-  )
+  const access = session.visitor_uuid
+    ? await updateAccess(
+        normalizeAccessContext({
+          ...body,
+          visitor_uuid: session.visitor_uuid,
+        }),
+      )
+    : null
 
-  return Response.json({ ok: true })
+  return Response.json({ access })
 }

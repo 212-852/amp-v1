@@ -2,45 +2,28 @@
 
 import { useEffect } from "react"
 
+import { detectAccessChannel } from "@/components/access/channel"
+
 const HEARTBEAT_INTERVAL_MS = 30 * 1000
 
-function resolveChannel() {
-  const userAgent = navigator.userAgent.toLowerCase()
-  const standaloneNavigator = navigator as Navigator & {
-    standalone?: boolean
-  }
-
-  if (userAgent.includes("line")) {
-    return "liff"
-  }
-
-  if (
-    window.matchMedia("(display-mode: standalone)").matches ||
-    standaloneNavigator.standalone === true
-  ) {
-    return "pwa"
-  }
-
-  return "web"
-}
-
-async function postContact(path: string, state: "active" | "hidden") {
-  await fetch(path, {
+async function postAccess(state: "active" | "hidden", heartbeat = false) {
+  await fetch("/api/visitors/state", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      type: "push",
-      channel: resolveChannel(),
+      source_channel: detectAccessChannel(),
       state,
+      receive: true,
+      heartbeat,
     }),
     cache: "no-store",
     keepalive: true,
   }).catch(() => undefined)
 }
 
-export function ContactPresence() {
+export function AccessPresence() {
   useEffect(() => {
     let intervalId: ReturnType<typeof setInterval> | null = null
     let accessSynced = false
@@ -59,21 +42,21 @@ export function ContactPresence() {
 
       intervalId = setInterval(() => {
         if (document.visibilityState === "visible") {
-          void postContact("/api/contacts/heartbeat", "active")
+          void postAccess("active", true)
         }
       }, HEARTBEAT_INTERVAL_MS)
     }
 
     const syncVisibility = () => {
       if (document.visibilityState === "visible") {
-        void postContact(accessSynced ? "/api/contacts/state" : "/api/contacts", "active")
+        void postAccess("active")
         accessSynced = true
         startHeartbeat()
         return
       }
 
       if (accessSynced) {
-        void postContact("/api/contacts/state", "hidden")
+        void postAccess("hidden")
       }
       stopHeartbeat()
     }

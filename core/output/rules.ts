@@ -1,5 +1,6 @@
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
-import { isContactOnline, type ContactRecord } from "@/core/contacts/rules"
+import type { ContactRecord } from "@/core/contacts/rules"
+import { isAccessOnline, type AccessRecord } from "@/core/access/rules"
 
 export type OutputMessage = {
   text: string
@@ -12,12 +13,14 @@ export type OutputTarget = {
 }
 
 export type OutputDestination = {
-  contact: ContactRecord
+  contact: ContactRecord | null
+  visitor: AccessRecord | null
   transport: "line" | "web" | "push" | "discord" | "none"
 }
 
-const CONTACT_SELECT =
-  "user_uuid,visitor_uuid,type,value,channel,state,receive,last_seen_at"
+const CONTACT_SELECT = "user_uuid,visitor_uuid,type,value"
+const VISITOR_SELECT =
+  "visitor_uuid,user_uuid,source_channel,state,receive,last_seen_at"
 
 function contactTargetQuery(target: OutputTarget) {
   const filters: string[] = []
@@ -69,40 +72,87 @@ export async function loadOutputContacts(target: OutputTarget) {
   return (await response.json()) as ContactRecord[]
 }
 
+function visitorTargetQuery(target: OutputTarget) {
+  const filters: string[] = []
+  const orFilters: string[] = []
+
+  if (target.user_uuid) {
+    const userUuid = encodeURIComponent(target.user_uuid)
+    filters.push(`user_uuid=eq.${userUuid}`)
+    orFilters.push(`user_uuid.eq.${userUuid}`)
+  }
+
+  if (target.visitor_uuid) {
+    const visitorUuid = encodeURIComponent(target.visitor_uuid)
+    filters.push(`visitor_uuid=eq.${visitorUuid}`)
+    orFilters.push(`visitor_uuid.eq.${visitorUuid}`)
+  }
+
+  if (filters.length === 0) {
+    throw new Error("Output target requires user_uuid or visitor_uuid")
+  }
+
+  return [
+    filters.length === 1 ? filters[0] : `or=(${orFilters.join(",")})`,
+    `select=${VISITOR_SELECT}`,
+    "limit=1",
+  ].join("&")
+}
+
+export async function loadOutputVisitor(target: OutputTarget) {
+  const config = getRestConfig()
+
+  if (!config) {
+    return null
+  }
+
+  const response = await fetch(restUrl(config, "visitors", visitorTargetQuery(target)), {
+    headers: restHeaders(config),
+    cache: "no-store",
+  })
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+    throw new Error(
+      `Failed to load output visitor: ${error.code ?? "unknown"} ${
+        error.message ?? "No PostgREST error returned"
+      }`,
+    )
+  }
+
+  const rows = (await response.json()) as AccessRecord[]
+
+  return rows[0] ?? null
+}
+
 export function resolveOutputDestinations(
+  visitor: AccessRecord | null,
   contacts: ContactRecord[],
   now: Date = new Date(),
 ): OutputDestination[] {
-  return contacts.map((contact) => {
-    if (!contact.receive) {
-      return { contact, transport: "none" }
-    }
+  const destinations: OutputDestination[] = []
 
-    if (contact.channel === "line") {
-      return { contact, transport: "line" }
-    }
+  if (visitor?.receive && isAccessOnline(visitor, now)) {
+    return [{ contact: null, visitor, transport: "web" }]
+  }
 
-    if (
-      (contact.channel === "web" ||
-        contact.channel === "liff" ||
-        contact.channel === "pwa") &&
-      isContactOnline(contact.last_seen_at, now)
-    ) {
-      return { contact, transport: "web" }
-    }
-
+  contacts.forEach((contact) => {
     if (contact.type === "line") {
-      return { contact, transport: "line" }
+      destinations.push({ contact, visitor, transport: "line" })
+      return
     }
 
     if (contact.type === "discord") {
-      return { contact, transport: "discord" }
+      destinations.push({ contact, visitor, transport: "discord" })
+      return
     }
 
     if (contact.type === "push") {
-      return { contact, transport: "push" }
+      destinations.push({ contact, visitor, transport: "push" })
     }
-
-    return { contact, transport: "none" }
   })
+
+  return destinations.length > 0
+    ? destinations
+    : [{ contact: null, visitor, transport: "none" }]
 }
