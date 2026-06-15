@@ -994,6 +994,10 @@ export default function OverlayModal({
             locale={locale}
             onBack={() => set_link_step("options")}
             onSuccess={() => {
+              const url = new URL(window.location.href)
+
+              url.searchParams.delete("auth_error")
+              window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`)
               onClose()
               router.refresh()
             }}

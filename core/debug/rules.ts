@@ -18,6 +18,7 @@ const identityEvents = new Set([
   "email_verify_api_response",
   "email_verify_request_received",
   "email_verify_result",
+  "email_verify_success",
   "email_session_update",
   "google_code_exchange_failed",
   "google_code_exchange_success",

@@ -324,11 +324,23 @@ export async function verifyEmailOtpLogin(request: NextRequest) {
       throw new Error("Email OTP did not return an auth user")
     }
 
+    const verifiedEmail = normalizeEmail(verifiedData.user.email) ?? email
+
+    await sendIdentityDebug("email_verify_success", {
+      provider: "email",
+      visitor_uuid: session.visitor_uuid,
+      auth_user_id: verifiedData.user.id,
+      email: verifiedEmail,
+      verify_type: successfulType,
+      session_exists: !!verifiedData.session,
+      source_channel: context.source_channel,
+    })
+
     const linkResult = await linkCurrentVisitorToIdentity({
       provider: "email",
-      provider_user_id: email,
-      email,
-      display_name: verifiedData.user.email ?? email,
+      provider_user_id: verifiedEmail,
+      email: verifiedEmail,
+      display_name: verifiedEmail,
     })
     const profile = await resolveAuthUserProfile(linkResult.user_uuid)
     const sessionPayload = {
@@ -338,8 +350,7 @@ export async function verifyEmailOtpLogin(request: NextRequest) {
       tier: profile.tier,
       display_name: profile.display_name,
       provider: "email",
-      provider_user_id: email,
-      email,
+      email: verifiedEmail,
       source_channel: linkResult.source_channel,
     }
 
@@ -348,7 +359,7 @@ export async function verifyEmailOtpLogin(request: NextRequest) {
       visitor_uuid: linkResult.visitor_uuid,
       user_uuid: linkResult.user_uuid,
       identity_uuid: linkResult.identity_uuid,
-      email,
+      email: verifiedEmail,
       display_name: linkResult.display_name,
       source_channel: linkResult.source_channel,
     })

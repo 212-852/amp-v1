@@ -203,6 +203,7 @@ export async function sendIdentityDebug(
     | "email_verify_api_response"
     | "email_verify_request_received"
     | "email_verify_result"
+    | "email_verify_success"
     | "email_session_update"
     | "google_oauth_callback_received"
     | "google_oauth_start"
