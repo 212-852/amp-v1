@@ -1,10 +1,20 @@
-export async function POST() {
-  return Response.json(
-    {
-      deprecated: true,
-      message: "Access state moved to /api/visitors/state",
-      use: "/api/visitors/state",
-    },
-    { status: 410 },
+import { resolveAuthContext } from "@/core/auth/context"
+import { resolveSession } from "@/core/auth/session"
+import { updateContactAccess } from "@/core/contacts/action"
+import { normalizeContactAccessContext } from "@/core/contacts/context"
+
+export async function POST(request: Request) {
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+  const authContext = await resolveAuthContext()
+  const session = await resolveSession(authContext)
+
+  await updateContactAccess(
+    normalizeContactAccessContext({
+      ...body,
+      user_uuid: session.user_uuid,
+      visitor_uuid: session.visitor_uuid,
+    }),
   )
+
+  return Response.json({ ok: true })
 }

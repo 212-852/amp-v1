@@ -28,8 +28,8 @@ export async function POST(request: Request) {
     if (isAccessStatePayload(body)) {
       return Response.json(
         {
-          error: "Access state must use /api/visitors/state",
-          use: "/api/visitors/state",
+          error: "Access state must use /api/contacts/state",
+          use: "/api/contacts/state",
         },
         { status: 400 },
       )

@@ -7,7 +7,7 @@ import { detectAccessChannel } from "@/components/access/channel"
 const HEARTBEAT_INTERVAL_MS = 30 * 1000
 
 async function postAccess(state: "active" | "hidden", heartbeat = false) {
-  await fetch("/api/visitors/state", {
+  await fetch(heartbeat ? "/api/contacts/heartbeat" : "/api/contacts/state", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

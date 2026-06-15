@@ -6,6 +6,12 @@ create table if not exists public.contacts (
 
   type text not null check (type in ('line', 'email', 'push', 'discord')),
   value text not null,
+  channel text not null default 'web'
+    check (channel in ('web', 'pwa', 'liff', 'line')),
+  state text not null default 'offline'
+    check (state in ('active', 'background', 'hidden', 'offline')),
+  receive boolean not null default true,
+  last_seen_at timestamptz null,
 
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -22,19 +28,20 @@ drop index if exists contacts_visitor_type_uidx;
 drop index if exists contacts_user_type_uidx;
 
 alter table public.visitors
-add column if not exists state text not null default 'offline'
-  check (state in ('active', 'background', 'hidden', 'offline')),
-add column if not exists receive boolean not null default true,
-add column if not exists last_seen_at timestamptz null;
+drop column if exists state,
+drop column if exists receive,
+drop column if exists last_seen_at;
 
 delete from public.contacts
 where value like 'push:visitor:%';
 
 alter table public.contacts
-drop column if exists channel,
-drop column if exists state,
-drop column if exists receive,
-drop column if exists last_seen_at;
+add column if not exists channel text not null default 'web'
+  check (channel in ('web', 'pwa', 'liff', 'line')),
+add column if not exists state text not null default 'offline'
+  check (state in ('active', 'background', 'hidden', 'offline')),
+add column if not exists receive boolean not null default true,
+add column if not exists last_seen_at timestamptz null;
 
 delete from public.contacts a
 using public.contacts b

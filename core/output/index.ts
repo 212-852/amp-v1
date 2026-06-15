@@ -1,9 +1,5 @@
 import type { OutputMessage, OutputTarget } from "@/core/output/rules"
-import {
-  loadOutputContacts,
-  loadOutputVisitor,
-  resolveOutputDestinations,
-} from "@/core/output/rules"
+import { loadOutputContacts, resolveOutputDestinations } from "@/core/output/rules"
 import { deliverDiscord } from "@/core/output/discord"
 import { deliverLine } from "@/core/output/line"
 import { deliverPush } from "@/core/output/push"
@@ -18,11 +14,8 @@ export async function deliverOutput(
   target: OutputTarget,
   message: OutputMessage,
 ): Promise<DeliveryResult[]> {
-  const [visitor, contacts] = await Promise.all([
-    loadOutputVisitor(target),
-    loadOutputContacts(target),
-  ])
-  const destinations = resolveOutputDestinations(visitor, contacts)
+  const contacts = await loadOutputContacts(target)
+  const destinations = resolveOutputDestinations(contacts)
 
   return Promise.all(
     destinations.map(async (destination) => {
@@ -33,7 +26,7 @@ export async function deliverOutput(
       }
 
       if (destination.transport === "web") {
-        return deliverWeb(destination.visitor, message)
+        return deliverWeb(destination.contact, message)
       }
 
       if (destination.transport === "push") {
