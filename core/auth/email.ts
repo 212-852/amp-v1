@@ -11,6 +11,7 @@ import { resolveSession } from "@/core/auth/session"
 import {
   create_auth_supabase_client,
   create_service_role_supabase_client,
+  get_shared_auth_supabase_client,
 } from "@/core/auth/supabase"
 import { set_amp_auth_cookies } from "@/src/lib/supabase/server"
 
@@ -62,6 +63,39 @@ function jsonError(error: unknown, fallback: string, status = 400) {
   )
 }
 
+function summarizeAuthState(input: {
+  session: Awaited<ReturnType<ReturnType<typeof create_auth_supabase_client>["auth"]["getSession"]>>
+  user: Awaited<ReturnType<ReturnType<typeof create_auth_supabase_client>["auth"]["getUser"]>>
+}) {
+  return {
+    session: {
+      exists: !!input.session.data.session,
+      user_id: input.session.data.session?.user.id ?? null,
+      user_email: input.session.data.session?.user.email ?? null,
+      error: serializeError(input.session.error),
+    },
+    user: {
+      id: input.user.data.user?.id ?? null,
+      email: input.user.data.user?.email ?? null,
+      error: serializeError(input.user.error),
+    },
+  }
+}
+
+async function findAuthUserByEmail(email: string) {
+  const admin = create_service_role_supabase_client()
+  const result = await admin.auth.admin.listUsers({
+    page: 1,
+    perPage: 1000,
+  })
+  const user = result.data.users.find((item) => item.email?.toLowerCase() === email)
+
+  return {
+    user,
+    error: result.error,
+  }
+}
+
 export async function startEmailOtpLogin(request: NextRequest) {
   try {
     const body = await readRequestBody(request)
@@ -92,7 +126,7 @@ export async function startEmailOtpLogin(request: NextRequest) {
       source_channel: context.source_channel,
     })
 
-    const supabase = create_auth_supabase_client()
+    const supabase = get_shared_auth_supabase_client()
     const { data, error } = await supabase.auth.signInWithOtp(payload)
 
     await sendIdentityDebug("email_send_result", {
@@ -106,14 +140,8 @@ export async function startEmailOtpLogin(request: NextRequest) {
       source_channel: context.source_channel,
     })
 
-    const admin = create_service_role_supabase_client()
-    const adminResult = await admin.auth.admin.listUsers({
-      page: 1,
-      perPage: 1000,
-    })
-    const authUser = adminResult.data.users.find(
-      (user) => user.email?.toLowerCase() === email,
-    )
+    const authUserResult = await findAuthUserByEmail(email)
+    const authUser = authUserResult.user
 
     await sendIdentityDebug("email_user_exists_after_send", {
       provider: "email",
@@ -124,7 +152,7 @@ export async function startEmailOtpLogin(request: NextRequest) {
       auth_user_id: authUser?.id ?? null,
       email_confirmed_at: authUser?.email_confirmed_at ?? null,
       created_at: authUser?.created_at ?? null,
-      error: serializeError(adminResult.error),
+      error: serializeError(authUserResult.error),
       source_channel: context.source_channel,
     })
 
@@ -185,15 +213,34 @@ export async function verifyEmailOtpLogin(request: NextRequest) {
       type: "email" as const,
     }
 
+    const supabase = get_shared_auth_supabase_client()
+    const preSession = await supabase.auth.getSession()
+    const preUser = await supabase.auth.getUser()
+    const authUserResult = email ? await findAuthUserByEmail(email) : null
+    const authUser = authUserResult?.user ?? null
+
     await sendIdentityDebug("email_verify_payload", {
       provider: "email",
       visitor_uuid: session.visitor_uuid,
       payload,
+      auth_state_before_verify: summarizeAuthState({
+        session: preSession,
+        user: preUser,
+      }),
+      auth_user_match: {
+        email,
+        exists: !!authUser,
+        auth_user_id: authUser?.id ?? null,
+        email_confirmed_at: authUser?.email_confirmed_at ?? null,
+        created_at: authUser?.created_at ?? null,
+        admin_error: serializeError(authUserResult?.error),
+      },
       source_channel: context.source_channel,
     })
 
-    const supabase = create_auth_supabase_client()
     const result = await supabase.auth.verifyOtp(payload)
+    const postSession = await supabase.auth.getSession()
+    const postUser = await supabase.auth.getUser()
 
     await sendIdentityDebug("email_verify_result", {
       provider: "email",
@@ -206,6 +253,17 @@ export async function verifyEmailOtpLogin(request: NextRequest) {
         session_exists: !!result.data.session,
       },
       error: serializeError(result.error),
+      auth_state_after_verify: summarizeAuthState({
+        session: postSession,
+        user: postUser,
+      }),
+      auth_user_match: {
+        email,
+        exists: !!authUser,
+        auth_user_id: authUser?.id ?? null,
+        verify_user_id: result.data.user?.id ?? null,
+        same_user: !!authUser?.id && authUser.id === result.data.user?.id,
+      },
       source_channel: context.source_channel,
     })
 
