@@ -18,13 +18,6 @@ export const metadata: Metadata = {
     title: "PET TAXI",
     statusBarStyle: "default",
   },
-  icons: {
-    apple: "/images/apple_icon.png",
-    icon: [
-      { url: "/images/icon_192.png", sizes: "192x192", type: "image/png" },
-      { url: "/images/icon_512.png", sizes: "512x512", type: "image/png" },
-    ],
-  },
 };
 
 export default function RootLayout({

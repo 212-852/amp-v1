@@ -52,8 +52,13 @@ export function normalizeContactContext(input: ContactInput): ContactContext {
   const type = normalizeType(input.type)
   const channel = normalizeChannel(input.channel)
   const state = normalizeState(input.state)
+  const browserPushValue =
+    type === "push" && channel !== "line" && visitor_uuid
+      ? `push:visitor:${visitor_uuid}`
+      : null
   const value =
     normalizeString(input.value) ??
+    browserPushValue ??
     (user_uuid ? `${type}:user:${user_uuid}` : null) ??
     (visitor_uuid ? `${type}:visitor:${visitor_uuid}` : null) ??
     `${type}:anonymous`

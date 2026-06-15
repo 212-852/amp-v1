@@ -17,11 +17,37 @@ create table if not exists public.contacts (
   check (user_uuid is not null or visitor_uuid is not null)
 );
 
-create unique index if not exists contacts_user_type_value_uidx
-  on public.contacts (user_uuid, type, value);
+drop index if exists contacts_user_type_value_uidx;
 
-create unique index if not exists contacts_visitor_type_value_uidx
-  on public.contacts (visitor_uuid, type, value);
+drop index if exists contacts_visitor_type_value_uidx;
+
+delete from public.contacts a
+using public.contacts b
+where a.contact_uuid <> b.contact_uuid
+  and a.visitor_uuid is not null
+  and a.visitor_uuid = b.visitor_uuid
+  and a.type = b.type
+  and (
+    a.updated_at < b.updated_at
+    or (a.updated_at = b.updated_at and a.contact_uuid < b.contact_uuid)
+  );
+
+delete from public.contacts a
+using public.contacts b
+where a.contact_uuid <> b.contact_uuid
+  and a.user_uuid is not null
+  and a.user_uuid = b.user_uuid
+  and a.type = b.type
+  and (
+    a.updated_at < b.updated_at
+    or (a.updated_at = b.updated_at and a.contact_uuid < b.contact_uuid)
+  );
+
+create unique index if not exists contacts_visitor_type_uidx
+  on public.contacts (visitor_uuid, type);
+
+create unique index if not exists contacts_user_type_uidx
+  on public.contacts (user_uuid, type);
 
 create index if not exists contacts_user_uuid_idx
   on public.contacts (user_uuid);

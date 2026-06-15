@@ -43,6 +43,7 @@ async function postContact(path: string, state: "active" | "hidden") {
 export function ContactPresence() {
   useEffect(() => {
     let intervalId: ReturnType<typeof setInterval> | null = null
+    let accessSynced = false
 
     const stopHeartbeat = () => {
       if (intervalId) {
@@ -65,12 +66,15 @@ export function ContactPresence() {
 
     const syncVisibility = () => {
       if (document.visibilityState === "visible") {
-        void postContact("/api/contacts", "active")
+        void postContact(accessSynced ? "/api/contacts/state" : "/api/contacts", "active")
+        accessSynced = true
         startHeartbeat()
         return
       }
 
-      void postContact("/api/contacts", "hidden")
+      if (accessSynced) {
+        void postContact("/api/contacts/state", "hidden")
+      }
       stopHeartbeat()
     }
 
