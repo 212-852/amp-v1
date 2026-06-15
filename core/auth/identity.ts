@@ -53,6 +53,7 @@ export type IdentityLinkInput = {
   provider_user_id?: string | null
   email?: string | null
   display_name?: string | null
+  image_url?: string | null
   locale?: string | null
 }
 
@@ -129,6 +130,7 @@ export function normalizeIdentityLinkInput(
     provider_user_id: provider === "email" ? email : provider_user_id,
     email,
     display_name: normalizeString(input.display_name),
+    image_url: normalizeString(input.image_url),
     locale: normalizeString(input.locale),
   }
 }
@@ -185,8 +187,13 @@ export function normalizeGoogleIdentityInput(
 export async function sendIdentityDebug(
   event:
     | "auth_callback_received"
+    | "google_oauth_callback_received"
+    | "google_oauth_start"
+    | "google_oauth_state_failed"
     | "google_code_exchange_failed"
     | "google_code_exchange_success"
+    | "google_token_exchange_failed"
+    | "google_token_exchange_success"
     | "identity_upsert_payload"
     | "identity_link_failed"
     | "identity_link_started"
@@ -329,6 +336,7 @@ async function createUser(input: IdentityLinkInput) {
       tier: "member",
       locale: input.locale ?? "en",
       display_name: input.display_name ?? input.email ?? null,
+      image_url: input.image_url ?? null,
     }),
     cache: "no-store",
   })

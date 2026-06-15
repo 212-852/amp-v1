@@ -9,5 +9,5 @@ where a.ctid <> b.ctid
     or (a.created_at = b.created_at and a.ctid < b.ctid)
   );
 
-create unique index if not exists identities_provider_provider_user_id_uidx
+create unique index if not exists identities_provider_user_idx
   on public.identities (provider, provider_user_id);

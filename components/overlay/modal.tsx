@@ -13,7 +13,6 @@ import type {
 } from "@/components/overlay/types"
 import { useLocale } from "@/src/components/locale/provider"
 import type { Locale } from "@/src/lib/locale"
-import { create_browser_supabase_client } from "@/src/lib/supabase/client"
 
 const content = {
   close_label: {
@@ -204,25 +203,7 @@ async function send_identity_link_started(action: NonNullable<OverlayItem["actio
 }
 
 async function start_google_link() {
-  const supabase = create_browser_supabase_client()
-  const redirectTo = `${window.location.origin}/auth/callback`
-
-  await send_identity_link_started("google")
-
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo,
-      queryParams: {
-        access_type: "offline",
-        prompt: "consent",
-      },
-    },
-  })
-
-  if (error) {
-    throw error
-  }
+  window.location.href = "/api/auth/google/start"
 }
 
 async function handleLinkOption(item: OverlayItem) {
