@@ -2,11 +2,12 @@
 
 import { useState } from "react"
 
-import { ChevronRight, Mail, PawPrint } from "lucide-react"
+import { ChevronRight, LogOut, Mail, PawPrint, User } from "lucide-react"
 import { SiGoogle, SiLine } from "react-icons/si"
 
 import { getOverlayModalAnimationClass } from "@/components/overlay/animations"
 import type {
+  OverlayAccount,
   OverlayItem,
   OverlayPhase,
   OverlayRule,
@@ -20,6 +21,11 @@ const content = {
     en: "Close overlay",
     es: "Cerrar",
   },
+  close_action: {
+    ja: "閉じる",
+    en: "Close",
+    es: "Cerrar",
+  },
   link_title: {
     ja: "Link",
     en: "Link",
@@ -29,6 +35,26 @@ const content = {
     ja: "アカウントを連携すると、別の端末でも続けて使えて通知も受け取れます。",
     en: "Connect your account to continue across devices and receive notifications.",
     es: "Conecta tu cuenta para continuar en otros dispositivos y recibir notificaciones.",
+  },
+  account_title: {
+    ja: "Account",
+    en: "Account",
+    es: "Cuenta",
+  },
+  account_description: {
+    ja: "アカウント情報とログアウト。",
+    en: "Account details and logout.",
+    es: "Detalles de cuenta y cierre de sesion.",
+  },
+  account_guest_name: {
+    ja: "Member",
+    en: "Member",
+    es: "Miembro",
+  },
+  logout: {
+    ja: "ログアウト",
+    en: "Logout",
+    es: "Cerrar sesion",
   },
   line_title: {
     ja: "LINE連携",
@@ -221,6 +247,10 @@ async function handleLinkOption(item: OverlayItem) {
 }
 
 function get_modal_title(rule: OverlayRule, locale: Locale) {
+  if (rule.type === "account") {
+    return content.account_title[locale]
+  }
+
   if (rule.type === "link") {
     return content.link_title[locale]
   }
@@ -245,6 +275,10 @@ function get_modal_title(rule: OverlayRule, locale: Locale) {
 }
 
 function get_modal_description(rule: OverlayRule, locale: Locale) {
+  if (rule.type === "account") {
+    return content.account_description[locale]
+  }
+
   if (rule.type === "link") {
     return content.link_description[locale]
   }
@@ -354,6 +388,119 @@ function LinkOptionIcon({ action }: Readonly<{ action: OverlayItem["action"] }>)
   }
 
   return <Mail className="h-7 w-7 text-[#8f5d28]" strokeWidth={2} aria-hidden="true" />
+}
+
+function AccountProviderIcon({
+  provider,
+}: Readonly<{ provider: OverlayAccount["provider"] }>) {
+  if (provider === "google") {
+    return <SiGoogle className="h-5 w-5 text-[#4285f4]" aria-hidden="true" />
+  }
+
+  if (provider === "line") {
+    return <SiLine className="h-5 w-5 text-[#06c755]" aria-hidden="true" />
+  }
+
+  if (provider === "email") {
+    return <Mail className="h-5 w-5 text-[#8f5d28]" strokeWidth={2} aria-hidden="true" />
+  }
+
+  return <User className="h-5 w-5 text-[#8f5d28]" strokeWidth={2} aria-hidden="true" />
+}
+
+function AccountAvatar({ rule }: Readonly<{ rule: OverlayRule }>) {
+  const account = rule.account
+
+  if (account?.image_url) {
+    return (
+      <span
+        className="block h-full w-full rounded-full bg-cover bg-center"
+        style={{ backgroundImage: `url(${account.image_url})` }}
+        aria-hidden="true"
+      />
+    )
+  }
+
+  return <AccountProviderIcon provider={account?.provider ?? null} />
+}
+
+function AccountPanel({
+  rule,
+  locale,
+  onClose,
+}: Readonly<{
+  rule: OverlayRule
+  locale: Locale
+  onClose: () => void
+}>) {
+  const [is_logging_out, set_is_logging_out] = useState(false)
+  const account = rule.account
+  const display_name = account?.display_name ?? content.account_guest_name[locale]
+
+  function handle_logout() {
+    if (is_logging_out) {
+      return
+    }
+
+    set_is_logging_out(true)
+    fetch("/api/auth/logout", {
+      method: "POST",
+    })
+      .catch(() => null)
+      .finally(() => {
+        window.location.href = "/"
+      })
+  }
+
+  return (
+    <div className="grid gap-3">
+      <div className="flex items-center gap-3 rounded-[18px] border border-[#e5e5e5] bg-white px-4 py-4">
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#fdfaf6] text-[#8f5d28] ring-1 ring-[#dcc7aa]">
+          <AccountAvatar rule={rule} />
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-[15px] font-bold leading-5 text-[#111111]">
+            {display_name}
+          </span>
+          <span className="mt-1 flex items-center gap-2 text-[12px] font-semibold leading-5 text-[#777777]">
+            <AccountProviderIcon provider={account?.provider ?? null} />
+            {account?.email ? <span className="truncate">{account.email}</span> : null}
+          </span>
+        </span>
+      </div>
+
+      <button
+        type="button"
+        onClick={handle_logout}
+        disabled={is_logging_out}
+        className={[
+          "flex min-h-[54px] items-center justify-between rounded-2xl",
+          "border border-[#e5e5e5] px-4 py-3 text-left",
+          "text-[14px] font-semibold text-[#111111]",
+          "transition-colors hover:bg-[#fdfaf6] focus-visible:outline",
+          "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8f5d28]",
+          is_logging_out ? "cursor-wait opacity-75" : "",
+        ].join(" ")}
+      >
+        <span>{content.logout[locale]}</span>
+        <LogOut className="h-5 w-5 text-[#8f5d28]" strokeWidth={2} aria-hidden="true" />
+      </button>
+
+      <button
+        type="button"
+        onClick={onClose}
+        className={[
+          "flex min-h-[54px] items-center justify-center rounded-2xl",
+          "border border-[#e5e5e5] px-4 py-3 text-center",
+          "text-[14px] font-semibold text-[#111111]",
+          "transition-colors hover:bg-[#fdfaf6] focus-visible:outline",
+          "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8f5d28]",
+        ].join(" ")}
+      >
+        {content.close_action[locale]}
+      </button>
+    </div>
+  )
 }
 
 function LinkOption({
@@ -542,8 +689,11 @@ export default function OverlayModal({
       </p>
 
       <div className="mt-5 grid gap-2">
-        {rule.items.map((item) => (
-          rule.type === "link" ? (
+        {rule.type === "account" ? (
+          <AccountPanel rule={rule} locale={locale} onClose={onClose} />
+        ) : (
+          rule.items.map((item) => (
+            rule.type === "link" ? (
             <LinkOption
               key={item.id}
               item={item}
@@ -551,7 +701,7 @@ export default function OverlayModal({
               loading_action={loading_action}
               on_link_click={handle_link_click}
             />
-          ) : rule.type === "language" ? (
+            ) : rule.type === "language" ? (
             <LanguageOption
               key={item.id}
               item={item}
@@ -559,10 +709,11 @@ export default function OverlayModal({
               set_locale={set_locale}
               onClose={onClose}
             />
-          ) : (
-            <DefaultOption key={item.id} item={item} locale={locale} />
-          )
-        ))}
+            ) : (
+              <DefaultOption key={item.id} item={item} locale={locale} />
+            )
+          ))
+        )}
       </div>
     </section>
   )

@@ -11,6 +11,7 @@ const animationByType: Record<OverlayType, OverlayAnimation> = {
   my_page: "from_bottom",
   menu: "from_left",
   link: "center_drop",
+  account: "center_drop",
   notice: "center_drop",
   language: "center_drop",
 }
@@ -19,6 +20,7 @@ const placementByType: Record<OverlayType, OverlayPlacement> = {
   my_page: "bottom",
   menu: "left",
   link: "center",
+  account: "center",
   notice: "center",
   language: "center",
 }
@@ -67,6 +69,11 @@ const contentByType: Record<
       },
     ],
   },
+  account: {
+    title: "",
+    description: "",
+    items: [],
+  },
   notice: {
     title: "",
     description: "",
@@ -95,6 +102,7 @@ export function resolveOverlayRule(context: OverlayContext): OverlayRule {
     source: context.source,
     animation: animationByType[context.type],
     placement: placementByType[context.type],
+    account: context.account,
     ...content,
   }
 }

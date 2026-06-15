@@ -12,6 +12,7 @@ export { default as OverlayModal } from "@/components/overlay/modal"
 export { default as OverlayOutput } from "@/components/overlay/output"
 export type {
   OverlayAction,
+  OverlayAccount,
   OverlayAnimation,
   OverlayPhase,
   OverlayRequest,

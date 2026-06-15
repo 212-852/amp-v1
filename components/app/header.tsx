@@ -13,6 +13,7 @@ export type AppHeaderAuth = {
   display_name: string | null
   image_url: string | null
   provider: "google" | "line" | "email" | null
+  email: string | null
 }
 
 const content = {
@@ -164,6 +165,24 @@ export default function AppHeader({ auth }: { auth: AppHeaderAuth }) {
   const user_name = is_logged_in
     ? auth.display_name ?? content.member[locale]
     : content.guest[locale]
+  const open_account_link = () => {
+    if (!is_logged_in) {
+      openOverlay({ type: "link", source: "user" })
+      return
+    }
+
+    openOverlay({
+      type: "account",
+      source: "user",
+      account: {
+        user_uuid: auth.user_uuid,
+        display_name: auth.display_name,
+        image_url: auth.image_url,
+        provider: auth.provider,
+        email: auth.email,
+      },
+    })
+  }
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 h-[108px] text-[#3d2a19]">
@@ -185,7 +204,7 @@ export default function AppHeader({ auth }: { auth: AppHeaderAuth }) {
                 <MemberPill label={content.guest[locale]} />
                 <LinkPill
                   label={content.link[locale]}
-                  onClick={() => openOverlay({ type: "link", source: "user" })}
+                  onClick={open_account_link}
                 />
               </>
             ) : is_linked ? (
@@ -194,7 +213,7 @@ export default function AppHeader({ auth }: { auth: AppHeaderAuth }) {
                 <LinkPill
                   label={content.linked[locale]}
                   provider={auth.provider}
-                  onClick={() => openOverlay({ type: "link", source: "user" })}
+                  onClick={open_account_link}
                 />
               </>
             ) : (
@@ -202,7 +221,7 @@ export default function AppHeader({ auth }: { auth: AppHeaderAuth }) {
                 <MemberPill label={content.member[locale]} filled />
                 <LinkPill
                   label={content.link[locale]}
-                  onClick={() => openOverlay({ type: "link", source: "user" })}
+                  onClick={open_account_link}
                 />
               </>
             )}

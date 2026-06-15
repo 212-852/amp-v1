@@ -7,8 +7,8 @@ import {
 } from "@/core/contacts/rules"
 
 type ContactUpsertBody = {
-  user_uuid: string | null
-  visitor_uuid: string | null
+  user_uuid?: string | null
+  visitor_uuid?: string | null
   type: ContactRecord["type"]
   value: string
   channel: ContactRecord["channel"]
@@ -46,6 +46,20 @@ function contactConflictTarget(context: ContactContext) {
   return "visitor_uuid,type,value"
 }
 
+function contactUpsertIdentity(context: ContactContext) {
+  if (context.user_uuid) {
+    return {
+      user_uuid: context.user_uuid,
+      visitor_uuid: null,
+    }
+  }
+
+  return {
+    user_uuid: null,
+    visitor_uuid: context.visitor_uuid,
+  }
+}
+
 export async function upsertContact(context: ContactContext): Promise<ContactRecord | null> {
   assertContactContext(context)
 
@@ -63,8 +77,7 @@ export async function upsertContact(context: ContactContext): Promise<ContactRec
   }
 
   const body: ContactUpsertBody = {
-    user_uuid: context.user_uuid,
-    visitor_uuid: context.visitor_uuid,
+    ...contactUpsertIdentity(context),
     type: context.type,
     value: context.value,
     channel: context.type === "line" ? "line" : "web",

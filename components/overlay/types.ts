@@ -4,6 +4,7 @@ export type OverlayType =
   | "my_page"
   | "menu"
   | "link"
+  | "account"
   | "notice"
   | "language"
 
@@ -12,6 +13,7 @@ export type OverlaySource = "user" | "driver" | "admin"
 export type OverlayRequest = {
   type: OverlayType
   source: OverlaySource
+  account?: OverlayAccount
 }
 
 export type OverlayContext = OverlayRequest & {
@@ -34,6 +36,14 @@ export type OverlayItem = {
   locale?: Locale
 }
 
+export type OverlayAccount = {
+  user_uuid: string | null
+  display_name: string | null
+  image_url: string | null
+  provider: "google" | "line" | "email" | null
+  email: string | null
+}
+
 export type OverlayRule = {
   type: OverlayType
   source: OverlaySource
@@ -42,6 +52,7 @@ export type OverlayRule = {
   animation: OverlayAnimation
   placement: OverlayPlacement
   items: OverlayItem[]
+  account?: OverlayAccount
 }
 
 export type OverlayAction = {

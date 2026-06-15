@@ -14,6 +14,7 @@ const identityEvents = new Set([
   "identity_link_success",
   "identity_upsert_payload",
   "identity_unlinked",
+  "logout_success",
   "oauth_callback_code_found",
   "oauth_callback_code_missing",
   "oauth_callback_enter",
