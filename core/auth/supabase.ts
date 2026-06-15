@@ -10,3 +10,14 @@ export function create_auth_supabase_client() {
 
   return createClient(url, key)
 }
+
+export function create_service_role_supabase_client() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!url || !key) {
+    throw new Error("Supabase service role client config is missing")
+  }
+
+  return createClient(url, key)
+}

@@ -194,6 +194,7 @@ export async function sendIdentityDebug(
     | "email_send_method"
     | "email_send_request"
     | "email_send_result"
+    | "email_user_exists_after_send"
     | "email_verify_attempt"
     | "email_verify_attempt_result"
     | "email_verify_payload"

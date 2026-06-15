@@ -8,7 +8,10 @@ import {
 } from "@/core/auth/identity"
 import { linkCurrentVisitorToIdentity } from "@/core/auth/link"
 import { resolveSession } from "@/core/auth/session"
-import { create_auth_supabase_client } from "@/core/auth/supabase"
+import {
+  create_auth_supabase_client,
+  create_service_role_supabase_client,
+} from "@/core/auth/supabase"
 import { set_amp_auth_cookies } from "@/src/lib/supabase/server"
 
 function normalizeEmail(value: unknown) {
@@ -90,21 +93,43 @@ export async function startEmailOtpLogin(request: NextRequest) {
     })
 
     const supabase = create_auth_supabase_client()
-    const result = await supabase.auth.signInWithOtp(payload)
+    const { data, error } = await supabase.auth.signInWithOtp(payload)
 
     await sendIdentityDebug("email_send_result", {
       provider: "email",
       visitor_uuid: session.visitor_uuid,
       user_uuid: session.user_uuid,
-      payload,
-      success: !result.error,
-      data: result.data,
-      error: serializeError(result.error),
+      email,
+      success: !error,
+      data,
+      error: serializeError(error),
       source_channel: context.source_channel,
     })
 
-    if (result.error) {
-      throw new Error(result.error.message)
+    const admin = create_service_role_supabase_client()
+    const adminResult = await admin.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000,
+    })
+    const authUser = adminResult.data.users.find(
+      (user) => user.email?.toLowerCase() === email,
+    )
+
+    await sendIdentityDebug("email_user_exists_after_send", {
+      provider: "email",
+      visitor_uuid: session.visitor_uuid,
+      user_uuid: session.user_uuid,
+      email,
+      exists: !!authUser,
+      auth_user_id: authUser?.id ?? null,
+      email_confirmed_at: authUser?.email_confirmed_at ?? null,
+      created_at: authUser?.created_at ?? null,
+      error: serializeError(adminResult.error),
+      source_channel: context.source_channel,
+    })
+
+    if (error) {
+      throw new Error(error.message)
     }
 
     await sendIdentityDebug("email_otp_sent", {
