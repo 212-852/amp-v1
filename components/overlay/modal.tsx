@@ -1,6 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import type { ClipboardEvent, KeyboardEvent } from "react"
+import { useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 
 import { ChevronRight, LogOut, Mail, PawPrint, User } from "lucide-react"
 import { SiGoogle, SiLine } from "react-icons/si"
@@ -92,24 +94,34 @@ const content = {
     es: "Inicia sesion con tu correo electronico",
   },
   email_step_description: {
-    ja: "メールアドレスにログインリンクを送ります。",
-    en: "We will send a login link to your email address.",
-    es: "Enviaremos un enlace de inicio de sesion a tu correo.",
+    ja: "メールアドレスを入力してください",
+    en: "Enter your email address.",
+    es: "Ingresa tu correo electronico.",
   },
   email_input_label: {
     ja: "メールアドレス",
     en: "Email address",
     es: "Correo electronico",
   },
-  send_link: {
-    ja: "リンクを送信",
-    en: "Send link",
-    es: "Enviar enlace",
+  send_code: {
+    ja: "認証コードを送信",
+    en: "Send code",
+    es: "Enviar codigo",
   },
-  email_link_sent: {
-    ja: "ログインリンクをメールに送信しました。メールを開いてログインしてください。",
-    en: "Open the link in your email to log in.",
-    es: "Abre el enlace en tu correo para iniciar sesion.",
+  email_code_description: {
+    ja: "メールに届いた6桁コードを入力してください",
+    en: "Enter the 6 digit code sent to your email.",
+    es: "Ingresa el codigo de 6 digitos enviado a tu correo.",
+  },
+  verify_code: {
+    ja: "認証する",
+    en: "Verify",
+    es: "Verificar",
+  },
+  resend_code: {
+    ja: "コードを再送信",
+    en: "Resend code",
+    es: "Reenviar codigo",
   },
   back_to_link: {
     ja: "戻る",
@@ -601,14 +613,21 @@ function LinkOption({
 function EmailLoginPanel({
   locale,
   onBack,
+  onClose,
 }: Readonly<{
   locale: Locale
   onBack: () => void
+  onClose: () => void
 }>) {
+  const router = useRouter()
   const [email, set_email] = useState("")
+  const [step, set_step] = useState<"email" | "code">("email")
+  const [otp_digits, set_otp_digits] = useState<string[]>(["", "", "", "", "", ""])
   const [error, set_error] = useState<string | null>(null)
-  const [sent, set_sent] = useState(false)
   const [loading, set_loading] = useState(false)
+  const input_refs = useRef<Array<HTMLInputElement | null>>([])
+  const otp = otp_digits.join("")
+  const can_verify = otp.length === 6 && otp_digits.every(Boolean) && !loading
 
   async function post_json(path: string, body: Record<string, string>) {
     const response = await fetch(path, {
@@ -626,28 +645,108 @@ function EmailLoginPanel({
     }
 
     if (!response.ok || result.ok === false) {
-      throw new Error(result.message ?? result.error ?? "Failed to send login link")
+      throw new Error(result.message ?? result.error ?? "Request failed")
     }
 
     return result
   }
 
-  function handle_send_link() {
+  function focus_digit(index: number) {
+    window.setTimeout(() => {
+      input_refs.current[index]?.focus()
+    }, 0)
+  }
+
+  function clear_digits() {
+    set_otp_digits(["", "", "", "", "", ""])
+    focus_digit(0)
+  }
+
+  function handle_digit_change(index: number, value: string) {
+    const digit = value.replace(/\D/g, "").slice(-1)
+
+    set_otp_digits((current) => {
+      const next = [...current]
+      next[index] = digit
+      return next
+    })
+
+    if (digit && index < 5) {
+      focus_digit(index + 1)
+    }
+  }
+
+  function handle_digit_key_down(
+    index: number,
+    event: KeyboardEvent<HTMLInputElement>,
+  ) {
+    if (event.key !== "Backspace") {
+      return
+    }
+
+    if (!otp_digits[index] && index > 0) {
+      event.preventDefault()
+      focus_digit(index - 1)
+    }
+  }
+
+  function handle_paste(event: ClipboardEvent<HTMLInputElement>) {
+    const pasted = event.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6)
+
+    if (!pasted) {
+      return
+    }
+
+    event.preventDefault()
+    set_otp_digits(
+      Array.from({ length: 6 }, (_, index) => pasted[index] ?? ""),
+    )
+    focus_digit(Math.min(pasted.length, 6) - 1)
+  }
+
+  function handle_send_code() {
     if (loading) {
       return
     }
 
     set_error(null)
-    set_sent(false)
+    set_otp_digits(["", "", "", "", "", ""])
     set_loading(true)
     post_json("/api/auth/email/start", { email })
       .then(() => {
-        set_sent(true)
+        set_step("code")
+        focus_digit(0)
       })
       .catch((send_error) => {
         set_error(
-          send_error instanceof Error ? send_error.message : "Failed to send login link",
+          send_error instanceof Error ? send_error.message : "Failed to send code",
         )
+      })
+      .finally(() => {
+        set_loading(false)
+      })
+  }
+
+  function handle_verify_code() {
+    if (!can_verify) {
+      return
+    }
+
+    set_error(null)
+    set_loading(true)
+    post_json("/api/auth/email/verify", {
+      email,
+      token: otp,
+    })
+      .then(() => {
+        onClose()
+        router.refresh()
+      })
+      .catch((verify_error) => {
+        set_error(
+          verify_error instanceof Error ? verify_error.message : "Failed to verify code",
+        )
+        clear_digits()
       })
       .finally(() => {
         set_loading(false)
@@ -657,29 +756,48 @@ function EmailLoginPanel({
   return (
     <div className="grid gap-3">
       <p className="text-[13px] font-medium leading-6 text-[#777777]">
-        {content.email_step_description[locale]}
+        {step === "email"
+          ? content.email_step_description[locale]
+          : content.email_code_description[locale]}
       </p>
 
-      <label className="grid gap-1.5 text-[12px] font-bold text-[#777777]">
-        {content.email_input_label[locale]}
-        <input
-          type="email"
-          value={email}
-          disabled={loading}
-          onChange={(event) => {
-            set_email(event.target.value)
-            set_sent(false)
-          }}
-          className="h-12 rounded-2xl border border-[#e5e5e5] px-4 text-[15px] font-semibold text-[#111111] outline-none focus:border-[#8f5d28]"
-          autoComplete="email"
-        />
-      </label>
-
-      {sent ? (
-        <p className="rounded-2xl border border-[#d9ead4] bg-[#f7fff4] px-4 py-3 text-[12px] font-semibold leading-5 text-[#4d7a38]">
-          {content.email_link_sent[locale]}
-        </p>
-      ) : null}
+      {step === "email" ? (
+        <label className="grid gap-1.5 text-[12px] font-bold text-[#777777]">
+          {content.email_input_label[locale]}
+          <input
+            type="email"
+            value={email}
+            disabled={loading}
+            onChange={(event) => {
+              set_email(event.target.value)
+            }}
+            className="h-12 rounded-2xl border border-[#e5e5e5] px-4 text-[15px] font-semibold text-[#111111] outline-none focus:border-[#8f5d28]"
+            autoComplete="email"
+          />
+        </label>
+      ) : (
+        <div className="grid grid-cols-6 gap-2">
+          {otp_digits.map((digit, index) => (
+            <input
+              key={index}
+              ref={(element) => {
+                input_refs.current[index] = element
+              }}
+              type="text"
+              value={digit}
+              disabled={loading}
+              onChange={(event) => handle_digit_change(index, event.target.value)}
+              onKeyDown={(event) => handle_digit_key_down(index, event)}
+              onPaste={handle_paste}
+              inputMode="numeric"
+              pattern="[0-9]*"
+              autoComplete={index === 0 ? "one-time-code" : "off"}
+              maxLength={1}
+              className="h-14 w-12 rounded-xl border border-[#e5e5e5] text-center text-[24px] font-bold text-[#111111] outline-none focus:border-[#8f5d28]"
+            />
+          ))}
+        </div>
+      )}
 
       {error ? (
         <p className="rounded-2xl border border-[#f1c7c7] bg-[#fff6f6] px-4 py-3 text-[12px] font-semibold leading-5 text-[#9a3333]">
@@ -689,17 +807,30 @@ function EmailLoginPanel({
 
       <button
         type="button"
-        disabled={loading}
-        onClick={handle_send_link}
+        disabled={step === "code" ? !can_verify : loading}
+        onClick={step === "email" ? handle_send_code : handle_verify_code}
         className={[
           "flex min-h-[54px] items-center justify-center rounded-2xl",
           "border border-[#e5e5e5] bg-[#8f5d28] px-4 py-3 text-center",
           "text-[14px] font-semibold text-white",
-          loading ? "cursor-not-allowed opacity-75" : "",
+          loading || (step === "code" && !can_verify)
+            ? "cursor-not-allowed opacity-75"
+            : "",
         ].join(" ")}
       >
-        {content.send_link[locale]}
+        {step === "email" ? content.send_code[locale] : content.verify_code[locale]}
       </button>
+
+      {step === "code" ? (
+        <button
+          type="button"
+          disabled={loading}
+          onClick={handle_send_code}
+          className="min-h-[48px] rounded-2xl border border-[#e5e5e5] px-4 py-3 text-[14px] font-semibold text-[#111111]"
+        >
+          {content.resend_code[locale]}
+        </button>
+      ) : null}
 
       <button
         type="button"
@@ -847,6 +978,7 @@ export default function OverlayModal({
           <EmailLoginPanel
             locale={locale}
             onBack={() => set_link_step("options")}
+            onClose={onClose}
           />
         ) : (
           rule.items.map((item) => (
