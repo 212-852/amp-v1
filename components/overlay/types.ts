@@ -23,6 +23,14 @@ export type OverlayAnimation =
 
 export type OverlayPlacement = "bottom" | "left" | "center"
 
+export type OverlayItem = {
+  id: string
+  title: string
+  description?: string
+  badge?: string
+  action?: "line" | "google" | "email"
+}
+
 export type OverlayRule = {
   type: OverlayType
   source: OverlaySource
@@ -30,7 +38,7 @@ export type OverlayRule = {
   description: string
   animation: OverlayAnimation
   placement: OverlayPlacement
-  items: string[]
+  items: OverlayItem[]
 }
 
 export type OverlayAction = {

@@ -1,6 +1,7 @@
 import type {
   OverlayAnimation,
   OverlayContext,
+  OverlayItem,
   OverlayPlacement,
   OverlayRule,
   OverlayType,
@@ -27,33 +28,70 @@ const contentByType: Record<
   {
     title: string
     description: string
-    items: string[]
+    items: OverlayItem[]
   }
 > = {
   my_page: {
     title: "My Page",
     description: "Account and profile actions.",
-    items: ["Profile", "Reservations", "Linked identity"],
+    items: [
+      { id: "profile", title: "Profile" },
+      { id: "reservations", title: "Reservations" },
+      { id: "linked_identity", title: "Linked identity" },
+    ],
   },
   menu: {
     title: "Menu",
     description: "Navigation and app actions.",
-    items: ["Dashboard", "Support", "Settings"],
+    items: [
+      { id: "dashboard", title: "Dashboard" },
+      { id: "support", title: "Support" },
+      { id: "settings", title: "Settings" },
+    ],
   },
   link: {
     title: "Link",
-    description: "Connect or review linked identity.",
-    items: ["LINE", "Member account", "Partner access"],
+    description:
+      "Connect your account to continue across devices and receive notifications.",
+    items: [
+      {
+        id: "line",
+        title: "LINE連携",
+        badge: "おすすめ",
+        description: "通知やログインが簡単になります",
+        action: "line",
+      },
+      {
+        id: "google",
+        title: "Google",
+        description: "Googleアカウントでログイン",
+        action: "google",
+      },
+      {
+        id: "email",
+        title: "eMail",
+        description: "メールアドレスでログイン",
+        action: "email",
+      },
+    ],
   },
   notice: {
     title: "Notice",
     description: "Latest notifications and required actions.",
-    items: ["Reservation updates", "Driver messages", "System notices"],
+    items: [
+      { id: "reservation_updates", title: "Reservation updates" },
+      { id: "driver_messages", title: "Driver messages" },
+      { id: "system_notices", title: "System notices" },
+    ],
   },
   language: {
     title: "Language",
     description: "Choose display language.",
-    items: ["日本語", "English", "中文"],
+    items: [
+      { id: "ja", title: "日本語" },
+      { id: "en", title: "English" },
+      { id: "zh", title: "中文" },
+    ],
   },
 }
 
