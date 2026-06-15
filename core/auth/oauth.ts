@@ -5,10 +5,13 @@ import { NextResponse } from "next/server"
 import { resolveAuthContext } from "@/core/auth/context"
 import {
   normalizeGoogleIdentityInput,
+  resolveIdentity,
   sendIdentityDebug,
 } from "@/core/auth/identity"
 import { linkCurrentVisitorToIdentity } from "@/core/auth/link"
+import { resolveAuthRoute } from "@/core/auth/route"
 import { resolveSession } from "@/core/auth/session"
+import { resolveEntranceContext } from "@/core/entrance/context"
 import {
   create_server_supabase_client,
   set_amp_auth_cookies,
@@ -123,57 +126,72 @@ export async function completeGoogleOAuthCallback(request: NextRequest) {
   })
 
   const response = redirectHome(request)
-  let exchange_succeeded = false
+  const cookieStore = await cookies()
+  const supabase = create_server_supabase_client(cookieStore, response)
+  const exchangeResult = await supabase.auth
+    .exchangeCodeForSession(code)
+    .catch((exchangeError: unknown) => {
+      const message =
+        exchangeError instanceof Error ? exchangeError.message : String(exchangeError)
+
+      return {
+        data: { session: null },
+        error: { message },
+      }
+    })
+  const { data, error: exchangeError } = exchangeResult
+
+  if (exchangeError || !data.session?.user) {
+    const message = exchangeError?.message ?? "Google session exchange failed"
+
+    await sendIdentityDebug("oauth_exchange_failed", {
+      provider: "google",
+      visitor_uuid: failureContext.visitor_uuid,
+      user_uuid: failureContext.user_uuid,
+      error: message,
+      source_channel: failureContext.source_channel,
+    })
+    await sendIdentityDebug("google_code_exchange_failed", {
+      provider: "google",
+      visitor_uuid: failureContext.visitor_uuid,
+      user_uuid: failureContext.user_uuid,
+      error: message,
+      source_channel: failureContext.source_channel,
+    })
+    await sendIdentityDebug("identity_link_failed", {
+      provider: "google",
+      visitor_uuid: failureContext.visitor_uuid,
+      user_uuid: failureContext.user_uuid,
+      reason: "exchange_failed",
+      error: message,
+      error_code: null,
+      error_description: null,
+      source_channel: failureContext.source_channel,
+    })
+
+    return redirectGoogleError(request)
+  }
+
+  await sendIdentityDebug("oauth_exchange_success", {
+    provider: "google",
+    visitor_uuid: failureContext.visitor_uuid,
+    user_uuid: failureContext.user_uuid,
+    source_channel: failureContext.source_channel,
+  })
+  await sendIdentityDebug("google_code_exchange_success", {
+    provider: "google",
+    visitor_uuid: failureContext.visitor_uuid,
+    user_uuid: failureContext.user_uuid,
+    source_channel: failureContext.source_channel,
+  })
 
   try {
-    const cookieStore = await cookies()
-    const supabase = create_server_supabase_client(cookieStore, response)
-    const { data, error: exchangeError } = await supabase.auth
-      .exchangeCodeForSession(code)
-      .catch((exchangeError: unknown) => {
-        const message =
-          exchangeError instanceof Error ? exchangeError.message : String(exchangeError)
-
-        return {
-          data: { session: null },
-          error: { message },
-        }
-      })
-
-    if (exchangeError || !data.session?.user) {
-      await sendIdentityDebug("oauth_exchange_failed", {
-        provider: "google",
-        visitor_uuid: failureContext.visitor_uuid,
-        user_uuid: failureContext.user_uuid,
-        error: exchangeError?.message ?? "Google session exchange failed",
-        source_channel: failureContext.source_channel,
-      })
-      await sendIdentityDebug("google_code_exchange_failed", {
-        provider: "google",
-        visitor_uuid: failureContext.visitor_uuid,
-        user_uuid: failureContext.user_uuid,
-        error: exchangeError?.message ?? "Google session exchange failed",
-        source_channel: failureContext.source_channel,
-      })
-      throw new Error(exchangeError?.message ?? "Google session exchange failed")
-    }
-
-    exchange_succeeded = true
-    await sendIdentityDebug("oauth_exchange_success", {
-      provider: "google",
-      visitor_uuid: failureContext.visitor_uuid,
-      user_uuid: failureContext.user_uuid,
-      source_channel: failureContext.source_channel,
-    })
-    await sendIdentityDebug("google_code_exchange_success", {
-      provider: "google",
-      visitor_uuid: failureContext.visitor_uuid,
-      user_uuid: failureContext.user_uuid,
-      source_channel: failureContext.source_channel,
-    })
-
     const identityInput = normalizeGoogleIdentityInput(data.session.user)
     const result = await linkCurrentVisitorToIdentity(identityInput)
+    const context = await resolveAuthContext()
+    const entrance = await resolveEntranceContext()
+    const identity = await resolveIdentity(context, result.session)
+    const route = resolveAuthRoute(context, entrance, result.session, identity)
 
     set_amp_auth_cookies(response, data.session)
 
@@ -186,6 +204,8 @@ export async function completeGoogleOAuthCallback(request: NextRequest) {
       display_name: result.display_name,
       source_channel: result.source_channel,
     })
+
+    void route
 
     return response
   } catch (callbackError) {
@@ -203,8 +223,6 @@ export async function completeGoogleOAuthCallback(request: NextRequest) {
       source_channel: failureContext.source_channel,
     })
 
-    return exchange_succeeded
-      ? redirectAuthError(request, "link_failed")
-      : redirectGoogleError(request)
+    return redirectAuthError(request, "link_failed")
   }
 }
