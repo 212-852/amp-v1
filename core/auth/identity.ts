@@ -50,7 +50,7 @@ export type IdentityProvider = "line" | "google" | "email"
 
 export type IdentityLinkInput = {
   provider: IdentityProvider
-  provider_user_id?: string | null
+  user_id?: string | null
   email?: string | null
   display_name?: string | null
   locale?: string | null
@@ -94,20 +94,20 @@ export function normalizeIdentityLinkInput(
     throw new Error("Identity provider must be line, google, or email")
   }
 
-  const provider_user_id = normalizeString(input.provider_user_id)
+  const user_id = normalizeString(input.user_id)
   const email = normalizeString(input.email)
 
   if (provider === "email" && !email) {
     throw new Error("Email identity requires email")
   }
 
-  if ((provider === "line" || provider === "google") && !provider_user_id) {
-    throw new Error("Provider identity requires provider_user_id")
+  if ((provider === "line" || provider === "google") && !user_id) {
+    throw new Error("Provider identity requires user_id")
   }
 
   return {
     provider,
-    provider_user_id,
+    user_id: provider === "email" ? email : user_id,
     email,
     display_name: normalizeString(input.display_name),
     locale: normalizeString(input.locale),
@@ -115,7 +115,7 @@ export function normalizeIdentityLinkInput(
 }
 
 function identityValue(input: IdentityLinkInput) {
-  return input.provider === "email" ? input.email : input.provider_user_id
+  return input.user_id ?? (input.provider === "email" ? input.email : null)
 }
 
 export function contactInputFromIdentity(
@@ -148,15 +148,15 @@ export function normalizeGoogleIdentityInput(
   user: SupabaseAuthUser,
   locale?: string | null,
 ): IdentityLinkInput {
-  const provider_user_id = normalizeString(user.user_metadata?.sub) ?? normalizeString(user.id)
+  const user_id = normalizeString(user.id) ?? normalizeString(user.user_metadata?.sub)
 
-  if (!provider_user_id) {
-    throw new Error("Google identity requires provider_user_id")
+  if (!user_id) {
+    throw new Error("Google identity requires user_id")
   }
 
   return normalizeIdentityLinkInput({
     provider: "google",
-    provider_user_id,
+    user_id,
     email: user.email ?? user.user_metadata?.email ?? null,
     display_name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? null,
     locale,
@@ -168,6 +168,7 @@ export async function sendIdentityDebug(
     | "auth_callback_received"
     | "google_code_exchange_failed"
     | "google_code_exchange_success"
+    | "identity_upsert_payload"
     | "identity_link_failed"
     | "identity_link_started"
     | "identity_link_success"
@@ -222,15 +223,9 @@ function identityLookupQuery(input: IdentityLinkInput) {
   }
 
   const filters =
-    input.provider === "email"
-      ? [
-          `email.eq.${encodeURIComponent(value)}`,
-          `external_user_id.eq.${encodeURIComponent(value)}`,
-        ]
-      : [
-          `provider_user_uuid.eq.${encodeURIComponent(value)}`,
-          `external_user_id.eq.${encodeURIComponent(value)}`,
-        ]
+    input.provider === "email" && input.email
+      ? [`user_id.eq.${encodeURIComponent(value)}`, `email.eq.${encodeURIComponent(input.email)}`]
+      : [`user_id.eq.${encodeURIComponent(value)}`]
 
   return [
     `provider=eq.${encodeURIComponent(input.provider)}`,
@@ -323,11 +318,18 @@ export async function upsertIdentityLink(
     throw new Error("Identity is already linked to another user")
   }
 
+  await sendIdentityDebug("identity_upsert_payload", {
+    provider: input.provider,
+    user_uuid,
+    user_id: value,
+    email: input.email ?? null,
+  })
+
   const response = await fetch(
     restUrl(
       config,
       "identities",
-      "on_conflict=provider,external_user_id&select=identity_uuid,user_uuid",
+      "on_conflict=provider,user_id&select=identity_uuid,user_uuid",
     ),
     {
       method: "POST",
@@ -337,11 +339,9 @@ export async function upsertIdentityLink(
       },
       body: JSON.stringify({
         provider: input.provider,
-        provider_user_uuid: input.provider_user_id ?? value,
-        external_user_id: value,
+        user_id: value,
         email: input.email ?? null,
         user_uuid,
-        updated_at: new Date().toISOString(),
       }),
       cache: "no-store",
     },
@@ -385,11 +385,16 @@ export async function resolveUserUuidByIdentityValue(value: string) {
     return null
   }
 
-  const filter = encodeURIComponent(
-    `(provider_user_uuid.eq.${value},external_user_id.eq.${value})`,
-  )
   const response = await fetch(
-    restUrl(config, "identities", [`or=${filter}`, "select=user_uuid", "limit=1"].join("&")),
+    restUrl(
+      config,
+      "identities",
+      [
+        `user_id=eq.${encodeURIComponent(value)}`,
+        "select=user_uuid",
+        "limit=1",
+      ].join("&"),
+    ),
     {
       headers: restHeaders(config),
       cache: "no-store",

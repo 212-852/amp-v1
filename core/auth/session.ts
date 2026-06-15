@@ -308,13 +308,14 @@ async function resolveUserUuidFromIdentities(
   config: SupabaseConfig,
   authUserId: string,
 ) {
-  const filter = encodeURIComponent(
-    `(auth_user_uuid.eq.${authUserId},provider_user_uuid.eq.${authUserId},external_user_id.eq.${authUserId})`,
-  )
   const row = await fetchFirstRow<UserUuidRow>(
     config,
     "identities",
-    [`or=${filter}`, "select=user_uuid", "limit=1"].join("&"),
+    [
+      `user_id=eq.${encodeURIComponent(authUserId)}`,
+      "select=user_uuid",
+      "limit=1",
+    ].join("&"),
   )
 
   return row?.user_uuid ?? null
