@@ -32,6 +32,10 @@ function redirectGoogleError(request: Request) {
   return NextResponse.redirect(new URL("/?auth_error=google", appBaseUrl(request)))
 }
 
+function redirectAuthError(request: Request, reason: string) {
+  return NextResponse.redirect(new URL(`/?auth_error=${reason}`, appBaseUrl(request)))
+}
+
 async function resolveFailureContext() {
   try {
     const context = await resolveAuthContext()
@@ -58,6 +62,13 @@ export async function completeGoogleOAuthCallback(request: NextRequest) {
   const error_code = requestUrl.searchParams.get("error_code")
   const error_description = requestUrl.searchParams.get("error_description")
 
+  await sendIdentityDebug("oauth_callback_enter", {
+    provider: "google",
+    code_exists: Boolean(code),
+    error,
+    error_code,
+    error_description,
+  })
   await sendIdentityDebug("auth_callback_received", {
     provider: "google",
     code_exists: Boolean(code),
@@ -80,10 +91,16 @@ export async function completeGoogleOAuthCallback(request: NextRequest) {
       source_channel: failureContext.source_channel,
     })
 
-    return redirectGoogleError(request)
+    return redirectAuthError(request, "oauth_error")
   }
 
   if (!code) {
+    await sendIdentityDebug("oauth_callback_code_missing", {
+      provider: "google",
+      visitor_uuid: failureContext.visitor_uuid,
+      user_uuid: failureContext.user_uuid,
+      source_channel: failureContext.source_channel,
+    })
     await sendIdentityDebug("identity_link_failed", {
       provider: "google",
       visitor_uuid: failureContext.visitor_uuid,
@@ -98,7 +115,15 @@ export async function completeGoogleOAuthCallback(request: NextRequest) {
     return NextResponse.redirect(new URL("/?auth_error=missing_code", appBaseUrl(request)))
   }
 
+  await sendIdentityDebug("oauth_callback_code_found", {
+    provider: "google",
+    visitor_uuid: failureContext.visitor_uuid,
+    user_uuid: failureContext.user_uuid,
+    source_channel: failureContext.source_channel,
+  })
+
   const response = redirectHome(request)
+  let exchange_succeeded = false
 
   try {
     const cookieStore = await cookies()
@@ -116,6 +141,13 @@ export async function completeGoogleOAuthCallback(request: NextRequest) {
       })
 
     if (exchangeError || !data.session?.user) {
+      await sendIdentityDebug("oauth_exchange_failed", {
+        provider: "google",
+        visitor_uuid: failureContext.visitor_uuid,
+        user_uuid: failureContext.user_uuid,
+        error: exchangeError?.message ?? "Google session exchange failed",
+        source_channel: failureContext.source_channel,
+      })
       await sendIdentityDebug("google_code_exchange_failed", {
         provider: "google",
         visitor_uuid: failureContext.visitor_uuid,
@@ -126,6 +158,13 @@ export async function completeGoogleOAuthCallback(request: NextRequest) {
       throw new Error(exchangeError?.message ?? "Google session exchange failed")
     }
 
+    exchange_succeeded = true
+    await sendIdentityDebug("oauth_exchange_success", {
+      provider: "google",
+      visitor_uuid: failureContext.visitor_uuid,
+      user_uuid: failureContext.user_uuid,
+      source_channel: failureContext.source_channel,
+    })
     await sendIdentityDebug("google_code_exchange_success", {
       provider: "google",
       visitor_uuid: failureContext.visitor_uuid,
@@ -164,6 +203,8 @@ export async function completeGoogleOAuthCallback(request: NextRequest) {
       source_channel: failureContext.source_channel,
     })
 
-    return redirectGoogleError(request)
+    return exchange_succeeded
+      ? redirectAuthError(request, "link_failed")
+      : redirectGoogleError(request)
   }
 }

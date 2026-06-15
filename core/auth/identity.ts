@@ -171,7 +171,13 @@ export async function sendIdentityDebug(
     | "identity_link_failed"
     | "identity_link_started"
     | "identity_link_success"
-    | "identity_unlinked",
+    | "identity_unlinked"
+    | "oauth_callback_code_found"
+    | "oauth_callback_code_missing"
+    | "oauth_callback_enter"
+    | "oauth_exchange_failed"
+    | "oauth_exchange_success"
+    | "oauth_start",
   payload: Record<string, unknown>,
   request_id?: string | null,
 ) {
@@ -183,6 +189,12 @@ export async function sendCurrentIdentityLinkStarted(provider: IdentityProvider)
   const session = await resolveSession(context)
 
   await sendIdentityDebug("identity_link_started", {
+    provider,
+    visitor_uuid: session.visitor_uuid,
+    user_uuid: session.user_uuid,
+    source_channel: context.source_channel,
+  })
+  await sendIdentityDebug("oauth_start", {
     provider,
     visitor_uuid: session.visitor_uuid,
     user_uuid: session.user_uuid,

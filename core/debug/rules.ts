@@ -8,6 +8,12 @@ const identityEvents = new Set([
   "identity_link_started",
   "identity_link_success",
   "identity_unlinked",
+  "oauth_callback_code_found",
+  "oauth_callback_code_missing",
+  "oauth_callback_enter",
+  "oauth_exchange_failed",
+  "oauth_exchange_success",
+  "oauth_start",
 ])
 
 const authSessionEvents = new Set([
