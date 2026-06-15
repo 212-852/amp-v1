@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
+import { ContactPresence } from "@/components/contacts/presence";
 import { OverlayProvider } from "@/components/overlay";
 import "./globals.css";
 
@@ -34,7 +35,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${geistSans.variable} h-full antialiased`}>
       <body className="min-h-full">
-        <OverlayProvider>{children}</OverlayProvider>
+        <OverlayProvider>
+          <ContactPresence />
+          {children}
+        </OverlayProvider>
       </body>
     </html>
   );

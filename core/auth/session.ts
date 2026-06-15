@@ -2,10 +2,10 @@ import { cache } from "react"
 
 import { resolveAuthContext } from "@/core/auth/context"
 import type { AppSession, AuthContext, SourceChannel } from "@/core/auth/types"
+import { sendAuthDebug as send_auth_debug } from "@/core/debug"
 
 const VISITOR_COOKIE_NAME = "amp_visitor_uuid"
 const VISITOR_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
-const TEMP_AUTH_DEBUG_OWNER_ID = "1475072657505648701"
 
 type VisitorRecord = {
   visitor_uuid: string
@@ -107,10 +107,6 @@ type VisitorUpsertBody = {
   source_channel: SourceChannel
   updated_at: string
   user_uuid: null
-  debug_source?: string
-  debug_path?: string | null
-  debug_request_id?: string | null
-  debug_source_channel?: SourceChannel
 }
 
 const runtimeVisitors = new Map<string, VisitorRecord>()
@@ -122,52 +118,6 @@ const visitorCookieOptions: CookieOptions = {
   path: "/",
   sameSite: "lax",
   secure: process.env.NODE_ENV === "production",
-}
-
-// TEMP_AUTH_DEBUG
-async function send_auth_debug(
-  event: string,
-  payload: Record<string, unknown>,
-  request_id?: string | null,
-) {
-  if (
-    process.env.DEBUG_CAT_SWITCH !== "true" ||
-    !process.env.DEBUG_CAT_WEBHOOK
-  ) {
-    return
-  }
-
-  try {
-    await fetch(process.env.DEBUG_CAT_WEBHOOK, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        username: "AUTH SESSION",
-        content:
-          `<@${TEMP_AUTH_DEBUG_OWNER_ID}>\n` +
-          "[DEBUG] AUTH_SESSION\n" +
-          `event: ${event}\n` +
-          "```json\n" +
-          JSON.stringify(
-            {
-              event,
-              request_id: request_id ?? null,
-              ...payload,
-            },
-            null,
-            2,
-          ) +
-          "\n```",
-        allowed_mentions: {
-          users: [TEMP_AUTH_DEBUG_OWNER_ID],
-        },
-      }),
-    })
-  } catch (error) {
-    console.error("TEMP_AUTH_DEBUG_FAILED", error)
-  }
 }
 
 async function resolveRequestId(runtime?: SessionRuntime): Promise<string> {
@@ -432,14 +382,10 @@ const supabaseVisitorStore: VisitorStore = {
       source_channel: context.source_channel,
       updated_at: new Date().toISOString(),
       user_uuid: null,
-      debug_source: "auth/session",
-      debug_path: debug.pathname,
-      debug_request_id: debug.request_id,
-      debug_source_channel: context.source_channel,
     }
     const result = await upsertVisitorRow(config, body)
-    let visitor = result.visitor
-    let upsertError = result.error
+    const visitor = result.visitor
+    const upsertError = result.error
 
     await send_auth_debug(
       "visitor_upsert_result",
@@ -455,44 +401,6 @@ const supabaseVisitorStore: VisitorStore = {
       },
       debug.request_id,
     )
-
-    if (!visitor && result.error?.code === "42703") {
-      await send_auth_debug(
-        "visitor_debug_columns_missing",
-        {
-          visitor_uuid,
-          error_code: result.error.code ?? null,
-          error_message: result.error.message ?? null,
-          error_details: result.error.details ?? null,
-        },
-        debug.request_id,
-      )
-
-      const fallbackResult = await upsertVisitorRow(config, {
-        visitor_uuid,
-        source_channel: context.source_channel,
-        updated_at: body.updated_at,
-        user_uuid: null,
-      })
-      visitor = fallbackResult.visitor
-      upsertError = fallbackResult.error
-
-      await send_auth_debug(
-        "visitor_upsert_result",
-        {
-          pathname: debug.pathname,
-          visitor_uuid,
-          source_channel: context.source_channel,
-          data: fallbackResult.visitor,
-          error_code: fallbackResult.error?.code ?? null,
-          error_message: fallbackResult.error?.message ?? null,
-          error_details: fallbackResult.error?.details ?? null,
-          error_hint: fallbackResult.error?.hint ?? null,
-          fallback_without_debug_columns: true,
-        },
-        debug.request_id,
-      )
-    }
 
     if (!visitor) {
       await send_auth_debug(
