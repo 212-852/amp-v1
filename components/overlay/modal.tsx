@@ -407,23 +407,21 @@ function LanguageOption({
         }
       }}
       className={[
-        "grid min-h-[54px] grid-cols-[24px_minmax(0,1fr)] items-center gap-2 rounded-2xl",
+        "flex min-h-[54px] items-center justify-between rounded-2xl",
         "border border-[#e5e5e5] px-4 py-3 text-left",
         "text-[14px] font-semibold text-[#111111]",
         "transition-colors hover:bg-[#fdfaf6] focus-visible:outline",
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8f5d28]",
       ].join(" ")}
     >
-      <span className="flex h-5 w-6 items-center justify-start">
-        {item.locale === locale ? (
-          <PawPrint
-            className="h-4 w-4 fill-[#8f5d28] text-[#8f5d28]"
-            strokeWidth={2.5}
-            aria-hidden="true"
-          />
-        ) : null}
-      </span>
       <span>{get_language_label(item, locale)}</span>
+      {item.locale === locale ? (
+        <PawPrint
+          className="h-4 w-4 fill-[#8f5d28] text-[#8f5d28]"
+          strokeWidth={2.5}
+          aria-hidden="true"
+        />
+      ) : null}
     </button>
   )
 }
