@@ -1,13 +1,15 @@
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 
+import { resolveAuthContext } from "@/core/auth/context"
 import { linkCurrentVisitorToIdentity } from "@/core/auth/link"
 import {
   normalizeGoogleIdentityInput,
+  sendIdentityDebug,
   type SupabaseAuthUser,
 } from "@/core/auth/identity"
+import { resolveSession } from "@/core/auth/session"
 import { getRestConfig } from "@/core/db/rest"
-import { sendAuthDebug } from "@/core/debug"
 import { normalize_locale } from "@/src/lib/locale"
 
 const google_code_verifier_cookie = "amp_google_code_verifier"
@@ -147,8 +149,13 @@ export async function startGoogleOAuth(request: Request) {
   const config = getRestConfig()
 
   if (!config) {
-    await sendAuthDebug("google_callback_failed", {
+    await sendIdentityDebug("identity_link_failed", {
+      provider: "google",
+      visitor_uuid: null,
+      user_uuid: null,
       reason: "missing_supabase_config",
+      error: "Supabase config is missing",
+      source_channel: null,
     })
 
     return redirectHome(request)
@@ -160,6 +167,15 @@ export async function startGoogleOAuth(request: Request) {
   const requestUrl = new URL(request.url)
   const locale = normalize_locale(requestUrl.searchParams.get("locale"))
   const authorizeUrl = new URL(googleAuthorizeUrl(config))
+  const context = await resolveAuthContext()
+  const session = await resolveSession(context)
+
+  await sendIdentityDebug("identity_link_started", {
+    provider: "google",
+    visitor_uuid: session.visitor_uuid,
+    user_uuid: session.user_uuid,
+    source_channel: context.source_channel,
+  })
 
   authorizeUrl.searchParams.set("provider", "google")
   authorizeUrl.searchParams.set("redirect_to", callbackUrl(request))
@@ -202,6 +218,15 @@ export async function completeGoogleOAuthCallback(request: Request) {
   response.cookies.delete(google_state_cookie)
   response.cookies.delete(google_locale_cookie)
 
+  await sendIdentityDebug("auth_callback_received", {
+    provider: "google",
+    code_exists: Boolean(code),
+    state_exists: Boolean(state),
+    pathname: requestUrl.pathname,
+  })
+
+  const failureContext = await resolveGoogleFailureContext()
+
   try {
     if (!code || !verifier || !state || state !== expectedState) {
       throw new Error("Google callback is missing valid OAuth state")
@@ -216,7 +241,17 @@ export async function completeGoogleOAuthCallback(request: Request) {
     const user = await getGoogleAuthUser(token.access_token)
     const identityInput = normalizeGoogleIdentityInput(user, locale)
 
-    await linkCurrentVisitorToIdentity(identityInput)
+    const result = await linkCurrentVisitorToIdentity(identityInput)
+
+    await sendIdentityDebug("identity_link_success", {
+      provider: "google",
+      visitor_uuid: result.visitor_uuid,
+      user_uuid: result.user_uuid,
+      identity_uuid: result.identity_uuid,
+      email: result.email,
+      display_name: result.display_name,
+      source_channel: result.source_channel,
+    })
 
     response.cookies.set(
       "sb-access-token",
@@ -236,16 +271,36 @@ export async function completeGoogleOAuthCallback(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
 
-    if (message.includes("visitor") || message.includes("Visitor")) {
-      await sendAuthDebug("visitor_missing_on_google_callback", {
-        error_message: message,
-      })
-    }
-
-    await sendAuthDebug("google_callback_failed", {
-      error_message: message,
+    await sendIdentityDebug("identity_link_failed", {
+      provider: "google",
+      visitor_uuid: failureContext.visitor_uuid,
+      user_uuid: failureContext.user_uuid,
+      reason: message.includes("visitor") || message.includes("Visitor")
+        ? "visitor_missing"
+        : "google_callback_failed",
+      error: message,
+      source_channel: failureContext.source_channel,
     })
 
     return response
+  }
+}
+
+async function resolveGoogleFailureContext() {
+  try {
+    const context = await resolveAuthContext()
+    const session = await resolveSession(context)
+
+    return {
+      visitor_uuid: session.visitor_uuid,
+      user_uuid: session.user_uuid,
+      source_channel: context.source_channel,
+    }
+  } catch {
+    return {
+      visitor_uuid: null,
+      user_uuid: null,
+      source_channel: null,
+    }
   }
 }

@@ -66,11 +66,17 @@ export type SupabaseAuthUser = {
 }
 
 type IdentityRow = {
+  identity_uuid?: string | null
   user_uuid?: string | null
 }
 
 type UserRow = {
   user_uuid?: string | null
+}
+
+export type IdentityLinkRecord = {
+  identity_uuid: string | null
+  user_uuid: string
 }
 
 function normalizeString(value: unknown) {
@@ -153,6 +159,19 @@ export function normalizeGoogleIdentityInput(
     display_name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? null,
     locale,
   })
+}
+
+export async function sendIdentityDebug(
+  event:
+    | "auth_callback_received"
+    | "identity_link_failed"
+    | "identity_link_started"
+    | "identity_link_success"
+    | "identity_unlinked",
+  payload: Record<string, unknown>,
+  request_id?: string | null,
+) {
+  await sendAuthDebug(event, payload, request_id)
 }
 
 function identityLookupQuery(input: IdentityLinkInput) {
@@ -250,34 +269,26 @@ export async function resolveOrCreateIdentityUser(input: IdentityLinkInput) {
 export async function upsertIdentityLink(
   input: IdentityLinkInput,
   user_uuid: string,
-  request_id?: string | null,
-) {
+): Promise<IdentityLinkRecord | null> {
   const config = getRestConfig()
   const value = identityValue(input)
 
   if (!config || !value) {
-    return
+    return null
   }
 
   const existingUserUuid = await findIdentityUserUuid(input)
 
   if (existingUserUuid && existingUserUuid !== user_uuid) {
-    await sendAuthDebug(
-      input.provider === "google" ? "google_identity_conflict" : "identity_conflict",
-      {
-        provider: input.provider,
-        provider_user_id: input.provider_user_id ?? null,
-        email: input.email ?? null,
-        existing_user_uuid: existingUserUuid,
-        requested_user_uuid: user_uuid,
-      },
-      request_id,
-    )
     throw new Error("Identity is already linked to another user")
   }
 
   const response = await fetch(
-    restUrl(config, "identities", "on_conflict=provider,external_user_id&select=user_uuid"),
+    restUrl(
+      config,
+      "identities",
+      "on_conflict=provider,external_user_id&select=identity_uuid,user_uuid",
+    ),
     {
       method: "POST",
       headers: {
@@ -304,6 +315,27 @@ export async function upsertIdentityLink(
       }`,
     )
   }
+
+  const rows = (await response.json()) as IdentityRow[]
+  const row = rows[0]
+
+  if (!row?.user_uuid) {
+    return null
+  }
+
+  return {
+    identity_uuid: row.identity_uuid ?? null,
+    user_uuid: row.user_uuid,
+  }
+}
+
+export async function sendIdentityUnlinkedDebug(input: {
+  provider: IdentityProvider
+  visitor_uuid: string | null
+  user_uuid: string | null
+  identity_uuid: string | null
+}) {
+  await sendIdentityDebug("identity_unlinked", input)
 }
 
 export async function resolveUserUuidByIdentityValue(value: string) {

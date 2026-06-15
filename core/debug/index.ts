@@ -1,4 +1,7 @@
-import { shouldSendAuthSessionDebug } from "@/core/debug/rules"
+import {
+  resolveDebugTitle,
+  shouldSendAuthSessionDebug,
+} from "@/core/debug/rules"
 import { notify } from "@/core/notify"
 
 export async function sendAuthDebug(
@@ -13,7 +16,7 @@ export async function sendAuthDebug(
   try {
     await notify({
       channel: "discord",
-      title: "AUTH_SESSION",
+      title: resolveDebugTitle(event),
       event,
       request_id,
       payload,

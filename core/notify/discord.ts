@@ -12,6 +12,11 @@ export async function notifyDiscord(payload: DiscordNotifyPayload) {
     return
   }
 
+  const fields = Object.entries(payload.payload)
+    .filter(([, value]) => value !== undefined && value !== null && value !== "")
+    .map(([key, value]) => `${key}: ${String(value)}`)
+    .join("\n")
+
   await fetch(process.env.DEBUG_CAT_WEBHOOK, {
     method: "POST",
     headers: {
@@ -23,6 +28,7 @@ export async function notifyDiscord(payload: DiscordNotifyPayload) {
         `<@${TEMP_AUTH_DEBUG_OWNER_ID}>\n` +
         `[DEBUG] ${payload.title}\n` +
         `event: ${payload.event}\n` +
+        (fields ? `${fields}\n` : "") +
         "```json\n" +
         JSON.stringify(
           {

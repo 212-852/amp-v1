@@ -7,6 +7,7 @@ import {
   contactInputFromIdentity,
   normalizeIdentityLinkInput,
   resolveOrCreateIdentityUser,
+  sendIdentityDebug,
   upsertIdentityLink,
   type IdentityLinkInput,
   type IdentityLinkState,
@@ -30,6 +31,10 @@ export type AuthLinkInput = IdentityLinkInput & {
 export type AuthLinkResult = {
   visitor_uuid: string
   user_uuid: string
+  identity_uuid: string | null
+  email: string | null
+  display_name: string | null
+  source_channel: string
   session: AppSession
 }
 
@@ -165,27 +170,45 @@ export async function linkCurrentVisitorToIdentity(
         : null,
   }
   const user_uuid = session.user_uuid ?? (await resolveOrCreateIdentityUser(input))
-
-  await upsertIdentityLink(input, user_uuid)
+  let identity: Awaited<ReturnType<typeof upsertIdentityLink>> = null
 
   try {
+    identity = await upsertIdentityLink(input, user_uuid)
     await linkVisitorToUser(visitor_uuid, user_uuid)
+    await linkVisitorContactsToUser(visitor_uuid, user_uuid)
+    await upsertRealContact(input, visitor_uuid, user_uuid)
+    await linkParticipantsToUser(visitor_uuid, user_uuid)
   } catch (error) {
-    await sendAuthDebug("user_link_failed", {
+    const error_message = error instanceof Error ? error.message : String(error)
+
+    if (error_message.includes("link visitor")) {
+      await sendAuthDebug("user_link_failed", {
+        visitor_uuid,
+        user_uuid,
+        error_message,
+      })
+    }
+
+    await sendIdentityDebug("identity_link_failed", {
+      provider: input.provider,
       visitor_uuid,
       user_uuid,
-      error_message: error instanceof Error ? error.message : String(error),
+      reason: error_message.includes("already linked")
+        ? "identity_conflict"
+        : "identity_link_failed",
+      error: error_message,
+      source_channel: context.source_channel,
     })
     throw error
   }
 
-  await linkVisitorContactsToUser(visitor_uuid, user_uuid)
-  await upsertRealContact(input, visitor_uuid, user_uuid)
-  await linkParticipantsToUser(visitor_uuid, user_uuid)
-
   return {
     visitor_uuid,
     user_uuid,
+    identity_uuid: identity?.identity_uuid ?? null,
+    email: input.email ?? null,
+    display_name: input.display_name ?? null,
+    source_channel: context.source_channel,
     session: {
       ...session,
       visitor_uuid,
