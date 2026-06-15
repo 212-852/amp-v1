@@ -1,7 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState } from "react"
 
 import { ChevronRight, LogOut, Mail, PawPrint, User } from "lucide-react"
 import { SiGoogle, SiLine } from "react-icons/si"
@@ -93,34 +92,24 @@ const content = {
     es: "Inicia sesion con tu correo electronico",
   },
   email_step_description: {
-    ja: "メールアドレスに6桁のコードを送ります。",
-    en: "We will send a 6 digit code to your email address.",
-    es: "Enviaremos un codigo de 6 digitos a tu correo.",
+    ja: "メールアドレスにログインリンクを送ります。",
+    en: "We will send a login link to your email address.",
+    es: "Enviaremos un enlace de inicio de sesion a tu correo.",
   },
   email_input_label: {
     ja: "メールアドレス",
     en: "Email address",
     es: "Correo electronico",
   },
-  email_code_label: {
-    ja: "認証コード",
-    en: "Verification code",
-    es: "Codigo de verificacion",
-  },
-  email_latest_code_note: {
-    ja: "最新のメールに届いた6桁コードを入力してください",
-    en: "Enter the 6 digit code from the latest email.",
-    es: "Ingresa el codigo de 6 digitos del correo mas reciente.",
-  },
   send_code: {
-    ja: "コードを送信",
-    en: "Send code",
-    es: "Enviar codigo",
+    ja: "リンクを送信",
+    en: "Send link",
+    es: "Enviar enlace",
   },
-  verify_code: {
-    ja: "認証する",
-    en: "Verify",
-    es: "Verificar",
+  email_link_sent: {
+    ja: "メールに届いたリンクを開いてログインしてください。",
+    en: "Open the link in your email to log in.",
+    es: "Abre el enlace en tu correo para iniciar sesion.",
   },
   back_to_link: {
     ja: "戻る",
@@ -609,52 +598,17 @@ function LinkOption({
   )
 }
 
-type EmailStep = "email" | "code"
-const empty_otp_digits = ["", "", "", "", "", ""]
-
 function EmailLoginPanel({
   locale,
   onBack,
-  onSuccess,
 }: Readonly<{
   locale: Locale
   onBack: () => void
-  onSuccess: () => void
 }>) {
-  const [step, set_step] = useState<EmailStep>("email")
   const [email, set_email] = useState("")
-  const [otp_digits, set_otp_digits] = useState<string[]>(empty_otp_digits)
   const [error, set_error] = useState<string | null>(null)
+  const [sent, set_sent] = useState(false)
   const [loading, set_loading] = useState(false)
-  const otp_input_refs = useRef<Array<HTMLInputElement | null>>([])
-  const otp = otp_digits.join("")
-
-  function focus_otp_input(index: number) {
-    window.setTimeout(() => {
-      otp_input_refs.current[index]?.focus()
-      otp_input_refs.current[index]?.select()
-    }, 0)
-  }
-
-  function set_otp_from_text(value: string, start_index: number) {
-    const digits = value.replace(/\D/g, "").slice(0, 6 - start_index)
-
-    if (!digits) {
-      return
-    }
-
-    set_otp_digits((current) => {
-      const next = [...current]
-
-      digits.split("").forEach((digit, offset) => {
-        next[start_index + offset] = digit
-      })
-
-      return next
-    })
-
-    focus_otp_input(Math.min(start_index + digits.length, 5))
-  }
 
   async function post_json(path: string, body: Record<string, string>) {
     const response = await fetch(path, {
@@ -684,13 +638,11 @@ function EmailLoginPanel({
     }
 
     set_error(null)
-    set_otp_digits(empty_otp_digits)
+    set_sent(false)
     set_loading(true)
     post_json("/api/auth/email/start", { email })
       .then(() => {
-        set_step("code")
-        set_otp_digits(empty_otp_digits)
-        focus_otp_input(0)
+        set_sent(true)
       })
       .catch((send_error) => {
         set_error(send_error instanceof Error ? send_error.message : "Failed to send code")
@@ -698,78 +650,6 @@ function EmailLoginPanel({
       .finally(() => {
         set_loading(false)
       })
-  }
-
-  function handle_verify_code() {
-    if (loading || otp.length !== 6) {
-      return
-    }
-
-    set_error(null)
-    set_loading(true)
-    post_json("/api/auth/email/verify", { email, token: otp })
-      .then(() => {
-        onSuccess()
-      })
-      .catch((verify_error) => {
-        set_error(
-          verify_error instanceof Error ? verify_error.message : "Failed to verify code",
-        )
-        set_otp_digits(empty_otp_digits)
-        focus_otp_input(0)
-      })
-      .finally(() => {
-        set_loading(false)
-      })
-  }
-
-  function handle_otp_change(index: number, value: string) {
-    set_error(null)
-
-    if (value.length > 1) {
-      set_otp_from_text(value, index)
-      return
-    }
-
-    const digit = value.replace(/\D/g, "").slice(0, 1)
-
-    set_otp_digits((current) => {
-      const next = [...current]
-
-      next[index] = digit
-
-      return next
-    })
-
-    if (digit && index < 5) {
-      focus_otp_input(index + 1)
-    }
-  }
-
-  function handle_otp_key_down(index: number, key: string) {
-    if (key !== "Backspace") {
-      return
-    }
-
-    if (otp_digits[index]) {
-      set_otp_digits((current) => {
-        const next = [...current]
-
-        next[index] = ""
-
-        return next
-      })
-      return
-    }
-
-    if (index > 0) {
-      focus_otp_input(index - 1)
-    }
-  }
-
-  function handle_otp_paste(index: number, text: string) {
-    set_error(null)
-    set_otp_from_text(text, index)
   }
 
   return (
@@ -783,45 +663,20 @@ function EmailLoginPanel({
         <input
           type="email"
           value={email}
-          disabled={loading || step === "code"}
-          onChange={(event) => set_email(event.target.value)}
+          disabled={loading}
+          onChange={(event) => {
+            set_email(event.target.value)
+            set_sent(false)
+          }}
           className="h-12 rounded-2xl border border-[#e5e5e5] px-4 text-[15px] font-semibold text-[#111111] outline-none focus:border-[#8f5d28]"
           autoComplete="email"
         />
       </label>
 
-      {step === "code" ? (
-        <label className="grid gap-1.5 text-[12px] font-bold text-[#777777]">
-          {content.email_code_label[locale]}
-          <span className="text-[12px] font-semibold leading-5 text-[#9a7b5f]">
-            {content.email_latest_code_note[locale]}
-          </span>
-          <span className="grid grid-cols-6 gap-1.5">
-            {otp_digits.map((digit, index) => (
-              <input
-                key={`email-otp-${index}`}
-                ref={(element) => {
-                  otp_input_refs.current[index] = element
-                }}
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={digit}
-                disabled={loading}
-                maxLength={index === 0 ? 6 : 1}
-                onChange={(event) => handle_otp_change(index, event.target.value)}
-                onKeyDown={(event) => handle_otp_key_down(index, event.key)}
-                onPaste={(event) => {
-                  event.preventDefault()
-                  handle_otp_paste(index, event.clipboardData.getData("text"))
-                }}
-                className="h-14 w-12 rounded-xl border border-[#e5e5e5] text-center text-[24px] font-bold text-[#111111] outline-none focus:border-[#8f5d28]"
-                autoComplete={index === 0 ? "one-time-code" : "off"}
-                aria-label={`${content.email_code_label[locale]} ${index + 1}`}
-              />
-            ))}
-          </span>
-        </label>
+      {sent ? (
+        <p className="rounded-2xl border border-[#d9ead4] bg-[#f7fff4] px-4 py-3 text-[12px] font-semibold leading-5 text-[#4d7a38]">
+          {content.email_link_sent[locale]}
+        </p>
       ) : null}
 
       {error ? (
@@ -832,18 +687,16 @@ function EmailLoginPanel({
 
       <button
         type="button"
-        disabled={loading || (step === "code" && otp.length !== 6)}
-        onClick={step === "email" ? handle_send_code : handle_verify_code}
+        disabled={loading}
+        onClick={handle_send_code}
         className={[
           "flex min-h-[54px] items-center justify-center rounded-2xl",
           "border border-[#e5e5e5] bg-[#8f5d28] px-4 py-3 text-center",
           "text-[14px] font-semibold text-white",
-          loading || (step === "code" && otp.length !== 6)
-            ? "cursor-not-allowed opacity-75"
-            : "",
+          loading ? "cursor-not-allowed opacity-75" : "",
         ].join(" ")}
       >
-        {step === "email" ? content.send_code[locale] : content.verify_code[locale]}
+        {content.send_code[locale]}
       </button>
 
       <button
@@ -925,7 +778,6 @@ export default function OverlayModal({
   onClose: () => void
 }>) {
   const { locale, set_locale } = useLocale()
-  const router = useRouter()
   const [loading_action, set_loading_action] = useState<OverlayItem["action"] | null>(null)
   const [link_step, set_link_step] = useState<"options" | "email">("options")
   const modal_title = get_modal_title(rule, locale)
@@ -993,14 +845,6 @@ export default function OverlayModal({
           <EmailLoginPanel
             locale={locale}
             onBack={() => set_link_step("options")}
-            onSuccess={() => {
-              const url = new URL(window.location.href)
-
-              url.searchParams.delete("auth_error")
-              window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`)
-              onClose()
-              router.refresh()
-            }}
           />
         ) : (
           rule.items.map((item) => (
