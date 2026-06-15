@@ -107,6 +107,11 @@ const content = {
     en: "Verification code",
     es: "Codigo de verificacion",
   },
+  email_latest_code_note: {
+    ja: "最新のメールに届いた6桁コードを入力してください",
+    en: "Enter the 6 digit code from the latest email.",
+    es: "Ingresa el codigo de 6 digitos del correo mas reciente.",
+  },
   send_code: {
     ja: "コードを送信",
     en: "Send code",
@@ -679,6 +684,7 @@ function EmailLoginPanel({
     }
 
     set_error(null)
+    set_otp_digits(empty_otp_digits)
     set_loading(true)
     post_json("/api/auth/email/start", { email })
       .then(() => {
@@ -787,6 +793,9 @@ function EmailLoginPanel({
       {step === "code" ? (
         <label className="grid gap-1.5 text-[12px] font-bold text-[#777777]">
           {content.email_code_label[locale]}
+          <span className="text-[12px] font-semibold leading-5 text-[#9a7b5f]">
+            {content.email_latest_code_note[locale]}
+          </span>
           <span className="grid grid-cols-6 gap-1.5">
             {otp_digits.map((digit, index) => (
               <input

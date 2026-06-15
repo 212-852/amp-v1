@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
+import { Buffer } from "node:buffer"
 
 import { resolveAuthContext } from "@/core/auth/context"
 import {
@@ -12,6 +13,45 @@ import { create_auth_supabase_client } from "@/core/auth/supabase"
 import { set_amp_auth_cookies } from "@/src/lib/supabase/server"
 
 const supabase_sdk_version = "2.108.2"
+
+function decode_supabase_key_ref(key: string) {
+  try {
+    const payload = JSON.parse(
+      Buffer.from(key.split(".")[1] ?? "", "base64url").toString("utf8"),
+    ) as {
+      ref?: string | null
+      role?: string | null
+      iss?: string | null
+    }
+
+    return {
+      ref: payload.ref ?? null,
+      role: payload.role ?? null,
+      iss: payload.iss ?? null,
+    }
+  } catch {
+    return {
+      ref: null,
+      role: null,
+      iss: null,
+    }
+  }
+}
+
+function get_auth_client_debug_config() {
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const decoded = key ? decode_supabase_key_ref(key) : null
+
+  return {
+    supabase_url: process.env.NEXT_PUBLIC_SUPABASE_URL ?? null,
+    has_anon_key: !!key,
+    anon_key_prefix: key?.slice(0, 12) ?? null,
+    anon_key_ref: decoded?.ref ?? null,
+    anon_key_role: decoded?.role ?? null,
+    anon_key_iss: decoded?.iss ?? null,
+    using_service_role: false,
+  }
+}
 
 function normalizeEmail(value: unknown) {
   return typeof value === "string" && value.trim()
@@ -84,10 +124,7 @@ export async function startEmailOtpLogin(request: NextRequest) {
     await sendIdentityDebug("email_auth_client_config", {
       provider: "email",
       step: "start",
-      supabase_url: process.env.NEXT_PUBLIC_SUPABASE_URL ?? null,
-      has_anon_key: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      anon_key_prefix: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.slice(0, 12) ?? null,
-      using_service_role: false,
+      ...get_auth_client_debug_config(),
       source_channel: context.source_channel,
     })
 
@@ -219,13 +256,12 @@ export async function verifyEmailOtpLogin(request: NextRequest) {
       })
     }
 
+    const auth_config = get_auth_client_debug_config()
+
     await sendIdentityDebug("email_auth_client_config", {
       provider: "email",
       step: "verify",
-      supabase_url: process.env.NEXT_PUBLIC_SUPABASE_URL ?? null,
-      has_anon_key: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      anon_key_prefix: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.slice(0, 12) ?? null,
-      using_service_role: false,
+      ...auth_config,
       source_channel: context.source_channel,
     })
 
@@ -293,16 +329,38 @@ export async function verifyEmailOtpLogin(request: NextRequest) {
     })
 
     if (error) {
-      return emailVerifyApiResponse({
+      await sendIdentityDebug("email_verify_api_response", {
+        provider: "email",
         status: 403,
         success: false,
         error: error.message,
+        verify_type,
+        email,
+        visitor_uuid: session.visitor_uuid,
+        auth_user_id: null,
+        session_exists: false,
         details: {
-          reason: "invalid_token",
+          reason: "supabase_email_otp_invalid",
+          supabase_url: auth_config.supabase_url,
+          anon_key_ref: auth_config.anon_key_ref,
           error_status: error.status ?? null,
-          attempted_types: [verify_type],
         },
       })
+
+      return NextResponse.json(
+        {
+          ok: false,
+          reason: "supabase_email_otp_invalid",
+          email,
+          token: normalized_token,
+          type: verify_type,
+          supabase_url: auth_config.supabase_url,
+          anon_key_ref: auth_config.anon_key_ref,
+          error_message: error.message,
+          error_status: error.status ?? null,
+        },
+        { status: 403 },
+      )
     }
 
     if (!data.user?.id) {
