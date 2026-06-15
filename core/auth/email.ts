@@ -62,6 +62,7 @@ export async function startEmailOtpLogin(request: NextRequest) {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
+        emailRedirectTo: undefined,
         shouldCreateUser: true,
       },
     })
@@ -120,11 +121,15 @@ export async function verifyEmailOtpLogin(request: NextRequest) {
       throw new Error(error.message)
     }
 
+    if (!data.user?.id) {
+      throw new Error("Email OTP did not return an auth user")
+    }
+
     const result = await linkCurrentVisitorToIdentity({
       provider: "email",
       provider_user_id: email,
       email,
-      display_name: data.user?.user_metadata?.name ?? email,
+      display_name: data.user.user_metadata?.name ?? email,
     })
     const profile = await resolveAuthUserProfile(result.user_uuid)
     const payload = {
