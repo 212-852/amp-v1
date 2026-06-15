@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 
 import { ChevronRight, LogOut, Mail, PawPrint, User } from "lucide-react"
@@ -605,6 +605,7 @@ function LinkOption({
 }
 
 type EmailStep = "email" | "code"
+const empty_otp_digits = ["", "", "", "", "", ""]
 
 function EmailLoginPanel({
   locale,
@@ -617,9 +618,38 @@ function EmailLoginPanel({
 }>) {
   const [step, set_step] = useState<EmailStep>("email")
   const [email, set_email] = useState("")
-  const [code, set_code] = useState("")
+  const [otp_digits, set_otp_digits] = useState<string[]>(empty_otp_digits)
   const [error, set_error] = useState<string | null>(null)
   const [loading, set_loading] = useState(false)
+  const otp_input_refs = useRef<Array<HTMLInputElement | null>>([])
+  const otp = otp_digits.join("")
+
+  function focus_otp_input(index: number) {
+    window.setTimeout(() => {
+      otp_input_refs.current[index]?.focus()
+      otp_input_refs.current[index]?.select()
+    }, 0)
+  }
+
+  function set_otp_from_text(value: string, start_index: number) {
+    const digits = value.replace(/\D/g, "").slice(0, 6 - start_index)
+
+    if (!digits) {
+      return
+    }
+
+    set_otp_digits((current) => {
+      const next = [...current]
+
+      digits.split("").forEach((digit, offset) => {
+        next[start_index + offset] = digit
+      })
+
+      return next
+    })
+
+    focus_otp_input(Math.min(start_index + digits.length, 5))
+  }
 
   async function post_json(path: string, body: Record<string, string>) {
     const response = await fetch(path, {
@@ -632,10 +662,12 @@ function EmailLoginPanel({
     const result = (await response.json().catch(() => ({}))) as {
       ok?: boolean
       error?: string
+      message?: string
+      reason?: string
     }
 
     if (!response.ok || result.ok === false) {
-      throw new Error(result.error ?? "Email verification failed")
+      throw new Error(result.message ?? result.error ?? "Email verification failed")
     }
 
     return result
@@ -651,6 +683,8 @@ function EmailLoginPanel({
     post_json("/api/auth/email/start", { email })
       .then(() => {
         set_step("code")
+        set_otp_digits(empty_otp_digits)
+        focus_otp_input(0)
       })
       .catch((send_error) => {
         set_error(send_error instanceof Error ? send_error.message : "Failed to send code")
@@ -661,13 +695,13 @@ function EmailLoginPanel({
   }
 
   function handle_verify_code() {
-    if (loading) {
+    if (loading || otp.length !== 6) {
       return
     }
 
     set_error(null)
     set_loading(true)
-    post_json("/api/auth/email/verify", { email, code })
+    post_json("/api/auth/email/verify", { email, token: otp })
       .then(() => {
         onSuccess()
       })
@@ -675,10 +709,61 @@ function EmailLoginPanel({
         set_error(
           verify_error instanceof Error ? verify_error.message : "Failed to verify code",
         )
+        set_otp_digits(empty_otp_digits)
+        focus_otp_input(0)
       })
       .finally(() => {
         set_loading(false)
       })
+  }
+
+  function handle_otp_change(index: number, value: string) {
+    set_error(null)
+
+    if (value.length > 1) {
+      set_otp_from_text(value, index)
+      return
+    }
+
+    const digit = value.replace(/\D/g, "").slice(0, 1)
+
+    set_otp_digits((current) => {
+      const next = [...current]
+
+      next[index] = digit
+
+      return next
+    })
+
+    if (digit && index < 5) {
+      focus_otp_input(index + 1)
+    }
+  }
+
+  function handle_otp_key_down(index: number, key: string) {
+    if (key !== "Backspace") {
+      return
+    }
+
+    if (otp_digits[index]) {
+      set_otp_digits((current) => {
+        const next = [...current]
+
+        next[index] = ""
+
+        return next
+      })
+      return
+    }
+
+    if (index > 0) {
+      focus_otp_input(index - 1)
+    }
+  }
+
+  function handle_otp_paste(index: number, text: string) {
+    set_error(null)
+    set_otp_from_text(text, index)
   }
 
   return (
@@ -702,15 +787,31 @@ function EmailLoginPanel({
       {step === "code" ? (
         <label className="grid gap-1.5 text-[12px] font-bold text-[#777777]">
           {content.email_code_label[locale]}
-          <input
-            type="text"
-            inputMode="numeric"
-            value={code}
-            disabled={loading}
-            onChange={(event) => set_code(event.target.value.replace(/\D/g, "").slice(0, 6))}
-            className="h-12 rounded-2xl border border-[#e5e5e5] px-4 text-[20px] font-bold tracking-[0.2em] text-[#111111] outline-none focus:border-[#8f5d28]"
-            autoComplete="one-time-code"
-          />
+          <span className="grid grid-cols-6 gap-1.5">
+            {otp_digits.map((digit, index) => (
+              <input
+                key={`email-otp-${index}`}
+                ref={(element) => {
+                  otp_input_refs.current[index] = element
+                }}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={digit}
+                disabled={loading}
+                maxLength={index === 0 ? 6 : 1}
+                onChange={(event) => handle_otp_change(index, event.target.value)}
+                onKeyDown={(event) => handle_otp_key_down(index, event.key)}
+                onPaste={(event) => {
+                  event.preventDefault()
+                  handle_otp_paste(index, event.clipboardData.getData("text"))
+                }}
+                className="h-14 w-12 rounded-xl border border-[#e5e5e5] text-center text-[24px] font-bold text-[#111111] outline-none focus:border-[#8f5d28]"
+                autoComplete={index === 0 ? "one-time-code" : "off"}
+                aria-label={`${content.email_code_label[locale]} ${index + 1}`}
+              />
+            ))}
+          </span>
         </label>
       ) : null}
 
@@ -722,13 +823,15 @@ function EmailLoginPanel({
 
       <button
         type="button"
-        disabled={loading}
+        disabled={loading || (step === "code" && otp.length !== 6)}
         onClick={step === "email" ? handle_send_code : handle_verify_code}
         className={[
           "flex min-h-[54px] items-center justify-center rounded-2xl",
           "border border-[#e5e5e5] bg-[#8f5d28] px-4 py-3 text-center",
           "text-[14px] font-semibold text-white",
-          loading ? "cursor-wait opacity-75" : "",
+          loading || (step === "code" && otp.length !== 6)
+            ? "cursor-not-allowed opacity-75"
+            : "",
         ].join(" ")}
       >
         {step === "email" ? content.send_code[locale] : content.verify_code[locale]}
