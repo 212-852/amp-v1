@@ -5,6 +5,7 @@ import { NextResponse } from "next/server"
 import { resolveAuthContext } from "@/core/auth/context"
 import {
   normalizeGoogleIdentityInput,
+  resolveAuthUserProfile,
   resolveIdentity,
   sendIdentityDebug,
 } from "@/core/auth/identity"
@@ -272,6 +273,20 @@ async function completeGoogleOAuthCallbackCore(request: NextRequest) {
       identity_uuid: result.identity_uuid,
       email: result.email,
       display_name: result.display_name,
+      source_channel: result.source_channel,
+    })
+
+    const linkedProfile = await resolveAuthUserProfile(result.user_uuid)
+
+    await sendIdentityDebug("session_after_identity_link", {
+      visitor_uuid: result.visitor_uuid,
+      user_uuid: result.user_uuid,
+      role: linkedProfile.role,
+      tier: linkedProfile.tier,
+      display_name: linkedProfile.display_name,
+      provider: "google",
+      provider_user_id: identityInput.provider_user_id ?? null,
+      email: result.email,
       source_channel: result.source_channel,
     })
 

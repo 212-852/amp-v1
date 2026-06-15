@@ -1,13 +1,18 @@
 "use client"
 
-import { Bell, Globe2, User } from "lucide-react"
+import { Bell, Globe2, Mail, User } from "lucide-react"
+import { SiGoogle, SiLine } from "react-icons/si"
 
 import { useOverlay } from "@/components/overlay"
 import { useLocale } from "@/src/components/locale/provider"
 
-const mock_auth = {
-  is_logged_in: false,
-  is_linked: false,
+export type AppHeaderAuth = {
+  user_uuid: string | null
+  role: string
+  tier: string
+  display_name: string | null
+  image_url: string | null
+  provider: "google" | "line" | "email" | null
 }
 
 const content = {
@@ -78,14 +83,44 @@ function MemberPill({ label, filled = false }: { label: string; filled?: boolean
   )
 }
 
-function LinkPill({ label, onClick }: { label: string; onClick: () => void }) {
+function ProviderIcon({
+  provider,
+  className = "h-4 w-4",
+}: {
+  provider: AppHeaderAuth["provider"]
+  className?: string
+}) {
+  if (provider === "google") {
+    return <SiGoogle className={className} aria-hidden="true" />
+  }
+
+  if (provider === "line") {
+    return <SiLine className={className} aria-hidden="true" />
+  }
+
+  if (provider === "email") {
+    return <Mail className={className} strokeWidth={2} aria-hidden="true" />
+  }
+
+  return <User className={className} strokeWidth={2} aria-hidden="true" />
+}
+
+function LinkPill({
+  label,
+  provider,
+  onClick,
+}: {
+  label: string
+  provider?: AppHeaderAuth["provider"]
+  onClick: () => void
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex h-[30px] items-center rounded-full bg-[#fdfaf6] px-3 text-[14px] font-semibold leading-none text-[#8f5d28] ring-1 ring-[#dcc7aa]"
+      className="inline-flex h-[30px] min-w-[42px] items-center justify-center rounded-full bg-[#fdfaf6] px-3 text-[14px] font-semibold leading-none text-[#8f5d28] ring-1 ring-[#dcc7aa]"
     >
-      {label}
+      {provider ? <ProviderIcon provider={provider} /> : label}
     </button>
   )
 }
@@ -106,12 +141,28 @@ function HeaderCurve() {
   )
 }
 
-export default function AppHeader() {
+function UserAvatar({ auth }: { auth: AppHeaderAuth }) {
+  if (auth.image_url) {
+    return (
+      <span
+        className="block h-full w-full rounded-full bg-cover bg-center"
+        style={{ backgroundImage: `url(${auth.image_url})` }}
+        aria-hidden="true"
+      />
+    )
+  }
+
+  return <ProviderIcon provider={auth.provider} className="h-4 w-4" />
+}
+
+export default function AppHeader({ auth }: { auth: AppHeaderAuth }) {
   const { openOverlay } = useOverlay()
   const { locale } = useLocale()
   const language_label = locale.toUpperCase()
-  const user_name = mock_auth.is_logged_in
-    ? content.test_user[locale]
+  const is_logged_in = Boolean(auth.user_uuid)
+  const is_linked = Boolean(auth.provider)
+  const user_name = is_logged_in
+    ? auth.display_name ?? content.member[locale]
     : content.guest[locale]
 
   return (
@@ -129,7 +180,7 @@ export default function AppHeader() {
 
         <div className="flex min-w-[200px] flex-col items-end pt-0.5">
           <div className="flex items-center justify-end gap-1.5">
-            {!mock_auth.is_logged_in ? (
+            {!is_logged_in ? (
               <>
                 <MemberPill label={content.guest[locale]} />
                 <LinkPill
@@ -137,11 +188,12 @@ export default function AppHeader() {
                   onClick={() => openOverlay({ type: "link", source: "user" })}
                 />
               </>
-            ) : mock_auth.is_linked ? (
+            ) : is_linked ? (
               <>
                 <MemberPill label={content.member[locale]} filled />
                 <LinkPill
                   label={content.linked[locale]}
+                  provider={auth.provider}
                   onClick={() => openOverlay({ type: "link", source: "user" })}
                 />
               </>
@@ -186,7 +238,7 @@ export default function AppHeader() {
               aria-label={content.user_profile_label[locale]}
               className="flex h-9 w-9 items-center justify-center rounded-full bg-[#8f5d28] text-[#fdfaf6]"
             >
-              <User className="h-4 w-4" strokeWidth={2} />
+              <UserAvatar auth={auth} />
             </button>
           </div>
         </div>

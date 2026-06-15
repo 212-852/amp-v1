@@ -15,6 +15,7 @@ const identityEvents = new Set([
   "oauth_exchange_failed",
   "oauth_exchange_success",
   "oauth_start",
+  "session_after_identity_link",
 ])
 
 const authSessionEvents = new Set([

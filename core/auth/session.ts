@@ -89,6 +89,9 @@ type SupabaseConfig = {
 
 type AuthUserResponse = {
   id?: string
+  user_metadata?: {
+    sub?: string | null
+  } | null
 }
 
 type UserUuidRow = {
@@ -279,12 +282,12 @@ function visitorQuery(visitor_uuid: string) {
   ].join("&")
 }
 
-async function resolveAuthUserId(
+async function resolveAuthProviderUserIds(
   config: SupabaseConfig,
   auth_token: string | null,
 ) {
   if (!auth_token) {
-    return null
+    return []
   }
 
   const response = await fetch(`${config.url}/auth/v1/user`, {
@@ -296,40 +299,34 @@ async function resolveAuthUserId(
   })
 
   if (!response.ok) {
-    return null
+    return []
   }
 
   const user = (await response.json()) as AuthUserResponse
+  const ids = [user.user_metadata?.sub, user.id].filter(
+    (value): value is string => typeof value === "string" && Boolean(value),
+  )
 
-  return user.id ?? null
+  return Array.from(new Set(ids))
 }
 
 async function resolveUserUuidFromIdentities(
   config: SupabaseConfig,
-  authUserId: string,
+  providerUserIds: string[],
 ) {
+  if (!providerUserIds.length) {
+    return null
+  }
+
+  const filters = providerUserIds.map(
+    (providerUserId) =>
+      `provider_user_id.eq.${encodeURIComponent(providerUserId)}`,
+  )
   const row = await fetchFirstRow<UserUuidRow>(
     config,
     "identities",
     [
-      `user_id=eq.${encodeURIComponent(authUserId)}`,
-      "select=user_uuid",
-      "limit=1",
-    ].join("&"),
-  )
-
-  return row?.user_uuid ?? null
-}
-
-async function resolveUserUuidFromUsers(
-  config: SupabaseConfig,
-  authUserId: string,
-) {
-  const row = await fetchFirstRow<UserUuidRow>(
-    config,
-    "users",
-    [
-      `auth_user_uuid=eq.${encodeURIComponent(authUserId)}`,
+      `or=(${filters.join(",")})`,
       "select=user_uuid",
       "limit=1",
     ].join("&"),
@@ -436,16 +433,13 @@ const supabaseVisitorStore: VisitorStore = {
       return null
     }
 
-    const authUserId = await resolveAuthUserId(config, context.auth_token)
+    const providerUserIds = await resolveAuthProviderUserIds(config, context.auth_token)
 
-    if (!authUserId) {
+    if (!providerUserIds.length) {
       return null
     }
 
-    return (
-      (await resolveUserUuidFromIdentities(config, authUserId)) ??
-      (await resolveUserUuidFromUsers(config, authUserId))
-    )
+    return resolveUserUuidFromIdentities(config, providerUserIds)
   },
 
   async linkVisitorUser(visitor_uuid, user_uuid) {

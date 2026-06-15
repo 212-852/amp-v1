@@ -50,7 +50,7 @@ export type IdentityProvider = "line" | "google" | "email"
 
 export type IdentityLinkInput = {
   provider: IdentityProvider
-  user_id?: string | null
+  provider_user_id?: string | null
   email?: string | null
   display_name?: string | null
   locale?: string | null
@@ -70,15 +70,34 @@ export type SupabaseAuthUser = {
 type IdentityRow = {
   identity_uuid?: string | null
   user_uuid?: string | null
+  provider?: IdentityProvider | null
+  provider_user_id?: string | null
+  email?: string | null
 }
 
 type UserRow = {
   user_uuid?: string | null
+  role?: string | null
+  tier?: string | null
+  display_name?: string | null
+  image_url?: string | null
+  locale?: string | null
 }
 
 export type IdentityLinkRecord = {
   identity_uuid: string | null
   user_uuid: string
+}
+
+export type AuthUserProfile = {
+  user_uuid: string | null
+  role: string
+  tier: string
+  display_name: string | null
+  image_url: string | null
+  provider: IdentityProvider | null
+  provider_user_id: string | null
+  email: string | null
 }
 
 function normalizeString(value: unknown) {
@@ -94,20 +113,20 @@ export function normalizeIdentityLinkInput(
     throw new Error("Identity provider must be line, google, or email")
   }
 
-  const user_id = normalizeString(input.user_id)
+  const provider_user_id = normalizeString(input.provider_user_id)
   const email = normalizeString(input.email)
 
   if (provider === "email" && !email) {
     throw new Error("Email identity requires email")
   }
 
-  if ((provider === "line" || provider === "google") && !user_id) {
-    throw new Error("Provider identity requires user_id")
+  if ((provider === "line" || provider === "google") && !provider_user_id) {
+    throw new Error("Provider identity requires provider_user_id")
   }
 
   return {
     provider,
-    user_id: provider === "email" ? email : user_id,
+    provider_user_id: provider === "email" ? email : provider_user_id,
     email,
     display_name: normalizeString(input.display_name),
     locale: normalizeString(input.locale),
@@ -115,7 +134,7 @@ export function normalizeIdentityLinkInput(
 }
 
 function identityValue(input: IdentityLinkInput) {
-  return input.user_id ?? (input.provider === "email" ? input.email : null)
+  return input.provider_user_id ?? (input.provider === "email" ? input.email : null)
 }
 
 export function contactInputFromIdentity(
@@ -148,15 +167,15 @@ export function normalizeGoogleIdentityInput(
   user: SupabaseAuthUser,
   locale?: string | null,
 ): IdentityLinkInput {
-  const user_id = normalizeString(user.id) ?? normalizeString(user.user_metadata?.sub)
+  const provider_user_id = normalizeString(user.user_metadata?.sub) ?? normalizeString(user.id)
 
-  if (!user_id) {
-    throw new Error("Google identity requires user_id")
+  if (!provider_user_id) {
+    throw new Error("Google identity requires provider_user_id")
   }
 
   return normalizeIdentityLinkInput({
     provider: "google",
-    user_id,
+    provider_user_id,
     email: user.email ?? user.user_metadata?.email ?? null,
     display_name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? null,
     locale,
@@ -178,7 +197,8 @@ export async function sendIdentityDebug(
     | "oauth_callback_enter"
     | "oauth_exchange_failed"
     | "oauth_exchange_success"
-    | "oauth_start",
+    | "oauth_start"
+    | "session_after_identity_link",
   payload: Record<string, unknown>,
   request_id?: string | null,
 ) {
@@ -224,8 +244,11 @@ function identityLookupQuery(input: IdentityLinkInput) {
 
   const filters =
     input.provider === "email" && input.email
-      ? [`user_id.eq.${encodeURIComponent(value)}`, `email.eq.${encodeURIComponent(input.email)}`]
-      : [`user_id.eq.${encodeURIComponent(value)}`]
+      ? [
+          `provider_user_id.eq.${encodeURIComponent(value)}`,
+          `email.eq.${encodeURIComponent(input.email)}`,
+        ]
+      : [`provider_user_id.eq.${encodeURIComponent(value)}`]
 
   return [
     `provider=eq.${encodeURIComponent(input.provider)}`,
@@ -246,6 +269,38 @@ async function findIdentityUserUuid(input: IdentityLinkInput) {
     headers: restHeaders(config),
     cache: "no-store",
   })
+
+  if (!response.ok) {
+    return null
+  }
+
+  const rows = (await response.json()) as IdentityRow[]
+
+  return rows[0]?.user_uuid ?? null
+}
+
+async function findUserUuidByIdentityEmail(email: string | null) {
+  const config = getRestConfig()
+
+  if (!config || !email) {
+    return null
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "identities",
+      [
+        `email=eq.${encodeURIComponent(email)}`,
+        "select=user_uuid",
+        "limit=1",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
 
   if (!response.ok) {
     return null
@@ -298,7 +353,11 @@ async function createUser(input: IdentityLinkInput) {
 }
 
 export async function resolveOrCreateIdentityUser(input: IdentityLinkInput) {
-  return (await findIdentityUserUuid(input)) ?? (await createUser(input))
+  return (
+    (await findIdentityUserUuid(input)) ??
+    (await findUserUuidByIdentityEmail(input.email ?? null)) ??
+    (await createUser(input))
+  )
 }
 
 export async function upsertIdentityLink(
@@ -321,7 +380,7 @@ export async function upsertIdentityLink(
   await sendIdentityDebug("identity_upsert_payload", {
     provider: input.provider,
     user_uuid,
-    user_id: value,
+    provider_user_id: value,
     email: input.email ?? null,
   })
 
@@ -329,7 +388,7 @@ export async function upsertIdentityLink(
     restUrl(
       config,
       "identities",
-      "on_conflict=provider,user_id&select=identity_uuid,user_uuid",
+      "on_conflict=provider,provider_user_id&select=identity_uuid,user_uuid",
     ),
     {
       method: "POST",
@@ -339,7 +398,7 @@ export async function upsertIdentityLink(
       },
       body: JSON.stringify({
         provider: input.provider,
-        user_id: value,
+        provider_user_id: value,
         email: input.email ?? null,
         user_uuid,
       }),
@@ -390,7 +449,7 @@ export async function resolveUserUuidByIdentityValue(value: string) {
       config,
       "identities",
       [
-        `user_id=eq.${encodeURIComponent(value)}`,
+        `provider_user_id=eq.${encodeURIComponent(value)}`,
         "select=user_uuid",
         "limit=1",
       ].join("&"),
@@ -408,4 +467,71 @@ export async function resolveUserUuidByIdentityValue(value: string) {
   const rows = (await response.json()) as UserUuidRow[]
 
   return rows[0]?.user_uuid ?? null
+}
+
+export async function resolveAuthUserProfile(user_uuid: string | null): Promise<AuthUserProfile> {
+  const empty: AuthUserProfile = {
+    user_uuid,
+    role: user_uuid ? "user" : "guest",
+    tier: user_uuid ? "member" : "guest",
+    display_name: null,
+    image_url: null,
+    provider: null,
+    provider_user_id: null,
+    email: null,
+  }
+  const config = getRestConfig()
+
+  if (!config || !user_uuid) {
+    return empty
+  }
+
+  const [userResponse, identityResponse] = await Promise.all([
+    fetch(
+      restUrl(
+        config,
+        "users",
+        [
+          `user_uuid=eq.${encodeURIComponent(user_uuid)}`,
+          "select=user_uuid,role,tier,display_name,image_url,locale",
+          "limit=1",
+        ].join("&"),
+      ),
+      {
+        headers: restHeaders(config),
+        cache: "no-store",
+      },
+    ),
+    fetch(
+      restUrl(
+        config,
+        "identities",
+        [
+          `user_uuid=eq.${encodeURIComponent(user_uuid)}`,
+          "select=provider,provider_user_id,email",
+          "limit=1",
+        ].join("&"),
+      ),
+      {
+        headers: restHeaders(config),
+        cache: "no-store",
+      },
+    ),
+  ])
+
+  const users = userResponse.ok ? ((await userResponse.json()) as UserRow[]) : []
+  const identities = identityResponse.ok ? ((await identityResponse.json()) as IdentityRow[]) : []
+  const user = users[0]
+  const identity = identities[0]
+
+  return {
+    user_uuid,
+    role: user?.role ?? empty.role,
+    tier: user?.tier ?? empty.tier,
+    display_name: user?.display_name ?? null,
+    image_url: user?.image_url ?? null,
+    provider: identity?.provider ?? null,
+    provider_user_id: identity?.provider_user_id ?? null,
+    email: identity?.email ?? null,
+  }
 }
