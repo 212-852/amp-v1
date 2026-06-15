@@ -1,18 +1,7 @@
-import { startEmailCodeLogin } from "@/core/auth/email"
+import type { NextRequest } from "next/server"
 
-export async function POST(request: Request) {
-  try {
-    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
-    const result = await startEmailCodeLogin(body)
+import { startEmailOtpLogin } from "@/core/auth/email"
 
-    return Response.json(result)
-  } catch (error) {
-    return Response.json(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : "Failed to send email code",
-      },
-      { status: 400 },
-    )
-  }
+export async function POST(request: NextRequest) {
+  return startEmailOtpLogin(request)
 }

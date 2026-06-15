@@ -1,18 +1,7 @@
-import { verifyEmailCodeLogin } from "@/core/auth/email"
+import type { NextRequest } from "next/server"
 
-export async function POST(request: Request) {
-  try {
-    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
-    const result = await verifyEmailCodeLogin(body)
+import { verifyEmailOtpLogin } from "@/core/auth/email"
 
-    return Response.json(result)
-  } catch (error) {
-    return Response.json(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : "Failed to verify email code",
-      },
-      { status: 400 },
-    )
-  }
+export async function POST(request: NextRequest) {
+  return verifyEmailOtpLogin(request)
 }
