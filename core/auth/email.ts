@@ -15,7 +15,7 @@ import {
 } from "@/src/lib/supabase/server"
 
 const supabase_sdk_version = "2.108.2"
-const email_verify_types = ["email", "magiclink"] as const
+const email_verify_types = ["email", "signup", "magiclink"] as const
 
 function normalizeEmail(value: unknown) {
   return typeof value === "string" && value.trim()
@@ -43,22 +43,6 @@ function jsonError(error: unknown, fallback: string) {
       message,
     },
     { status: 400 },
-  )
-}
-
-function jsonFailure(input: {
-  reason: string
-  message: string
-  status?: number
-}) {
-  return NextResponse.json(
-    {
-      ok: false,
-      reason: input.reason,
-      error: input.message,
-      message: input.message,
-    },
-    { status: input.status ?? 400 },
   )
 }
 
@@ -143,6 +127,48 @@ export async function verifyEmailOtpLogin(request: NextRequest) {
   const authResponse = NextResponse.json({
     ok: false,
   })
+  let response_email: string | null = null
+  let response_visitor_uuid: string | null = null
+  let response_verify_type: string | null = null
+  let response_auth_user_id: string | null = null
+  let response_session_exists = false
+
+  async function emailVerifyApiResponse(input: {
+    status: 200 | 401 | 403 | 409 | 500
+    success: boolean
+    error: string | null
+    verify_type?: string | null
+    details?: Record<string, unknown>
+    session?: Record<string, unknown>
+  }) {
+    const verify_type = input.verify_type ?? response_verify_type
+
+    await sendIdentityDebug("email_verify_api_response", {
+      provider: "email",
+      status: input.status,
+      success: input.success,
+      error: input.error,
+      verify_type,
+      email: response_email,
+      visitor_uuid: response_visitor_uuid,
+      auth_user_id: response_auth_user_id,
+      session_exists: response_session_exists,
+      details: input.details ?? null,
+    })
+
+    return NextResponse.json(
+      {
+        ok: input.success,
+        success: input.success,
+        error: input.error,
+        message: input.error,
+        verify_type,
+        details: input.details ?? null,
+        session: input.session,
+      },
+      { status: input.status },
+    )
+  }
 
   try {
     const body = await readRequestBody(request)
@@ -151,6 +177,9 @@ export async function verifyEmailOtpLogin(request: NextRequest) {
     const normalized_token = normalizeCode(raw_token)
     const context = await resolveAuthContext()
     const session = await resolveSession(context)
+
+    response_email = email
+    response_visitor_uuid = session.visitor_uuid
 
     await sendIdentityDebug("email_verify_request_received", {
       provider: "email",
@@ -163,23 +192,29 @@ export async function verifyEmailOtpLogin(request: NextRequest) {
     })
 
     if (!session.visitor_uuid) {
-      return jsonFailure({
-        reason: "visitor_missing",
-        message: "Email verification requires visitor_uuid",
+      return emailVerifyApiResponse({
+        status: 401,
+        success: false,
+        error: "Email verification requires visitor_uuid",
+        details: { reason: "visitor_missing" },
       })
     }
 
     if (!email) {
-      return jsonFailure({
-        reason: "email_missing",
-        message: "Email is required",
+      return emailVerifyApiResponse({
+        status: 403,
+        success: false,
+        error: "Email is required",
+        details: { reason: "email_missing" },
       })
     }
 
     if (!/^\d{6}$/.test(normalized_token)) {
-      return jsonFailure({
-        reason: "invalid_token_format",
-        message: "Verification code must be 6 digits",
+      return emailVerifyApiResponse({
+        status: 403,
+        success: false,
+        error: "Verification code must be 6 digits",
+        details: { reason: "invalid_token_format" },
       })
     }
 
@@ -237,9 +272,16 @@ export async function verifyEmailOtpLogin(request: NextRequest) {
 
       if (!result.error) {
         successful_type = verify_type
+        response_verify_type = verify_type
+        response_auth_user_id = result.data.user?.id ?? null
+        response_session_exists = !!result.data.session
         break
       }
     }
+
+    response_verify_type = successful_type ?? email_verify_types[email_verify_types.length - 1]
+    response_auth_user_id = verified_data?.user?.id ?? null
+    response_session_exists = !!verified_data?.session
 
     await sendIdentityDebug("email_verify_result", {
       provider: "email",
@@ -259,9 +301,15 @@ export async function verifyEmailOtpLogin(request: NextRequest) {
     })
 
     if (verify_error) {
-      return jsonFailure({
-        reason: "email_verify_failed",
-        message: verify_error.message,
+      return emailVerifyApiResponse({
+        status: 403,
+        success: false,
+        error: verify_error.message,
+        details: {
+          reason: "invalid_token",
+          error_status: verify_error.status ?? null,
+          attempted_types: email_verify_types,
+        },
       })
     }
 
@@ -298,16 +346,47 @@ export async function verifyEmailOtpLogin(request: NextRequest) {
       source_channel: result.source_channel,
     })
     await sendIdentityDebug("session_after_identity_link", payload)
+    await sendIdentityDebug("email_session_update", {
+      provider: "email",
+      visitor_uuid: result.visitor_uuid,
+      user_uuid: result.user_uuid,
+      verify_type: successful_type,
+      session_exists: !!verified_data.session,
+      source_channel: result.source_channel,
+    })
 
     const response = NextResponse.json({
       ok: true,
+      success: true,
       session: payload,
     })
 
     set_amp_auth_cookies(response, verified_data.session)
+    await sendIdentityDebug("email_verify_api_response", {
+      provider: "email",
+      status: 200,
+      success: true,
+      error: null,
+      verify_type: successful_type,
+      email,
+      visitor_uuid: result.visitor_uuid,
+      auth_user_id: verified_data.user.id,
+      session_exists: !!verified_data.session,
+      details: null,
+    })
 
     return response
   } catch (error) {
-    return jsonError(error, "Failed to verify email OTP")
+    const message = error instanceof Error ? error.message : "Failed to verify email OTP"
+    const status = message.includes("already linked") ? 409 : 500
+
+    return emailVerifyApiResponse({
+      status,
+      success: false,
+      error: message,
+      details: {
+        reason: status === 409 ? "identity_conflict" : "internal_error",
+      },
+    })
   }
 }

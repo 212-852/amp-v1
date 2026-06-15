@@ -196,8 +196,10 @@ export async function sendIdentityDebug(
     | "email_verify_attempt"
     | "email_verify_attempt_result"
     | "email_verify_payload"
+    | "email_verify_api_response"
     | "email_verify_request_received"
     | "email_verify_result"
+    | "email_session_update"
     | "google_oauth_callback_received"
     | "google_oauth_start"
     | "google_oauth_state_failed"
@@ -209,14 +211,26 @@ export async function sendIdentityDebug(
     | "identity_link_failed"
     | "identity_link_started"
     | "identity_link_success"
+    | "identity_lookup_result"
+    | "identity_lookup_start"
+    | "identity_email_lookup_result"
+    | "identity_email_lookup_start"
     | "identity_unlinked"
+    | "identity_upsert_start"
+    | "identity_upsert_success"
+    | "identity_user_resolve_result"
     | "oauth_callback_code_found"
     | "oauth_callback_code_missing"
     | "oauth_callback_enter"
     | "oauth_exchange_failed"
     | "oauth_exchange_success"
     | "oauth_start"
-    | "session_after_identity_link",
+    | "session_update"
+    | "session_after_identity_link"
+    | "user_create_start"
+    | "user_create_success"
+    | "visitor_update_start"
+    | "visitor_update_success",
   payload: Record<string, unknown>,
   request_id?: string | null,
 ) {
@@ -275,6 +289,12 @@ async function findIdentityUserUuidByProviderUserId(input: IdentityLinkInput) {
     return null
   }
 
+  await sendIdentityDebug("identity_lookup_start", {
+    provider: input.provider,
+    provider_user_id: identityValue(input),
+    email: input.email ?? null,
+  })
+
   const response = await fetch(
     restUrl(config, "identities", identityProviderUserIdQuery(input)),
     {
@@ -293,8 +313,17 @@ async function findIdentityUserUuidByProviderUserId(input: IdentityLinkInput) {
   }
 
   const rows = (await response.json()) as IdentityRow[]
+  const user_uuid = rows[0]?.user_uuid ?? null
 
-  return rows[0]?.user_uuid ?? null
+  await sendIdentityDebug("identity_lookup_result", {
+    provider: input.provider,
+    provider_user_id: identityValue(input),
+    email: input.email ?? null,
+    found: !!user_uuid,
+    user_uuid,
+  })
+
+  return user_uuid
 }
 
 async function findUserUuidByIdentityEmail(email: string | null) {
@@ -303,6 +332,11 @@ async function findUserUuidByIdentityEmail(email: string | null) {
   if (!config || !email) {
     return null
   }
+
+  await sendIdentityDebug("identity_email_lookup_start", {
+    provider: "email",
+    email,
+  })
 
   const response = await fetch(
     restUrl(
@@ -321,12 +355,26 @@ async function findUserUuidByIdentityEmail(email: string | null) {
   )
 
   if (!response.ok) {
+    await sendIdentityDebug("identity_email_lookup_result", {
+      provider: "email",
+      email,
+      found: false,
+      error: "identity_email_lookup_failed",
+    })
     return null
   }
 
   const rows = (await response.json()) as IdentityRow[]
+  const user_uuid = rows[0]?.user_uuid ?? null
 
-  return rows[0]?.user_uuid ?? null
+  await sendIdentityDebug("identity_email_lookup_result", {
+    provider: "email",
+    email,
+    found: !!user_uuid,
+    user_uuid,
+  })
+
+  return user_uuid
 }
 
 async function createUser(input: IdentityLinkInput) {
@@ -335,6 +383,12 @@ async function createUser(input: IdentityLinkInput) {
   if (!config) {
     return crypto.randomUUID()
   }
+
+  await sendIdentityDebug("user_create_start", {
+    provider: input.provider,
+    provider_user_id: identityValue(input),
+    email: input.email ?? null,
+  })
 
   const response = await fetch(restUrl(config, "users", "select=user_uuid"), {
     method: "POST",
@@ -368,6 +422,13 @@ async function createUser(input: IdentityLinkInput) {
     throw new Error("User creation did not return user_uuid")
   }
 
+  await sendIdentityDebug("user_create_success", {
+    provider: input.provider,
+    provider_user_id: identityValue(input),
+    email: input.email ?? null,
+    user_uuid,
+  })
+
   return user_uuid
 }
 
@@ -378,17 +439,51 @@ export async function resolveOrCreateIdentityUser(
   const identityUserUuid = await findIdentityUserUuidByProviderUserId(input)
 
   if (identityUserUuid) {
+    await sendIdentityDebug("identity_user_resolve_result", {
+      provider: input.provider,
+      provider_user_id: identityValue(input),
+      email: input.email ?? null,
+      user_uuid: identityUserUuid,
+      source: "identity",
+    })
     return identityUserUuid
   }
 
   if (current_user_uuid) {
+    await sendIdentityDebug("identity_user_resolve_result", {
+      provider: input.provider,
+      provider_user_id: identityValue(input),
+      email: input.email ?? null,
+      user_uuid: current_user_uuid,
+      source: "current_user",
+    })
     return current_user_uuid
   }
 
-  return (
-    (await findUserUuidByIdentityEmail(input.email ?? null)) ??
-    (await createUser(input))
-  )
+  const emailUserUuid = await findUserUuidByIdentityEmail(input.email ?? null)
+
+  if (emailUserUuid) {
+    await sendIdentityDebug("identity_user_resolve_result", {
+      provider: input.provider,
+      provider_user_id: identityValue(input),
+      email: input.email ?? null,
+      user_uuid: emailUserUuid,
+      source: "email_identity",
+    })
+    return emailUserUuid
+  }
+
+  const createdUserUuid = await createUser(input)
+
+  await sendIdentityDebug("identity_user_resolve_result", {
+    provider: input.provider,
+    provider_user_id: identityValue(input),
+    email: input.email ?? null,
+    user_uuid: createdUserUuid,
+    source: "created_user",
+  })
+
+  return createdUserUuid
 }
 
 export async function upsertIdentityLink(
@@ -409,6 +504,12 @@ export async function upsertIdentityLink(
   }
 
   await sendIdentityDebug("identity_upsert_payload", {
+    provider: input.provider,
+    user_uuid,
+    provider_user_id: value,
+    email: input.email ?? null,
+  })
+  await sendIdentityDebug("identity_upsert_start", {
     provider: input.provider,
     user_uuid,
     provider_user_id: value,
@@ -452,6 +553,14 @@ export async function upsertIdentityLink(
   if (!row?.user_uuid) {
     return null
   }
+
+  await sendIdentityDebug("identity_upsert_success", {
+    provider: input.provider,
+    user_uuid: row.user_uuid,
+    identity_uuid: row.identity_uuid ?? null,
+    provider_user_id: value,
+    email: input.email ?? null,
+  })
 
   return {
     identity_uuid: row.identity_uuid ?? null,

@@ -56,6 +56,11 @@ async function linkVisitorToUser(visitor_uuid: string, user_uuid: string) {
     return
   }
 
+  await sendIdentityDebug("visitor_update_start", {
+    visitor_uuid,
+    user_uuid,
+  })
+
   const response = await fetch(
     restUrl(config, "visitors", `visitor_uuid=eq.${encodeURIComponent(visitor_uuid)}`),
     {
@@ -90,6 +95,11 @@ async function linkVisitorToUser(visitor_uuid: string, user_uuid: string) {
     })
     throw new Error("Visitor was not found while linking user")
   }
+
+  await sendIdentityDebug("visitor_update_success", {
+    visitor_uuid: rows[0].visitor_uuid,
+    user_uuid: rows[0].user_uuid ?? user_uuid,
+  })
 }
 
 async function linkParticipantsToUser(visitor_uuid: string, user_uuid: string) {
@@ -220,6 +230,12 @@ export async function linkCurrentVisitorToIdentity(
     await linkExistingVisitorContacts(visitor_uuid, user_uuid, input)
     await upsertRealContact(input, visitor_uuid, user_uuid, context.source_channel)
     await linkParticipantsToUser(visitor_uuid, user_uuid)
+    await sendIdentityDebug("session_update", {
+      provider: input.provider,
+      visitor_uuid,
+      user_uuid,
+      source_channel: context.source_channel,
+    })
   } catch (error) {
     const error_message = error instanceof Error ? error.message : String(error)
 
