@@ -243,43 +243,43 @@ export async function sendIdentityLinkStartedFromInput(
   await sendCurrentIdentityLinkStarted(provider)
 }
 
-function identityLookupQuery(input: IdentityLinkInput) {
+function identityProviderUserIdQuery(input: IdentityLinkInput) {
   const value = identityValue(input)
 
   if (!value) {
     throw new Error("Identity value is required")
   }
 
-  const filters =
-    input.provider === "email" && input.email
-      ? [
-          `provider_user_id.eq.${encodeURIComponent(value)}`,
-          `email.eq.${encodeURIComponent(input.email)}`,
-        ]
-      : [`provider_user_id.eq.${encodeURIComponent(value)}`]
-
   return [
     `provider=eq.${encodeURIComponent(input.provider)}`,
-    `or=(${filters.join(",")})`,
+    `provider_user_id=eq.${encodeURIComponent(value)}`,
     "select=user_uuid",
     "limit=1",
   ].join("&")
 }
 
-async function findIdentityUserUuid(input: IdentityLinkInput) {
+async function findIdentityUserUuidByProviderUserId(input: IdentityLinkInput) {
   const config = getRestConfig()
 
   if (!config) {
     return null
   }
 
-  const response = await fetch(restUrl(config, "identities", identityLookupQuery(input)), {
-    headers: restHeaders(config),
-    cache: "no-store",
-  })
+  const response = await fetch(
+    restUrl(config, "identities", identityProviderUserIdQuery(input)),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
 
   if (!response.ok) {
-    return null
+    const error = await readRestError(response)
+    throw new Error(
+      `Failed to lookup identity: ${error.code ?? "unknown"} ${
+        error.message ?? "No PostgREST error returned"
+      }`,
+    )
   }
 
   const rows = (await response.json()) as IdentityRow[]
@@ -361,9 +361,21 @@ async function createUser(input: IdentityLinkInput) {
   return user_uuid
 }
 
-export async function resolveOrCreateIdentityUser(input: IdentityLinkInput) {
+export async function resolveOrCreateIdentityUser(
+  input: IdentityLinkInput,
+  current_user_uuid?: string | null,
+) {
+  const identityUserUuid = await findIdentityUserUuidByProviderUserId(input)
+
+  if (identityUserUuid) {
+    return identityUserUuid
+  }
+
+  if (current_user_uuid) {
+    return current_user_uuid
+  }
+
   return (
-    (await findIdentityUserUuid(input)) ??
     (await findUserUuidByIdentityEmail(input.email ?? null)) ??
     (await createUser(input))
   )
@@ -380,7 +392,7 @@ export async function upsertIdentityLink(
     return null
   }
 
-  const existingUserUuid = await findIdentityUserUuid(input)
+  const existingUserUuid = await findIdentityUserUuidByProviderUserId(input)
 
   if (existingUserUuid && existingUserUuid !== user_uuid) {
     throw new Error("Identity is already linked to another user")

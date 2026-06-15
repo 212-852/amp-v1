@@ -211,7 +211,7 @@ export async function linkCurrentVisitorToIdentity(
         ? (rawInput.contact as ContactInput)
         : null,
   }
-  const user_uuid = session.user_uuid ?? (await resolveOrCreateIdentityUser(input))
+  const user_uuid = await resolveOrCreateIdentityUser(input, session.user_uuid)
   let identity: Awaited<ReturnType<typeof upsertIdentityLink>> = null
 
   try {
