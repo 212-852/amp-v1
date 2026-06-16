@@ -1,3 +1,5 @@
+import type { SessionProvider } from "@/core/auth/types"
+
 export type HeaderSessionLike = {
   visitor_uuid?: string | null
   user_uuid?: string | null
@@ -5,6 +7,8 @@ export type HeaderSessionLike = {
   role?: string | null
   tier?: string | null
   image_url?: string | null
+  provider?: SessionProvider | null
+  can_logout?: boolean
 }
 
 export type OpsHeaderSession = {
@@ -14,6 +18,8 @@ export type OpsHeaderSession = {
   tier: string | null
   display_name: string
   image_url: string | null
+  provider: SessionProvider | null
+  can_logout: boolean
 }
 
 export function normalizeOpsHeaderDisplay(
@@ -31,6 +37,8 @@ export function normalizeOpsHeaderDisplay(
       tier: session?.tier ?? null,
       display_name: session?.display_name ?? role,
       image_url: session?.image_url ?? null,
+      provider: session?.provider ?? null,
+      can_logout: session?.can_logout ?? false,
     }
   }
 
@@ -41,6 +49,8 @@ export function normalizeOpsHeaderDisplay(
     tier: null,
     display_name: "Guest",
     image_url: null,
+    provider: null,
+    can_logout: false,
   }
 }
 
@@ -61,5 +71,7 @@ export function normalizeOpsHeaderSession(
     tier: session?.tier ?? null,
     display_name: session?.display_name ?? default_display_name,
     image_url: session?.image_url ?? null,
+    provider: session?.provider ?? null,
+    can_logout: session?.can_logout ?? false,
   }
 }

@@ -1,10 +1,9 @@
 "use client"
 
-import { Menu, MessageCircle, Settings } from "lucide-react"
+import { ChevronDown, MessageCircle, Settings } from "lucide-react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { useEffect, useRef, useState } from "react"
 
-import { useOverlay, type OverlayType } from "@/components/overlay"
 import {
   normalizeOpsHeaderDisplay,
   type HeaderSessionLike,
@@ -13,22 +12,7 @@ import {
 
 export type { OpsHeaderSession, HeaderSessionLike } from "@/core/ops/header_session"
 
-const headerActions = [
-  { label: "Chat", icon: MessageCircle },
-  { label: "Settings", icon: Settings, overlayType: "menu" },
-  { label: "Menu", icon: Menu, overlayType: "menu" },
-]
-
-const pageLabels: Record<string, string> = {
-  "/admin": "ダッシュボード",
-  "/admin/orders": "注文管理",
-  "/admin/drivers": "ドライバー管理",
-  "/admin/concierge": "コンシェルジュ",
-  "/admin/users": "ユーザー管理",
-  "/admin/partners": "パートナー管理",
-  "/admin/notifications": "通知",
-  "/admin/settings": "設定",
-}
+const page_label = "Home"
 
 function resolveInitials(value: string | null | undefined) {
   const normalized = value?.trim()
@@ -46,34 +30,113 @@ function resolveInitials(value: string | null | undefined) {
   return normalized.slice(0, 2).toUpperCase()
 }
 
+function resolveAvatarImage(session: OpsHeaderSession) {
+  if (session.provider === "line" && session.image_url) {
+    return session.image_url
+  }
+
+  return null
+}
+
+type HeaderMenuItem = {
+  key: string
+  label: string
+  href?: string
+  onClick?: () => void
+}
+
 export default function OpsHeader({
   session,
 }: {
   session?: HeaderSessionLike | null
 }) {
-  const pathname = usePathname()
-  const { openOverlay } = useOverlay()
   const safe_session = normalizeOpsHeaderDisplay(session)
   const is_logged_in = Boolean(safe_session.user_uuid)
   const displayName = safe_session.display_name
   const roleLabel = is_logged_in ? safe_session.role : "Guest"
   const tierLabel = is_logged_in ? safe_session.tier : null
-  const pageLabel = pageLabels[pathname] ?? "ダッシュボード"
-  const breadcrumbs = [
-    { label: "ホーム", href: "/admin" },
-    { label: pageLabel, href: pathname },
+  const avatar_image_url = resolveAvatarImage(safe_session)
+  const menu_ref = useRef<HTMLDivElement>(null)
+  const [menu_open, set_menu_open] = useState(false)
+  const [is_logging_out, set_is_logging_out] = useState(false)
+
+  useEffect(() => {
+    if (!menu_open) {
+      return
+    }
+
+    function handle_pointer_down(event: MouseEvent | TouchEvent) {
+      const target = event.target
+
+      if (!(target instanceof Node)) {
+        return
+      }
+
+      if (menu_ref.current?.contains(target)) {
+        return
+      }
+
+      set_menu_open(false)
+    }
+
+    document.addEventListener("mousedown", handle_pointer_down)
+    document.addEventListener("touchstart", handle_pointer_down)
+
+    return () => {
+      document.removeEventListener("mousedown", handle_pointer_down)
+      document.removeEventListener("touchstart", handle_pointer_down)
+    }
+  }, [menu_open])
+
+  function close_menu() {
+    set_menu_open(false)
+  }
+
+  function toggle_menu() {
+    set_menu_open((current) => !current)
+  }
+
+  function handle_logout() {
+    if (is_logging_out) {
+      return
+    }
+
+    set_is_logging_out(true)
+    close_menu()
+
+    fetch("/api/auth/logout", {
+      method: "POST",
+    })
+      .catch(() => null)
+      .finally(() => {
+        window.location.href = "/"
+      })
+  }
+
+  const menu_items: HeaderMenuItem[] = [
+    { key: "admin-home", label: "Admin Home", href: "/admin" },
+    { key: "chat", label: "Chat" },
+    { key: "settings", label: "Settings", href: "/admin/settings" },
   ]
 
+  if (safe_session.can_logout) {
+    menu_items.push({
+      key: "logout",
+      label: "Logout",
+      onClick: handle_logout,
+    })
+  }
+
   return (
-    <header className="border-b border-neutral-200 bg-white px-5 pb-3 pt-[calc(10px+env(safe-area-inset-top,0px))]">
+    <header className="relative z-40 border-b border-neutral-200 bg-white px-5 pb-3 pt-[calc(10px+env(safe-area-inset-top,0px))]">
       <div className="mx-auto flex w-full max-w-[430px] items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <div className="relative h-[52px] w-[52px] shrink-0 overflow-hidden rounded-full border border-neutral-200 bg-neutral-50">
-            {safe_session.image_url ? (
-              <span
-                className="block h-full w-full bg-cover bg-center"
-                style={{ backgroundImage: `url(${safe_session.image_url})` }}
-                aria-hidden="true"
+            {avatar_image_url ? (
+              <img
+                src={avatar_image_url}
+                alt=""
+                className="h-full w-full object-cover"
               />
             ) : (
               <span className="flex h-full w-full items-center justify-center text-[17px] font-bold text-neutral-800">
@@ -89,55 +152,92 @@ export default function OpsHeader({
             <p className="mt-0.5 text-[12px] font-medium leading-tight text-neutral-500">
               {tierLabel ? `${roleLabel} / ${tierLabel}` : roleLabel}
             </p>
-            <nav
-              aria-label="Breadcrumb"
-              className="mt-1 flex min-w-0 items-center overflow-hidden text-[11px] font-medium leading-tight text-neutral-500"
-            >
-              {breadcrumbs.map((item, index) => (
-                <span key={`${item.href}-${item.label}`} className="min-w-0">
-                  {index > 0 ? (
-                    <span className="px-1 text-neutral-400" aria-hidden="true">
-                      &gt;
-                    </span>
-                  ) : null}
-                  <Link
-                    href={item.href}
-                    aria-current={
-                      index === breadcrumbs.length - 1 ? "page" : undefined
-                    }
-                    className="truncate text-neutral-500"
-                  >
-                    {item.label}
-                  </Link>
-                </span>
-              ))}
-            </nav>
+            <p className="mt-1 truncate text-[11px] font-medium leading-tight text-neutral-500">
+              {page_label}
+            </p>
           </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          {headerActions.map((item) => {
-            const Icon = item.icon
+          <button
+            type="button"
+            aria-label="Chat"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-900"
+          >
+            <MessageCircle className="h-4 w-4" strokeWidth={1.8} />
+          </button>
 
-            return (
-              <button
-                key={item.label}
-                type="button"
-                aria-label={item.label}
-                onClick={() => {
-                  if (item.overlayType) {
-                    openOverlay({
-                      type: item.overlayType as OverlayType,
-                      source: "admin",
-                    })
-                  }
-                }}
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-900"
+          <Link
+            href="/admin/settings"
+            aria-label="Settings"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-900"
+          >
+            <Settings className="h-4 w-4" strokeWidth={1.8} />
+          </Link>
+
+          <div ref={menu_ref} className="relative">
+            <button
+              type="button"
+              aria-label="Menu"
+              aria-expanded={menu_open}
+              aria-haspopup="menu"
+              onClick={toggle_menu}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-900"
+            >
+              <ChevronDown
+                className={[
+                  "h-4 w-4 transition-transform duration-200",
+                  menu_open ? "rotate-180" : "",
+                ].join(" ")}
+                strokeWidth={1.8}
+              />
+            </button>
+
+            {menu_open ? (
+              <div
+                role="menu"
+                aria-label="Admin menu"
+                className="absolute right-0 top-[calc(100%+6px)] z-50 min-w-[168px] overflow-hidden rounded-2xl border border-neutral-200 bg-white py-1 shadow-[0_12px_32px_rgba(0,0,0,0.08)]"
               >
-                <Icon className="h-4 w-4" strokeWidth={1.8} />
-              </button>
-            )
-          })}
+                {menu_items.map((item) => {
+                  const item_class =
+                    "flex w-full items-center px-3.5 py-2.5 text-left text-[13px] font-medium text-neutral-900 transition-colors hover:bg-neutral-50"
+
+                  if (item.href) {
+                    return (
+                      <Link
+                        key={item.key}
+                        href={item.href}
+                        role="menuitem"
+                        className={item_class}
+                        onClick={close_menu}
+                      >
+                        {item.label}
+                      </Link>
+                    )
+                  }
+
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      role="menuitem"
+                      className={item_class}
+                      disabled={item.key === "logout" && is_logging_out}
+                      onClick={() => {
+                        item.onClick?.()
+                        if (item.key !== "logout") {
+                          close_menu()
+                        }
+                      }}
+                    >
+                      {item.label}
+                    </button>
+                  )
+                })}
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
     </header>
