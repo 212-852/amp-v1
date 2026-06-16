@@ -28,73 +28,29 @@ a {
   text-decoration: none;
 }
 
-@keyframes cat_track_step {
-  0%,
-  100% {
+@keyframes robo_cat_step {
+  from {
     transform: translateX(0);
   }
 
-  50% {
-    transform: translateX(3px);
+  to {
+    transform: translateX(-112px);
   }
 }
 
-@keyframes cat_blink {
-  0%,
-  88%,
-  100% {
-    transform: scaleY(1);
-  }
-
-  90%,
-  94% {
-    transform: scaleY(0.25);
-  }
-}
-
-.cat_container {
-  width: 120px;
-  height: 32px;
+.robo_cat_window {
+  width: 28px;
+  height: 28px;
   overflow: hidden;
-  position: relative;
-  flex: 0 0 120px;
+  flex: 0 0 28px;
 }
 
-.cat_track {
-  position: absolute;
-  left: 0;
-  top: 4px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  white-space: nowrap;
-  animation: cat_track_step 1.2s steps(2, end) infinite;
+.robo_cat_sprite {
+  width: 112px;
+  height: 28px;
+  background-image: url("/images/robo_neko.svg");
+  background-repeat: no-repeat;
+  background-size: 112px 28px;
+  animation: robo_cat_step 1.2s steps(4, end) infinite;
   will-change: transform;
-}
-
-.cat_icon {
-  width: 24px;
-  height: 24px;
-  flex: 0 0 24px;
-  object-fit: contain;
-  display: block;
-  transform-origin: center center;
-  animation: cat_blink 2.4s steps(2, end) infinite;
-  will-change: transform;
-}
-
-.cat_icon:nth-child(1) {
-  animation-delay: 0s;
-}
-
-.cat_icon:nth-child(2) {
-  animation-delay: 0.25s;
-}
-
-.cat_icon:nth-child(3) {
-  animation-delay: 0.5s;
-}
-
-.cat_icon:nth-child(4) {
-  animation-delay: 0.75s;
 }
