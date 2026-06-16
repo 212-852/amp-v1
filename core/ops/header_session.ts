@@ -16,6 +16,34 @@ export type OpsHeaderSession = {
   image_url: string | null
 }
 
+export function normalizeOpsHeaderDisplay(
+  session?: HeaderSessionLike | null,
+): OpsHeaderSession {
+  const user_uuid = session?.user_uuid ?? null
+
+  if (user_uuid) {
+    const role = session?.role ?? "guest"
+
+    return {
+      visitor_uuid: session?.visitor_uuid ?? null,
+      user_uuid,
+      role,
+      tier: session?.tier ?? null,
+      display_name: session?.display_name ?? role,
+      image_url: session?.image_url ?? null,
+    }
+  }
+
+  return {
+    visitor_uuid: session?.visitor_uuid ?? null,
+    user_uuid: null,
+    role: "Guest",
+    tier: null,
+    display_name: "Guest",
+    image_url: null,
+  }
+}
+
 export function normalizeOpsHeaderSession(
   session?: HeaderSessionLike | null,
   options?: {

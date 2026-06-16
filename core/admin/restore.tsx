@@ -1,6 +1,8 @@
 import { redirect, unstable_rethrow } from "next/navigation"
 
+import AdminComingSoon from "@/components/admin/coming-soon"
 import AdminDataSections from "@/components/admin/data_sections"
+import AdminFooter from "@/components/admin/footer"
 import AdminHeader from "@/components/admin/header"
 import AdminPageFallback from "@/components/admin/page_fallback"
 import AdminSessionPanel from "@/components/admin/session_panel"
@@ -13,7 +15,7 @@ import { resolveSession } from "@/core/auth/session"
 import type { Session } from "@/core/auth/types"
 import { sendAuthDebug } from "@/core/debug"
 import { resolveEntranceContext } from "@/core/entrance/context"
-import { normalizeOpsHeaderSession } from "@/core/ops/header_session"
+import { normalizeOpsHeaderDisplay } from "@/core/ops/header_session"
 
 const ADMIN_PATH = "/admin"
 
@@ -53,33 +55,86 @@ async function sendRestoreDebug(
 }
 
 export function resolveAdminRestoreStep() {
-  const raw = process.env.ADMIN_RESTORE_STEP ?? "1"
+  const raw = process.env.ADMIN_RESTORE_STEP
+
+  if (!raw || raw === "ui") {
+    return 0
+  }
+
   const step = Number(raw)
 
   if (!Number.isFinite(step) || step < 1) {
-    return 1
+    return 0
   }
 
   return Math.min(step, 5)
+}
+
+async function resolveAdminAccess() {
+  const context = await resolveAuthContext()
+
+  await sendRestoreDebug(
+    "admin_restore_step_context_ok",
+    buildDebugPayload(null, context.requested_route ?? ADMIN_PATH),
+  )
+
+  const session = await resolveSession(context)
+
+  await sendRestoreDebug(
+    "admin_restore_step_session_ok",
+    buildDebugPayload(session, context.requested_route ?? ADMIN_PATH),
+  )
+
+  const entrance = await resolveEntranceContext()
+  const identity = await resolveIdentity(context, session)
+  const route = resolveAuthRoute(context, entrance, session, identity)
+  const redirect_to = resolveRoleRedirectPath(context, session)
+
+  await sendRestoreDebug("admin_restore_step_route_ok", {
+    ...buildDebugPayload(session, context.requested_route ?? ADMIN_PATH),
+    route_path: route.path,
+    route_role: route.role,
+    route_tier: route.tier,
+    redirect_to,
+  })
+
+  if (redirect_to && redirect_to !== (context.requested_route ?? ADMIN_PATH)) {
+    redirect(redirect_to)
+  }
+
+  return { context, session }
+}
+
+function renderAdminUiShell(session: Session | null | undefined) {
+  const header_session = normalizeOpsHeaderDisplay(session)
+
+  return (
+    <div className="min-h-dvh bg-neutral-50 text-neutral-900">
+      <AdminHeader session={header_session} />
+      <main className="mx-auto flex w-full max-w-[430px] flex-col gap-3 px-5 pb-[calc(118px+env(safe-area-inset-bottom,0px))] pt-4">
+        <AdminComingSoon title="本日の状況" />
+      </main>
+      <AdminFooter />
+    </div>
+  )
 }
 
 export async function renderAdminRestorePage() {
   const step = resolveAdminRestoreStep()
 
   try {
-    const context = await resolveAuthContext()
+    if (step === 0) {
+      const { session } = await resolveAdminAccess()
 
-    await sendRestoreDebug(
-      "admin_restore_step_context_ok",
-      buildDebugPayload(null, context.requested_route ?? ADMIN_PATH),
-    )
+      await sendRestoreDebug("admin_restore_step_header_ok", {
+        pathname: ADMIN_PATH,
+        ...normalizeOpsHeaderDisplay(session),
+      })
 
-    const session = await resolveSession(context)
+      return renderAdminUiShell(session)
+    }
 
-    await sendRestoreDebug(
-      "admin_restore_step_session_ok",
-      buildDebugPayload(session, context.requested_route ?? ADMIN_PATH),
-    )
+    const { session } = await resolveAdminAccess()
 
     if (step === 1) {
       return (
@@ -88,28 +143,6 @@ export async function renderAdminRestorePage() {
         </div>
       )
     }
-
-    const entrance = await resolveEntranceContext()
-    const identity = await resolveIdentity(context, session)
-    const route = resolveAuthRoute(context, entrance, session, identity)
-    const redirect_to = resolveRoleRedirectPath(context, session)
-
-    await sendRestoreDebug("admin_restore_step_route_ok", {
-      ...buildDebugPayload(session, context.requested_route ?? ADMIN_PATH),
-      route_path: route.path,
-      route_role: route.role,
-      route_tier: route.tier,
-      redirect_to,
-    })
-
-    if (redirect_to && redirect_to !== (context.requested_route ?? ADMIN_PATH)) {
-      redirect(redirect_to)
-    }
-
-    const header_session = normalizeOpsHeaderSession(session, {
-      default_display_name: "Admin",
-      default_role: "admin",
-    })
 
     if (step === 2) {
       return (
@@ -120,16 +153,13 @@ export async function renderAdminRestorePage() {
       )
     }
 
+    const header_session = normalizeOpsHeaderDisplay(session)
     const header = <AdminHeader session={header_session} />
 
     if (step === 3) {
       await sendRestoreDebug("admin_restore_step_header_ok", {
         pathname: ADMIN_PATH,
-        visitor_uuid: header_session.visitor_uuid,
-        user_uuid: header_session.user_uuid,
-        role: header_session.role,
-        tier: header_session.tier,
-        display_name: header_session.display_name,
+        ...header_session,
       })
 
       return (
@@ -145,11 +175,7 @@ export async function renderAdminRestorePage() {
     if (step === 4) {
       await sendRestoreDebug("admin_restore_step_header_ok", {
         pathname: ADMIN_PATH,
-        visitor_uuid: header_session.visitor_uuid,
-        user_uuid: header_session.user_uuid,
-        role: header_session.role,
-        tier: header_session.tier,
-        display_name: header_session.display_name,
+        ...header_session,
       })
 
       await sendRestoreDebug("admin_restore_step_shell_ok", {
@@ -161,11 +187,7 @@ export async function renderAdminRestorePage() {
 
     await sendRestoreDebug("admin_restore_step_header_ok", {
       pathname: ADMIN_PATH,
-      visitor_uuid: header_session.visitor_uuid,
-      user_uuid: header_session.user_uuid,
-      role: header_session.role,
-      tier: header_session.tier,
-      display_name: header_session.display_name,
+      ...header_session,
     })
 
     await sendRestoreDebug("admin_restore_step_shell_ok", {

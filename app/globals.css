@@ -27,3 +27,39 @@ a {
   color: inherit;
   text-decoration: none;
 }
+
+@keyframes admin-cat-blink {
+  0%,
+  88%,
+  100% {
+    transform: translateY(0) scaleY(1);
+  }
+
+  92%,
+  96% {
+    transform: translateY(1px) scaleY(0.9);
+  }
+}
+
+@keyframes admin-cat-wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+
+  25% {
+    transform: rotate(-4deg);
+  }
+
+  75% {
+    transform: rotate(4deg);
+  }
+}
+
+.admin-cat-icon {
+  display: inline-flex;
+  transform-origin: center bottom;
+  animation:
+    admin-cat-blink 2.8s ease-in-out infinite,
+    admin-cat-wiggle 4.2s ease-in-out infinite;
+}

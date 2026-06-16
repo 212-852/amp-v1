@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation"
 
 import { useOverlay, type OverlayType } from "@/components/overlay"
 import {
-  normalizeOpsHeaderSession,
+  normalizeOpsHeaderDisplay,
   type HeaderSessionLike,
   type OpsHeaderSession,
 } from "@/core/ops/header_session"
@@ -53,13 +53,11 @@ export default function OpsHeader({
 }) {
   const pathname = usePathname()
   const { openOverlay } = useOverlay()
-  const safe_session = normalizeOpsHeaderSession(session, {
-    default_display_name: "Admin",
-    default_role: "admin",
-  })
+  const safe_session = normalizeOpsHeaderDisplay(session)
+  const is_logged_in = Boolean(safe_session.user_uuid)
   const displayName = safe_session.display_name
-  const roleLabel = safe_session.role
-  const tierLabel = safe_session.tier
+  const roleLabel = is_logged_in ? safe_session.role : "Guest"
+  const tierLabel = is_logged_in ? safe_session.tier : null
   const pageLabel = pageLabels[pathname] ?? "ダッシュボード"
   const breadcrumbs = [
     { label: "ホーム", href: "/admin" },

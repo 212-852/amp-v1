@@ -1,4 +1,4 @@
-const CACHE_VERSION = "amp-mqg35pv3"
+const CACHE_VERSION = "amp-mqgdjmgn"
 
 const BYPASS_PREFIXES = [
   "/_next/static/",
