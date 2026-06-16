@@ -1,9 +1,12 @@
 import OpsShell from "@/components/ops/shell"
+import { resolveAdminPageRender } from "@/core/admin/render"
 
-export default function AdminLayout({
+export default async function AdminLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  return <OpsShell>{children}</OpsShell>
+  const { header_session } = await resolveAdminPageRender()
+
+  return <OpsShell session={header_session}>{children}</OpsShell>
 }

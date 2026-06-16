@@ -1,16 +1,14 @@
 import OpsAssistant from "@/components/ops/assistant"
 import OpsHeader from "@/components/ops/header"
-import { resolveAuthContext } from "@/core/auth/context"
-import { resolveSession } from "@/core/auth/session"
+import type { OpsHeaderSession } from "@/core/ops/header_session"
 
-export default async function OpsShell({
+export default function OpsShell({
   children,
+  session,
 }: Readonly<{
   children: React.ReactNode
+  session: OpsHeaderSession
 }>) {
-  const context = await resolveAuthContext()
-  const session = await resolveSession(context)
-
   return (
     <div className="min-h-dvh bg-neutral-50 text-neutral-900">
       <OpsHeader session={session} />

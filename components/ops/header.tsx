@@ -5,14 +5,9 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 
 import { useOverlay, type OverlayType } from "@/components/overlay"
+import type { OpsHeaderSession } from "@/core/ops/header_session"
 
-export type OpsHeaderSession = {
-  user_uuid: string | null
-  role: string
-  tier: string
-  display_name: string | null
-  image_url: string | null
-}
+export type { OpsHeaderSession } from "@/core/ops/header_session"
 
 const headerActions = [
   { label: "Chat", icon: MessageCircle },
@@ -47,15 +42,23 @@ function resolveInitials(value: string | null | undefined) {
   return normalized.slice(0, 2).toUpperCase()
 }
 
-export default function OpsHeader({ session }: { session: OpsHeaderSession }) {
+export default function OpsHeader({
+  session,
+}: {
+  session?: OpsHeaderSession | null
+}) {
   const pathname = usePathname()
   const { openOverlay } = useOverlay()
-  const isLoggedIn = Boolean(session.user_uuid)
-  const displayName = isLoggedIn
-    ? session.display_name ?? session.role
-    : "Guest"
-  const roleLabel = isLoggedIn ? session.role : "Guest"
-  const tierLabel = isLoggedIn ? session.tier : null
+  const safe_session: OpsHeaderSession = {
+    user_uuid: session?.user_uuid ?? null,
+    role: session?.role ?? "admin",
+    tier: session?.tier ?? null,
+    display_name: session?.display_name ?? "Admin",
+    image_url: session?.image_url ?? null,
+  }
+  const displayName = safe_session.display_name
+  const roleLabel = safe_session.role
+  const tierLabel = safe_session.tier
   const pageLabel = pageLabels[pathname] ?? "ダッシュボード"
   const breadcrumbs = [
     { label: "ホーム", href: "/admin" },
@@ -67,10 +70,10 @@ export default function OpsHeader({ session }: { session: OpsHeaderSession }) {
       <div className="mx-auto flex w-full max-w-[430px] items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <div className="relative h-[52px] w-[52px] shrink-0 overflow-hidden rounded-full border border-neutral-200 bg-neutral-50">
-            {session.image_url ? (
+            {safe_session.image_url ? (
               <span
                 className="block h-full w-full bg-cover bg-center"
-                style={{ backgroundImage: `url(${session.image_url})` }}
+                style={{ backgroundImage: `url(${safe_session.image_url})` }}
                 aria-hidden="true"
               />
             ) : (

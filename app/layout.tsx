@@ -16,6 +16,10 @@ export const metadata: Metadata = {
   title: "PET TAXI",
   description: "AMP v1 user app shell",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/images/icon_192.png",
+    apple: "/images/icon_192.png",
+  },
   appleWebApp: {
     capable: true,
     title: "PET TAXI",
