@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
+import { LiffAutoLogin } from "@/components/access/liff";
 import { AccessPresence } from "@/components/access/presence";
 import { OverlayProvider } from "@/components/overlay";
 import { LocaleProvider } from "@/src/components/locale/provider";
@@ -32,6 +33,7 @@ export default function RootLayout({
         <LocaleProvider>
           <OverlayProvider>
             <AccessPresence />
+            <LiffAutoLogin />
             {children}
           </OverlayProvider>
         </LocaleProvider>

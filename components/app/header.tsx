@@ -14,6 +14,7 @@ export type AppHeaderAuth = {
   image_url: string | null
   provider: "google" | "line" | "email" | null
   email: string | null
+  can_logout: boolean
 }
 
 const content = {
@@ -180,6 +181,7 @@ export default function AppHeader({ auth }: { auth: AppHeaderAuth }) {
         image_url: auth.image_url,
         provider: auth.provider,
         email: auth.email,
+        can_logout: auth.can_logout,
       },
     })
   }

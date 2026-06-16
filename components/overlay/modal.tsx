@@ -510,22 +510,24 @@ function AccountPanel({
         </span>
       </div>
 
-      <button
-        type="button"
-        onClick={handle_logout}
-        disabled={is_logging_out}
-        className={[
-          "flex min-h-[54px] items-center justify-between rounded-2xl",
-          "border border-[#e5e5e5] px-4 py-3 text-left",
-          "text-[14px] font-semibold text-[#111111]",
-          "transition-colors hover:bg-[#fdfaf6] focus-visible:outline",
-          "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8f5d28]",
-          is_logging_out ? "cursor-wait opacity-75" : "",
-        ].join(" ")}
-      >
-        <span>{content.logout[locale]}</span>
-        <LogOut className="h-5 w-5 text-[#8f5d28]" strokeWidth={2} aria-hidden="true" />
-      </button>
+      {account?.can_logout ? (
+        <button
+          type="button"
+          onClick={handle_logout}
+          disabled={is_logging_out}
+          className={[
+            "flex min-h-[54px] items-center justify-between rounded-2xl",
+            "border border-[#e5e5e5] px-4 py-3 text-left",
+            "text-[14px] font-semibold text-[#111111]",
+            "transition-colors hover:bg-[#fdfaf6] focus-visible:outline",
+            "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8f5d28]",
+            is_logging_out ? "cursor-wait opacity-75" : "",
+          ].join(" ")}
+        >
+          <span>{content.logout[locale]}</span>
+          <LogOut className="h-5 w-5 text-[#8f5d28]" strokeWidth={2} aria-hidden="true" />
+        </button>
+      ) : null}
 
       <button
         type="button"

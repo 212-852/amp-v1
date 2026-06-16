@@ -15,6 +15,10 @@ export default async function Page() {
     resolveSession(context),
   ])
   const auth = await resolveAuthUserProfile(session.user_uuid)
+  const headerAuth = {
+    ...auth,
+    can_logout: session.can_logout,
+  }
 
   if (route.path !== "/") {
     redirect(route.path)
@@ -22,7 +26,7 @@ export default async function Page() {
 
   return (
     <div className="min-h-dvh bg-[#f5e8d5] text-[#3d2a19]">
-      <AppHeader auth={auth} />
+      <AppHeader auth={headerAuth} />
       <AppHome />
       <AppFooter />
     </div>

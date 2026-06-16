@@ -42,6 +42,7 @@ export type OverlayAccount = {
   image_url: string | null
   provider: "google" | "line" | "email" | null
   email: string | null
+  can_logout: boolean
 }
 
 export type OverlayRule = {

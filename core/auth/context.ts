@@ -1,6 +1,7 @@
 import { cookies, headers } from "next/headers"
 
 import type { AuthContext, SourceChannel } from "@/core/auth/types"
+import { sendAuthDebug } from "@/core/debug"
 import { resolveEntranceContext } from "@/core/entrance/context"
 
 function resolveSourceChannel(
@@ -71,7 +72,7 @@ export async function resolveAuthContext(): Promise<AuthContext> {
     requestHeaders.get("x-amp-pathname") ?? requestHeaders.get("x-amp-route")
   const search = requestHeaders.get("x-amp-search")
 
-  return {
+  const context: AuthContext = {
     auth_token:
       resolveBearerToken(requestHeaders.get("authorization")) ??
       cookieStore.get("sb-access-token")?.value ??
@@ -89,4 +90,12 @@ export async function resolveAuthContext(): Promise<AuthContext> {
     ),
     locale: requestHeaders.get("x-amp-locale"),
   }
+
+  await sendAuthDebug("auth_entry_detected", {
+    source_channel: context.source_channel,
+    requested_route: context.requested_route,
+    has_auth_token: Boolean(context.auth_token),
+  })
+
+  return context
 }

@@ -46,8 +46,16 @@ const identityEvents = new Set([
 ])
 
 const authSessionEvents = new Set([
+  "auth_entry_detected",
   "identity_conflict",
+  "liff_init_started",
+  "liff_login_required",
+  "liff_profile_resolved",
+  "logout_visibility_resolved",
   "participant_transfer_failed",
+  "session_restore_failed",
+  "session_restore_started",
+  "session_restore_success",
   "visitor_cookie_set",
   "visitor_cookie_only",
   "visitor_missing",

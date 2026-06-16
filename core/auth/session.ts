@@ -606,7 +606,41 @@ function buildAnonymousSession(context: AuthContext): AppSession {
     visitor_uuid: null,
     user_uuid: null,
     source_channel: context.source_channel ?? "web",
+    can_logout: false,
   }
+}
+
+function resolveLogoutVisibility(session: {
+  user_uuid: string | null
+  source_channel: SourceChannel
+}) {
+  return Boolean(
+    session.user_uuid &&
+      (session.source_channel === "web" || session.source_channel === "pwa"),
+  )
+}
+
+async function withLogoutVisibility(
+  session: Omit<AppSession, "can_logout"> & { can_logout?: boolean },
+  request_id?: string | null,
+): Promise<AppSession> {
+  const resolved: AppSession = {
+    ...session,
+    can_logout: resolveLogoutVisibility(session),
+  }
+
+  await send_auth_debug(
+    "logout_visibility_resolved",
+    {
+      visitor_uuid: resolved.visitor_uuid,
+      user_uuid: resolved.user_uuid,
+      source_channel: resolved.source_channel,
+      can_logout: resolved.can_logout,
+    },
+    request_id,
+  )
+
+  return resolved
 }
 
 function buildFailedSessionCacheEntry(context: AuthContext): SessionCacheEntry {
@@ -856,11 +890,11 @@ async function resolve_session_context_core(
       )
     }
 
-    const session: AppSession = {
+    const session = await withLogoutVisibility({
       visitor_uuid: visitorResolution.visitor_uuid,
       user_uuid: user_uuid ?? visitor?.user_uuid ?? null,
       source_channel: context.source_channel,
-    }
+    }, request_id)
 
     await send_auth_debug(
       "session_built",
@@ -1109,9 +1143,28 @@ export async function resolveSession(
   const request_id = await resolveRequestId()
 
   try {
+    await send_auth_debug(
+      "session_restore_started",
+      {
+        pathname: context.requested_route,
+        source_channel: context.source_channel,
+      },
+      request_id,
+    )
+
     const session = await getResolvedSessionFromRequestHeaders()
 
     if (session) {
+      await send_auth_debug(
+        "session_restore_success",
+        {
+          pathname: context.requested_route,
+          visitor_uuid: session.visitor_uuid,
+          user_uuid: session.user_uuid,
+          source_channel: session.source_channel,
+        },
+        request_id,
+      )
       await send_auth_debug(
         "resolve_session_exit",
         {
@@ -1126,11 +1179,42 @@ export async function resolveSession(
     }
 
     if (visitorStore !== supabaseVisitorStore) {
-      return resolve_session_context(context, visitorStore)
+      const customSession = await resolve_session_context(context, visitorStore)
+      await send_auth_debug(
+        "session_restore_success",
+        {
+          pathname: context.requested_route,
+          visitor_uuid: customSession.visitor_uuid,
+          user_uuid: customSession.user_uuid,
+          source_channel: customSession.source_channel,
+        },
+        request_id,
+      )
+      return customSession
     }
 
-    return resolveSessionCached(request_id)
+    const cachedSession = await resolveSessionCached(request_id)
+    await send_auth_debug(
+      "session_restore_success",
+      {
+        pathname: context.requested_route,
+        visitor_uuid: cachedSession.visitor_uuid,
+        user_uuid: cachedSession.user_uuid,
+        source_channel: cachedSession.source_channel,
+      },
+      request_id,
+    )
+    return cachedSession
   } catch (error) {
+    await send_auth_debug(
+      "session_restore_failed",
+      {
+        pathname: context.requested_route,
+        source_channel: context.source_channel,
+        error_message: error instanceof Error ? error.message : String(error),
+      },
+      request_id,
+    )
     await send_auth_debug(
       "session_failed",
       {
@@ -1157,11 +1241,11 @@ async function getResolvedSessionFromRequestHeaders(): Promise<AppSession | null
       return null
     }
 
-    return {
+    return withLogoutVisibility({
       visitor_uuid,
       user_uuid: requestHeaders.get("x-amp-session-user-uuid"),
       source_channel,
-    }
+    })
   } catch {
     return null
   }

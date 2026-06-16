@@ -641,3 +641,32 @@ export async function verifyCustomOtpLogin(request: NextRequest) {
     return jsonError(error, "Failed to verify OTP", statusForOtpError(error))
   }
 }
+
+export async function sendLiffAuthDebug(request: NextRequest) {
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+  const event = typeof body.event === "string" ? body.event : null
+
+  if (
+    event !== "liff_init_started" &&
+    event !== "liff_login_required" &&
+    event !== "liff_profile_resolved"
+  ) {
+    return NextResponse.json({ ok: false }, { status: 400 })
+  }
+
+  await sendAuthDebug(event, {
+    provider: "line",
+    source_channel: "liff",
+    ...body,
+  })
+
+  return NextResponse.json({ ok: true })
+}
+
+export async function startLineLogin() {
+  const liffUrl =
+    process.env.NEXT_PUBLIC_LIFF_URL ??
+    "https://liff.line.me/2006953406-vj2gYoAb"
+
+  return NextResponse.redirect(liffUrl, 303)
+}
