@@ -779,6 +779,29 @@ function validateLineAuthorizeUrl(input: {
   }
 }
 
+function buildLineAuthorizeUrl(input: {
+  channelId: string
+  redirectUri: string
+  state: string
+}) {
+  const url = new URL(LINE_LOGIN_AUTHORIZE_URL)
+
+  url.searchParams.set("response_type", "code")
+  url.searchParams.set("client_id", input.channelId)
+  url.searchParams.set("redirect_uri", input.redirectUri)
+  url.searchParams.set("state", input.state)
+  url.searchParams.set("scope", "profile openid")
+
+  validateLineAuthorizeUrl({
+    url,
+    channelId: input.channelId,
+    redirectUri: input.redirectUri,
+    state: input.state,
+  })
+
+  return url
+}
+
 function isUuid(value: string | null) {
   return Boolean(
     value &&
@@ -911,6 +934,15 @@ async function createLoginBridge(input: {
 
   const expires_at = new Date(Date.now() + 10 * 60 * 1000).toISOString()
   const oauth_state = crypto.randomUUID()
+
+  await sendIdentityDebug("bridge_insert_start", {
+    provider: input.provider,
+    visitor_uuid: input.visitor_uuid,
+    user_uuid: input.user_uuid,
+    source_channel: input.source_channel,
+    expires_at,
+  })
+
   const response = await fetch(
     restUrl(config, "login_bridge", `select=${LOGIN_BRIDGE_SELECT}`),
     {
@@ -948,6 +980,15 @@ async function createLoginBridge(input: {
     throw new Error("Login bridge creation did not return bridge_uuid")
   }
 
+  await sendIdentityDebug("bridge_insert_success", {
+    provider: bridge.provider,
+    bridge_uuid: bridge.bridge_uuid,
+    visitor_uuid: bridge.visitor_uuid,
+    user_uuid: bridge.user_uuid,
+    source_channel: bridge.source_channel,
+    expires_at: bridge.expires_at,
+  })
+
   return bridge
 }
 
@@ -981,6 +1022,14 @@ export async function startLoginBridge(request: NextRequest) {
     const context = await resolveAuthContext()
     const session = await resolveSession(context)
     const source_channel = body.source_channel === "pwa" ? "pwa" : context.source_channel
+    const config = lineLoginConfig(request)
+
+    await sendIdentityDebug("bridge_start_request", {
+      provider: "line",
+      visitor_uuid: session.visitor_uuid,
+      user_uuid: session.user_uuid,
+      source_channel,
+    })
 
     if (!session.visitor_uuid) {
       throw new Error("Login bridge requires visitor_uuid")
@@ -991,6 +1040,16 @@ export async function startLoginBridge(request: NextRequest) {
       user_uuid: session.user_uuid,
       provider: "line",
       source_channel,
+    })
+    const state = encodeLineBridgeState({
+      bridge_uuid: bridge.bridge_uuid,
+      oauth_state: bridge.oauth_state,
+      source_channel: "pwa",
+    })
+    const authorizeUrl = buildLineAuthorizeUrl({
+      channelId: config.channelId,
+      redirectUri: config.redirectUri,
+      state,
     })
 
     await sendIdentityDebug("bridge_start", {
@@ -1007,18 +1066,41 @@ export async function startLoginBridge(request: NextRequest) {
       visitor_uuid: bridge.visitor_uuid,
       source_channel: bridge.source_channel,
     })
+    await sendIdentityDebug("line_oauth_authorize_url", {
+      provider: "line",
+      bridge_uuid: bridge.bridge_uuid,
+      visitor_uuid: bridge.visitor_uuid,
+      user_uuid: bridge.user_uuid,
+      source_channel: bridge.source_channel,
+      channel_id: config.channelId,
+      redirect_uri: config.redirectUri,
+      expected_redirect_uri: "https://app.da-nya.com/api/auth/line/callback",
+      callback_matches_expected:
+        config.redirectUri === "https://app.da-nya.com/api/auth/line/callback",
+      liff_callback_detected: config.redirectUri.includes("liff.line.me"),
+      state,
+      authorize_url: authorizeUrl.toString(),
+    })
+    await sendIdentityDebug("bridge_authorize_url_created", {
+      provider: "line",
+      bridge_uuid: bridge.bridge_uuid,
+      visitor_uuid: bridge.visitor_uuid,
+      source_channel: bridge.source_channel,
+      authorize_url: authorizeUrl.toString(),
+    })
+    await sendIdentityDebug("bridge_start_response", {
+      provider: "line",
+      bridge_uuid: bridge.bridge_uuid,
+      visitor_uuid: bridge.visitor_uuid,
+      user_uuid: bridge.user_uuid,
+      source_channel: bridge.source_channel,
+      authorize_url_exists: true,
+    })
 
     return NextResponse.json({
       ok: true,
-      success: true,
       bridge_uuid: bridge.bridge_uuid,
-      start_url: `/api/auth/line/start?bridge_uuid=${encodeURIComponent(
-        bridge.bridge_uuid,
-      )}&source_channel=pwa`,
-      authorize_url: `/api/auth/line/start?bridge_uuid=${encodeURIComponent(
-        bridge.bridge_uuid,
-      )}&source_channel=pwa`,
-      expires_at: bridge.expires_at,
+      authorize_url: authorizeUrl.toString(),
     })
   } catch (error) {
     return jsonError(error, "Failed to start login bridge", 500)
@@ -1114,9 +1196,11 @@ export async function sendLoginBridgeDebug(request: NextRequest) {
     event !== "bridge_polling_started" &&
     event !== "line_login_button_clicked" &&
     event !== "pwa_bridge_start_request" &&
+    event !== "pwa_bridge_start_failed" &&
     event !== "pwa_bridge_start_success" &&
     event !== "pwa_line_popup_blocked" &&
     event !== "pwa_line_popup_opened" &&
+    event !== "pwa_line_popup_redirected" &&
     event !== "pwa_reload_after_bridge"
   ) {
     return NextResponse.json({ ok: false }, { status: 400 })
@@ -1169,16 +1253,7 @@ export async function startLineLogin(request: NextRequest) {
         })
       : null
     const state = bridge_state ?? crypto.randomUUID()
-    const url = new URL(LINE_LOGIN_AUTHORIZE_URL)
-
-    url.searchParams.set("response_type", "code")
-    url.searchParams.set("client_id", config.channelId)
-    url.searchParams.set("redirect_uri", config.redirectUri)
-    url.searchParams.set("state", state)
-    url.searchParams.set("scope", "profile openid")
-
-    validateLineAuthorizeUrl({
-      url,
+    const url = buildLineAuthorizeUrl({
       channelId: config.channelId,
       redirectUri: config.redirectUri,
       state,

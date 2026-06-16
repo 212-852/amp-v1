@@ -1020,53 +1020,94 @@ export default function OverlayModal({
   async function start_pwa_line_bridge(popup: Window | null) {
     set_loading_action("line")
     set_bridge_status("polling")
-    await send_bridge_debug("pwa_bridge_start_request", {
+    let failure_logged = false
+    send_bridge_debug("pwa_bridge_start_request", {
       provider: "line",
       source_channel: "pwa",
       popup_opened: Boolean(popup),
     })
 
-    const response = await fetch("/api/auth/bridge/start", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+    try {
+      const response = await fetch("/api/auth/bridge/start", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          provider: "line",
+          source_channel: "pwa",
+        }),
+      })
+      const result = (await response.json().catch(() => ({}))) as {
+        ok?: boolean
+        bridge_uuid?: string
+        authorize_url?: string
+        error?: string
+        message?: string
+      }
+      const authorize_url = result.authorize_url
+
+      if (!response.ok || result.ok === false || !result.bridge_uuid || !authorize_url) {
+        const error_message =
+          result.message ?? result.error ?? "Failed to start LINE login"
+
+        await send_bridge_debug("pwa_bridge_start_failed", {
+          provider: "line",
+          source_channel: "pwa",
+          http_status: response.status,
+          response_json: result,
+          error_message,
+          bridge_uuid: result.bridge_uuid ?? null,
+          authorize_url_exists: Boolean(authorize_url),
+        })
+        failure_logged = true
+        throw new Error(error_message)
+      }
+
+      localStorage.setItem("amp_line_bridge_uuid", result.bridge_uuid)
+      await send_bridge_debug("pwa_bridge_start_success", {
         provider: "line",
+        bridge_uuid: result.bridge_uuid,
         source_channel: "pwa",
-      }),
-    })
-    const result = (await response.json().catch(() => ({}))) as {
-      ok?: boolean
-      bridge_uuid?: string
-      authorize_url?: string
-      start_url?: string
-      error?: string
-      message?: string
+        http_status: response.status,
+        response_json: result,
+        authorize_url_exists: true,
+      })
+
+      const final_url = new URL(authorize_url, window.location.origin).toString()
+
+      if (popup) {
+        popup.location.href = final_url
+        await send_bridge_debug("pwa_line_popup_redirected", {
+          provider: "line",
+          bridge_uuid: result.bridge_uuid,
+          source_channel: "pwa",
+          authorize_url: final_url,
+        })
+      } else {
+        window.location.href = final_url
+      }
+
+      start_bridge_polling(result.bridge_uuid)
+    } catch (error) {
+      const error_message = error instanceof Error ? error.message : String(error)
+
+      popup?.close()
+      set_bridge_status("failed")
+      set_loading_action(null)
+      if (!failure_logged) {
+        await send_bridge_debug("pwa_bridge_start_failed", {
+          provider: "line",
+          source_channel: "pwa",
+          http_status: null,
+          response_json: null,
+          error_message,
+          bridge_uuid: null,
+          authorize_url_exists: false,
+        })
+      }
+      throw error
     }
-    const authorize_url = result.authorize_url ?? result.start_url
-
-    if (!response.ok || result.ok === false || !result.bridge_uuid || !authorize_url) {
-      throw new Error(result.message ?? result.error ?? "Failed to start LINE login")
-    }
-
-    localStorage.setItem("amp_line_bridge_uuid", result.bridge_uuid)
-    await send_bridge_debug("pwa_bridge_start_success", {
-      provider: "line",
-      bridge_uuid: result.bridge_uuid,
-      source_channel: "pwa",
-      authorize_url,
-    })
-    start_bridge_polling(result.bridge_uuid)
-
-    const final_url = new URL(authorize_url, window.location.origin).toString()
-
-    if (popup) {
-      popup.location.href = final_url
-      return
-    }
-
-    window.location.href = final_url
   }
 
   function handle_link_click(item: OverlayItem) {
