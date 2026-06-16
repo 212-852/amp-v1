@@ -75,6 +75,8 @@ const identityEvents = new Set([
   "pwa_bridge_start_failed",
   "pwa_bridge_start_success",
   "pwa_line_popup_blocked",
+  "pwa_popup_connecting_page_failed",
+  "pwa_popup_connecting_page_written",
   "pwa_line_popup_opened",
   "pwa_line_popup_redirected",
   "pwa_login_success_ui_shown",

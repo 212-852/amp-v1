@@ -1273,6 +1273,8 @@ export async function sendLoginBridgeDebug(request: NextRequest) {
     event !== "pwa_line_popup_blocked" &&
     event !== "pwa_line_popup_opened" &&
     event !== "pwa_line_popup_redirected" &&
+    event !== "pwa_popup_connecting_page_failed" &&
+    event !== "pwa_popup_connecting_page_written" &&
     event !== "pwa_login_success_ui_shown" &&
     event !== "pwa_popup_close_attempted" &&
     event !== "pwa_popup_close_failed" &&

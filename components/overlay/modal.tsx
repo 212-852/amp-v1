@@ -1065,6 +1065,80 @@ export default function OverlayModal({
     }).catch(() => null)
   }
 
+  function popup_page_html(input: {
+    title: string
+    text: string
+    show_spinner: boolean
+  }) {
+    return [
+      "<!doctype html>",
+      '<html lang="ja">',
+      "<head>",
+      '<meta charset="utf-8" />',
+      '<meta name="viewport" content="width=device-width, initial-scale=1" />',
+      `<title>${input.title}</title>`,
+      "<style>",
+      "body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f7efe6;color:#3b2f2a;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;}",
+      ".card{width:min(88vw,360px);padding:28px 24px;border-radius:24px;background:#fffdf9;border:1px solid #eadfce;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.06);}",
+      ".title{font-size:18px;font-weight:800;margin-bottom:10px;}",
+      ".text{font-size:14px;line-height:1.7;color:#6a5a50;}",
+      ".spinner{width:30px;height:30px;margin:0 auto 18px;border:3px solid #eadfce;border-top-color:#a1662f;border-radius:50%;animation:spin .9s linear infinite;}",
+      "@keyframes spin{to{transform:rotate(360deg)}}",
+      "</style>",
+      "</head>",
+      "<body>",
+      '<div class="card">',
+      input.show_spinner ? '<div class="spinner"></div>' : "",
+      `<div class="title">${input.title}</div>`,
+      `<div class="text">${input.text}</div>`,
+      "</div>",
+      "</body>",
+      "</html>",
+    ].join("")
+  }
+
+  function write_popup_page(
+    popup: Window | null,
+    input: { title: string; text: string; show_spinner: boolean },
+  ) {
+    if (!popup) {
+      return false
+    }
+
+    try {
+      popup.document.open()
+      popup.document.write(popup_page_html(input))
+      popup.document.close()
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  function write_connecting_popup(popup: Window | null) {
+    const written = write_popup_page(popup, {
+      title: "Connecting...",
+      text: "LINEログイン画面を開いています。<br />このまま少しお待ちください。",
+      show_spinner: true,
+    })
+
+    send_bridge_debug(
+      written ? "pwa_popup_connecting_page_written" : "pwa_popup_connecting_page_failed",
+      {
+        provider: "line",
+        source_channel: "pwa",
+      },
+    )
+  }
+
+  function write_popup_error(popup: Window | null) {
+    write_popup_page(popup, {
+      title: "ログインを開始できませんでした",
+      text: "アプリに戻って、もう一度お試しください。",
+      show_spinner: false,
+    })
+  }
+
   function start_bridge_polling(bridge_uuid: string) {
     stop_bridge_polling()
     set_bridge_status("polling")
@@ -1236,7 +1310,7 @@ export default function OverlayModal({
           ? error.name === "AbortError"
           : error_message === "AbortError" || error_message.includes("aborted")
 
-      popup?.close()
+      write_popup_error(popup)
       bridge_popup_ref.current = null
       set_bridge_status("failed")
       set_loading_action(null)
@@ -1275,6 +1349,7 @@ export default function OverlayModal({
       bridge_popup_ref.current = popup
 
       if (popup) {
+        write_connecting_popup(popup)
         popup.location.href = bridge_authorize_url
         send_bridge_debug("pwa_line_popup_redirected", {
           provider: "line",
@@ -1296,6 +1371,7 @@ export default function OverlayModal({
     }
 
     const popup = window.open("about:blank", "_blank")
+    write_connecting_popup(popup)
     start_pwa_line_bridge(popup).catch(() => null)
   }
 
@@ -1349,6 +1425,7 @@ export default function OverlayModal({
       const popup = window.open("about:blank", "_blank")
 
       if (popup) {
+        write_connecting_popup(popup)
         send_bridge_debug("pwa_line_popup_opened", {
           provider: "line",
           source_channel,
