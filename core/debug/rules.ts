@@ -111,7 +111,7 @@ const authSessionEvents = new Set([
   "admin_page_render_started",
   "admin_page_context_resolved",
   "admin_page_session_resolved",
-  "admin_page_route_decided",
+  "admin_page_route_resolved",
   "admin_page_header_props_ready",
   "admin_page_render_success",
   "admin_page_render_failed",
