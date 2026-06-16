@@ -1,4 +1,4 @@
-import { randomInt } from "crypto"
+import { createHmac, randomInt, timingSafeEqual } from "crypto"
 
 import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
@@ -14,13 +14,11 @@ import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/re
 import { sendAuthDebug } from "@/core/debug"
 import { sendMail } from "@/core/mail/action"
 
-type OtpPurpose = "login" | "register" | "verify" | "reset_password"
 type OtpChannel = "email" | "line" | "sms"
 
 type OtpContext = {
   visitor_uuid: string
   user_uuid: string | null
-  purpose: OtpPurpose
   channel: OtpChannel
   target: string
 }
@@ -29,18 +27,19 @@ type OtpRecord = {
   otp_uuid: string
   channel: OtpChannel
   target: string
-  code: string
-  purpose: OtpPurpose
+  code_hash: string
   visitor_uuid: string | null
   user_uuid: string | null
   attempt_count: number
   expires_at: string
-  used_at: string | null
+  consumed_at: string | null
   created_at: string
 }
 
 const OTP_SELECT =
-  "otp_uuid,channel,target,code,purpose,visitor_uuid,user_uuid,attempt_count,expires_at,used_at,created_at"
+  "otp_uuid,visitor_uuid,user_uuid,channel,target,code_hash,expires_at,consumed_at,attempt_count,created_at"
+
+const OTP_MAX_ATTEMPTS = 5
 
 function appBaseUrl(request: Request) {
   const requestUrl = new URL(request.url)
@@ -131,19 +130,6 @@ function normalize_channel(value: unknown): OtpChannel {
   return "email"
 }
 
-function normalize_purpose(value: unknown): OtpPurpose {
-  if (
-    value === "login" ||
-    value === "register" ||
-    value === "verify" ||
-    value === "reset_password"
-  ) {
-    return value
-  }
-
-  return "login"
-}
-
 function normalize_target(channel: OtpChannel, value: unknown) {
   const target = normalize_string(value)
 
@@ -169,7 +155,6 @@ function normalize_code(value: unknown) {
 function normalize_otp_context(input: {
   session: AppSession
   channel?: unknown
-  purpose?: unknown
   target: unknown
 }): OtpContext {
   const channel = normalize_channel(input.channel)
@@ -186,7 +171,6 @@ function normalize_otp_context(input: {
   return {
     visitor_uuid: input.session.visitor_uuid,
     user_uuid: input.session.user_uuid,
-    purpose: normalize_purpose(input.purpose),
     channel,
     target,
   }
@@ -196,13 +180,38 @@ function otp_filter(context: OtpContext) {
   return [
     `channel=eq.${encodeURIComponent(context.channel)}`,
     `target=eq.${encodeURIComponent(context.target)}`,
-    `purpose=eq.${encodeURIComponent(context.purpose)}`,
     `visitor_uuid=eq.${encodeURIComponent(context.visitor_uuid)}`,
   ].join("&")
 }
 
 function generate_otp_code() {
   return String(randomInt(0, 1_000_000)).padStart(6, "0")
+}
+
+function otp_secret() {
+  const secret = process.env.OTP_SECRET
+
+  if (!secret) {
+    throw new Error("OTP_SECRET is required")
+  }
+
+  return secret
+}
+
+function hash_otp_code(context: OtpContext, code: string) {
+  return createHmac("sha256", otp_secret())
+    .update([context.channel, context.target, context.visitor_uuid, code].join(":"))
+    .digest("hex")
+}
+
+function safe_hash_equal(expected: string, actual: string) {
+  const expectedBuffer = Buffer.from(expected, "hex")
+  const actualBuffer = Buffer.from(actual, "hex")
+
+  return (
+    expectedBuffer.length === actualBuffer.length &&
+    timingSafeEqual(expectedBuffer, actualBuffer)
+  )
 }
 
 async function latest_otp(context: OtpContext) {
@@ -218,7 +227,7 @@ async function latest_otp(context: OtpContext) {
       "otp",
       [
         otp_filter(context),
-        "used_at=is.null",
+        "consumed_at=is.null",
         `select=${OTP_SELECT}`,
         "order=created_at.desc",
         "limit=1",
@@ -265,12 +274,12 @@ export async function expire_otp(context: OtpContext) {
 
   const now = new Date().toISOString()
   const response = await fetch(
-    restUrl(config, "otp", [otp_filter(context), "used_at=is.null"].join("&")),
+    restUrl(config, "otp", [otp_filter(context), "consumed_at=is.null"].join("&")),
     {
       method: "PATCH",
       headers: restHeaders(config),
       body: JSON.stringify({
-        used_at: now,
+        consumed_at: now,
       }),
       cache: "no-store",
     },
@@ -308,11 +317,11 @@ export async function create_otp(context: OtpContext) {
     body: JSON.stringify({
       channel: context.channel,
       target: context.target,
-      code,
-      purpose: context.purpose,
+      code_hash: hash_otp_code(context, code),
       visitor_uuid: context.visitor_uuid,
       user_uuid: context.user_uuid,
       expires_at,
+      attempt_count: 0,
     }),
     cache: "no-store",
   })
@@ -328,7 +337,10 @@ export async function create_otp(context: OtpContext) {
 
   const rows = (await response.json()) as OtpRecord[]
 
-  return rows[0]
+  return {
+    record: rows[0],
+    code,
+  }
 }
 
 async function increment_attempt(record: OtpRecord) {
@@ -373,7 +385,7 @@ export async function consume_otp(record: OtpRecord) {
       method: "PATCH",
       headers: restHeaders(config),
       body: JSON.stringify({
-        used_at: new Date().toISOString(),
+        consumed_at: new Date().toISOString(),
       }),
       cache: "no-store",
     },
@@ -396,7 +408,7 @@ export async function verify_otp(context: OtpContext, code: string) {
     throw new Error("OTP code was not found")
   }
 
-  if (record.used_at) {
+  if (record.consumed_at) {
     throw new Error("OTP code was already used")
   }
 
@@ -405,15 +417,15 @@ export async function verify_otp(context: OtpContext, code: string) {
     throw new Error("OTP code has expired")
   }
 
-  if (record.attempt_count >= 5) {
+  if (record.attempt_count >= OTP_MAX_ATTEMPTS) {
     await consume_otp(record)
     throw new Error("OTP attempt limit exceeded")
   }
 
-  if (record.code !== code) {
+  if (!safe_hash_equal(hash_otp_code(context, code), record.code_hash)) {
     await increment_attempt(record)
 
-    if (record.attempt_count + 1 >= 5) {
+    if (record.attempt_count + 1 >= OTP_MAX_ATTEMPTS) {
       await consume_otp(record)
     }
 
@@ -427,7 +439,7 @@ export async function verify_otp(context: OtpContext, code: string) {
 
 function otp_email(input: { code: string }) {
   return {
-    subject: "【ペットタクシーわんだにゃー】\n認証コード",
+    subject: "【ペットタクシーわんだにゃー】認証コード",
     text: ["認証コード", "", input.code, "", "このコードは10分で失効します。"].join("\n"),
   }
 }
@@ -527,36 +539,33 @@ export async function sendOtpLogin(request: NextRequest) {
     const otpContext = normalize_otp_context({
       session,
       channel: body.channel,
-      purpose: body.purpose,
       target: body.target ?? body.email,
     })
 
     await sendIdentityDebug("otp_send_request", {
       channel: otpContext.channel,
       target: otpContext.target,
-      purpose: otpContext.purpose,
       visitor_uuid: otpContext.visitor_uuid,
       user_uuid: otpContext.user_uuid,
       source_channel: context.source_channel,
     })
 
-    const record = await create_otp(otpContext)
+    const issued = await create_otp(otpContext)
 
     if (otpContext.channel === "email") {
       await sendMail({
         to: otpContext.target,
-        ...otp_email({ code: record.code }),
+        ...otp_email({ code: issued.code }),
       })
     }
 
     await sendIdentityDebug("otp_send_success", {
       channel: otpContext.channel,
       target: otpContext.target,
-      purpose: otpContext.purpose,
       visitor_uuid: otpContext.visitor_uuid,
       user_uuid: otpContext.user_uuid,
-      otp_uuid: record.otp_uuid,
-      expires_at: record.expires_at,
+      otp_uuid: issued.record?.otp_uuid ?? null,
+      expires_at: issued.record?.expires_at ?? null,
     })
 
     return NextResponse.json({
@@ -576,7 +585,6 @@ export async function verifyCustomOtpLogin(request: NextRequest) {
     const otpContext = normalize_otp_context({
       session,
       channel: body.channel,
-      purpose: body.purpose,
       target: body.target ?? body.email,
     })
     const code = normalize_code(body.code ?? body.token)
@@ -584,7 +592,6 @@ export async function verifyCustomOtpLogin(request: NextRequest) {
     await sendIdentityDebug("otp_verify_request", {
       channel: otpContext.channel,
       target: otpContext.target,
-      purpose: otpContext.purpose,
       visitor_uuid: otpContext.visitor_uuid,
       user_uuid: otpContext.user_uuid,
       source_channel: context.source_channel,
@@ -603,7 +610,6 @@ export async function verifyCustomOtpLogin(request: NextRequest) {
     await sendIdentityDebug("otp_verify_success", {
       channel: otpContext.channel,
       target: otpContext.target,
-      purpose: otpContext.purpose,
       visitor_uuid: otpContext.visitor_uuid,
       user_uuid: runtimeSession.user_uuid,
     })

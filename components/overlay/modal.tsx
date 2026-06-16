@@ -94,7 +94,7 @@ const content = {
     es: "Inicia sesion con tu correo electronico",
   },
   email_step_description: {
-    ja: "メールアドレスへ認証コードを送信します",
+    ja: "メールアドレスに認証コードを送信します",
     en: "We will send a verification code to your email address.",
     es: "Enviaremos un codigo de verificacion a tu correo.",
   },
@@ -715,7 +715,6 @@ function EmailLoginPanel({
     set_loading(true)
     post_json("/api/auth/otp/send", {
       channel: "email",
-      purpose: "login",
       target: email,
     })
       .then(() => {
@@ -742,7 +741,6 @@ function EmailLoginPanel({
     submitted_otp_ref.current = otp
     post_json("/api/auth/otp/verify", {
       channel: "email",
-      purpose: "login",
       target: email,
       code: otp,
     })
