@@ -970,7 +970,10 @@ export default function OverlayModal({
 
   useEffect(() => stop_bridge_polling, [stop_bridge_polling])
 
-  async function send_bridge_debug(event: string, bridge_uuid: string) {
+  async function send_bridge_debug(
+    event: string,
+    payload: Record<string, unknown> = {},
+  ) {
     await fetch("/api/auth/bridge/debug", {
       method: "POST",
       headers: {
@@ -978,7 +981,7 @@ export default function OverlayModal({
       },
       body: JSON.stringify({
         event,
-        bridge_uuid,
+        ...payload,
       }),
     }).catch(() => null)
   }
@@ -986,7 +989,7 @@ export default function OverlayModal({
   function start_bridge_polling(bridge_uuid: string) {
     stop_bridge_polling()
     set_bridge_status("polling")
-    send_bridge_debug("bridge_polling_started", bridge_uuid)
+    send_bridge_debug("bridge_polling_started", { bridge_uuid })
 
     bridge_poll_ref.current = window.setInterval(() => {
       fetch(`/api/auth/bridge/status?bridge_uuid=${encodeURIComponent(bridge_uuid)}`, {
@@ -997,7 +1000,7 @@ export default function OverlayModal({
           if (result.status === "success" && result.ok !== false) {
             stop_bridge_polling()
             localStorage.removeItem("amp_line_bridge_uuid")
-            send_bridge_debug("pwa_reload_after_bridge", bridge_uuid).finally(() => {
+            send_bridge_debug("pwa_reload_after_bridge", { bridge_uuid }).finally(() => {
               router.refresh()
               window.location.reload()
             })
@@ -1014,9 +1017,14 @@ export default function OverlayModal({
     }, 2000)
   }
 
-  async function start_pwa_line_bridge() {
+  async function start_pwa_line_bridge(popup: Window | null) {
     set_loading_action("line")
     set_bridge_status("polling")
+    await send_bridge_debug("pwa_bridge_start_request", {
+      provider: "line",
+      source_channel: "pwa",
+      popup_opened: Boolean(popup),
+    })
 
     const response = await fetch("/api/auth/bridge/start", {
       method: "POST",
@@ -1031,18 +1039,34 @@ export default function OverlayModal({
     const result = (await response.json().catch(() => ({}))) as {
       ok?: boolean
       bridge_uuid?: string
+      authorize_url?: string
       start_url?: string
       error?: string
       message?: string
     }
+    const authorize_url = result.authorize_url ?? result.start_url
 
-    if (!response.ok || result.ok === false || !result.bridge_uuid || !result.start_url) {
+    if (!response.ok || result.ok === false || !result.bridge_uuid || !authorize_url) {
       throw new Error(result.message ?? result.error ?? "Failed to start LINE login")
     }
 
     localStorage.setItem("amp_line_bridge_uuid", result.bridge_uuid)
+    await send_bridge_debug("pwa_bridge_start_success", {
+      provider: "line",
+      bridge_uuid: result.bridge_uuid,
+      source_channel: "pwa",
+      authorize_url,
+    })
     start_bridge_polling(result.bridge_uuid)
-    window.open(result.start_url, "_blank", "noopener,noreferrer")
+
+    const final_url = new URL(authorize_url, window.location.origin).toString()
+
+    if (popup) {
+      popup.location.href = final_url
+      return
+    }
+
+    window.location.href = final_url
   }
 
   function handle_link_click(item: OverlayItem) {
@@ -1055,8 +1079,46 @@ export default function OverlayModal({
       return
     }
 
-    if (item.action === "line" && detectAccessChannel() === "pwa") {
-      start_pwa_line_bridge().catch(() => {
+    if (item.action === "line") {
+      const source_channel = detectAccessChannel()
+      const is_pwa = source_channel === "pwa"
+      const is_liff = source_channel === "liff"
+
+      send_bridge_debug("line_login_button_clicked", {
+        provider: "line",
+        source_channel,
+        is_pwa,
+        is_liff,
+      })
+
+      if (is_liff) {
+        return
+      }
+
+      if (!is_pwa) {
+        set_loading_action(item.action)
+        handleLinkOption(item).catch(() => {
+          set_loading_action(null)
+        })
+        return
+      }
+
+      const popup = window.open("about:blank", "_blank")
+
+      if (popup) {
+        send_bridge_debug("pwa_line_popup_opened", {
+          provider: "line",
+          source_channel,
+        })
+      } else {
+        send_bridge_debug("pwa_line_popup_blocked", {
+          provider: "line",
+          source_channel,
+        })
+      }
+
+      start_pwa_line_bridge(popup).catch(() => {
+        popup?.close()
         stop_bridge_polling()
         set_bridge_status("failed")
         set_loading_action(null)

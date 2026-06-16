@@ -1015,6 +1015,9 @@ export async function startLoginBridge(request: NextRequest) {
       start_url: `/api/auth/line/start?bridge_uuid=${encodeURIComponent(
         bridge.bridge_uuid,
       )}&source_channel=pwa`,
+      authorize_url: `/api/auth/line/start?bridge_uuid=${encodeURIComponent(
+        bridge.bridge_uuid,
+      )}&source_channel=pwa`,
       expires_at: bridge.expires_at,
     })
   } catch (error) {
@@ -1107,7 +1110,15 @@ export async function sendLoginBridgeDebug(request: NextRequest) {
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
   const event = typeof body.event === "string" ? body.event : null
 
-  if (event !== "bridge_polling_started" && event !== "pwa_reload_after_bridge") {
+  if (
+    event !== "bridge_polling_started" &&
+    event !== "line_login_button_clicked" &&
+    event !== "pwa_bridge_start_request" &&
+    event !== "pwa_bridge_start_success" &&
+    event !== "pwa_line_popup_blocked" &&
+    event !== "pwa_line_popup_opened" &&
+    event !== "pwa_reload_after_bridge"
+  ) {
     return NextResponse.json({ ok: false }, { status: 400 })
   }
 
