@@ -744,6 +744,41 @@ function lineLoginConfig(request: NextRequest) {
   }
 }
 
+function validateLineAuthorizeUrl(input: {
+  url: URL
+  channelId: string
+  redirectUri: string
+  state: string
+}) {
+  if (input.url.origin + input.url.pathname !== LINE_LOGIN_AUTHORIZE_URL) {
+    throw new Error("LINE authorize URL endpoint is malformed")
+  }
+
+  if (input.url.searchParams.get("response_type") !== "code") {
+    throw new Error("LINE authorize URL response_type is malformed")
+  }
+
+  if (input.url.searchParams.get("client_id") !== input.channelId) {
+    throw new Error("LINE authorize URL client_id is malformed")
+  }
+
+  if (input.url.searchParams.get("redirect_uri") !== input.redirectUri) {
+    throw new Error("LINE authorize URL redirect_uri is malformed")
+  }
+
+  if (input.url.searchParams.get("state") !== input.state) {
+    throw new Error("LINE authorize URL state is malformed")
+  }
+
+  if (input.url.searchParams.get("scope") !== "profile openid") {
+    throw new Error("LINE authorize URL scope is malformed")
+  }
+
+  if (input.redirectUri.includes("liff.line.me")) {
+    throw new Error("LINE authorize URL must not use LIFF URL as callback")
+  }
+}
+
 function isUuid(value: string | null) {
   return Boolean(
     value &&
@@ -1129,7 +1164,38 @@ export async function startLineLogin(request: NextRequest) {
     url.searchParams.set("client_id", config.channelId)
     url.searchParams.set("redirect_uri", config.redirectUri)
     url.searchParams.set("state", state)
-    url.searchParams.set("scope", "openid profile")
+    url.searchParams.set("scope", "profile openid")
+
+    validateLineAuthorizeUrl({
+      url,
+      channelId: config.channelId,
+      redirectUri: config.redirectUri,
+      state,
+    })
+
+    await sendIdentityDebug("line_oauth_authorize_url", {
+      provider: "line",
+      bridge_uuid: bridge?.bridge_uuid ?? null,
+      visitor_uuid: session.visitor_uuid,
+      user_uuid: session.user_uuid,
+      source_channel: bridge?.source_channel ?? context.source_channel,
+      channel_id: config.channelId,
+      redirect_uri: config.redirectUri,
+      expected_redirect_uri: "https://app.da-nya.com/api/auth/line/callback",
+      callback_matches_expected:
+        config.redirectUri === "https://app.da-nya.com/api/auth/line/callback",
+      liff_callback_detected: config.redirectUri.includes("liff.line.me"),
+      state,
+      authorize_url: url.toString(),
+    })
+    await sendIdentityDebug("line_oauth_redirect_start", {
+      provider: "line",
+      bridge_uuid: bridge?.bridge_uuid ?? null,
+      visitor_uuid: session.visitor_uuid,
+      user_uuid: session.user_uuid,
+      source_channel: bridge?.source_channel ?? context.source_channel,
+      final_url: url.toString(),
+    })
 
     const response = NextResponse.redirect(url, 303)
     if (!bridge_state) {
@@ -1149,6 +1215,14 @@ export async function startLineLogin(request: NextRequest) {
       user_uuid: session.user_uuid,
       source_channel: bridge?.source_channel ?? context.source_channel,
       redirect_uri: config.redirectUri,
+    })
+    await sendIdentityDebug("line_oauth_redirect_complete", {
+      provider: "line",
+      bridge_uuid: bridge?.bridge_uuid ?? null,
+      visitor_uuid: session.visitor_uuid,
+      user_uuid: session.user_uuid,
+      source_channel: bridge?.source_channel ?? context.source_channel,
+      final_url: url.toString(),
     })
 
     return response

@@ -1014,7 +1014,7 @@ export default function OverlayModal({
     }, 2000)
   }
 
-  async function start_pwa_line_bridge(login_window: Window | null) {
+  async function start_pwa_line_bridge() {
     set_loading_action("line")
     set_bridge_status("polling")
 
@@ -1042,12 +1042,6 @@ export default function OverlayModal({
 
     localStorage.setItem("amp_line_bridge_uuid", result.bridge_uuid)
     start_bridge_polling(result.bridge_uuid)
-
-    if (login_window) {
-      login_window.location.href = result.start_url
-      return
-    }
-
     window.open(result.start_url, "_blank", "noopener,noreferrer")
   }
 
@@ -1062,10 +1056,7 @@ export default function OverlayModal({
     }
 
     if (item.action === "line" && detectAccessChannel() === "pwa") {
-      const login_window = window.open("", "_blank")
-
-      start_pwa_line_bridge(login_window).catch(() => {
-        login_window?.close()
+      start_pwa_line_bridge().catch(() => {
         stop_bridge_polling()
         set_bridge_status("failed")
         set_loading_action(null)
