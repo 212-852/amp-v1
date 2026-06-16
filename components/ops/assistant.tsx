@@ -27,7 +27,7 @@ export default function OpsAssistant() {
             <div className="relative h-[72px] w-[76px] shrink-0">
               <div className="pointer-events-none absolute bottom-[-14px] -left-4 z-10">
                 <div className="h-[74px] w-[88px] overflow-hidden">
-                  <OpsNeko className="h-[130px] w-[100px] object-contain object-top" />
+                  <OpsNeko />
                 </div>
               </div>
             </div>

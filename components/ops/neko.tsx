@@ -1,20 +1,15 @@
-import Image from "next/image"
-
 type OpsNekoProps = {
   className?: string
 }
 
 export default function OpsNeko({
-  className = "h-[124px] w-[96px] object-contain object-top",
+  className = "",
 }: Readonly<OpsNekoProps>) {
   return (
-    <Image
-      src="/images/robo_neko.svg"
-      alt="roboNeko"
-      width={96}
-      height={124}
-      unoptimized
-      className={className}
-    />
+    <div className={`robo_cat_area ${className}`.trim()} aria-hidden="true">
+      <div className="robo_cat_frame">
+        <div className="robo_cat_sprite" />
+      </div>
+    </div>
   )
 }
