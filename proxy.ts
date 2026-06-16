@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server"
 
 import type { AuthContext, SourceChannel } from "@/core/auth/types"
 import { resolveRoleRedirectPath } from "@/core/auth/route"
+import { sendAuthDebug } from "@/core/debug"
 import {
   resolve_session_context,
   VISITOR_COOKIE_NAME,
@@ -72,7 +73,19 @@ function resolveAuthContext(request: NextRequest): AuthContext {
   }
 }
 
-export async function proxy(request: NextRequest) {
+function formatProxyError(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function formatProxyErrorStack(error: unknown) {
+  if (process.env.NODE_ENV === "production") {
+    return null
+  }
+
+  return error instanceof Error ? error.stack ?? null : null
+}
+
+async function runProxy(request: NextRequest) {
   let pendingCookie: PendingCookie | null = null
   const context = resolveAuthContext(request)
   const requestVisitorUuid =
@@ -169,6 +182,20 @@ export async function proxy(request: NextRequest) {
   }
 
   return response
+}
+
+export async function proxy(request: NextRequest) {
+  try {
+    return await runProxy(request)
+  } catch (error) {
+    await sendAuthDebug("proxy_request_failed", {
+      pathname: request.nextUrl.pathname,
+      error_message: formatProxyError(error),
+      error_stack: formatProxyErrorStack(error),
+    })
+
+    return NextResponse.next()
+  }
 }
 
 export const config = {
