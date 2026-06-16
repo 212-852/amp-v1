@@ -808,6 +808,7 @@ function EmailLoginPanel({
               pattern="[0-9]*"
               autoComplete={index === 0 ? "one-time-code" : "off"}
               maxLength={1}
+              style={{ fontSize: "24px" }}
               className="h-14 w-12 rounded-xl border border-[#e5e5e5] text-center text-[24px] font-bold text-[#111111] outline-none focus:border-[#8f5d28]"
             />
           ))}
