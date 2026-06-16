@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { LiffAutoLogin } from "@/components/access/liff";
+import { PwaRuntime } from "@/components/pwa/runtime";
 import { AccessPresence } from "@/components/access/presence";
 import { OverlayProvider } from "@/components/overlay";
 import { LocaleProvider } from "@/src/components/locale/provider";
@@ -32,6 +33,7 @@ export default function RootLayout({
       <body className="min-h-full">
         <LocaleProvider>
           <OverlayProvider>
+            <PwaRuntime />
             <AccessPresence />
             <LiffAutoLogin />
             {children}

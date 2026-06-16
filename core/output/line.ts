@@ -6,7 +6,7 @@ export async function deliverLine(
   contact: ContactRecord,
   message: OutputMessage,
 ): Promise<DeliveryResult> {
-  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN
+  const token = process.env.LINE_MESSAGING_CHANNEL_ACCESS_TOKEN
 
   if (!token || !contact.value) {
     return { transport: "line", delivered: false }

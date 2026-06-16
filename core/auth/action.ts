@@ -40,6 +40,10 @@ const OTP_SELECT =
   "otp_uuid,visitor_uuid,user_uuid,channel,target,code_hash,expires_at,consumed_at,attempt_count,created_at"
 
 const OTP_MAX_ATTEMPTS = 5
+const LINE_LOGIN_STATE_COOKIE = "amp_line_oauth_state"
+const LINE_LOGIN_AUTHORIZE_URL = "https://access.line.me/oauth2/v2.1/authorize"
+const LINE_LOGIN_TOKEN_URL = "https://api.line.me/oauth2/v2.1/token"
+const LINE_PROFILE_URL = "https://api.line.me/v2/profile"
 
 console.warn("[OTP_ENVIRONMENT_LOADED]", {
   has_otp_secret: Boolean(process.env.OTP_SECRET),
@@ -663,10 +667,186 @@ export async function sendLiffAuthDebug(request: NextRequest) {
   return NextResponse.json({ ok: true })
 }
 
-export async function startLineLogin() {
-  const liffUrl =
-    process.env.NEXT_PUBLIC_LIFF_URL ??
-    "https://liff.line.me/2006953406-vj2gYoAb"
+function lineLoginConfig(request: NextRequest) {
+  const channelId = process.env.LINE_LOGIN_CHANNEL_ID
+  const channelSecret = process.env.LINE_LOGIN_CHANNEL_SECRET
+  const appUrl = appBaseUrl(request)
 
-  return NextResponse.redirect(liffUrl, 303)
+  if (!channelId || !channelSecret) {
+    throw new Error("LINE login config is missing")
+  }
+
+  return {
+    channelId,
+    channelSecret,
+    redirectUri: `${appUrl}/api/auth/line/callback`,
+  }
+}
+
+export async function startLineLogin(request: NextRequest) {
+  try {
+    const context = await resolveAuthContext()
+    const session = await resolveSession(context)
+    const config = lineLoginConfig(request)
+    const state = crypto.randomUUID()
+    const url = new URL(LINE_LOGIN_AUTHORIZE_URL)
+
+    url.searchParams.set("response_type", "code")
+    url.searchParams.set("client_id", config.channelId)
+    url.searchParams.set("redirect_uri", config.redirectUri)
+    url.searchParams.set("state", state)
+    url.searchParams.set("scope", "openid profile")
+
+    const response = NextResponse.redirect(url, 303)
+    response.cookies.set(LINE_LOGIN_STATE_COOKIE, state, {
+      httpOnly: true,
+      maxAge: 10 * 60,
+      path: "/",
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    })
+
+    await sendIdentityDebug("line_oauth_started", {
+      provider: "line",
+      visitor_uuid: session.visitor_uuid,
+      user_uuid: session.user_uuid,
+      source_channel: context.source_channel,
+      redirect_uri: config.redirectUri,
+    })
+
+    return response
+  } catch (error) {
+    return jsonError(error, "Failed to start LINE login", 500)
+  }
+}
+
+async function exchangeLineCode(input: {
+  code: string
+  redirectUri: string
+  channelId: string
+  channelSecret: string
+}) {
+  const response = await fetch(LINE_LOGIN_TOKEN_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code: input.code,
+      redirect_uri: input.redirectUri,
+      client_id: input.channelId,
+      client_secret: input.channelSecret,
+    }),
+    cache: "no-store",
+  })
+  const data = (await response.json().catch(() => ({}))) as {
+    access_token?: string
+    id_token?: string
+    error?: string
+    error_description?: string
+  }
+
+  if (!response.ok || !data.access_token) {
+    throw new Error(data.error_description ?? data.error ?? "LINE token exchange failed")
+  }
+
+  return {
+    access_token: data.access_token,
+    id_token: data.id_token ?? null,
+  }
+}
+
+async function fetchLineProfile(accessToken: string) {
+  const response = await fetch(LINE_PROFILE_URL, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    cache: "no-store",
+  })
+  const profile = (await response.json().catch(() => ({}))) as {
+    userId?: string
+    displayName?: string
+    pictureUrl?: string
+  }
+
+  if (!response.ok || !profile.userId) {
+    throw new Error("LINE profile resolve failed")
+  }
+
+  return profile
+}
+
+export async function completeLineLogin(request: NextRequest) {
+  const context = await resolveAuthContext()
+  const session = await resolveSession(context)
+  const config = lineLoginConfig(request)
+  const requestUrl = new URL(request.url)
+  const code = requestUrl.searchParams.get("code")
+  const state = requestUrl.searchParams.get("state")
+  const error = requestUrl.searchParams.get("error")
+  const errorDescription = requestUrl.searchParams.get("error_description")
+  const cookieState = request.cookies.get(LINE_LOGIN_STATE_COOKIE)?.value ?? null
+  const failureUrl = new URL("/", appBaseUrl(request))
+
+  await sendIdentityDebug("line_oauth_callback_received", {
+    provider: "line",
+    visitor_uuid: session.visitor_uuid,
+    user_uuid: session.user_uuid,
+    source_channel: context.source_channel,
+    code_exists: Boolean(code),
+    state_exists: Boolean(state),
+    error,
+    error_description: errorDescription,
+  })
+
+  try {
+    if (error) {
+      throw new Error(errorDescription ?? error)
+    }
+
+    if (!code || !state || state !== cookieState) {
+      throw new Error("LINE OAuth state mismatch")
+    }
+
+    const token = await exchangeLineCode({
+      code,
+      redirectUri: config.redirectUri,
+      channelId: config.channelId,
+      channelSecret: config.channelSecret,
+    })
+    const profile = await fetchLineProfile(token.access_token)
+    const result = await linkCurrentVisitorToIdentity({
+      provider: "line",
+      provider_user_id: profile.userId,
+      display_name: profile.displayName ?? null,
+    })
+
+    await sendIdentityDebug("line_identity_link_success", {
+      provider: "line",
+      visitor_uuid: result.visitor_uuid,
+      user_uuid: result.user_uuid,
+      identity_uuid: result.identity_uuid,
+      provider_user_id: profile.userId,
+      display_name: profile.displayName ?? null,
+      source_channel: result.source_channel,
+    })
+
+    const response = NextResponse.redirect(new URL("/", appBaseUrl(request)), 303)
+    response.cookies.delete(LINE_LOGIN_STATE_COOKIE)
+
+    return response
+  } catch (callbackError) {
+    failureUrl.searchParams.set("auth_error", "line")
+    await sendIdentityDebug("identity_link_failed", {
+      provider: "line",
+      visitor_uuid: session.visitor_uuid,
+      user_uuid: session.user_uuid,
+      reason: "line_oauth_failed",
+      error: callbackError instanceof Error ? callbackError.message : String(callbackError),
+      source_channel: context.source_channel,
+    })
+
+    return NextResponse.redirect(failureUrl, 303)
+  }
 }
