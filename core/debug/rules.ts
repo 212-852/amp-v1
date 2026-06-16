@@ -30,6 +30,7 @@ const identityEvents = new Set([
   "oauth_exchange_success",
   "oauth_start",
   "identity_resolved",
+  "otp_environment_loaded",
   "otp_send_request",
   "otp_send_success",
   "otp_verify_request",

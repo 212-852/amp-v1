@@ -214,6 +214,7 @@ export async function sendIdentityDebug(
     | "oauth_exchange_failed"
     | "oauth_exchange_success"
     | "oauth_start"
+    | "otp_environment_loaded"
     | "otp_send_request"
     | "otp_send_success"
     | "otp_verify_request"

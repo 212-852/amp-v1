@@ -41,6 +41,11 @@ const OTP_SELECT =
 
 const OTP_MAX_ATTEMPTS = 5
 
+console.warn("[OTP_ENVIRONMENT_LOADED]", {
+  has_otp_secret: Boolean(process.env.OTP_SECRET),
+  node_env: process.env.NODE_ENV ?? null,
+})
+
 function appBaseUrl(request: Request) {
   const requestUrl = new URL(request.url)
 
@@ -540,6 +545,15 @@ export async function sendOtpLogin(request: NextRequest) {
       session,
       channel: body.channel,
       target: body.target ?? body.email,
+    })
+
+    await sendIdentityDebug("otp_environment_loaded", {
+      has_otp_secret: Boolean(process.env.OTP_SECRET),
+      visitor_uuid: otpContext.visitor_uuid,
+      user_uuid: otpContext.user_uuid,
+      email: otpContext.channel === "email" ? otpContext.target : null,
+      channel: otpContext.channel,
+      source_channel: context.source_channel,
     })
 
     await sendIdentityDebug("otp_send_request", {
