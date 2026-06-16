@@ -1,4 +1,11 @@
-import type { Session } from "@/core/auth/types"
+export type HeaderSessionLike = {
+  visitor_uuid?: string | null
+  user_uuid?: string | null
+  display_name?: string | null
+  role?: string | null
+  tier?: string | null
+  image_url?: string | null
+}
 
 export type OpsHeaderSession = {
   visitor_uuid: string | null
@@ -10,7 +17,7 @@ export type OpsHeaderSession = {
 }
 
 export function normalizeOpsHeaderSession(
-  session: Session | null | undefined,
+  session?: HeaderSessionLike | null,
   options?: {
     default_display_name?: string
     default_role?: string

@@ -5,9 +5,13 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 
 import { useOverlay, type OverlayType } from "@/components/overlay"
-import type { OpsHeaderSession } from "@/core/ops/header_session"
+import {
+  normalizeOpsHeaderSession,
+  type HeaderSessionLike,
+  type OpsHeaderSession,
+} from "@/core/ops/header_session"
 
-export type { OpsHeaderSession } from "@/core/ops/header_session"
+export type { OpsHeaderSession, HeaderSessionLike } from "@/core/ops/header_session"
 
 const headerActions = [
   { label: "Chat", icon: MessageCircle },
@@ -45,18 +49,14 @@ function resolveInitials(value: string | null | undefined) {
 export default function OpsHeader({
   session,
 }: {
-  session?: OpsHeaderSession | null
+  session?: HeaderSessionLike | null
 }) {
   const pathname = usePathname()
   const { openOverlay } = useOverlay()
-  const safe_session: OpsHeaderSession = {
-    visitor_uuid: session?.visitor_uuid ?? null,
-    user_uuid: session?.user_uuid ?? null,
-    role: session?.role ?? "admin",
-    tier: session?.tier ?? null,
-    display_name: session?.display_name ?? "Admin",
-    image_url: session?.image_url ?? null,
-  }
+  const safe_session = normalizeOpsHeaderSession(session, {
+    default_display_name: "Admin",
+    default_role: "admin",
+  })
   const displayName = safe_session.display_name
   const roleLabel = safe_session.role
   const tierLabel = safe_session.tier

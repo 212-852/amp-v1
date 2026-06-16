@@ -1,9 +1,8 @@
 import OpsAssistant from "@/components/ops/assistant"
 import OpsHeader from "@/components/ops/header"
-import type { Session } from "@/core/auth/types"
 import {
   normalizeOpsHeaderSession,
-  type OpsHeaderSession,
+  type HeaderSessionLike,
 } from "@/core/ops/header_session"
 
 export default function AdminShell({
@@ -11,15 +10,12 @@ export default function AdminShell({
   session,
 }: Readonly<{
   children: React.ReactNode
-  session?: Session | OpsHeaderSession | null
+  session?: HeaderSessionLike | null
 }>) {
-  const header_session = normalizeOpsHeaderSession(
-    session as Session | null | undefined,
-    {
-      default_display_name: "Admin",
-      default_role: "admin",
-    },
-  )
+  const header_session = normalizeOpsHeaderSession(session, {
+    default_display_name: "Admin",
+    default_role: "admin",
+  })
 
   return (
     <div className="min-h-dvh bg-neutral-50 text-neutral-900">

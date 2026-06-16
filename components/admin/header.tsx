@@ -1,16 +1,15 @@
 "use client"
 
 import OpsHeader from "@/components/ops/header"
-import type { Session } from "@/core/auth/types"
 import {
   normalizeOpsHeaderSession,
-  type OpsHeaderSession,
+  type HeaderSessionLike,
 } from "@/core/ops/header_session"
 
 export default function AdminHeader({
   session,
 }: Readonly<{
-  session?: Session | OpsHeaderSession | null
+  session?: HeaderSessionLike | null
 }>) {
   const header_session = normalizeOpsHeaderSession(session, {
     default_display_name: "Admin",
