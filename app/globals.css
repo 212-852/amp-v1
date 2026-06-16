@@ -34,33 +34,33 @@ a {
   }
 
   to {
-    background-position-x: -132.8px;
+    background-position-x: -199.2px;
   }
 }
 
 .robo_cat_window {
-  width: 33.2px;
-  height: 40px;
-  min-width: 33.2px;
-  max-width: 33.2px;
-  min-height: 40px;
-  max-height: 40px;
+  width: 50px;
+  height: 60px;
+  min-width: 50px;
+  max-width: 50px;
+  min-height: 60px;
+  max-height: 60px;
   overflow: hidden;
-  flex: 0 0 33.2px;
+  flex: 0 0 50px;
   position: relative;
   align-self: center;
 }
 
 .robo_cat_sprite {
-  width: 132.8px;
-  height: 40px;
-  min-width: 132.8px;
-  max-width: 132.8px;
-  min-height: 40px;
-  max-height: 40px;
+  width: 199.2px;
+  height: 60px;
+  min-width: 199.2px;
+  max-width: 199.2px;
+  min-height: 60px;
+  max-height: 60px;
   background-image: url("/images/robo_neko.svg");
   background-repeat: no-repeat;
-  background-size: 132.8px 40px;
+  background-size: 199.2px 60px;
   background-position: 0 0;
   animation: robo_cat_frames 1.4s steps(4, end) infinite;
 }
