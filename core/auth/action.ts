@@ -41,6 +41,7 @@ type LoginBridgeRecord = {
   visitor_uuid: string
   provider: string
   status: "pending" | "success" | "failed" | "expired"
+  oauth_state: string
   user_uuid: string | null
   source_channel: string
   expires_at: string
@@ -57,7 +58,7 @@ const LINE_LOGIN_AUTHORIZE_URL = "https://access.line.me/oauth2/v2.1/authorize"
 const LINE_LOGIN_TOKEN_URL = "https://api.line.me/oauth2/v2.1/token"
 const LINE_PROFILE_URL = "https://api.line.me/v2/profile"
 const LOGIN_BRIDGE_SELECT =
-  "bridge_uuid,visitor_uuid,provider,status,user_uuid,source_channel,expires_at,completed_at,created_at"
+  "bridge_uuid,visitor_uuid,provider,status,oauth_state,user_uuid,source_channel,expires_at,completed_at,created_at"
 
 console.warn("[OTP_ENVIRONMENT_LOADED]", {
   has_otp_secret: Boolean(process.env.OTP_SECRET),
@@ -752,6 +753,48 @@ function isUuid(value: string | null) {
   )
 }
 
+type LineBridgeStatePayload = {
+  bridge_uuid: string
+  oauth_state: string
+  source_channel: "pwa"
+}
+
+function encodeLineBridgeState(payload: LineBridgeStatePayload) {
+  return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url")
+}
+
+function parseLineBridgeState(value: string | null): LineBridgeStatePayload | null {
+  if (!value) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as {
+      bridge_uuid?: unknown
+      oauth_state?: unknown
+      source_channel?: unknown
+    }
+
+    if (
+      typeof parsed.bridge_uuid === "string" &&
+      isUuid(parsed.bridge_uuid) &&
+      typeof parsed.oauth_state === "string" &&
+      parsed.oauth_state &&
+      parsed.source_channel === "pwa"
+    ) {
+      return {
+        bridge_uuid: parsed.bridge_uuid,
+        oauth_state: parsed.oauth_state,
+        source_channel: "pwa",
+      }
+    }
+  } catch {
+    return null
+  }
+
+  return null
+}
+
 async function loadLoginBridge(bridge_uuid: string) {
   const config = getRestConfig()
 
@@ -832,6 +875,7 @@ async function createLoginBridge(input: {
   }
 
   const expires_at = new Date(Date.now() + 10 * 60 * 1000).toISOString()
+  const oauth_state = crypto.randomUUID()
   const response = await fetch(
     restUrl(config, "login_bridge", `select=${LOGIN_BRIDGE_SELECT}`),
     {
@@ -844,6 +888,7 @@ async function createLoginBridge(input: {
         visitor_uuid: input.visitor_uuid,
         provider: input.provider,
         status: "pending",
+        oauth_state,
         user_uuid: input.user_uuid,
         source_channel: input.source_channel,
         expires_at,
@@ -921,6 +966,12 @@ export async function startLoginBridge(request: NextRequest) {
       source_channel: bridge.source_channel,
       expires_at: bridge.expires_at,
     })
+    await sendIdentityDebug("bridge_state_created", {
+      provider: "line",
+      bridge_uuid: bridge.bridge_uuid,
+      visitor_uuid: bridge.visitor_uuid,
+      source_channel: bridge.source_channel,
+    })
 
     return NextResponse.json({
       ok: true,
@@ -965,7 +1016,7 @@ export async function getLoginBridgeStatus(request: NextRequest) {
     }
 
     if (bridge.status === "pending") {
-      await sendIdentityDebug("bridge_status_pending", {
+      await sendIdentityDebug("bridge_poll_pending", {
         provider: bridge.provider,
         bridge_uuid: bridge.bridge_uuid,
         visitor_uuid: bridge.visitor_uuid,
@@ -976,7 +1027,14 @@ export async function getLoginBridgeStatus(request: NextRequest) {
     if (bridge.status === "success") {
       const profile = await resolveAuthUserProfile(bridge.user_uuid)
 
-      await sendIdentityDebug("bridge_session_restored", {
+      await sendIdentityDebug("bridge_poll_success", {
+        provider: bridge.provider,
+        bridge_uuid: bridge.bridge_uuid,
+        visitor_uuid: bridge.visitor_uuid,
+        user_uuid: bridge.user_uuid,
+        source_channel: bridge.source_channel,
+      })
+      await sendIdentityDebug("pwa_session_restored", {
         provider: bridge.provider,
         bridge_uuid: bridge.bridge_uuid,
         visitor_uuid: bridge.visitor_uuid,
@@ -1046,7 +1104,24 @@ export async function startLineLogin(request: NextRequest) {
     }
 
     const config = lineLoginConfig(request)
-    const bridge_state = bridge_uuid && isUuid(bridge_uuid) ? bridge_uuid : null
+    const bridge =
+      bridge_uuid && isUuid(bridge_uuid) ? await loadLoginBridge(bridge_uuid) : null
+
+    if (bridge_uuid && !bridge) {
+      throw new Error("Login bridge was not found")
+    }
+
+    if (bridge && bridge.status !== "pending") {
+      throw new Error("Login bridge is not pending")
+    }
+
+    const bridge_state = bridge
+      ? encodeLineBridgeState({
+          bridge_uuid: bridge.bridge_uuid,
+          oauth_state: bridge.oauth_state,
+          source_channel: "pwa",
+        })
+      : null
     const state = bridge_state ?? crypto.randomUUID()
     const url = new URL(LINE_LOGIN_AUTHORIZE_URL)
 
@@ -1057,20 +1132,22 @@ export async function startLineLogin(request: NextRequest) {
     url.searchParams.set("scope", "openid profile")
 
     const response = NextResponse.redirect(url, 303)
-    response.cookies.set(LINE_LOGIN_STATE_COOKIE, state, {
-      httpOnly: true,
-      maxAge: 10 * 60,
-      path: "/",
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-    })
+    if (!bridge_state) {
+      response.cookies.set(LINE_LOGIN_STATE_COOKIE, state, {
+        httpOnly: true,
+        maxAge: 10 * 60,
+        path: "/",
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+      })
+    }
 
     await sendIdentityDebug("line_oauth_started", {
       provider: "line",
-      bridge_uuid: bridge_state,
+      bridge_uuid: bridge?.bridge_uuid ?? null,
       visitor_uuid: session.visitor_uuid,
       user_uuid: session.user_uuid,
-      source_channel: context.source_channel,
+      source_channel: bridge?.source_channel ?? context.source_channel,
       redirect_uri: config.redirectUri,
     })
 
@@ -1207,11 +1284,12 @@ export async function completeLineLogin(request: NextRequest) {
   const errorDescription = requestUrl.searchParams.get("error_description")
   const cookieState = request.cookies.get(LINE_LOGIN_STATE_COOKIE)?.value ?? null
   const failureUrl = new URL("/", appBaseUrl(request))
+  const bridgeStatePayload = parseLineBridgeState(state)
   let callbackBridge: LoginBridgeRecord | null = null
 
   await sendIdentityDebug("line_oauth_callback_received", {
     provider: "line",
-    bridge_uuid: isUuid(state) ? state : null,
+    bridge_uuid: bridgeStatePayload?.bridge_uuid ?? null,
     visitor_uuid: session.visitor_uuid,
     user_uuid: session.user_uuid,
     source_channel: context.source_channel,
@@ -1222,8 +1300,31 @@ export async function completeLineLogin(request: NextRequest) {
   })
 
   try {
-    callbackBridge =
-      isUuid(state) && state ? await loadLoginBridge(state).catch(() => null) : null
+    if (bridgeStatePayload) {
+      callbackBridge = await loadLoginBridge(bridgeStatePayload.bridge_uuid)
+
+      await sendIdentityDebug("line_callback_bridge_detected", {
+        provider: "line",
+        bridge_uuid: bridgeStatePayload.bridge_uuid,
+        visitor_uuid: callbackBridge?.visitor_uuid ?? null,
+        source_channel: bridgeStatePayload.source_channel,
+      })
+
+      if (!callbackBridge) {
+        throw new Error("Login bridge was not found")
+      }
+
+      if (callbackBridge.oauth_state !== bridgeStatePayload.oauth_state) {
+        throw new Error("LINE bridge OAuth state mismatch")
+      }
+
+      await sendIdentityDebug("bridge_state_valid", {
+        provider: "line",
+        bridge_uuid: callbackBridge.bridge_uuid,
+        visitor_uuid: callbackBridge.visitor_uuid,
+        source_channel: callbackBridge.source_channel,
+      })
+    }
 
     if (error) {
       if (callbackBridge?.status === "pending") {
@@ -1236,6 +1337,10 @@ export async function completeLineLogin(request: NextRequest) {
     }
 
     if (!code || !state) {
+      throw new Error("LINE OAuth state mismatch")
+    }
+
+    if (!callbackBridge && state !== cookieState) {
       throw new Error("LINE OAuth state mismatch")
     }
 
@@ -1257,10 +1362,6 @@ export async function completeLineLogin(request: NextRequest) {
       response.cookies.delete(LINE_LOGIN_STATE_COOKIE)
 
       return response
-    }
-
-    if (state !== cookieState) {
-      throw new Error("LINE OAuth state mismatch")
     }
 
     const result = await linkCurrentVisitorToIdentity({
