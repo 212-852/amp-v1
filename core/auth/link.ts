@@ -8,6 +8,7 @@ import {
   normalizeIdentityLinkInput,
   resolveOrCreateIdentityUser,
   sendIdentityDebug,
+  syncUserProfileFromIdentityLink,
   upsertIdentityLink,
   type IdentityLinkInput,
   type IdentityLinkState,
@@ -243,6 +244,7 @@ export async function linkVisitorToIdentity(
         : null,
   }
   const user_uuid = await resolveOrCreateIdentityUser(input, options.current_user_uuid)
+  await syncUserProfileFromIdentityLink(user_uuid, input)
   let identity: Awaited<ReturnType<typeof upsertIdentityLink>> = null
 
   try {

@@ -22,6 +22,24 @@ export type OpsHeaderSession = {
   can_logout: boolean
 }
 
+function resolveHeaderTier(
+  tier: string | null | undefined,
+  user_uuid: string | null,
+): string | null {
+  const normalized =
+    typeof tier === "string" && tier.trim() ? tier.trim().toLowerCase() : null
+
+  if (!normalized) {
+    return null
+  }
+
+  if (user_uuid && normalized === "guest") {
+    return null
+  }
+
+  return normalized
+}
+
 export function normalizeOpsHeaderDisplay(
   session?: HeaderSessionLike | null,
 ): OpsHeaderSession {
@@ -34,7 +52,7 @@ export function normalizeOpsHeaderDisplay(
       visitor_uuid: session?.visitor_uuid ?? null,
       user_uuid,
       role,
-      tier: session?.tier ?? null,
+      tier: resolveHeaderTier(session?.tier ?? null, user_uuid),
       display_name: session?.display_name ?? role,
       image_url: session?.image_url ?? null,
       provider: session?.provider ?? null,
@@ -63,12 +81,13 @@ export function normalizeOpsHeaderSession(
 ): OpsHeaderSession {
   const default_display_name = options?.default_display_name ?? "Admin"
   const default_role = options?.default_role ?? "admin"
+  const user_uuid = session?.user_uuid ?? null
 
   return {
     visitor_uuid: session?.visitor_uuid ?? null,
-    user_uuid: session?.user_uuid ?? null,
+    user_uuid,
     role: session?.role ?? default_role,
-    tier: session?.tier ?? null,
+    tier: resolveHeaderTier(session?.tier ?? null, user_uuid),
     display_name: session?.display_name ?? default_display_name,
     image_url: session?.image_url ?? null,
     provider: session?.provider ?? null,

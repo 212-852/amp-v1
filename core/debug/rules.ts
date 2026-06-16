@@ -91,6 +91,9 @@ const identityEvents = new Set([
   "session_after_identity_link",
   "user_create_start",
   "user_create_success",
+  "user_profile_sync_failed",
+  "user_profile_sync_start",
+  "user_profile_sync_success",
   "visitor_update_start",
   "visitor_update_success",
 ])

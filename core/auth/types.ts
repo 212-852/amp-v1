@@ -7,6 +7,8 @@ export type SessionTier =
   | "trainee"
   | "active"
   | "admin"
+  | "owner"
+  | (string & {})
 
 export type IdentityState = "anonymous" | "linked" | "logged_in"
 

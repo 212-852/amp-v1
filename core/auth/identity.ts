@@ -275,6 +275,9 @@ export async function sendIdentityDebug(
     | "session_after_identity_link"
     | "user_create_start"
     | "user_create_success"
+    | "user_profile_sync_failed"
+    | "user_profile_sync_start"
+    | "user_profile_sync_success"
     | "visitor_update_start"
     | "visitor_update_success",
   payload: Record<string, unknown>,
@@ -612,6 +615,65 @@ export async function upsertIdentityLink(
     identity_uuid: row.identity_uuid ?? null,
     user_uuid: row.user_uuid,
   }
+}
+
+export async function syncUserProfileFromIdentityLink(
+  user_uuid: string,
+  input: IdentityLinkInput,
+) {
+  const config = getRestConfig()
+
+  if (!config) {
+    return
+  }
+
+  const patch: Record<string, string> = {}
+
+  if (input.display_name) {
+    patch.display_name = input.display_name
+  }
+
+  if (input.image_url) {
+    patch.image_url = input.image_url
+  }
+
+  if (Object.keys(patch).length === 0) {
+    return
+  }
+
+  await sendIdentityDebug("user_profile_sync_start", {
+    provider: input.provider,
+    user_uuid,
+    has_display_name: Boolean(input.display_name),
+    has_image_url: Boolean(input.image_url),
+  })
+
+  const response = await fetch(
+    restUrl(config, "users", `user_uuid=eq.${encodeURIComponent(user_uuid)}`),
+    {
+      method: "PATCH",
+      headers: restHeaders(config),
+      body: JSON.stringify(patch),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+
+    await sendIdentityDebug("user_profile_sync_failed", {
+      provider: input.provider,
+      user_uuid,
+      error_code: error.code ?? null,
+      error_message: error.message ?? null,
+    })
+    return
+  }
+
+  await sendIdentityDebug("user_profile_sync_success", {
+    provider: input.provider,
+    user_uuid,
+  })
 }
 
 export async function sendIdentityUnlinkedDebug(input: {

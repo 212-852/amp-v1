@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronDown, MessageCircle, Settings } from "lucide-react"
+import { ChevronDown, MessageCircle, Settings, X } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 
@@ -30,14 +30,6 @@ function resolveInitials(value: string | null | undefined) {
   return normalized.slice(0, 2).toUpperCase()
 }
 
-function resolveAvatarImage(session: OpsHeaderSession) {
-  if (session.provider === "line" && session.image_url) {
-    return session.image_url
-  }
-
-  return null
-}
-
 type HeaderMenuItem = {
   key: string
   label: string
@@ -55,7 +47,7 @@ export default function OpsHeader({
   const displayName = safe_session.display_name
   const roleLabel = is_logged_in ? safe_session.role : "Guest"
   const tierLabel = is_logged_in ? safe_session.tier : null
-  const avatar_image_url = resolveAvatarImage(safe_session)
+  const avatar_image_url = safe_session.image_url
   const menu_ref = useRef<HTMLDivElement>(null)
   const [menu_open, set_menu_open] = useState(false)
   const [is_logging_out, set_is_logging_out] = useState(false)
@@ -184,59 +176,64 @@ export default function OpsHeader({
               onClick={toggle_menu}
               className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-900"
             >
-              <ChevronDown
-                className={[
-                  "h-4 w-4 transition-transform duration-200",
-                  menu_open ? "rotate-180" : "",
-                ].join(" ")}
-                strokeWidth={1.8}
-              />
+              {menu_open ? (
+                <X className="h-4 w-4" strokeWidth={1.8} />
+              ) : (
+                <ChevronDown className="h-4 w-4" strokeWidth={1.8} />
+              )}
             </button>
 
-            {menu_open ? (
-              <div
-                role="menu"
-                aria-label="Admin menu"
-                className="absolute right-0 top-[calc(100%+6px)] z-50 min-w-[168px] overflow-hidden rounded-2xl border border-neutral-200 bg-white py-1 shadow-[0_12px_32px_rgba(0,0,0,0.08)]"
-              >
-                {menu_items.map((item) => {
-                  const item_class =
-                    "flex w-full items-center px-3.5 py-2.5 text-left text-[13px] font-medium text-neutral-900 transition-colors hover:bg-neutral-50"
+            <div
+              role="menu"
+              aria-label="Admin menu"
+              aria-hidden={!menu_open}
+              className={[
+                "absolute right-0 top-[calc(100%+6px)] z-50 min-w-[168px] origin-top-right overflow-hidden rounded-2xl border border-neutral-200 bg-white py-1 shadow-[0_12px_32px_rgba(0,0,0,0.08)]",
+                "transition-[opacity,transform] duration-150 ease-out",
+                menu_open
+                  ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
+                  : "pointer-events-none -translate-y-1 scale-95 opacity-0",
+              ].join(" ")}
+            >
+              {menu_items.map((item) => {
+                const item_class =
+                  "flex w-full items-center px-3.5 py-2.5 text-left text-[13px] font-medium text-neutral-900 transition-colors hover:bg-neutral-50"
 
-                  if (item.href) {
-                    return (
-                      <Link
-                        key={item.key}
-                        href={item.href}
-                        role="menuitem"
-                        className={item_class}
-                        onClick={close_menu}
-                      >
-                        {item.label}
-                      </Link>
-                    )
-                  }
-
+                if (item.href) {
                   return (
-                    <button
+                    <Link
                       key={item.key}
-                      type="button"
+                      href={item.href}
                       role="menuitem"
+                      tabIndex={menu_open ? 0 : -1}
                       className={item_class}
-                      disabled={item.key === "logout" && is_logging_out}
-                      onClick={() => {
-                        item.onClick?.()
-                        if (item.key !== "logout") {
-                          close_menu()
-                        }
-                      }}
+                      onClick={close_menu}
                     >
                       {item.label}
-                    </button>
+                    </Link>
                   )
-                })}
-              </div>
-            ) : null}
+                }
+
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    role="menuitem"
+                    tabIndex={menu_open ? 0 : -1}
+                    className={item_class}
+                    disabled={item.key === "logout" && is_logging_out}
+                    onClick={() => {
+                      item.onClick?.()
+                      if (item.key !== "logout") {
+                        close_menu()
+                      }
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
         </div>
       </div>

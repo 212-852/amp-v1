@@ -655,17 +655,13 @@ function normalizeSessionRole(value: string | null | undefined): SessionRole {
 }
 
 function normalizeSessionTier(value: string | null | undefined): SessionTier {
-  if (
-    value === "admin" ||
-    value === "active" ||
-    value === "trainee" ||
-    value === "vip" ||
-    value === "member"
-  ) {
-    return value
+  const normalized = normalizeNullableString(value)?.toLowerCase()
+
+  if (!normalized) {
+    return "guest"
   }
 
-  return "guest"
+  return normalized
 }
 
 function normalizeSessionProvider(
