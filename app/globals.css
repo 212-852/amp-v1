@@ -28,13 +28,13 @@ a {
   text-decoration: none;
 }
 
-@keyframes robo_cat_step {
+@keyframes robo_cat_frames {
   from {
-    transform: translateX(0);
+    background-position-x: 0;
   }
 
   to {
-    transform: translateX(-112px);
+    background-position-x: -112px;
   }
 }
 
@@ -43,14 +43,17 @@ a {
   height: 28px;
   overflow: hidden;
   flex: 0 0 28px;
+  position: relative;
 }
 
 .robo_cat_sprite {
   width: 112px;
   height: 28px;
-  background-image: url("/images/robo_neko.svg");
+  background-image: url("/images/robo_neko.jpeg");
   background-repeat: no-repeat;
   background-size: 112px 28px;
-  animation: robo_cat_step 1.2s steps(4, end) infinite;
-  will-change: transform;
+  position: absolute;
+  left: 0;
+  top: 0;
+  animation: robo_cat_frames 1.4s steps(4, end) infinite;
 }
