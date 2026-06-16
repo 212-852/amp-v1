@@ -1,10 +1,46 @@
+import { randomInt } from "crypto"
+
 import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
 
 import { resolveAuthContext } from "@/core/auth/context"
-import { resolveSession, VISITOR_COOKIE_NAME } from "@/core/auth/session"
+import {
+  resolveAuthUserProfile,
+  sendIdentityDebug,
+} from "@/core/auth/identity"
+import { linkCurrentVisitorToIdentity } from "@/core/auth/link"
+import { resolveSession, VISITOR_COOKIE_NAME, type AppSession } from "@/core/auth/session"
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
 import { sendAuthDebug } from "@/core/debug"
+import { sendMail } from "@/core/mail/action"
+
+type OtpPurpose = "login" | "register" | "verify" | "reset_password"
+type OtpChannel = "email" | "line" | "sms"
+
+type OtpContext = {
+  visitor_uuid: string
+  user_uuid: string | null
+  purpose: OtpPurpose
+  channel: OtpChannel
+  target: string
+}
+
+type OtpRecord = {
+  otp_uuid: string
+  channel: OtpChannel
+  target: string
+  code: string
+  purpose: OtpPurpose
+  visitor_uuid: string | null
+  user_uuid: string | null
+  attempt_count: number
+  expires_at: string
+  used_at: string | null
+  created_at: string
+}
+
+const OTP_SELECT =
+  "otp_uuid,channel,target,code,purpose,visitor_uuid,user_uuid,attempt_count,expires_at,used_at,created_at"
 
 function appBaseUrl(request: Request) {
   const requestUrl = new URL(request.url)
@@ -81,4 +117,507 @@ export async function logoutCurrentVisitor(request: NextRequest) {
   })
 
   return response
+}
+
+function normalize_string(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null
+}
+
+function normalize_channel(value: unknown): OtpChannel {
+  if (value === "email" || value === "line" || value === "sms") {
+    return value
+  }
+
+  return "email"
+}
+
+function normalize_purpose(value: unknown): OtpPurpose {
+  if (
+    value === "login" ||
+    value === "register" ||
+    value === "verify" ||
+    value === "reset_password"
+  ) {
+    return value
+  }
+
+  return "login"
+}
+
+function normalize_target(channel: OtpChannel, value: unknown) {
+  const target = normalize_string(value)
+
+  if (!target) {
+    return null
+  }
+
+  if (channel === "email") {
+    return target.toLowerCase()
+  }
+
+  return target
+}
+
+function normalize_code(value: unknown) {
+  const code = String(value ?? "")
+    .trim()
+    .replace(/\s+/g, "")
+
+  return /^\d{6}$/.test(code) ? code : null
+}
+
+function normalize_otp_context(input: {
+  session: AppSession
+  channel?: unknown
+  purpose?: unknown
+  target: unknown
+}): OtpContext {
+  const channel = normalize_channel(input.channel)
+  const target = normalize_target(channel, input.target)
+
+  if (!input.session.visitor_uuid) {
+    throw new Error("OTP requires visitor_uuid")
+  }
+
+  if (!target) {
+    throw new Error("OTP target is required")
+  }
+
+  return {
+    visitor_uuid: input.session.visitor_uuid,
+    user_uuid: input.session.user_uuid,
+    purpose: normalize_purpose(input.purpose),
+    channel,
+    target,
+  }
+}
+
+function otp_filter(context: OtpContext) {
+  return [
+    `channel=eq.${encodeURIComponent(context.channel)}`,
+    `target=eq.${encodeURIComponent(context.target)}`,
+    `purpose=eq.${encodeURIComponent(context.purpose)}`,
+    `visitor_uuid=eq.${encodeURIComponent(context.visitor_uuid)}`,
+  ].join("&")
+}
+
+function generate_otp_code() {
+  return String(randomInt(0, 1_000_000)).padStart(6, "0")
+}
+
+async function latest_otp(context: OtpContext) {
+  const config = getRestConfig()
+
+  if (!config) {
+    throw new Error("Database config is missing")
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "otp",
+      [
+        otp_filter(context),
+        "used_at=is.null",
+        `select=${OTP_SELECT}`,
+        "order=created_at.desc",
+        "limit=1",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+    throw new Error(
+      `Failed to load OTP: ${error.code ?? "unknown"} ${
+        error.message ?? "No PostgREST error returned"
+      }`,
+    )
+  }
+
+  const rows = (await response.json()) as OtpRecord[]
+
+  return rows[0] ?? null
+}
+
+function assert_resend_allowed(record: OtpRecord | null) {
+  if (!record) {
+    return
+  }
+
+  const elapsed = Date.now() - new Date(record.created_at).getTime()
+
+  if (elapsed < 60 * 1000) {
+    throw new Error("Please wait before requesting a new code")
+  }
+}
+
+export async function expire_otp(context: OtpContext) {
+  const config = getRestConfig()
+
+  if (!config) {
+    throw new Error("Database config is missing")
+  }
+
+  const now = new Date().toISOString()
+  const response = await fetch(
+    restUrl(config, "otp", [otp_filter(context), "used_at=is.null"].join("&")),
+    {
+      method: "PATCH",
+      headers: restHeaders(config),
+      body: JSON.stringify({
+        used_at: now,
+      }),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+    throw new Error(
+      `Failed to expire OTP: ${error.code ?? "unknown"} ${
+        error.message ?? "No PostgREST error returned"
+      }`,
+    )
+  }
+}
+
+export async function create_otp(context: OtpContext) {
+  const config = getRestConfig()
+
+  if (!config) {
+    throw new Error("Database config is missing")
+  }
+
+  const latest = await latest_otp(context)
+  assert_resend_allowed(latest)
+  await expire_otp(context)
+
+  const code = generate_otp_code()
+  const expires_at = new Date(Date.now() + 10 * 60 * 1000).toISOString()
+  const response = await fetch(restUrl(config, "otp", `select=${OTP_SELECT}`), {
+    method: "POST",
+    headers: {
+      ...restHeaders(config),
+      Prefer: "return=representation",
+    },
+    body: JSON.stringify({
+      channel: context.channel,
+      target: context.target,
+      code,
+      purpose: context.purpose,
+      visitor_uuid: context.visitor_uuid,
+      user_uuid: context.user_uuid,
+      expires_at,
+    }),
+    cache: "no-store",
+  })
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+    throw new Error(
+      `Failed to create OTP: ${error.code ?? "unknown"} ${
+        error.message ?? "No PostgREST error returned"
+      }`,
+    )
+  }
+
+  const rows = (await response.json()) as OtpRecord[]
+
+  return rows[0]
+}
+
+async function increment_attempt(record: OtpRecord) {
+  const config = getRestConfig()
+
+  if (!config) {
+    throw new Error("Database config is missing")
+  }
+
+  const response = await fetch(
+    restUrl(config, "otp", `otp_uuid=eq.${encodeURIComponent(record.otp_uuid)}`),
+    {
+      method: "PATCH",
+      headers: restHeaders(config),
+      body: JSON.stringify({
+        attempt_count: record.attempt_count + 1,
+      }),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+    throw new Error(
+      `Failed to update OTP attempt: ${error.code ?? "unknown"} ${
+        error.message ?? "No PostgREST error returned"
+      }`,
+    )
+  }
+}
+
+export async function consume_otp(record: OtpRecord) {
+  const config = getRestConfig()
+
+  if (!config) {
+    throw new Error("Database config is missing")
+  }
+
+  const response = await fetch(
+    restUrl(config, "otp", `otp_uuid=eq.${encodeURIComponent(record.otp_uuid)}`),
+    {
+      method: "PATCH",
+      headers: restHeaders(config),
+      body: JSON.stringify({
+        used_at: new Date().toISOString(),
+      }),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+    throw new Error(
+      `Failed to consume OTP: ${error.code ?? "unknown"} ${
+        error.message ?? "No PostgREST error returned"
+      }`,
+    )
+  }
+}
+
+export async function verify_otp(context: OtpContext, code: string) {
+  const record = await latest_otp(context)
+
+  if (!record) {
+    throw new Error("OTP code was not found")
+  }
+
+  if (record.used_at) {
+    throw new Error("OTP code was already used")
+  }
+
+  if (new Date(record.expires_at).getTime() <= Date.now()) {
+    await consume_otp(record)
+    throw new Error("OTP code has expired")
+  }
+
+  if (record.attempt_count >= 5) {
+    await consume_otp(record)
+    throw new Error("OTP attempt limit exceeded")
+  }
+
+  if (record.code !== code) {
+    await increment_attempt(record)
+
+    if (record.attempt_count + 1 >= 5) {
+      await consume_otp(record)
+    }
+
+    throw new Error("Invalid OTP code")
+  }
+
+  await consume_otp(record)
+
+  return record
+}
+
+function otp_email(input: { code: string }) {
+  return {
+    subject: "【ペットタクシーわんだにゃー】\n認証コード",
+    text: ["認証コード", "", input.code, "", "このコードは10分で失効します。"].join("\n"),
+  }
+}
+
+export async function resolve_identity(context: OtpContext) {
+  if (context.channel !== "email") {
+    throw new Error("Only email OTP identity is supported")
+  }
+
+  return {
+    provider: "email" as const,
+    provider_user_id: context.target,
+    email: context.target,
+    display_name: context.target,
+  }
+}
+
+export async function resolve_user(identity: Awaited<ReturnType<typeof resolve_identity>>) {
+  const result = await linkCurrentVisitorToIdentity(identity)
+  const profile = await resolveAuthUserProfile(result.user_uuid)
+
+  await sendIdentityDebug("identity_resolved", {
+    provider: identity.provider,
+    visitor_uuid: result.visitor_uuid,
+    user_uuid: result.user_uuid,
+    identity_uuid: result.identity_uuid,
+    email: identity.email,
+    source_channel: result.source_channel,
+  })
+
+  return {
+    result,
+    profile,
+  }
+}
+
+export async function update_session(input: {
+  linked: Awaited<ReturnType<typeof resolve_user>>
+  identity: Awaited<ReturnType<typeof resolve_identity>>
+}) {
+  const session = {
+    visitor_uuid: input.linked.result.visitor_uuid,
+    user_uuid: input.linked.result.user_uuid,
+    role: input.linked.profile.role,
+    tier: input.linked.profile.tier,
+    display_name: input.linked.profile.display_name,
+    provider: input.identity.provider,
+    email: input.identity.email,
+    source_channel: input.linked.result.source_channel,
+  }
+
+  await sendIdentityDebug("session_updated", session)
+  await sendIdentityDebug("session_after_identity_link", session)
+
+  return session
+}
+
+function jsonError(error: unknown, fallback: string, status = 400) {
+  const message = error instanceof Error ? error.message : fallback
+
+  return NextResponse.json(
+    {
+      ok: false,
+      success: false,
+      error: message,
+      message,
+    },
+    { status },
+  )
+}
+
+function statusForOtpError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+
+  if (
+    message.includes("Invalid OTP") ||
+    message.includes("expired") ||
+    message.includes("attempt") ||
+    message.includes("already used") ||
+    message.includes("not found")
+  ) {
+    return 403
+  }
+
+  return 400
+}
+
+async function readBody(request: NextRequest) {
+  return (await request.json().catch(() => ({}))) as Record<string, unknown>
+}
+
+export async function sendOtpLogin(request: NextRequest) {
+  try {
+    const body = await readBody(request)
+    const context = await resolveAuthContext()
+    const session = await resolveSession(context)
+    const otpContext = normalize_otp_context({
+      session,
+      channel: body.channel,
+      purpose: body.purpose,
+      target: body.target ?? body.email,
+    })
+
+    await sendIdentityDebug("otp_send_request", {
+      channel: otpContext.channel,
+      target: otpContext.target,
+      purpose: otpContext.purpose,
+      visitor_uuid: otpContext.visitor_uuid,
+      user_uuid: otpContext.user_uuid,
+      source_channel: context.source_channel,
+    })
+
+    const record = await create_otp(otpContext)
+
+    if (otpContext.channel === "email") {
+      await sendMail({
+        to: otpContext.target,
+        ...otp_email({ code: record.code }),
+      })
+    }
+
+    await sendIdentityDebug("otp_send_success", {
+      channel: otpContext.channel,
+      target: otpContext.target,
+      purpose: otpContext.purpose,
+      visitor_uuid: otpContext.visitor_uuid,
+      user_uuid: otpContext.user_uuid,
+      otp_uuid: record.otp_uuid,
+      expires_at: record.expires_at,
+    })
+
+    return NextResponse.json({
+      ok: true,
+      success: true,
+    })
+  } catch (error) {
+    return jsonError(error, "Failed to send OTP", statusForOtpError(error))
+  }
+}
+
+export async function verifyCustomOtpLogin(request: NextRequest) {
+  try {
+    const body = await readBody(request)
+    const context = await resolveAuthContext()
+    const session = await resolveSession(context)
+    const otpContext = normalize_otp_context({
+      session,
+      channel: body.channel,
+      purpose: body.purpose,
+      target: body.target ?? body.email,
+    })
+    const code = normalize_code(body.code ?? body.token)
+
+    await sendIdentityDebug("otp_verify_request", {
+      channel: otpContext.channel,
+      target: otpContext.target,
+      purpose: otpContext.purpose,
+      visitor_uuid: otpContext.visitor_uuid,
+      user_uuid: otpContext.user_uuid,
+      source_channel: context.source_channel,
+    })
+
+    if (!code) {
+      throw new Error("OTP code must be 6 digits")
+    }
+
+    await verify_otp(otpContext, code)
+
+    const identity = await resolve_identity(otpContext)
+    const linked = await resolve_user(identity)
+    const runtimeSession = await update_session({ identity, linked })
+
+    await sendIdentityDebug("otp_verify_success", {
+      channel: otpContext.channel,
+      target: otpContext.target,
+      purpose: otpContext.purpose,
+      visitor_uuid: otpContext.visitor_uuid,
+      user_uuid: runtimeSession.user_uuid,
+    })
+
+    return NextResponse.json({
+      ok: true,
+      success: true,
+      session: runtimeSession,
+    })
+  } catch (error) {
+    await sendIdentityDebug("otp_verify_failed", {
+      reason: error instanceof Error ? error.message : String(error),
+    })
+
+    return jsonError(error, "Failed to verify OTP", statusForOtpError(error))
+  }
 }

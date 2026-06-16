@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server"
 
-import { startEmailOtpLogin } from "@/core/auth/email"
+import { sendOtpLogin } from "@/core/auth/action"
 
 export async function POST(request: NextRequest) {
-  return startEmailOtpLogin(request)
+  return sendOtpLogin(request)
 }

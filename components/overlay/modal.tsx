@@ -1,7 +1,7 @@
 "use client"
 
 import type { ClipboardEvent, KeyboardEvent } from "react"
-import { useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 
 import { ChevronRight, LogOut, Mail, PawPrint, User } from "lucide-react"
@@ -84,9 +84,9 @@ const content = {
     es: "Inicia sesion con tu cuenta de Google",
   },
   email_title: {
-    ja: "eMail",
-    en: "eMail",
-    es: "eMail",
+    ja: "Email",
+    en: "Email",
+    es: "Email",
   },
   email_description: {
     ja: "メールアドレスでログイン",
@@ -94,9 +94,9 @@ const content = {
     es: "Inicia sesion con tu correo electronico",
   },
   email_step_description: {
-    ja: "メールアドレスを入力してください",
-    en: "Enter your email address.",
-    es: "Ingresa tu correo electronico.",
+    ja: "メールアドレスへ認証コードを送信します",
+    en: "We will send a verification code to your email address.",
+    es: "Enviaremos un codigo de verificacion a tu correo.",
   },
   email_input_label: {
     ja: "メールアドレス",
@@ -114,12 +114,12 @@ const content = {
     es: "Ingresa el codigo de 6 digitos enviado a tu correo.",
   },
   verify_code: {
-    ja: "認証する",
-    en: "Verify",
-    es: "Verificar",
+    ja: "ログイン",
+    en: "Log in",
+    es: "Iniciar sesion",
   },
   resend_code: {
-    ja: "コードを再送信",
+    ja: "コードを再送",
     en: "Resend code",
     es: "Reenviar codigo",
   },
@@ -610,6 +610,28 @@ function LinkOption({
   )
 }
 
+async function post_json(path: string, body: Record<string, string>) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  })
+  const result = (await response.json().catch(() => ({}))) as {
+    ok?: boolean
+    error?: string
+    message?: string
+    reason?: string
+  }
+
+  if (!response.ok || result.ok === false) {
+    throw new Error(result.message ?? result.error ?? "Request failed")
+  }
+
+  return result
+}
+
 function EmailLoginPanel({
   locale,
   onBack,
@@ -626,41 +648,20 @@ function EmailLoginPanel({
   const [error, set_error] = useState<string | null>(null)
   const [loading, set_loading] = useState(false)
   const input_refs = useRef<Array<HTMLInputElement | null>>([])
+  const submitted_otp_ref = useRef<string | null>(null)
   const otp = otp_digits.join("")
   const can_verify = otp.length === 6 && otp_digits.every(Boolean) && !loading
 
-  async function post_json(path: string, body: Record<string, string>) {
-    const response = await fetch(path, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    })
-    const result = (await response.json().catch(() => ({}))) as {
-      ok?: boolean
-      error?: string
-      message?: string
-      reason?: string
-    }
-
-    if (!response.ok || result.ok === false) {
-      throw new Error(result.message ?? result.error ?? "Request failed")
-    }
-
-    return result
-  }
-
-  function focus_digit(index: number) {
+  const focus_digit = useCallback((index: number) => {
     window.setTimeout(() => {
       input_refs.current[index]?.focus()
     }, 0)
-  }
+  }, [])
 
-  function clear_digits() {
+  const clear_digits = useCallback(() => {
     set_otp_digits(["", "", "", "", "", ""])
     focus_digit(0)
-  }
+  }, [focus_digit])
 
   function handle_digit_change(index: number, value: string) {
     const digit = value.replace(/\D/g, "").slice(-1)
@@ -712,7 +713,11 @@ function EmailLoginPanel({
     set_error(null)
     set_otp_digits(["", "", "", "", "", ""])
     set_loading(true)
-    post_json("/api/auth/email/start", { email })
+    post_json("/api/auth/otp/send", {
+      channel: "email",
+      purpose: "login",
+      target: email,
+    })
       .then(() => {
         set_step("code")
         focus_digit(0)
@@ -727,16 +732,19 @@ function EmailLoginPanel({
       })
   }
 
-  function handle_verify_code() {
+  const handle_verify_code = useCallback(() => {
     if (!can_verify) {
       return
     }
 
     set_error(null)
     set_loading(true)
-    post_json("/api/auth/email/verify", {
-      email,
-      token: otp,
+    submitted_otp_ref.current = otp
+    post_json("/api/auth/otp/verify", {
+      channel: "email",
+      purpose: "login",
+      target: email,
+      code: otp,
     })
       .then(() => {
         onClose()
@@ -747,11 +755,20 @@ function EmailLoginPanel({
           verify_error instanceof Error ? verify_error.message : "Failed to verify code",
         )
         clear_digits()
+        submitted_otp_ref.current = null
       })
       .finally(() => {
         set_loading(false)
       })
-  }
+  }, [can_verify, clear_digits, email, onClose, otp, router])
+
+  useEffect(() => {
+    if (step !== "code" || !can_verify || submitted_otp_ref.current === otp) {
+      return
+    }
+
+    handle_verify_code()
+  }, [can_verify, handle_verify_code, otp, step])
 
   return (
     <div className="grid gap-3">
@@ -914,6 +931,10 @@ export default function OverlayModal({
   const [loading_action, set_loading_action] = useState<OverlayItem["action"] | null>(null)
   const [link_step, set_link_step] = useState<"options" | "email">("options")
   const modal_title = get_modal_title(rule, locale)
+  const display_title =
+    rule.type === "link" && link_step === "email"
+      ? content.email_title[locale]
+      : modal_title
   const modal_description = get_modal_description(rule, locale)
 
   function handle_link_click(item: OverlayItem) {
@@ -951,7 +972,7 @@ export default function OverlayModal({
             id="overlay-title"
             className="mb-4 text-[24px] font-bold tracking-[-0.03em]"
           >
-            {modal_title}
+            {display_title}
           </h2>
         </div>
 
