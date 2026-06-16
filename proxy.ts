@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
 import type { AuthContext, SourceChannel } from "@/core/auth/types"
+import { resolveRoleRedirectPath } from "@/core/auth/route"
 import {
   resolve_session_context,
   VISITOR_COOKIE_NAME,
@@ -97,6 +98,8 @@ export async function proxy(request: NextRequest) {
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set("x-amp-request-id", requestId)
   requestHeaders.set("x-amp-session-source-channel", session.source_channel)
+  requestHeaders.set("x-amp-session-role", session.role)
+  requestHeaders.set("x-amp-session-tier", session.tier)
 
   if (session.visitor_uuid) {
     requestHeaders.set("x-amp-session-visitor-uuid", session.visitor_uuid)
@@ -111,6 +114,26 @@ export async function proxy(request: NextRequest) {
 
   if (session.user_uuid) {
     requestHeaders.set("x-amp-session-user-uuid", session.user_uuid)
+  }
+
+  const redirectPath = resolveRoleRedirectPath(context, session)
+
+  if (redirectPath && redirectPath !== request.nextUrl.pathname) {
+    const redirectUrl = request.nextUrl.clone()
+    redirectUrl.pathname = redirectPath
+    redirectUrl.search = ""
+    const response = NextResponse.redirect(redirectUrl)
+    const cookieToSet = pendingCookie as PendingCookie | null
+
+    if (cookieToSet) {
+      response.cookies.set(
+        cookieToSet.name,
+        cookieToSet.value,
+        cookieToSet.options,
+      )
+    }
+
+    return response
   }
 
   const response = NextResponse.next({

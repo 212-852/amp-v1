@@ -29,6 +29,8 @@ export type AssistantState =
 export type Session = {
   visitor_uuid: string | null
   user_uuid: string | null
+  role: SessionRole
+  tier: SessionTier
   source_channel: SourceChannel
   can_logout: boolean
   can_start_line_oauth: boolean

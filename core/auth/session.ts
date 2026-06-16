@@ -1,7 +1,13 @@
 import { cache } from "react"
 
 import { resolveAuthContext } from "@/core/auth/context"
-import type { AppSession, AuthContext, SourceChannel } from "@/core/auth/types"
+import type {
+  AppSession,
+  AuthContext,
+  SessionRole,
+  SessionTier,
+  SourceChannel,
+} from "@/core/auth/types"
 import { sendAuthDebug as send_auth_debug } from "@/core/debug"
 
 const VISITOR_COOKIE_NAME = "amp_visitor_uuid"
@@ -68,6 +74,16 @@ type SessionCacheEntry = {
   created_new_visitor: boolean
   cookie_found: boolean
   cookie_value: string | null
+}
+
+type SessionProfile = {
+  role: SessionRole
+  tier: SessionTier
+}
+
+type UserProfileRow = {
+  role?: string | null
+  tier?: string | null
 }
 
 type VisitorStore = {
@@ -605,10 +621,83 @@ function buildAnonymousSession(context: AuthContext): AppSession {
   return {
     visitor_uuid: null,
     user_uuid: null,
+    role: "guest",
+    tier: "guest",
     source_channel: context.source_channel ?? "web",
     can_logout: false,
     can_start_line_oauth:
       context.source_channel === "web" || context.source_channel === "pwa",
+  }
+}
+
+function normalizeSessionRole(value: string | null | undefined): SessionRole {
+  if (value === "admin" || value === "driver" || value === "user") {
+    return value
+  }
+
+  return "guest"
+}
+
+function normalizeSessionTier(value: string | null | undefined): SessionTier {
+  if (
+    value === "admin" ||
+    value === "active" ||
+    value === "trainee" ||
+    value === "vip" ||
+    value === "member"
+  ) {
+    return value
+  }
+
+  return "guest"
+}
+
+async function resolveSessionProfile(user_uuid: string | null): Promise<SessionProfile> {
+  if (!user_uuid) {
+    return {
+      role: "guest",
+      tier: "guest",
+    }
+  }
+
+  const config = getSupabaseConfig()
+
+  if (!config) {
+    return {
+      role: "user",
+      tier: "member",
+    }
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "users",
+      [
+        `user_uuid=eq.${encodeURIComponent(user_uuid)}`,
+        "select=role,tier",
+        "limit=1",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return {
+      role: "user",
+      tier: "member",
+    }
+  }
+
+  const rows = (await response.json()) as UserProfileRow[]
+  const row = rows[0]
+
+  return {
+    role: normalizeSessionRole(row?.role ?? "user"),
+    tier: normalizeSessionTier(row?.tier ?? "member"),
   }
 }
 
@@ -623,14 +712,25 @@ function resolveLogoutVisibility(session: {
 }
 
 async function withLogoutVisibility(
-  session: Omit<AppSession, "can_logout" | "can_start_line_oauth"> & {
+  session: Omit<AppSession, "can_logout" | "can_start_line_oauth" | "role" | "tier"> & {
     can_logout?: boolean
     can_start_line_oauth?: boolean
+    role?: SessionRole
+    tier?: SessionTier
   },
   request_id?: string | null,
 ): Promise<AppSession> {
+  const profile =
+    session.role && session.tier
+      ? {
+          role: session.role,
+          tier: session.tier,
+        }
+      : await resolveSessionProfile(session.user_uuid)
   const resolved: AppSession = {
     ...session,
+    role: profile.role,
+    tier: profile.tier,
     can_logout: resolveLogoutVisibility(session),
     can_start_line_oauth:
       session.source_channel === "web" || session.source_channel === "pwa",
@@ -1251,6 +1351,8 @@ async function getResolvedSessionFromRequestHeaders(): Promise<AppSession | null
     return withLogoutVisibility({
       visitor_uuid,
       user_uuid: requestHeaders.get("x-amp-session-user-uuid"),
+      role: normalizeSessionRole(requestHeaders.get("x-amp-session-role")),
+      tier: normalizeSessionTier(requestHeaders.get("x-amp-session-tier")),
       source_channel,
     })
   } catch {

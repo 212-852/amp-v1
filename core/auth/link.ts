@@ -284,6 +284,8 @@ export async function linkVisitorToIdentity(
   const session = options.session ?? {
     visitor_uuid,
     user_uuid: null,
+    role: "guest" as const,
+    tier: "guest" as const,
     source_channel: options.source_channel as AppSession["source_channel"],
     can_logout: false,
     can_start_line_oauth: false,
