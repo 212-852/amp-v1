@@ -34,26 +34,24 @@ a {
   }
 
   to {
-    background-position-x: -112px;
+    background-position-x: -128px;
   }
 }
 
 .robo_cat_window {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   overflow: hidden;
-  flex: 0 0 28px;
+  flex: 0 0 32px;
   position: relative;
 }
 
 .robo_cat_sprite {
-  width: 112px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   background-image: url("/images/robo_neko.jpeg");
   background-repeat: no-repeat;
-  background-size: 112px 28px;
-  position: absolute;
-  left: 0;
-  top: 0;
+  background-size: 128px 32px;
+  background-position: 0 0;
   animation: robo_cat_frames 1.4s steps(4, end) infinite;
 }
