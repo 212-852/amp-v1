@@ -58,22 +58,26 @@ a {
   --cat_frame_count: 4;
   --cat_sprite_width: 398.4px;
 
-  width: var(--cat_frame_width);
-  height: 92px;
+  width: 99.6px;
+  height: 86px;
+  min-width: 99.6px;
+  max-width: 99.6px;
+  min-height: 86px;
+  max-height: 86px;
   overflow: hidden;
   position: relative;
-  flex: 0 0 var(--cat_frame_width);
+  flex: 0 0 99.6px;
 }
 
 .robo_cat_sprite {
   position: absolute;
   left: 0;
-  top: -12px;
-  width: var(--cat_sprite_width);
-  height: var(--cat_frame_height);
+  top: -4px;
+  width: 398.4px;
+  height: 120px;
   background-image: url("/images/robo_neko.svg");
   background-repeat: no-repeat;
-  background-size: var(--cat_sprite_width) var(--cat_frame_height);
+  background-size: 398.4px 120px;
   background-position: 0 0;
   animation: robo_cat_natural_blink 4.8s steps(1, end) infinite;
 }
