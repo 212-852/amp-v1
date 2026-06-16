@@ -1027,7 +1027,18 @@ export default function OverlayModal({
       popup_opened: Boolean(popup),
     })
 
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => {
+      controller.abort()
+    }, 8000)
+
     try {
+      send_bridge_debug("pwa_bridge_fetch_started", {
+        provider: "line",
+        source_channel: "pwa",
+        popup_opened: Boolean(popup),
+      })
+
       const response = await fetch("/api/auth/bridge/start", {
         method: "POST",
         headers: {
@@ -1037,19 +1048,45 @@ export default function OverlayModal({
           provider: "line",
           source_channel: "pwa",
         }),
+        signal: controller.signal,
       })
-      const result = (await response.json().catch(() => ({}))) as {
+      window.clearTimeout(timeout)
+
+      const body_text = await response.text()
+      let result: {
         ok?: boolean
         bridge_uuid?: string
         authorize_url?: string
         error?: string
         message?: string
-      }
-      const authorize_url = result.authorize_url
+      } | null = null
 
-      if (!response.ok || result.ok === false || !result.bridge_uuid || !authorize_url) {
+      try {
+        result = JSON.parse(body_text) as {
+          ok?: boolean
+          bridge_uuid?: string
+          authorize_url?: string
+          error?: string
+          message?: string
+        }
+      } catch {
+        result = null
+      }
+
+      await send_bridge_debug("pwa_bridge_fetch_response", {
+        provider: "line",
+        source_channel: "pwa",
+        status: response.status,
+        ok: response.ok,
+        body_text,
+        json: result,
+      })
+
+      const authorize_url = result?.authorize_url
+
+      if (!response.ok || result?.ok === false || !result?.bridge_uuid || !authorize_url) {
         const error_message =
-          result.message ?? result.error ?? "Failed to start LINE login"
+          result?.message ?? result?.error ?? body_text ?? "bridge start failed"
 
         await send_bridge_debug("pwa_bridge_start_failed", {
           provider: "line",
@@ -1057,7 +1094,7 @@ export default function OverlayModal({
           http_status: response.status,
           response_json: result,
           error_message,
-          bridge_uuid: result.bridge_uuid ?? null,
+          bridge_uuid: result?.bridge_uuid ?? null,
           authorize_url_exists: Boolean(authorize_url),
         })
         failure_logged = true
@@ -1090,11 +1127,30 @@ export default function OverlayModal({
 
       start_bridge_polling(result.bridge_uuid)
     } catch (error) {
+      window.clearTimeout(timeout)
       const error_message = error instanceof Error ? error.message : String(error)
+      const aborted =
+        error instanceof DOMException
+          ? error.name === "AbortError"
+          : error_message === "AbortError" || error_message.includes("aborted")
 
       popup?.close()
       set_bridge_status("failed")
       set_loading_action(null)
+      if (aborted) {
+        await send_bridge_debug("pwa_bridge_fetch_timeout", {
+          provider: "line",
+          source_channel: "pwa",
+          error_message,
+        })
+      } else {
+        await send_bridge_debug("pwa_bridge_fetch_failed", {
+          provider: "line",
+          source_channel: "pwa",
+          error_message,
+        })
+      }
+
       if (!failure_logged) {
         await send_bridge_debug("pwa_bridge_start_failed", {
           provider: "line",

@@ -1018,11 +1018,23 @@ function bridgeCompletePage() {
 
 export async function startLoginBridge(request: NextRequest) {
   try {
+    await sendIdentityDebug("bridge_start_api_enter", {
+      provider: "line",
+      pathname: new URL(request.url).pathname,
+    })
+
     const body = await readBody(request)
     const context = await resolveAuthContext()
     const session = await resolveSession(context)
     const source_channel = body.source_channel === "pwa" ? "pwa" : context.source_channel
     const config = lineLoginConfig(request)
+
+    await sendIdentityDebug("bridge_start_context_resolved", {
+      provider: "line",
+      visitor_uuid: session.visitor_uuid,
+      user_uuid: session.user_uuid,
+      source_channel,
+    })
 
     await sendIdentityDebug("bridge_start_request", {
       provider: "line",
@@ -1035,12 +1047,28 @@ export async function startLoginBridge(request: NextRequest) {
       throw new Error("Login bridge requires visitor_uuid")
     }
 
+    await sendIdentityDebug("bridge_start_insert_attempt", {
+      provider: "line",
+      visitor_uuid: session.visitor_uuid,
+      user_uuid: session.user_uuid,
+      source_channel,
+    })
+
     const bridge = await createLoginBridge({
       visitor_uuid: session.visitor_uuid,
       user_uuid: session.user_uuid,
       provider: "line",
       source_channel,
     })
+
+    await sendIdentityDebug("bridge_start_insert_success", {
+      provider: "line",
+      bridge_uuid: bridge.bridge_uuid,
+      visitor_uuid: bridge.visitor_uuid,
+      user_uuid: bridge.user_uuid,
+      source_channel: bridge.source_channel,
+    })
+
     const state = encodeLineBridgeState({
       bridge_uuid: bridge.bridge_uuid,
       oauth_state: bridge.oauth_state,
@@ -1050,6 +1078,14 @@ export async function startLoginBridge(request: NextRequest) {
       channelId: config.channelId,
       redirectUri: config.redirectUri,
       state,
+    })
+
+    await sendIdentityDebug("bridge_start_authorize_url_created", {
+      provider: "line",
+      bridge_uuid: bridge.bridge_uuid,
+      visitor_uuid: bridge.visitor_uuid,
+      source_channel: bridge.source_channel,
+      authorize_url: authorizeUrl.toString(),
     })
 
     await sendIdentityDebug("bridge_start", {
@@ -1096,6 +1132,14 @@ export async function startLoginBridge(request: NextRequest) {
       source_channel: bridge.source_channel,
       authorize_url_exists: true,
     })
+    await sendIdentityDebug("bridge_start_api_response", {
+      provider: "line",
+      bridge_uuid: bridge.bridge_uuid,
+      visitor_uuid: bridge.visitor_uuid,
+      user_uuid: bridge.user_uuid,
+      source_channel: bridge.source_channel,
+      authorize_url: authorizeUrl.toString(),
+    })
 
     return NextResponse.json({
       ok: true,
@@ -1103,6 +1147,11 @@ export async function startLoginBridge(request: NextRequest) {
       authorize_url: authorizeUrl.toString(),
     })
   } catch (error) {
+    await sendIdentityDebug("bridge_start_api_failed", {
+      provider: "line",
+      error_message: error instanceof Error ? error.message : String(error),
+    })
+
     return jsonError(error, "Failed to start login bridge", 500)
   }
 }
@@ -1195,6 +1244,10 @@ export async function sendLoginBridgeDebug(request: NextRequest) {
   if (
     event !== "bridge_polling_started" &&
     event !== "line_login_button_clicked" &&
+    event !== "pwa_bridge_fetch_failed" &&
+    event !== "pwa_bridge_fetch_response" &&
+    event !== "pwa_bridge_fetch_started" &&
+    event !== "pwa_bridge_fetch_timeout" &&
     event !== "pwa_bridge_start_request" &&
     event !== "pwa_bridge_start_failed" &&
     event !== "pwa_bridge_start_success" &&
