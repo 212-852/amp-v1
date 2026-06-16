@@ -1,6 +1,7 @@
 import type { Session } from "@/core/auth/types"
 
 export type OpsHeaderSession = {
+  visitor_uuid: string | null
   user_uuid: string | null
   role: string
   tier: string | null
@@ -19,6 +20,7 @@ export function normalizeOpsHeaderSession(
   const default_role = options?.default_role ?? "admin"
 
   return {
+    visitor_uuid: session?.visitor_uuid ?? null,
     user_uuid: session?.user_uuid ?? null,
     role: session?.role ?? default_role,
     tier: session?.tier ?? null,

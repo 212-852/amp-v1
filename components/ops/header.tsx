@@ -50,6 +50,7 @@ export default function OpsHeader({
   const pathname = usePathname()
   const { openOverlay } = useOverlay()
   const safe_session: OpsHeaderSession = {
+    visitor_uuid: session?.visitor_uuid ?? null,
     user_uuid: session?.user_uuid ?? null,
     role: session?.role ?? "admin",
     tier: session?.tier ?? null,
