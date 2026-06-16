@@ -9,6 +9,8 @@ const notifications: FooterNotification[] = [
   { label: "配車", message: "対応待ち2件" },
 ]
 
+const cat_image_src = "/images/robo_neko.jpeg"
+
 export default function AdminFooter() {
   return (
     <section
@@ -20,10 +22,10 @@ export default function AdminFooter() {
           <div className="flex items-center gap-2">
             <div className="cat_container" aria-hidden="true">
               <div className="cat_track">
-                <span className="cat_icon cat_1">🐱</span>
-                <span className="cat_icon cat_2">🐱</span>
-                <span className="cat_icon cat_3">🐱</span>
-                <span className="cat_icon cat_4">🐱</span>
+                <img className="cat_icon" src={cat_image_src} alt="" width={24} height={24} />
+                <img className="cat_icon" src={cat_image_src} alt="" width={24} height={24} />
+                <img className="cat_icon" src={cat_image_src} alt="" width={24} height={24} />
+                <img className="cat_icon" src={cat_image_src} alt="" width={24} height={24} />
               </div>
             </div>
 
