@@ -999,6 +999,8 @@ async function createLoginBridge(input: {
 }
 
 function bridgeCompletePage() {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.da-nya.com"
+
   return new NextResponse(
     [
       "<!doctype html>",
@@ -1007,10 +1009,26 @@ function bridgeCompletePage() {
       '<meta charset="utf-8" />',
       '<meta name="viewport" content="width=device-width,initial-scale=1" />',
       "<title>LINE Login Complete</title>",
+      "<style>",
+      "body{margin:0;background:#fdfaf6;color:#111;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}",
+      ".wrap{min-height:100dvh;display:grid;place-items:center;padding:28px;box-sizing:border-box;}",
+      ".panel{width:min(100%,420px);border:1px solid #e5e5e5;border-radius:24px;background:#fff;padding:28px 22px;text-align:center;box-shadow:0 18px 50px rgba(0,0,0,.10);}",
+      "h1{margin:0 0 12px;font-size:24px;line-height:1.4;letter-spacing:0;font-weight:800;}",
+      "p{margin:0;color:#555;font-size:15px;line-height:1.8;font-weight:600;}",
+      ".sub{margin-top:8px;color:#777;font-size:13px;}",
+      "a{margin-top:22px;display:inline-flex;min-height:48px;align-items:center;justify-content:center;border-radius:16px;background:#8f5d28;color:#fff;padding:0 20px;text-decoration:none;font-size:14px;font-weight:800;}",
+      "</style>",
       "</head>",
-      '<body style="font-family: system-ui, -apple-system, sans-serif; padding: 32px; line-height: 1.7;">',
-      "<h1>ログインが完了しました。</h1>",
+      "<body>",
+      '<main class="wrap">',
+      '<section class="panel">',
+      "<h1>ログインが完了しました</h1>",
       "<p>アプリに戻ってください。</p>",
+      '<p class="sub">この画面は閉じても大丈夫です。</p>',
+      `<a href="${appUrl.replace(/"/g, "&quot;")}">アプリに戻る</a>`,
+      "</section>",
+      "</main>",
+      "<script>window.setTimeout(function(){try{window.close()}catch(e){}},800)</script>",
       "</body>",
       "</html>",
     ].join(""),
@@ -1255,7 +1273,13 @@ export async function sendLoginBridgeDebug(request: NextRequest) {
     event !== "pwa_line_popup_blocked" &&
     event !== "pwa_line_popup_opened" &&
     event !== "pwa_line_popup_redirected" &&
-    event !== "pwa_reload_after_bridge"
+    event !== "pwa_login_success_ui_shown" &&
+    event !== "pwa_popup_close_attempted" &&
+    event !== "pwa_popup_close_failed" &&
+    event !== "pwa_reload_after_bridge" &&
+    event !== "pwa_session_refresh_failed" &&
+    event !== "pwa_session_refresh_success" &&
+    event !== "pwa_waiting_ui_shown"
   ) {
     return NextResponse.json({ ok: false }, { status: 400 })
   }
@@ -1593,6 +1617,14 @@ export async function completeLineLogin(request: NextRequest) {
         bridge: callbackBridge,
         oauth_state: bridgeStatePayload?.oauth_state ?? "",
         profile,
+      })
+
+      await sendIdentityDebug("bridge_callback_complete_page_shown", {
+        provider: "line",
+        bridge_uuid: callbackBridge.otp_uuid,
+        visitor_uuid: callbackBridge.visitor_uuid,
+        user_uuid: callbackBridge.user_uuid,
+        source_channel: "pwa",
       })
 
       const response = bridgeCompletePage()

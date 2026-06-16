@@ -89,6 +89,46 @@ const content = {
     en: "Could not confirm LINE login. Please try again.",
     es: "No se pudo confirmar el inicio de sesion de LINE. Intentalo otra vez.",
   },
+  line_bridge_title: {
+    ja: "LINEログインを確認しています",
+    en: "Checking LINE login",
+    es: "Verificando inicio de sesion de LINE",
+  },
+  line_bridge_body: {
+    ja: "LINEでログインが完了すると、この画面は自動で切り替わります。",
+    en: "When LINE login is complete, this screen will update automatically.",
+    es: "Cuando completes el inicio de sesion en LINE, esta pantalla cambiara automaticamente.",
+  },
+  line_bridge_sub: {
+    ja: "認証画面が開かない場合は、もう一度お試しください。",
+    en: "If the authorization screen does not open, please try again.",
+    es: "Si no se abre la pantalla de autorizacion, intentalo otra vez.",
+  },
+  line_bridge_retry: {
+    ja: "LINE認証をもう一度開く",
+    en: "Open LINE authorization again",
+    es: "Abrir autorizacion de LINE otra vez",
+  },
+  line_bridge_cancel: {
+    ja: "キャンセル",
+    en: "Cancel",
+    es: "Cancelar",
+  },
+  line_bridge_success: {
+    ja: "ログインしました",
+    en: "Logged in",
+    es: "Sesion iniciada",
+  },
+  line_bridge_failed_title: {
+    ja: "ログインの確認に失敗しました",
+    en: "Could not confirm login",
+    es: "No se pudo confirmar el inicio de sesion",
+  },
+  line_bridge_failed_body: {
+    ja: "もう一度LINEログインをお試しください",
+    en: "Please try LINE login again.",
+    es: "Intenta iniciar sesion con LINE otra vez.",
+  },
   google_title: {
     ja: "Google",
     en: "Google",
@@ -950,15 +990,25 @@ export default function OverlayModal({
   const { locale, set_locale } = useLocale()
   const [loading_action, set_loading_action] = useState<OverlayItem["action"] | null>(null)
   const [link_step, set_link_step] = useState<"options" | "email">("options")
-  const [bridge_status, set_bridge_status] = useState<"idle" | "polling" | "failed">(
-    "idle",
-  )
+  const [bridge_status, set_bridge_status] = useState<
+    "idle" | "polling" | "success" | "failed"
+  >("idle")
+  const [bridge_uuid, set_bridge_uuid] = useState<string | null>(null)
+  const [bridge_authorize_url, set_bridge_authorize_url] = useState<string | null>(null)
   const bridge_poll_ref = useRef<number | null>(null)
+  const bridge_popup_ref = useRef<Window | null>(null)
   const modal_title = get_modal_title(rule, locale)
-  const display_title =
-    rule.type === "link" && link_step === "email"
-      ? content.email_title[locale]
-      : modal_title
+  let display_title = modal_title
+
+  if (rule.type === "link" && link_step === "email") {
+    display_title = content.email_title[locale]
+  } else if (rule.type === "link" && bridge_status === "polling") {
+    display_title = content.line_bridge_title[locale]
+  } else if (rule.type === "link" && bridge_status === "success") {
+    display_title = content.line_bridge_success[locale]
+  } else if (rule.type === "link" && bridge_status === "failed") {
+    display_title = content.line_bridge_failed_title[locale]
+  }
   const modal_description = get_modal_description(rule, locale)
 
   const stop_bridge_polling = useCallback(() => {
@@ -969,6 +1019,35 @@ export default function OverlayModal({
   }, [])
 
   useEffect(() => stop_bridge_polling, [stop_bridge_polling])
+
+  async function close_bridge_popup(bridge_uuid_value: string | null) {
+    const popup = bridge_popup_ref.current
+
+    if (!popup) {
+      return
+    }
+
+    await send_bridge_debug("pwa_popup_close_attempted", {
+      provider: "line",
+      bridge_uuid: bridge_uuid_value,
+      source_channel: "pwa",
+    })
+
+    try {
+      if (!popup.closed) {
+        popup.close()
+      }
+    } catch (error) {
+      await send_bridge_debug("pwa_popup_close_failed", {
+        provider: "line",
+        bridge_uuid: bridge_uuid_value,
+        source_channel: "pwa",
+        error_message: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      bridge_popup_ref.current = null
+    }
+  }
 
   async function send_bridge_debug(
     event: string,
@@ -1000,10 +1079,25 @@ export default function OverlayModal({
           if (result.status === "success" && result.ok !== false) {
             stop_bridge_polling()
             localStorage.removeItem("amp_line_bridge_uuid")
-            send_bridge_debug("pwa_reload_after_bridge", { bridge_uuid }).finally(() => {
+            set_bridge_status("success")
+            set_loading_action(null)
+            send_bridge_debug("pwa_login_success_ui_shown", { bridge_uuid })
+            close_bridge_popup(bridge_uuid)
+            try {
               router.refresh()
-              window.location.reload()
-            })
+              send_bridge_debug("pwa_session_refresh_success", { bridge_uuid })
+              window.setTimeout(() => {
+                onClose()
+              }, 900)
+            } catch (error) {
+              send_bridge_debug("pwa_session_refresh_failed", {
+                bridge_uuid,
+                error_message: error instanceof Error ? error.message : String(error),
+              }).finally(() => {
+                send_bridge_debug("pwa_reload_after_bridge", { bridge_uuid })
+                window.location.reload()
+              })
+            }
             return
           }
 
@@ -1020,7 +1114,13 @@ export default function OverlayModal({
   async function start_pwa_line_bridge(popup: Window | null) {
     set_loading_action("line")
     set_bridge_status("polling")
+    bridge_popup_ref.current = popup
     let failure_logged = false
+    send_bridge_debug("pwa_waiting_ui_shown", {
+      provider: "line",
+      source_channel: "pwa",
+      popup_opened: Boolean(popup),
+    })
     send_bridge_debug("pwa_bridge_start_request", {
       provider: "line",
       source_channel: "pwa",
@@ -1102,6 +1202,7 @@ export default function OverlayModal({
       }
 
       localStorage.setItem("amp_line_bridge_uuid", result.bridge_uuid)
+      set_bridge_uuid(result.bridge_uuid)
       await send_bridge_debug("pwa_bridge_start_success", {
         provider: "line",
         bridge_uuid: result.bridge_uuid,
@@ -1112,6 +1213,7 @@ export default function OverlayModal({
       })
 
       const final_url = new URL(authorize_url, window.location.origin).toString()
+      set_bridge_authorize_url(final_url)
 
       if (popup) {
         popup.location.href = final_url
@@ -1135,6 +1237,7 @@ export default function OverlayModal({
           : error_message === "AbortError" || error_message.includes("aborted")
 
       popup?.close()
+      bridge_popup_ref.current = null
       set_bridge_status("failed")
       set_loading_action(null)
       if (aborted) {
@@ -1166,6 +1269,45 @@ export default function OverlayModal({
     }
   }
 
+  function retry_pwa_line_bridge() {
+    if (bridge_status === "polling" && bridge_authorize_url) {
+      const popup = window.open("about:blank", "_blank")
+      bridge_popup_ref.current = popup
+
+      if (popup) {
+        popup.location.href = bridge_authorize_url
+        send_bridge_debug("pwa_line_popup_redirected", {
+          provider: "line",
+          bridge_uuid,
+          source_channel: "pwa",
+          authorize_url: bridge_authorize_url,
+          retry: true,
+        })
+      } else {
+        send_bridge_debug("pwa_line_popup_blocked", {
+          provider: "line",
+          bridge_uuid,
+          source_channel: "pwa",
+          retry: true,
+        })
+        window.location.href = bridge_authorize_url
+      }
+      return
+    }
+
+    const popup = window.open("about:blank", "_blank")
+    start_pwa_line_bridge(popup).catch(() => null)
+  }
+
+  function cancel_pwa_line_bridge() {
+    stop_bridge_polling()
+    close_bridge_popup(bridge_uuid)
+    set_bridge_status("idle")
+    set_bridge_uuid(null)
+    set_bridge_authorize_url(null)
+    set_loading_action(null)
+  }
+
   function handle_link_click(item: OverlayItem) {
     if (!item.action || loading_action) {
       return
@@ -1189,6 +1331,10 @@ export default function OverlayModal({
       })
 
       if (is_liff) {
+        return
+      }
+
+      if (is_pwa && bridge_uuid && bridge_status === "polling") {
         return
       }
 
@@ -1262,7 +1408,7 @@ export default function OverlayModal({
         </button>
       </div>
 
-      {rule.type === "link" && link_step === "email" ? null : (
+      {rule.type === "link" && (link_step === "email" || bridge_status !== "idle") ? null : (
         <p className="mt-3 text-[13px] font-medium leading-6 text-[#777777]">
           {modal_description}
         </p>
@@ -1271,6 +1417,67 @@ export default function OverlayModal({
       <div className="mt-5 grid gap-2">
         {rule.type === "account" ? (
           <AccountPanel rule={rule} locale={locale} onClose={onClose} />
+        ) : rule.type === "link" && bridge_status !== "idle" ? (
+          <div className="grid gap-3">
+            <div className="rounded-2xl border border-[#e5e5e5] bg-[#fdfaf6] px-4 py-4">
+              {bridge_status === "success" ? (
+                <div className="flex items-center gap-3">
+                  <span className="h-4 w-4 rounded-full bg-[#06c755]" />
+                  <p className="text-[13px] font-bold leading-6 text-[#111111]">
+                    {content.line_bridge_success[locale]}
+                  </p>
+                </div>
+              ) : bridge_status === "failed" ? (
+                <div className="grid gap-1">
+                  <p className="text-[13px] font-bold leading-6 text-[#111111]">
+                    {content.line_bridge_failed_body[locale]}
+                  </p>
+                  <p className="text-[12px] font-semibold leading-5 text-[#777777]">
+                    {content.line_bridge_sub[locale]}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid gap-1">
+                  <div className="flex items-center gap-3">
+                    <span
+                      className="h-4 w-4 rounded-full border-2 border-[#dcc7aa] border-t-[#8f5d28]"
+                      aria-hidden="true"
+                    />
+                    <p className="text-[13px] font-bold leading-6 text-[#111111]">
+                      {content.line_bridge_body[locale]}
+                    </p>
+                  </div>
+                  <p className="pl-7 text-[12px] font-semibold leading-5 text-[#777777]">
+                    {content.line_bridge_sub[locale]}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {bridge_status === "success" ? null : (
+              <button
+                type="button"
+                onClick={retry_pwa_line_bridge}
+                className={[
+                  "flex min-h-[54px] items-center justify-center rounded-2xl",
+                  "border border-[#e5e5e5] bg-[#8f5d28] px-4 py-3 text-center",
+                  "text-[14px] font-semibold text-white",
+                ].join(" ")}
+              >
+                {content.line_bridge_retry[locale]}
+              </button>
+            )}
+
+            {bridge_status === "success" ? null : (
+              <button
+                type="button"
+                onClick={cancel_pwa_line_bridge}
+                className="min-h-[48px] rounded-2xl border border-[#e5e5e5] px-4 py-3 text-[14px] font-semibold text-[#111111]"
+              >
+                {content.line_bridge_cancel[locale]}
+              </button>
+            )}
+          </div>
         ) : rule.type === "link" && link_step === "email" ? (
           <EmailLoginPanel
             locale={locale}
@@ -1279,21 +1486,6 @@ export default function OverlayModal({
           />
         ) : (
           <>
-            {rule.type === "link" && bridge_status !== "idle" ? (
-              <p
-                className={[
-                  "rounded-2xl border px-4 py-3 text-[12px] font-semibold leading-5",
-                  bridge_status === "failed"
-                    ? "border-[#f1c7c7] bg-[#fff6f6] text-[#9a3333]"
-                    : "border-[#e5e5e5] bg-[#fdfaf6] text-[#8f5d28]",
-                ].join(" ")}
-              >
-                {bridge_status === "failed"
-                  ? content.line_bridge_failed[locale]
-                  : `${content.line_bridge_checking[locale]} ${content.line_bridge_return[locale]}`}
-              </p>
-            ) : null}
-
             {rule.items.map((item) =>
               rule.type === "link" ? (
                 <LinkOption
