@@ -36,19 +36,6 @@ type OtpRecord = {
   created_at: string
 }
 
-type LoginBridgeRecord = {
-  bridge_uuid: string
-  visitor_uuid: string
-  provider: string
-  status: "pending" | "success" | "failed" | "expired"
-  oauth_state: string
-  user_uuid: string | null
-  source_channel: string
-  expires_at: string
-  completed_at: string | null
-  created_at: string
-}
-
 const OTP_SELECT =
   "otp_uuid,visitor_uuid,user_uuid,channel,target,code_hash,expires_at,consumed_at,attempt_count,created_at"
 
@@ -57,8 +44,6 @@ const LINE_LOGIN_STATE_COOKIE = "amp_line_oauth_state"
 const LINE_LOGIN_AUTHORIZE_URL = "https://access.line.me/oauth2/v2.1/authorize"
 const LINE_LOGIN_TOKEN_URL = "https://api.line.me/oauth2/v2.1/token"
 const LINE_PROFILE_URL = "https://api.line.me/v2/profile"
-const LOGIN_BRIDGE_SELECT =
-  "bridge_uuid,visitor_uuid,provider,status,oauth_state,user_uuid,source_channel,expires_at,completed_at,created_at"
 
 console.warn("[OTP_ENVIRONMENT_LOADED]", {
   has_otp_secret: Boolean(process.env.OTP_SECRET),
@@ -853,6 +838,19 @@ function parseLineBridgeState(value: string | null): LineBridgeStatePayload | nu
   return null
 }
 
+function lineBridgeContext(input: { visitor_uuid: string; oauth_state: string }) {
+  return {
+    visitor_uuid: input.visitor_uuid,
+    user_uuid: null,
+    channel: "line" as const,
+    target: input.oauth_state,
+  }
+}
+
+function hashLineBridgeState(input: { visitor_uuid: string; oauth_state: string }) {
+  return hash_otp_code(lineBridgeContext(input), input.oauth_state)
+}
+
 async function loadLoginBridge(bridge_uuid: string) {
   const config = getRestConfig()
 
@@ -863,10 +861,10 @@ async function loadLoginBridge(bridge_uuid: string) {
   const response = await fetch(
     restUrl(
       config,
-      "login_bridge",
+      "otp",
       [
-        `bridge_uuid=eq.${encodeURIComponent(bridge_uuid)}`,
-        `select=${LOGIN_BRIDGE_SELECT}`,
+        `otp_uuid=eq.${encodeURIComponent(bridge_uuid)}`,
+        `select=${OTP_SELECT}`,
         "limit=1",
       ].join("&"),
     ),
@@ -879,20 +877,20 @@ async function loadLoginBridge(bridge_uuid: string) {
   if (!response.ok) {
     const error = await readRestError(response)
     throw new Error(
-      `Failed to load login bridge: ${error.code ?? "unknown"} ${
+      `Failed to load LINE bridge OTP: ${error.code ?? "unknown"} ${
         error.message ?? "No PostgREST error returned"
       }`,
     )
   }
 
-  const rows = (await response.json()) as LoginBridgeRecord[]
+  const rows = (await response.json()) as OtpRecord[]
 
   return rows[0] ?? null
 }
 
 async function patchLoginBridge(
   bridge_uuid: string,
-  payload: Partial<Pick<LoginBridgeRecord, "status" | "user_uuid" | "completed_at">>,
+  payload: Partial<Pick<OtpRecord, "user_uuid" | "consumed_at" | "attempt_count">>,
 ) {
   const config = getRestConfig()
 
@@ -901,7 +899,7 @@ async function patchLoginBridge(
   }
 
   const response = await fetch(
-    restUrl(config, "login_bridge", `bridge_uuid=eq.${encodeURIComponent(bridge_uuid)}`),
+    restUrl(config, "otp", `otp_uuid=eq.${encodeURIComponent(bridge_uuid)}`),
     {
       method: "PATCH",
       headers: restHeaders(config),
@@ -913,7 +911,7 @@ async function patchLoginBridge(
   if (!response.ok) {
     const error = await readRestError(response)
     throw new Error(
-      `Failed to update login bridge: ${error.code ?? "unknown"} ${
+      `Failed to update LINE bridge OTP: ${error.code ?? "unknown"} ${
         error.message ?? "No PostgREST error returned"
       }`,
     )
@@ -923,7 +921,6 @@ async function patchLoginBridge(
 async function createLoginBridge(input: {
   visitor_uuid: string
   user_uuid: string | null
-  provider: "line"
   source_channel: string
 }) {
   const config = getRestConfig()
@@ -936,7 +933,7 @@ async function createLoginBridge(input: {
   const oauth_state = crypto.randomUUID()
 
   await sendIdentityDebug("bridge_insert_start", {
-    provider: input.provider,
+    provider: "line",
     visitor_uuid: input.visitor_uuid,
     user_uuid: input.user_uuid,
     source_channel: input.source_channel,
@@ -944,7 +941,7 @@ async function createLoginBridge(input: {
   })
 
   const response = await fetch(
-    restUrl(config, "login_bridge", `select=${LOGIN_BRIDGE_SELECT}`),
+    restUrl(config, "otp", `select=${OTP_SELECT}`),
     {
       method: "POST",
       headers: {
@@ -953,12 +950,16 @@ async function createLoginBridge(input: {
       },
       body: JSON.stringify({
         visitor_uuid: input.visitor_uuid,
-        provider: input.provider,
-        status: "pending",
-        oauth_state,
-        user_uuid: input.user_uuid,
-        source_channel: input.source_channel,
+        user_uuid: null,
+        channel: "line",
+        target: oauth_state,
+        code_hash: hashLineBridgeState({
+          visitor_uuid: input.visitor_uuid,
+          oauth_state,
+        }),
         expires_at,
+        consumed_at: null,
+        attempt_count: 0,
       }),
       cache: "no-store",
     },
@@ -967,29 +968,34 @@ async function createLoginBridge(input: {
   if (!response.ok) {
     const error = await readRestError(response)
     throw new Error(
-      `Failed to create login bridge: ${error.code ?? "unknown"} ${
+      `Failed to create LINE bridge OTP: ${error.code ?? "unknown"} ${
         error.message ?? "No PostgREST error returned"
       }`,
     )
   }
 
-  const rows = (await response.json()) as LoginBridgeRecord[]
+  const rows = (await response.json()) as OtpRecord[]
   const bridge = rows[0]
 
-  if (!bridge?.bridge_uuid) {
-    throw new Error("Login bridge creation did not return bridge_uuid")
+  if (!bridge?.otp_uuid) {
+    throw new Error("LINE bridge OTP creation did not return otp_uuid")
   }
 
   await sendIdentityDebug("bridge_insert_success", {
-    provider: bridge.provider,
-    bridge_uuid: bridge.bridge_uuid,
+    provider: "line",
+    bridge_uuid: bridge.otp_uuid,
     visitor_uuid: bridge.visitor_uuid,
     user_uuid: bridge.user_uuid,
-    source_channel: bridge.source_channel,
+    source_channel: input.source_channel,
     expires_at: bridge.expires_at,
   })
 
-  return bridge
+  return {
+    ...bridge,
+    bridge_uuid: bridge.otp_uuid,
+    oauth_state,
+    source_channel: input.source_channel,
+  }
 }
 
 function bridgeCompletePage() {
@@ -1057,7 +1063,6 @@ export async function startLoginBridge(request: NextRequest) {
     const bridge = await createLoginBridge({
       visitor_uuid: session.visitor_uuid,
       user_uuid: session.user_uuid,
-      provider: "line",
       source_channel,
     })
 
@@ -1173,42 +1178,38 @@ export async function getLoginBridgeStatus(request: NextRequest) {
       return NextResponse.json({ ok: false, status: "failed" }, { status: 404 })
     }
 
-    if (bridge.status === "pending" && new Date(bridge.expires_at).getTime() <= Date.now()) {
-      await patchLoginBridge(bridge.bridge_uuid, {
-        status: "expired",
-      })
-
+    if (new Date(bridge.expires_at).getTime() <= Date.now() && !bridge.consumed_at) {
       return NextResponse.json({
         ok: true,
         status: "expired",
       })
     }
 
-    if (bridge.status === "pending") {
+    if (!bridge.consumed_at) {
       await sendIdentityDebug("bridge_poll_pending", {
-        provider: bridge.provider,
-        bridge_uuid: bridge.bridge_uuid,
+        provider: "line",
+        bridge_uuid: bridge.otp_uuid,
         visitor_uuid: bridge.visitor_uuid,
-        source_channel: bridge.source_channel,
+        source_channel: "pwa",
       })
     }
 
-    if (bridge.status === "success") {
+    if (bridge.consumed_at && bridge.user_uuid) {
       const profile = await resolveAuthUserProfile(bridge.user_uuid)
 
       await sendIdentityDebug("bridge_poll_success", {
-        provider: bridge.provider,
-        bridge_uuid: bridge.bridge_uuid,
+        provider: "line",
+        bridge_uuid: bridge.otp_uuid,
         visitor_uuid: bridge.visitor_uuid,
         user_uuid: bridge.user_uuid,
-        source_channel: bridge.source_channel,
+        source_channel: "pwa",
       })
       await sendIdentityDebug("pwa_session_restored", {
-        provider: bridge.provider,
-        bridge_uuid: bridge.bridge_uuid,
+        provider: "line",
+        bridge_uuid: bridge.otp_uuid,
         visitor_uuid: bridge.visitor_uuid,
         user_uuid: bridge.user_uuid,
-        source_channel: bridge.source_channel,
+        source_channel: "pwa",
       })
 
       return NextResponse.json({
@@ -1223,14 +1224,14 @@ export async function getLoginBridgeStatus(request: NextRequest) {
           display_name: profile.display_name,
           provider: profile.provider,
           email: profile.email,
-          source_channel: bridge.source_channel,
+          source_channel: "pwa",
         },
       })
     }
 
     return NextResponse.json({
       ok: true,
-      status: bridge.status,
+      status: "pending",
     })
   } catch (error) {
     return jsonError(error, "Failed to get login bridge status", 500)
@@ -1294,14 +1295,14 @@ export async function startLineLogin(request: NextRequest) {
       throw new Error("Login bridge was not found")
     }
 
-    if (bridge && bridge.status !== "pending") {
+    if (bridge && bridge.consumed_at) {
       throw new Error("Login bridge is not pending")
     }
 
     const bridge_state = bridge
       ? encodeLineBridgeState({
-          bridge_uuid: bridge.bridge_uuid,
-          oauth_state: bridge.oauth_state,
+          bridge_uuid: bridge.otp_uuid,
+          oauth_state: bridge.target,
           source_channel: "pwa",
         })
       : null
@@ -1314,10 +1315,10 @@ export async function startLineLogin(request: NextRequest) {
 
     await sendIdentityDebug("line_oauth_authorize_url", {
       provider: "line",
-      bridge_uuid: bridge?.bridge_uuid ?? null,
+      bridge_uuid: bridge?.otp_uuid ?? null,
       visitor_uuid: session.visitor_uuid,
       user_uuid: session.user_uuid,
-      source_channel: bridge?.source_channel ?? context.source_channel,
+      source_channel: bridge ? "pwa" : context.source_channel,
       channel_id: config.channelId,
       redirect_uri: config.redirectUri,
       expected_redirect_uri: "https://app.da-nya.com/api/auth/line/callback",
@@ -1329,10 +1330,10 @@ export async function startLineLogin(request: NextRequest) {
     })
     await sendIdentityDebug("line_oauth_redirect_start", {
       provider: "line",
-      bridge_uuid: bridge?.bridge_uuid ?? null,
+      bridge_uuid: bridge?.otp_uuid ?? null,
       visitor_uuid: session.visitor_uuid,
       user_uuid: session.user_uuid,
-      source_channel: bridge?.source_channel ?? context.source_channel,
+      source_channel: bridge ? "pwa" : context.source_channel,
       final_url: url.toString(),
     })
 
@@ -1349,18 +1350,18 @@ export async function startLineLogin(request: NextRequest) {
 
     await sendIdentityDebug("line_oauth_started", {
       provider: "line",
-      bridge_uuid: bridge?.bridge_uuid ?? null,
+      bridge_uuid: bridge?.otp_uuid ?? null,
       visitor_uuid: session.visitor_uuid,
       user_uuid: session.user_uuid,
-      source_channel: bridge?.source_channel ?? context.source_channel,
+      source_channel: bridge ? "pwa" : context.source_channel,
       redirect_uri: config.redirectUri,
     })
     await sendIdentityDebug("line_oauth_redirect_complete", {
       provider: "line",
-      bridge_uuid: bridge?.bridge_uuid ?? null,
+      bridge_uuid: bridge?.otp_uuid ?? null,
       visitor_uuid: session.visitor_uuid,
       user_uuid: session.user_uuid,
-      source_channel: bridge?.source_channel ?? context.source_channel,
+      source_channel: bridge ? "pwa" : context.source_channel,
       final_url: url.toString(),
     })
 
@@ -1428,18 +1429,33 @@ async function fetchLineProfile(accessToken: string) {
 }
 
 async function completeLineBridge(input: {
-  bridge: LoginBridgeRecord
+  bridge: OtpRecord
+  oauth_state: string
   profile: Awaited<ReturnType<typeof fetchLineProfile>>
 }) {
-  if (input.bridge.status !== "pending") {
+  if (input.bridge.channel !== "line") {
+    throw new Error("Login bridge channel is invalid")
+  }
+
+  if (input.bridge.consumed_at) {
     throw new Error("Login bridge is not pending")
   }
 
   if (new Date(input.bridge.expires_at).getTime() <= Date.now()) {
-    await patchLoginBridge(input.bridge.bridge_uuid, {
-      status: "expired",
-    })
     throw new Error("Login bridge has expired")
+  }
+
+  if (
+    !input.bridge.visitor_uuid ||
+    hashLineBridgeState({
+      visitor_uuid: input.bridge.visitor_uuid,
+      oauth_state: input.oauth_state,
+    }) !== input.bridge.code_hash
+  ) {
+    await patchLoginBridge(input.bridge.otp_uuid, {
+      attempt_count: input.bridge.attempt_count + 1,
+    })
+    throw new Error("LINE bridge OAuth state mismatch")
   }
 
   const result = await linkVisitorToIdentity(
@@ -1452,29 +1468,28 @@ async function completeLineBridge(input: {
     {
       visitor_uuid: input.bridge.visitor_uuid,
       current_user_uuid: input.bridge.user_uuid,
-      source_channel: input.bridge.source_channel,
+      source_channel: "pwa",
     },
   )
 
-  await patchLoginBridge(input.bridge.bridge_uuid, {
-    status: "success",
+  await patchLoginBridge(input.bridge.otp_uuid, {
     user_uuid: result.user_uuid,
-    completed_at: new Date().toISOString(),
+    consumed_at: new Date().toISOString(),
   })
 
   await sendIdentityDebug("bridge_completed", {
     provider: "line",
-    bridge_uuid: input.bridge.bridge_uuid,
+    bridge_uuid: input.bridge.otp_uuid,
     visitor_uuid: input.bridge.visitor_uuid,
     user_uuid: result.user_uuid,
     identity_uuid: result.identity_uuid,
     provider_user_id: input.profile.userId,
-    source_channel: input.bridge.source_channel,
+    source_channel: "pwa",
   })
 
   await sendIdentityDebug("line_identity_link_success", {
     provider: "line",
-    bridge_uuid: input.bridge.bridge_uuid,
+    bridge_uuid: input.bridge.otp_uuid,
     visitor_uuid: result.visitor_uuid,
     user_uuid: result.user_uuid,
     identity_uuid: result.identity_uuid,
@@ -1498,7 +1513,7 @@ export async function completeLineLogin(request: NextRequest) {
   const cookieState = request.cookies.get(LINE_LOGIN_STATE_COOKIE)?.value ?? null
   const failureUrl = new URL("/", appBaseUrl(request))
   const bridgeStatePayload = parseLineBridgeState(state)
-  let callbackBridge: LoginBridgeRecord | null = null
+  let callbackBridge: OtpRecord | null = null
 
   await sendIdentityDebug("line_oauth_callback_received", {
     provider: "line",
@@ -1527,23 +1542,31 @@ export async function completeLineLogin(request: NextRequest) {
         throw new Error("Login bridge was not found")
       }
 
-      if (callbackBridge.oauth_state !== bridgeStatePayload.oauth_state) {
+      if (
+        callbackBridge.channel !== "line" ||
+        callbackBridge.consumed_at ||
+        new Date(callbackBridge.expires_at).getTime() <= Date.now() ||
+        !callbackBridge.visitor_uuid ||
+        hashLineBridgeState({
+          visitor_uuid: callbackBridge.visitor_uuid,
+          oauth_state: bridgeStatePayload.oauth_state,
+        }) !== callbackBridge.code_hash
+      ) {
         throw new Error("LINE bridge OAuth state mismatch")
       }
 
       await sendIdentityDebug("bridge_state_valid", {
         provider: "line",
-        bridge_uuid: callbackBridge.bridge_uuid,
+        bridge_uuid: callbackBridge.otp_uuid,
         visitor_uuid: callbackBridge.visitor_uuid,
-        source_channel: callbackBridge.source_channel,
+        source_channel: "pwa",
       })
     }
 
     if (error) {
-      if (callbackBridge?.status === "pending") {
-        await patchLoginBridge(callbackBridge.bridge_uuid, {
-          status: "failed",
-          completed_at: new Date().toISOString(),
+      if (callbackBridge && !callbackBridge.consumed_at) {
+        await patchLoginBridge(callbackBridge.otp_uuid, {
+          attempt_count: callbackBridge.attempt_count + 1,
         })
       }
       throw new Error(errorDescription ?? error)
@@ -1568,6 +1591,7 @@ export async function completeLineLogin(request: NextRequest) {
     if (callbackBridge) {
       await completeLineBridge({
         bridge: callbackBridge,
+        oauth_state: bridgeStatePayload?.oauth_state ?? "",
         profile,
       })
 
@@ -1599,10 +1623,9 @@ export async function completeLineLogin(request: NextRequest) {
 
     return response
   } catch (callbackError) {
-    if (callbackBridge?.status === "pending") {
-      await patchLoginBridge(callbackBridge.bridge_uuid, {
-        status: "failed",
-        completed_at: new Date().toISOString(),
+    if (callbackBridge && !callbackBridge.consumed_at) {
+      await patchLoginBridge(callbackBridge.otp_uuid, {
+        attempt_count: callbackBridge.attempt_count + 1,
       }).catch(() => null)
     }
 
