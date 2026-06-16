@@ -28,58 +28,52 @@ a {
   text-decoration: none;
 }
 
-@keyframes robo_cat_blink {
-  0% {
+@keyframes robo_cat_natural_blink {
+  0%,
+  78% {
     background-position-x: 0;
   }
 
   82% {
-    background-position-x: 0;
+    background-position-x: calc(var(--cat_frame_width) * -1);
   }
 
-  86% {
-    background-position-x: -99.6px;
+  85% {
+    background-position-x: calc(var(--cat_frame_width) * -2);
   }
 
-  90% {
-    background-position-x: -199.2px;
+  88% {
+    background-position-x: calc(var(--cat_frame_width) * -3);
   }
 
-  94% {
-    background-position-x: -298.8px;
-  }
-
+  91%,
   100% {
     background-position-x: 0;
   }
 }
 
 .robo_cat_window {
-  width: 99.6px;
-  height: 90px;
-  min-width: 99.6px;
-  max-width: 99.6px;
-  min-height: 90px;
-  max-height: 90px;
+  --cat_frame_width: 99.6px;
+  --cat_frame_height: 120px;
+  --cat_frame_count: 4;
+  --cat_sprite_width: 398.4px;
+
+  width: var(--cat_frame_width);
+  height: 92px;
   overflow: hidden;
-  flex: 0 0 99.6px;
   position: relative;
-  align-self: center;
+  flex: 0 0 var(--cat_frame_width);
 }
 
 .robo_cat_sprite {
   position: absolute;
   left: 0;
-  top: 20px;
-  width: 398.4px;
-  height: 120px;
-  min-width: 398.4px;
-  max-width: 398.4px;
-  min-height: 120px;
-  max-height: 120px;
+  top: 14px;
+  width: var(--cat_sprite_width);
+  height: var(--cat_frame_height);
   background-image: url("/images/robo_neko.svg");
   background-repeat: no-repeat;
-  background-size: 398.4px 120px;
+  background-size: var(--cat_sprite_width) var(--cat_frame_height);
   background-position: 0 0;
-  animation: robo_cat_blink 4.2s steps(1, end) infinite;
+  animation: robo_cat_natural_blink 4.8s steps(1, end) infinite;
 }
