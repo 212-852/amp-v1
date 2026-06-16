@@ -26,12 +26,6 @@ const LIFF_SCRIPT_SRC = "https://static.line-scdn.net/liff/edge/2/sdk.js"
 const LIFF_ID = process.env.NEXT_PUBLIC_LIFF_ID ?? "2006953406-vj2gYoAb"
 
 function isLineEnvironment() {
-  const liff = (window as LiffWindow).liff
-
-  if (typeof liff?.isInClient === "function" && liff.isInClient()) {
-    return true
-  }
-
   return navigator.userAgent.toLowerCase().includes("line")
 }
 
@@ -70,7 +64,7 @@ async function postLiffDebug(event: string, payload: Record<string, unknown> = {
 }
 
 async function linkLineProfile(profile: LiffProfile, idToken: string | null) {
-  await fetch("/api/auth/link", {
+  await fetch("/api/auth/liff/session", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -81,6 +75,7 @@ async function linkLineProfile(profile: LiffProfile, idToken: string | null) {
       provider: "line",
       provider_user_id: profile.userId,
       display_name: profile.displayName ?? null,
+      source_channel: "liff",
     }),
     cache: "no-store",
   })

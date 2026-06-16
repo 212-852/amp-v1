@@ -15,6 +15,7 @@ export type AppHeaderAuth = {
   provider: "google" | "line" | "email" | null
   email: string | null
   can_logout: boolean
+  can_start_line_oauth: boolean
 }
 
 const content = {
@@ -168,7 +169,11 @@ export default function AppHeader({ auth }: { auth: AppHeaderAuth }) {
     : content.guest[locale]
   const open_account_link = () => {
     if (!is_logged_in) {
-      openOverlay({ type: "link", source: "user" })
+      openOverlay({
+        type: "link",
+        source: "user",
+        can_start_line_oauth: auth.can_start_line_oauth,
+      })
       return
     }
 

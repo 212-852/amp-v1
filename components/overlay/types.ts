@@ -14,6 +14,7 @@ export type OverlayRequest = {
   type: OverlayType
   source: OverlaySource
   account?: OverlayAccount
+  can_start_line_oauth?: boolean
 }
 
 export type OverlayContext = OverlayRequest & {

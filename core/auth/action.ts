@@ -667,6 +667,52 @@ export async function sendLiffAuthDebug(request: NextRequest) {
   return NextResponse.json({ ok: true })
 }
 
+export async function completeLiffSession(request: NextRequest) {
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+  const providerUserId =
+    typeof body.provider_user_id === "string" ? body.provider_user_id : null
+  const displayName =
+    typeof body.display_name === "string" ? body.display_name : null
+  const sourceChannel = body.source_channel === "liff" ? "liff" : "liff"
+
+  await sendAuthDebug("liff_session_start", {
+    provider: "line",
+    provider_user_id: providerUserId,
+    source_channel: sourceChannel,
+  })
+
+  if (!providerUserId) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "LIFF session requires provider_user_id",
+      },
+      { status: 400 },
+    )
+  }
+
+  const result = await linkCurrentVisitorToIdentity({
+    provider: "line",
+    provider_user_id: providerUserId,
+    display_name: displayName,
+  })
+
+  await sendAuthDebug("liff_session_success", {
+    provider: "line",
+    visitor_uuid: result.visitor_uuid,
+    user_uuid: result.user_uuid,
+    identity_uuid: result.identity_uuid,
+    provider_user_id: providerUserId,
+    source_channel: result.source_channel,
+  })
+
+  return NextResponse.json({
+    ok: true,
+    success: true,
+    session: result.session,
+  })
+}
+
 function lineLoginConfig(request: NextRequest) {
   const channelId = process.env.LINE_LOGIN_CHANNEL_ID
   const channelSecret = process.env.LINE_LOGIN_CHANNEL_SECRET
@@ -687,6 +733,18 @@ export async function startLineLogin(request: NextRequest) {
   try {
     const context = await resolveAuthContext()
     const session = await resolveSession(context)
+
+    if (context.source_channel === "liff" || context.source_channel === "line") {
+      await sendIdentityDebug("line_oauth_skipped_for_liff", {
+        provider: "line",
+        visitor_uuid: session.visitor_uuid,
+        user_uuid: session.user_uuid,
+        source_channel: context.source_channel,
+      })
+
+      return NextResponse.redirect(new URL("/", appBaseUrl(request)), 303)
+    }
+
     const config = lineLoginConfig(request)
     const state = crypto.randomUUID()
     const url = new URL(LINE_LOGIN_AUTHORIZE_URL)

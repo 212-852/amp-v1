@@ -96,6 +96,10 @@ const contentByType: Record<
 
 export function resolveOverlayRule(context: OverlayContext): OverlayRule {
   const content = contentByType[context.type]
+  const items =
+    context.type === "link" && context.can_start_line_oauth === false
+      ? content.items.filter((item) => item.action !== "line")
+      : content.items
 
   return {
     type: context.type,
@@ -104,5 +108,6 @@ export function resolveOverlayRule(context: OverlayContext): OverlayRule {
     placement: placementByType[context.type],
     account: context.account,
     ...content,
+    items,
   }
 }

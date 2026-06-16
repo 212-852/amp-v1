@@ -607,6 +607,7 @@ function buildAnonymousSession(context: AuthContext): AppSession {
     user_uuid: null,
     source_channel: context.source_channel ?? "web",
     can_logout: false,
+    can_start_line_oauth: context.source_channel === "web",
   }
 }
 
@@ -621,12 +622,16 @@ function resolveLogoutVisibility(session: {
 }
 
 async function withLogoutVisibility(
-  session: Omit<AppSession, "can_logout"> & { can_logout?: boolean },
+  session: Omit<AppSession, "can_logout" | "can_start_line_oauth"> & {
+    can_logout?: boolean
+    can_start_line_oauth?: boolean
+  },
   request_id?: string | null,
 ): Promise<AppSession> {
   const resolved: AppSession = {
     ...session,
     can_logout: resolveLogoutVisibility(session),
+    can_start_line_oauth: session.source_channel === "web",
   }
 
   await send_auth_debug(

@@ -210,6 +210,7 @@ export async function sendIdentityDebug(
     | "identity_user_resolve_result"
     | "line_identity_link_success"
     | "line_oauth_callback_received"
+    | "line_oauth_skipped_for_liff"
     | "line_oauth_started"
     | "oauth_callback_code_found"
     | "oauth_callback_code_missing"

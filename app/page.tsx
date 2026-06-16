@@ -18,6 +18,7 @@ export default async function Page() {
   const headerAuth = {
     ...auth,
     can_logout: session.can_logout,
+    can_start_line_oauth: session.can_start_line_oauth,
   }
 
   if (route.path !== "/") {

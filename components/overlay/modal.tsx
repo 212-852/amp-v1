@@ -284,7 +284,7 @@ async function handleLinkOption(item: OverlayItem) {
   }
 
   await send_identity_link_started(item.action)
-  window.location.href = "/api/auth/line"
+  window.location.href = "/api/auth/line/start"
 }
 
 function get_modal_title(rule: OverlayRule, locale: Locale) {

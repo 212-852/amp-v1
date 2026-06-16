@@ -31,6 +31,7 @@ export type Session = {
   user_uuid: string | null
   source_channel: SourceChannel
   can_logout: boolean
+  can_start_line_oauth: boolean
 }
 
 export type AppSession = Session
