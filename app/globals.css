@@ -28,44 +28,46 @@ a {
   text-decoration: none;
 }
 
+@keyframes admin-cat-track-walk {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  50% {
+    transform: translateX(2px);
+  }
+}
+
 @keyframes admin-cat-blink {
   0%,
-  88%,
   100% {
-    transform: translateY(0) scaleY(1);
-    opacity: 1;
+    transform: scaleY(1);
   }
 
-  92%,
-  96% {
-    transform: translateY(1px) scaleY(0.92);
-    opacity: 0.92;
+  50% {
+    transform: scaleY(0.1);
   }
 }
 
-@keyframes admin-cat-wiggle {
-  0%,
-  100% {
-    transform: rotate(0deg);
-  }
-
-  25% {
-    transform: rotate(-4deg);
-  }
-
-  75% {
-    transform: rotate(4deg);
-  }
-}
-
-.cat_group {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.cat_container {
+  position: relative;
   flex: 0 0 auto;
   width: 120px;
   min-width: 120px;
-  overflow: visible;
+  height: 32px;
+  overflow: hidden;
+}
+
+.cat_track {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  animation: admin-cat-track-walk 1.2s ease-in-out infinite;
 }
 
 .cat_icon {
@@ -74,11 +76,25 @@ a {
   justify-content: center;
   width: 24px;
   height: 24px;
-  font-size: 22px;
-  line-height: 1;
   flex: 0 0 24px;
-  transform-origin: center bottom;
-  animation:
-    admin-cat-blink 2.8s ease-in-out infinite,
-    admin-cat-wiggle 4.2s ease-in-out infinite;
+  font-size: 20px;
+  line-height: 1;
+  transform-origin: center center;
+  animation: admin-cat-blink 1.2s steps(2, end) infinite;
+}
+
+.cat_1 {
+  animation-delay: 0ms;
+}
+
+.cat_2 {
+  animation-delay: 300ms;
+}
+
+.cat_3 {
+  animation-delay: 600ms;
+}
+
+.cat_4 {
+  animation-delay: 900ms;
 }

@@ -9,8 +9,6 @@ const notifications: FooterNotification[] = [
   { label: "配車", message: "対応待ち2件" },
 ]
 
-const cat_delays = ["0ms", "180ms", "360ms", "540ms"]
-
 export default function AdminFooter() {
   return (
     <section
@@ -20,22 +18,13 @@ export default function AdminFooter() {
       <div className="relative mx-auto w-full max-w-[430px]">
         <div className="rounded-t-[24px] rounded-b-[4px] border border-b-0 border-neutral-200 bg-white px-2.5 py-2 shadow-[0_-4px_16px_rgba(0,0,0,0.04)]">
           <div className="flex items-center gap-2">
-            <div className="cat_group" aria-hidden="true">
-              {cat_delays.map((delay, index) => (
-                <span
-                  key={`admin-cat-${index}`}
-                  className="cat_icon"
-                  style={{ animationDelay: delay }}
-                >
-                  <img
-                    src="/images/robo_neko.svg"
-                    alt=""
-                    width={24}
-                    height={24}
-                    className="h-full w-full object-contain object-bottom"
-                  />
-                </span>
-              ))}
+            <div className="cat_container" aria-hidden="true">
+              <div className="cat_track">
+                <span className="cat_icon cat_1">🐱</span>
+                <span className="cat_icon cat_2">🐱</span>
+                <span className="cat_icon cat_3">🐱</span>
+                <span className="cat_icon cat_4">🐱</span>
+              </div>
             </div>
 
             <div className="min-w-0 flex-1 space-y-0.5 py-0.5">
