@@ -786,8 +786,10 @@ function EmailLoginPanel({
             onChange={(event) => {
               set_email(event.target.value)
             }}
-            className="h-12 rounded-2xl border border-[#e5e5e5] px-4 text-[15px] font-semibold text-[#111111] outline-none focus:border-[#8f5d28]"
+            inputMode="email"
             autoComplete="email"
+            style={{ fontSize: "16px", lineHeight: 1.4 }}
+            className="h-12 rounded-2xl border border-[#e5e5e5] px-4 text-[16px] font-semibold text-[#111111] outline-none focus:border-[#8f5d28]"
           />
         </label>
       ) : (
@@ -808,7 +810,7 @@ function EmailLoginPanel({
               pattern="[0-9]*"
               autoComplete={index === 0 ? "one-time-code" : "off"}
               maxLength={1}
-              style={{ fontSize: "24px" }}
+              style={{ fontSize: "24px", lineHeight: 1.4 }}
               className="h-14 w-12 rounded-xl border border-[#e5e5e5] text-center text-[24px] font-bold text-[#111111] outline-none focus:border-[#8f5d28]"
             />
           ))}

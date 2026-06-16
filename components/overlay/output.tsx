@@ -138,89 +138,89 @@ export default function OverlayOutput({
         @keyframes modal_bottom_enter {
           from {
             opacity: 0;
-            transform: translateY(100%) scale(0.98);
+            transform: translateY(100%);
           }
 
           to {
             opacity: 1;
-            transform: translateY(0) scale(1);
+            transform: translateY(0);
           }
         }
 
         @keyframes modal_bottom_exit {
           from {
             opacity: 1;
-            transform: translateY(0) scale(1);
+            transform: translateY(0);
           }
 
           to {
             opacity: 0;
-            transform: translateY(100%) scale(0.98);
+            transform: translateY(100%);
           }
         }
 
         @keyframes modal_left_enter {
           from {
             opacity: 0;
-            transform: translateX(-100%) scaleX(0.96);
+            transform: translateX(-100%);
           }
 
           to {
             opacity: 1;
-            transform: translateX(0) scaleX(1);
+            transform: translateX(0);
           }
         }
 
         @keyframes modal_left_exit {
           from {
             opacity: 1;
-            transform: translateX(0) scaleX(1);
+            transform: translateX(0);
           }
 
           to {
             opacity: 0;
-            transform: translateX(-100%) scaleX(0.96);
+            transform: translateX(-100%);
           }
         }
 
         @keyframes modal_center_drop_bounce {
           0% {
             opacity: 0;
-            transform: translate(-50%, -120%) scale(0.92);
+            transform: translate(-50%, -120%);
           }
 
           45% {
             opacity: 1;
-            transform: translate(-50%, -44%) scale(1.04);
+            transform: translate(-50%, -44%);
           }
 
           60% {
-            transform: translate(-50%, -56%) scale(0.98);
+            transform: translate(-50%, -56%);
           }
 
           74% {
-            transform: translate(-50%, -48%) scale(1.015);
+            transform: translate(-50%, -48%);
           }
 
           86% {
-            transform: translate(-50%, -51%) scale(0.995);
+            transform: translate(-50%, -51%);
           }
 
           100% {
             opacity: 1;
-            transform: translate(-50%, -50%) scale(1);
+            transform: translate(-50%, -50%);
           }
         }
 
         @keyframes modal_center_drop_bounce_exit {
           0% {
             opacity: 1;
-            transform: translate(-50%, -50%) scale(1);
+            transform: translate(-50%, -50%);
           }
 
           100% {
             opacity: 0;
-            transform: translate(-50%, -68%) scale(0.96);
+            transform: translate(-50%, -68%);
           }
         }
       `}</style>
