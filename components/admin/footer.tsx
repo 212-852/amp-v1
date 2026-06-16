@@ -19,8 +19,8 @@ export default function AdminFooter() {
         <div className="rounded-t-[24px] rounded-b-[4px] border border-b-0 border-neutral-200 bg-white px-2.5 py-2 shadow-[0_-4px_16px_rgba(0,0,0,0.04)]">
           <div className="flex items-center gap-2">
             <div className="robo_cat_area" aria-hidden="true">
-              <div className="robo_cat_viewport">
-                <div className="robo_cat_sprite" />
+              <div className="robo_cat_viewport !overflow-visible">
+                <div className="robo_cat_sprite !bottom-[-20px]" />
               </div>
             </div>
 
