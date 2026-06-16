@@ -18,27 +18,24 @@ export default function AdminFooter() {
       className="fixed inset-x-0 bottom-0 z-50 px-5 pb-[env(safe-area-inset-bottom)]"
     >
       <div className="relative mx-auto w-full max-w-[430px]">
-        <div className="relative overflow-visible rounded-t-[24px] rounded-b-[4px] border border-b-0 border-neutral-200 bg-white px-2.5 py-2 shadow-[0_-4px_16px_rgba(0,0,0,0.04)]">
+        <div className="rounded-t-[24px] rounded-b-[4px] border border-b-0 border-neutral-200 bg-white px-2.5 py-2 shadow-[0_-4px_16px_rgba(0,0,0,0.04)]">
           <div className="flex items-center gap-2">
-            <div className="relative flex h-[72px] w-[76px] shrink-0 items-end">
-              <div className="admin-cat-row pointer-events-none absolute bottom-[-10px] -left-1 z-10 flex items-end gap-0.5">
-                {cat_delays.map((delay, index) => (
-                  <span
-                    key={`admin-cat-${index}`}
-                    className="admin-cat-icon"
-                    style={{ animationDelay: delay }}
-                    aria-hidden="true"
-                  >
-                    <img
-                      src="/images/robo_neko.svg"
-                      alt=""
-                      width={22}
-                      height={28}
-                      className="block h-7 w-[22px] object-contain object-bottom"
-                    />
-                  </span>
-                ))}
-              </div>
+            <div className="cat_group" aria-hidden="true">
+              {cat_delays.map((delay, index) => (
+                <span
+                  key={`admin-cat-${index}`}
+                  className="cat_icon"
+                  style={{ animationDelay: delay }}
+                >
+                  <img
+                    src="/images/robo_neko.svg"
+                    alt=""
+                    width={24}
+                    height={24}
+                    className="h-full w-full object-contain object-bottom"
+                  />
+                </span>
+              ))}
             </div>
 
             <div className="min-w-0 flex-1 space-y-0.5 py-0.5">

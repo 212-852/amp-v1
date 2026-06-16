@@ -518,6 +518,22 @@ chat_action.ts
 driver_schedule.ts
 
 #########################
+ADMIN HEADER LOCK RULE
+#########################
+
+* Do not change admin header layout unless explicitly requested.
+* Do not change avatar size, button placement, spacing, breadcrumb/page label, dropdown behavior, or header height.
+* Admin header must receive resolved session only.
+* Admin header must not query DB.
+* Admin header must not decide role routing.
+* Admin header menu must remain a lightweight dropdown under the button.
+* Closed icon is chevron-down.
+* Open icon is X.
+* Header label must use role / tier from session.
+* If session.image_url exists, use it as avatar.
+* If missing, use initials fallback.
+
+#########################
 UI LOCK RULE
 #########################
 

@@ -33,11 +33,13 @@ a {
   88%,
   100% {
     transform: translateY(0) scaleY(1);
+    opacity: 1;
   }
 
   92%,
   96% {
-    transform: translateY(1px) scaleY(0.9);
+    transform: translateY(1px) scaleY(0.92);
+    opacity: 0.92;
   }
 }
 
@@ -56,8 +58,25 @@ a {
   }
 }
 
-.admin-cat-icon {
+.cat_group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  width: 120px;
+  min-width: 120px;
+  overflow: visible;
+}
+
+.cat_icon {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  font-size: 22px;
+  line-height: 1;
+  flex: 0 0 24px;
   transform-origin: center bottom;
   animation:
     admin-cat-blink 2.8s ease-in-out infinite,
