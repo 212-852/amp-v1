@@ -2,6 +2,11 @@ import { AUTH_SESSION_DEBUG } from "@/core/control"
 
 const identityEvents = new Set([
   "auth_callback_received",
+  "bridge_completed",
+  "bridge_polling_started",
+  "bridge_session_restored",
+  "bridge_start",
+  "bridge_status_pending",
   "contact_upsert_failed",
   "google_code_exchange_failed",
   "google_code_exchange_success",
@@ -40,6 +45,7 @@ const identityEvents = new Set([
   "otp_verify_request",
   "otp_verify_failed",
   "otp_verify_success",
+  "pwa_reload_after_bridge",
   "session_update",
   "session_updated",
   "session_after_identity_link",

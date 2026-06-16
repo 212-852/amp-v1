@@ -210,9 +210,30 @@ export async function linkCurrentVisitorToIdentity(
     throw new Error("Cannot link identity without visitor_uuid")
   }
 
+  return linkVisitorToIdentity(rawInput, {
+    visitor_uuid,
+    current_user_uuid: session.user_uuid,
+    source_channel: context.source_channel,
+    locale: context.locale,
+    session,
+  })
+}
+
+export async function linkVisitorToIdentity(
+  rawInput: Record<string, unknown>,
+  options: {
+    visitor_uuid: string
+    current_user_uuid?: string | null
+    source_channel: string
+    locale?: string | null
+    session?: AppSession
+  },
+): Promise<AuthLinkResult> {
+  const visitor_uuid = options.visitor_uuid
+
   const identityInput = normalizeIdentityLinkInput({
     ...rawInput,
-    locale: rawInput.locale ?? context.locale,
+    locale: rawInput.locale ?? options.locale,
   })
   const input: AuthLinkInput = {
     ...identityInput,
@@ -221,20 +242,20 @@ export async function linkCurrentVisitorToIdentity(
         ? (rawInput.contact as ContactInput)
         : null,
   }
-  const user_uuid = await resolveOrCreateIdentityUser(input, session.user_uuid)
+  const user_uuid = await resolveOrCreateIdentityUser(input, options.current_user_uuid)
   let identity: Awaited<ReturnType<typeof upsertIdentityLink>> = null
 
   try {
     identity = await upsertIdentityLink(input, user_uuid)
     await linkVisitorToUser(visitor_uuid, user_uuid)
     await linkExistingVisitorContacts(visitor_uuid, user_uuid, input)
-    await upsertRealContact(input, visitor_uuid, user_uuid, context.source_channel)
+    await upsertRealContact(input, visitor_uuid, user_uuid, options.source_channel)
     await linkParticipantsToUser(visitor_uuid, user_uuid)
     await sendIdentityDebug("session_update", {
       provider: input.provider,
       visitor_uuid,
       user_uuid,
-      source_channel: context.source_channel,
+      source_channel: options.source_channel,
     })
   } catch (error) {
     const error_message = error instanceof Error ? error.message : String(error)
@@ -255,9 +276,17 @@ export async function linkCurrentVisitorToIdentity(
         ? "identity_conflict"
         : "identity_link_failed",
       error: error_message,
-      source_channel: context.source_channel,
+      source_channel: options.source_channel,
     })
     throw error
+  }
+
+  const session = options.session ?? {
+    visitor_uuid,
+    user_uuid: null,
+    source_channel: options.source_channel as AppSession["source_channel"],
+    can_logout: false,
+    can_start_line_oauth: false,
   }
 
   return {
@@ -266,7 +295,7 @@ export async function linkCurrentVisitorToIdentity(
     identity_uuid: identity?.identity_uuid ?? null,
     email: input.email ?? null,
     display_name: input.display_name ?? null,
-    source_channel: context.source_channel,
+    source_channel: options.source_channel,
     session: {
       ...session,
       visitor_uuid,

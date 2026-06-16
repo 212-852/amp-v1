@@ -8,7 +8,7 @@ import {
   resolveAuthUserProfile,
   sendIdentityDebug,
 } from "@/core/auth/identity"
-import { linkCurrentVisitorToIdentity } from "@/core/auth/link"
+import { linkCurrentVisitorToIdentity, linkVisitorToIdentity } from "@/core/auth/link"
 import { resolveSession, VISITOR_COOKIE_NAME, type AppSession } from "@/core/auth/session"
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
 import { sendAuthDebug } from "@/core/debug"
@@ -36,6 +36,18 @@ type OtpRecord = {
   created_at: string
 }
 
+type LoginBridgeRecord = {
+  bridge_uuid: string
+  visitor_uuid: string
+  provider: string
+  status: "pending" | "success" | "failed" | "expired"
+  user_uuid: string | null
+  source_channel: string
+  expires_at: string
+  completed_at: string | null
+  created_at: string
+}
+
 const OTP_SELECT =
   "otp_uuid,visitor_uuid,user_uuid,channel,target,code_hash,expires_at,consumed_at,attempt_count,created_at"
 
@@ -44,6 +56,8 @@ const LINE_LOGIN_STATE_COOKIE = "amp_line_oauth_state"
 const LINE_LOGIN_AUTHORIZE_URL = "https://access.line.me/oauth2/v2.1/authorize"
 const LINE_LOGIN_TOKEN_URL = "https://api.line.me/oauth2/v2.1/token"
 const LINE_PROFILE_URL = "https://api.line.me/v2/profile"
+const LOGIN_BRIDGE_SELECT =
+  "bridge_uuid,visitor_uuid,provider,status,user_uuid,source_channel,expires_at,completed_at,created_at"
 
 console.warn("[OTP_ENVIRONMENT_LOADED]", {
   has_otp_secret: Boolean(process.env.OTP_SECRET),
@@ -729,10 +743,296 @@ function lineLoginConfig(request: NextRequest) {
   }
 }
 
+function isUuid(value: string | null) {
+  return Boolean(
+    value &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        value,
+      ),
+  )
+}
+
+async function loadLoginBridge(bridge_uuid: string) {
+  const config = getRestConfig()
+
+  if (!config) {
+    throw new Error("Database config is missing")
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "login_bridge",
+      [
+        `bridge_uuid=eq.${encodeURIComponent(bridge_uuid)}`,
+        `select=${LOGIN_BRIDGE_SELECT}`,
+        "limit=1",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+    throw new Error(
+      `Failed to load login bridge: ${error.code ?? "unknown"} ${
+        error.message ?? "No PostgREST error returned"
+      }`,
+    )
+  }
+
+  const rows = (await response.json()) as LoginBridgeRecord[]
+
+  return rows[0] ?? null
+}
+
+async function patchLoginBridge(
+  bridge_uuid: string,
+  payload: Partial<Pick<LoginBridgeRecord, "status" | "user_uuid" | "completed_at">>,
+) {
+  const config = getRestConfig()
+
+  if (!config) {
+    throw new Error("Database config is missing")
+  }
+
+  const response = await fetch(
+    restUrl(config, "login_bridge", `bridge_uuid=eq.${encodeURIComponent(bridge_uuid)}`),
+    {
+      method: "PATCH",
+      headers: restHeaders(config),
+      body: JSON.stringify(payload),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+    throw new Error(
+      `Failed to update login bridge: ${error.code ?? "unknown"} ${
+        error.message ?? "No PostgREST error returned"
+      }`,
+    )
+  }
+}
+
+async function createLoginBridge(input: {
+  visitor_uuid: string
+  user_uuid: string | null
+  provider: "line"
+  source_channel: string
+}) {
+  const config = getRestConfig()
+
+  if (!config) {
+    throw new Error("Database config is missing")
+  }
+
+  const expires_at = new Date(Date.now() + 10 * 60 * 1000).toISOString()
+  const response = await fetch(
+    restUrl(config, "login_bridge", `select=${LOGIN_BRIDGE_SELECT}`),
+    {
+      method: "POST",
+      headers: {
+        ...restHeaders(config),
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        visitor_uuid: input.visitor_uuid,
+        provider: input.provider,
+        status: "pending",
+        user_uuid: input.user_uuid,
+        source_channel: input.source_channel,
+        expires_at,
+      }),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+    throw new Error(
+      `Failed to create login bridge: ${error.code ?? "unknown"} ${
+        error.message ?? "No PostgREST error returned"
+      }`,
+    )
+  }
+
+  const rows = (await response.json()) as LoginBridgeRecord[]
+  const bridge = rows[0]
+
+  if (!bridge?.bridge_uuid) {
+    throw new Error("Login bridge creation did not return bridge_uuid")
+  }
+
+  return bridge
+}
+
+function bridgeCompletePage() {
+  return new NextResponse(
+    [
+      "<!doctype html>",
+      '<html lang="ja">',
+      "<head>",
+      '<meta charset="utf-8" />',
+      '<meta name="viewport" content="width=device-width,initial-scale=1" />',
+      "<title>LINE Login Complete</title>",
+      "</head>",
+      '<body style="font-family: system-ui, -apple-system, sans-serif; padding: 32px; line-height: 1.7;">',
+      "<h1>ログインが完了しました。</h1>",
+      "<p>アプリに戻ってください。</p>",
+      "</body>",
+      "</html>",
+    ].join(""),
+    {
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+      },
+    },
+  )
+}
+
+export async function startLoginBridge(request: NextRequest) {
+  try {
+    const body = await readBody(request)
+    const context = await resolveAuthContext()
+    const session = await resolveSession(context)
+    const source_channel = body.source_channel === "pwa" ? "pwa" : context.source_channel
+
+    if (!session.visitor_uuid) {
+      throw new Error("Login bridge requires visitor_uuid")
+    }
+
+    const bridge = await createLoginBridge({
+      visitor_uuid: session.visitor_uuid,
+      user_uuid: session.user_uuid,
+      provider: "line",
+      source_channel,
+    })
+
+    await sendIdentityDebug("bridge_start", {
+      provider: "line",
+      bridge_uuid: bridge.bridge_uuid,
+      visitor_uuid: bridge.visitor_uuid,
+      user_uuid: bridge.user_uuid,
+      source_channel: bridge.source_channel,
+      expires_at: bridge.expires_at,
+    })
+
+    return NextResponse.json({
+      ok: true,
+      success: true,
+      bridge_uuid: bridge.bridge_uuid,
+      start_url: `/api/auth/line/start?bridge_uuid=${encodeURIComponent(
+        bridge.bridge_uuid,
+      )}&source_channel=pwa`,
+      expires_at: bridge.expires_at,
+    })
+  } catch (error) {
+    return jsonError(error, "Failed to start login bridge", 500)
+  }
+}
+
+export async function getLoginBridgeStatus(request: NextRequest) {
+  try {
+    const context = await resolveAuthContext()
+    const session = await resolveSession(context)
+    const requestUrl = new URL(request.url)
+    const bridge_uuid = requestUrl.searchParams.get("bridge_uuid")
+
+    if (!bridge_uuid || !isUuid(bridge_uuid)) {
+      return NextResponse.json({ ok: false, status: "failed" }, { status: 400 })
+    }
+
+    const bridge = await loadLoginBridge(bridge_uuid)
+
+    if (!bridge || bridge.visitor_uuid !== session.visitor_uuid) {
+      return NextResponse.json({ ok: false, status: "failed" }, { status: 404 })
+    }
+
+    if (bridge.status === "pending" && new Date(bridge.expires_at).getTime() <= Date.now()) {
+      await patchLoginBridge(bridge.bridge_uuid, {
+        status: "expired",
+      })
+
+      return NextResponse.json({
+        ok: true,
+        status: "expired",
+      })
+    }
+
+    if (bridge.status === "pending") {
+      await sendIdentityDebug("bridge_status_pending", {
+        provider: bridge.provider,
+        bridge_uuid: bridge.bridge_uuid,
+        visitor_uuid: bridge.visitor_uuid,
+        source_channel: bridge.source_channel,
+      })
+    }
+
+    if (bridge.status === "success") {
+      const profile = await resolveAuthUserProfile(bridge.user_uuid)
+
+      await sendIdentityDebug("bridge_session_restored", {
+        provider: bridge.provider,
+        bridge_uuid: bridge.bridge_uuid,
+        visitor_uuid: bridge.visitor_uuid,
+        user_uuid: bridge.user_uuid,
+        source_channel: bridge.source_channel,
+      })
+
+      return NextResponse.json({
+        ok: true,
+        success: true,
+        status: "success",
+        session: {
+          visitor_uuid: bridge.visitor_uuid,
+          user_uuid: bridge.user_uuid,
+          role: profile.role,
+          tier: profile.tier,
+          display_name: profile.display_name,
+          provider: profile.provider,
+          email: profile.email,
+          source_channel: bridge.source_channel,
+        },
+      })
+    }
+
+    return NextResponse.json({
+      ok: true,
+      status: bridge.status,
+    })
+  } catch (error) {
+    return jsonError(error, "Failed to get login bridge status", 500)
+  }
+}
+
+export async function sendLoginBridgeDebug(request: NextRequest) {
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+  const event = typeof body.event === "string" ? body.event : null
+
+  if (event !== "bridge_polling_started" && event !== "pwa_reload_after_bridge") {
+    return NextResponse.json({ ok: false }, { status: 400 })
+  }
+
+  await sendIdentityDebug(event, {
+    provider: "line",
+    source_channel: "pwa",
+    ...body,
+  })
+
+  return NextResponse.json({ ok: true })
+}
+
 export async function startLineLogin(request: NextRequest) {
   try {
     const context = await resolveAuthContext()
     const session = await resolveSession(context)
+    const requestUrl = new URL(request.url)
+    const bridge_uuid = requestUrl.searchParams.get("bridge_uuid")
 
     if (context.source_channel === "liff" || context.source_channel === "line") {
       await sendIdentityDebug("line_oauth_skipped_for_liff", {
@@ -746,7 +1046,8 @@ export async function startLineLogin(request: NextRequest) {
     }
 
     const config = lineLoginConfig(request)
-    const state = crypto.randomUUID()
+    const bridge_state = bridge_uuid && isUuid(bridge_uuid) ? bridge_uuid : null
+    const state = bridge_state ?? crypto.randomUUID()
     const url = new URL(LINE_LOGIN_AUTHORIZE_URL)
 
     url.searchParams.set("response_type", "code")
@@ -766,6 +1067,7 @@ export async function startLineLogin(request: NextRequest) {
 
     await sendIdentityDebug("line_oauth_started", {
       provider: "line",
+      bridge_uuid: bridge_state,
       visitor_uuid: session.visitor_uuid,
       user_uuid: session.user_uuid,
       source_channel: context.source_channel,
@@ -835,6 +1137,65 @@ async function fetchLineProfile(accessToken: string) {
   return profile
 }
 
+async function completeLineBridge(input: {
+  bridge: LoginBridgeRecord
+  profile: Awaited<ReturnType<typeof fetchLineProfile>>
+}) {
+  if (input.bridge.status !== "pending") {
+    throw new Error("Login bridge is not pending")
+  }
+
+  if (new Date(input.bridge.expires_at).getTime() <= Date.now()) {
+    await patchLoginBridge(input.bridge.bridge_uuid, {
+      status: "expired",
+    })
+    throw new Error("Login bridge has expired")
+  }
+
+  const result = await linkVisitorToIdentity(
+    {
+      provider: "line",
+      provider_user_id: input.profile.userId,
+      display_name: input.profile.displayName ?? null,
+      image_url: input.profile.pictureUrl ?? null,
+    },
+    {
+      visitor_uuid: input.bridge.visitor_uuid,
+      current_user_uuid: input.bridge.user_uuid,
+      source_channel: input.bridge.source_channel,
+    },
+  )
+
+  await patchLoginBridge(input.bridge.bridge_uuid, {
+    status: "success",
+    user_uuid: result.user_uuid,
+    completed_at: new Date().toISOString(),
+  })
+
+  await sendIdentityDebug("bridge_completed", {
+    provider: "line",
+    bridge_uuid: input.bridge.bridge_uuid,
+    visitor_uuid: input.bridge.visitor_uuid,
+    user_uuid: result.user_uuid,
+    identity_uuid: result.identity_uuid,
+    provider_user_id: input.profile.userId,
+    source_channel: input.bridge.source_channel,
+  })
+
+  await sendIdentityDebug("line_identity_link_success", {
+    provider: "line",
+    bridge_uuid: input.bridge.bridge_uuid,
+    visitor_uuid: result.visitor_uuid,
+    user_uuid: result.user_uuid,
+    identity_uuid: result.identity_uuid,
+    provider_user_id: input.profile.userId,
+    display_name: input.profile.displayName ?? null,
+    source_channel: result.source_channel,
+  })
+
+  return result
+}
+
 export async function completeLineLogin(request: NextRequest) {
   const context = await resolveAuthContext()
   const session = await resolveSession(context)
@@ -846,9 +1207,11 @@ export async function completeLineLogin(request: NextRequest) {
   const errorDescription = requestUrl.searchParams.get("error_description")
   const cookieState = request.cookies.get(LINE_LOGIN_STATE_COOKIE)?.value ?? null
   const failureUrl = new URL("/", appBaseUrl(request))
+  let callbackBridge: LoginBridgeRecord | null = null
 
   await sendIdentityDebug("line_oauth_callback_received", {
     provider: "line",
+    bridge_uuid: isUuid(state) ? state : null,
     visitor_uuid: session.visitor_uuid,
     user_uuid: session.user_uuid,
     source_channel: context.source_channel,
@@ -859,11 +1222,20 @@ export async function completeLineLogin(request: NextRequest) {
   })
 
   try {
+    callbackBridge =
+      isUuid(state) && state ? await loadLoginBridge(state).catch(() => null) : null
+
     if (error) {
+      if (callbackBridge?.status === "pending") {
+        await patchLoginBridge(callbackBridge.bridge_uuid, {
+          status: "failed",
+          completed_at: new Date().toISOString(),
+        })
+      }
       throw new Error(errorDescription ?? error)
     }
 
-    if (!code || !state || state !== cookieState) {
+    if (!code || !state) {
       throw new Error("LINE OAuth state mismatch")
     }
 
@@ -874,10 +1246,28 @@ export async function completeLineLogin(request: NextRequest) {
       channelSecret: config.channelSecret,
     })
     const profile = await fetchLineProfile(token.access_token)
+
+    if (callbackBridge) {
+      await completeLineBridge({
+        bridge: callbackBridge,
+        profile,
+      })
+
+      const response = bridgeCompletePage()
+      response.cookies.delete(LINE_LOGIN_STATE_COOKIE)
+
+      return response
+    }
+
+    if (state !== cookieState) {
+      throw new Error("LINE OAuth state mismatch")
+    }
+
     const result = await linkCurrentVisitorToIdentity({
       provider: "line",
       provider_user_id: profile.userId,
       display_name: profile.displayName ?? null,
+      image_url: profile.pictureUrl ?? null,
     })
 
     await sendIdentityDebug("line_identity_link_success", {
@@ -895,6 +1285,13 @@ export async function completeLineLogin(request: NextRequest) {
 
     return response
   } catch (callbackError) {
+    if (callbackBridge?.status === "pending") {
+      await patchLoginBridge(callbackBridge.bridge_uuid, {
+        status: "failed",
+        completed_at: new Date().toISOString(),
+      }).catch(() => null)
+    }
+
     failureUrl.searchParams.set("auth_error", "line")
     await sendIdentityDebug("identity_link_failed", {
       provider: "line",

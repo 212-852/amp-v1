@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation"
 import { ChevronRight, LogOut, Mail, PawPrint, User } from "lucide-react"
 import { SiGoogle, SiLine } from "react-icons/si"
 
+import { detectAccessChannel } from "@/components/access/channel"
 import { getOverlayModalAnimationClass } from "@/components/overlay/animations"
 import type {
   OverlayAccount,
@@ -72,6 +73,21 @@ const content = {
     ja: "通知やログインが簡単になります",
     en: "Makes notifications and login easier",
     es: "Facilita las notificaciones y el inicio de sesion",
+  },
+  line_bridge_checking: {
+    ja: "LINEログインを確認しています…",
+    en: "Checking LINE login...",
+    es: "Verificando inicio de sesion de LINE...",
+  },
+  line_bridge_return: {
+    ja: "外部ブラウザでログインを完了したら、この画面に戻ってください。",
+    en: "After completing login in the external browser, return to this screen.",
+    es: "Despues de iniciar sesion en el navegador externo, vuelve a esta pantalla.",
+  },
+  line_bridge_failed: {
+    ja: "LINEログインを確認できませんでした。もう一度お試しください。",
+    en: "Could not confirm LINE login. Please try again.",
+    es: "No se pudo confirmar el inicio de sesion de LINE. Intentalo otra vez.",
   },
   google_title: {
     ja: "Google",
@@ -930,15 +946,104 @@ export default function OverlayModal({
   phase: OverlayPhase
   onClose: () => void
 }>) {
+  const router = useRouter()
   const { locale, set_locale } = useLocale()
   const [loading_action, set_loading_action] = useState<OverlayItem["action"] | null>(null)
   const [link_step, set_link_step] = useState<"options" | "email">("options")
+  const [bridge_status, set_bridge_status] = useState<"idle" | "polling" | "failed">(
+    "idle",
+  )
+  const bridge_poll_ref = useRef<number | null>(null)
   const modal_title = get_modal_title(rule, locale)
   const display_title =
     rule.type === "link" && link_step === "email"
       ? content.email_title[locale]
       : modal_title
   const modal_description = get_modal_description(rule, locale)
+
+  const stop_bridge_polling = useCallback(() => {
+    if (bridge_poll_ref.current) {
+      window.clearInterval(bridge_poll_ref.current)
+      bridge_poll_ref.current = null
+    }
+  }, [])
+
+  useEffect(() => stop_bridge_polling, [stop_bridge_polling])
+
+  async function send_bridge_debug(event: string, bridge_uuid: string) {
+    await fetch("/api/auth/bridge/debug", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        event,
+        bridge_uuid,
+      }),
+    }).catch(() => null)
+  }
+
+  function start_bridge_polling(bridge_uuid: string) {
+    stop_bridge_polling()
+    set_bridge_status("polling")
+    send_bridge_debug("bridge_polling_started", bridge_uuid)
+
+    bridge_poll_ref.current = window.setInterval(() => {
+      fetch(`/api/auth/bridge/status?bridge_uuid=${encodeURIComponent(bridge_uuid)}`, {
+        cache: "no-store",
+      })
+        .then((response) => response.json())
+        .then((result: { status?: string; ok?: boolean; success?: boolean }) => {
+          if (result.status === "success" && result.ok !== false) {
+            stop_bridge_polling()
+            localStorage.removeItem("amp_line_bridge_uuid")
+            send_bridge_debug("pwa_reload_after_bridge", bridge_uuid).finally(() => {
+              router.refresh()
+              window.location.reload()
+            })
+            return
+          }
+
+          if (result.status === "failed" || result.status === "expired") {
+            stop_bridge_polling()
+            set_bridge_status("failed")
+            set_loading_action(null)
+          }
+        })
+        .catch(() => null)
+    }, 2000)
+  }
+
+  async function start_pwa_line_bridge() {
+    set_loading_action("line")
+    set_bridge_status("polling")
+
+    const response = await fetch("/api/auth/bridge/start", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        provider: "line",
+        source_channel: "pwa",
+      }),
+    })
+    const result = (await response.json().catch(() => ({}))) as {
+      ok?: boolean
+      bridge_uuid?: string
+      start_url?: string
+      error?: string
+      message?: string
+    }
+
+    if (!response.ok || result.ok === false || !result.bridge_uuid || !result.start_url) {
+      throw new Error(result.message ?? result.error ?? "Failed to start LINE login")
+    }
+
+    localStorage.setItem("amp_line_bridge_uuid", result.bridge_uuid)
+    start_bridge_polling(result.bridge_uuid)
+    window.open(result.start_url, "_blank", "noopener,noreferrer")
+  }
 
   function handle_link_click(item: OverlayItem) {
     if (!item.action || loading_action) {
@@ -947,6 +1052,15 @@ export default function OverlayModal({
 
     if (item.action === "email") {
       set_link_step("email")
+      return
+    }
+
+    if (item.action === "line" && detectAccessChannel() === "pwa") {
+      start_pwa_line_bridge().catch(() => {
+        stop_bridge_polling()
+        set_bridge_status("failed")
+        set_loading_action(null)
+      })
       return
     }
 
@@ -1005,27 +1119,44 @@ export default function OverlayModal({
             onClose={onClose}
           />
         ) : (
-          rule.items.map((item) => (
-            rule.type === "link" ? (
-            <LinkOption
-              key={item.id}
-              item={item}
-              locale={locale}
-              loading_action={loading_action}
-              on_link_click={handle_link_click}
-            />
-            ) : rule.type === "language" ? (
-            <LanguageOption
-              key={item.id}
-              item={item}
-              locale={locale}
-              set_locale={set_locale}
-              onClose={onClose}
-            />
-            ) : (
-              <DefaultOption key={item.id} item={item} locale={locale} />
-            )
-          ))
+          <>
+            {rule.type === "link" && bridge_status !== "idle" ? (
+              <p
+                className={[
+                  "rounded-2xl border px-4 py-3 text-[12px] font-semibold leading-5",
+                  bridge_status === "failed"
+                    ? "border-[#f1c7c7] bg-[#fff6f6] text-[#9a3333]"
+                    : "border-[#e5e5e5] bg-[#fdfaf6] text-[#8f5d28]",
+                ].join(" ")}
+              >
+                {bridge_status === "failed"
+                  ? content.line_bridge_failed[locale]
+                  : `${content.line_bridge_checking[locale]} ${content.line_bridge_return[locale]}`}
+              </p>
+            ) : null}
+
+            {rule.items.map((item) =>
+              rule.type === "link" ? (
+                <LinkOption
+                  key={item.id}
+                  item={item}
+                  locale={locale}
+                  loading_action={loading_action}
+                  on_link_click={handle_link_click}
+                />
+              ) : rule.type === "language" ? (
+                <LanguageOption
+                  key={item.id}
+                  item={item}
+                  locale={locale}
+                  set_locale={set_locale}
+                  onClose={onClose}
+                />
+              ) : (
+                <DefaultOption key={item.id} item={item} locale={locale} />
+              ),
+            )}
+          </>
         )}
       </div>
     </section>

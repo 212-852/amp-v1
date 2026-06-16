@@ -187,6 +187,11 @@ export function normalizeGoogleIdentityInput(
 export async function sendIdentityDebug(
   event:
     | "auth_callback_received"
+    | "bridge_completed"
+    | "bridge_polling_started"
+    | "bridge_session_restored"
+    | "bridge_start"
+    | "bridge_status_pending"
     | "contact_upsert_failed"
     | "google_oauth_callback_received"
     | "google_oauth_start"
@@ -224,6 +229,7 @@ export async function sendIdentityDebug(
     | "otp_verify_request"
     | "otp_verify_failed"
     | "otp_verify_success"
+    | "pwa_reload_after_bridge"
     | "session_update"
     | "session_updated"
     | "session_after_identity_link"
