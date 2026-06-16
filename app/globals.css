@@ -52,27 +52,23 @@ a {
   }
 }
 
-.robo_cat_window {
+.robo_cat_area {
   --cat_frame_width: 99.6px;
   --cat_frame_height: 120px;
   --cat_frame_count: 4;
   --cat_sprite_width: 398.4px;
 
   width: 99.6px;
-  height: 86px;
-  min-width: 99.6px;
-  max-width: 99.6px;
-  min-height: 86px;
-  max-height: 86px;
-  overflow: hidden;
+  height: 110px;
   position: relative;
   flex: 0 0 99.6px;
+  overflow: visible;
 }
 
 .robo_cat_sprite {
   position: absolute;
   left: 0;
-  top: -4px;
+  top: -18px;
   width: 398.4px;
   height: 120px;
   background-image: url("/images/robo_neko.svg");
@@ -80,4 +76,14 @@ a {
   background-size: 398.4px 120px;
   background-position: 0 0;
   animation: robo_cat_natural_blink 4.8s steps(1, end) infinite;
+}
+
+.robo_cat_bottom_mask {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 22px;
+  background: #ffffff;
+  pointer-events: none;
 }
