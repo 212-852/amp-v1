@@ -286,6 +286,10 @@ export async function linkVisitorToIdentity(
     user_uuid: null,
     role: "guest" as const,
     tier: "guest" as const,
+    display_name: null,
+    image_url: null,
+    provider: null,
+    email: null,
     source_channel: options.source_channel as AppSession["source_channel"],
     can_logout: false,
     can_start_line_oauth: false,
@@ -302,6 +306,10 @@ export async function linkVisitorToIdentity(
       ...session,
       visitor_uuid,
       user_uuid,
+      display_name: input.display_name ?? session.display_name,
+      image_url: input.image_url ?? session.image_url,
+      provider: input.provider,
+      email: input.email ?? session.email,
     },
   }
 }

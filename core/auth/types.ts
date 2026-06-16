@@ -12,6 +12,8 @@ export type IdentityState = "anonymous" | "linked" | "logged_in"
 
 export type SourceChannel = "web" | "liff" | "pwa" | "line"
 
+export type SessionProvider = "google" | "line" | "email"
+
 export type SessionOverlayState =
   | "my_page"
   | "menu"
@@ -31,6 +33,10 @@ export type Session = {
   user_uuid: string | null
   role: SessionRole
   tier: SessionTier
+  display_name: string | null
+  image_url: string | null
+  provider: SessionProvider | null
+  email: string | null
   source_channel: SourceChannel
   can_logout: boolean
   can_start_line_oauth: boolean

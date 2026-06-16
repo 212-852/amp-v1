@@ -1,6 +1,6 @@
 "use client"
 
-import { Menu, MessageCircle, PawPrint, User } from "lucide-react"
+import { Cat, Menu, MessageCircle, PawPrint, User } from "lucide-react"
 import Image from "next/image"
 import { useEffect, useState } from "react"
 
@@ -344,6 +344,19 @@ function CopyrightText() {
   )
 }
 
+function FooterCats() {
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute right-6 top-[88px] z-20 flex items-center gap-1.5 text-[#8f5d28]"
+    >
+      {[0, 1, 2, 3].map((item) => (
+        <Cat key={item} className="cat_step h-[14px] w-[14px]" strokeWidth={2.1} />
+      ))}
+    </div>
+  )
+}
+
 export default function AppFooter() {
   const [footerMode, setFooterMode] = useState<FooterMode>("normal")
   const [assistantMode, setAssistantMode] = useState<AssistantMode>("bot")
@@ -358,6 +371,7 @@ export default function AppFooter() {
     <footer className="fixed inset-x-0 bottom-[-2px] z-50 pb-[env(safe-area-inset-bottom)]">
       <div className={footer_shell_class}>
         <FooterCurve />
+        <FooterCats />
         <PinkPawButton
           isInputMode={isInputMode}
           locale={locale}
@@ -419,6 +433,49 @@ export default function AppFooter() {
           ) : null}
         </div>
       </div>
+      <style jsx global>{`
+        .cat_step {
+          display: inline-block;
+          animation: cat_step_blink 1.8s steps(2, end) infinite;
+          transform-origin: center bottom;
+        }
+
+        .cat_step:nth-child(1) {
+          animation-delay: 0s;
+        }
+
+        .cat_step:nth-child(2) {
+          animation-delay: 0.18s;
+        }
+
+        .cat_step:nth-child(3) {
+          animation-delay: 0.36s;
+        }
+
+        .cat_step:nth-child(4) {
+          animation-delay: 0.54s;
+        }
+
+        @keyframes cat_step_blink {
+          0%,
+          70%,
+          100% {
+            transform: translateY(0) scaleY(1);
+            opacity: 1;
+          }
+
+          72%,
+          76% {
+            transform: translateY(1px) scaleY(0.82);
+            opacity: 0.92;
+          }
+
+          82% {
+            transform: translateY(-1px) scaleY(1);
+            opacity: 1;
+          }
+        }
+      `}</style>
 
     </footer>
   )

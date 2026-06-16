@@ -4,6 +4,7 @@ import { resolveAuthContext } from "@/core/auth/context"
 import type {
   AppSession,
   AuthContext,
+  SessionProvider,
   SessionRole,
   SessionTier,
   SourceChannel,
@@ -79,11 +80,22 @@ type SessionCacheEntry = {
 type SessionProfile = {
   role: SessionRole
   tier: SessionTier
+  display_name: string | null
+  image_url: string | null
+  provider: SessionProvider | null
+  email: string | null
 }
 
 type UserProfileRow = {
   role?: string | null
   tier?: string | null
+  display_name?: string | null
+  image_url?: string | null
+}
+
+type IdentityProfileRow = {
+  provider?: string | null
+  email?: string | null
 }
 
 type VisitorStore = {
@@ -623,6 +635,10 @@ function buildAnonymousSession(context: AuthContext): AppSession {
     user_uuid: null,
     role: "guest",
     tier: "guest",
+    display_name: null,
+    image_url: null,
+    provider: null,
+    email: null,
     source_channel: context.source_channel ?? "web",
     can_logout: false,
     can_start_line_oauth:
@@ -652,11 +668,29 @@ function normalizeSessionTier(value: string | null | undefined): SessionTier {
   return "guest"
 }
 
+function normalizeSessionProvider(
+  value: string | null | undefined,
+): SessionProvider | null {
+  if (value === "google" || value === "line" || value === "email") {
+    return value
+  }
+
+  return null
+}
+
+function normalizeNullableString(value: string | null | undefined) {
+  return typeof value === "string" && value.trim() ? value.trim() : null
+}
+
 async function resolveSessionProfile(user_uuid: string | null): Promise<SessionProfile> {
   if (!user_uuid) {
     return {
       role: "guest",
       tier: "guest",
+      display_name: null,
+      image_url: null,
+      provider: null,
+      email: null,
     }
   }
 
@@ -666,38 +700,71 @@ async function resolveSessionProfile(user_uuid: string | null): Promise<SessionP
     return {
       role: "user",
       tier: "member",
+      display_name: null,
+      image_url: null,
+      provider: null,
+      email: null,
     }
   }
 
-  const response = await fetch(
-    restUrl(
-      config,
-      "users",
-      [
-        `user_uuid=eq.${encodeURIComponent(user_uuid)}`,
-        "select=role,tier",
-        "limit=1",
-      ].join("&"),
+  const [userResponse, identityResponse] = await Promise.all([
+    fetch(
+      restUrl(
+        config,
+        "users",
+        [
+          `user_uuid=eq.${encodeURIComponent(user_uuid)}`,
+          "select=role,tier,display_name,image_url",
+          "limit=1",
+        ].join("&"),
+      ),
+      {
+        headers: restHeaders(config),
+        cache: "no-store",
+      },
     ),
-    {
-      headers: restHeaders(config),
-      cache: "no-store",
-    },
-  )
+    fetch(
+      restUrl(
+        config,
+        "identities",
+        [
+          `user_uuid=eq.${encodeURIComponent(user_uuid)}`,
+          "select=provider,email",
+          "limit=1",
+        ].join("&"),
+      ),
+      {
+        headers: restHeaders(config),
+        cache: "no-store",
+      },
+    ),
+  ])
 
-  if (!response.ok) {
+  if (!userResponse.ok) {
     return {
       role: "user",
       tier: "member",
+      display_name: null,
+      image_url: null,
+      provider: null,
+      email: null,
     }
   }
 
-  const rows = (await response.json()) as UserProfileRow[]
-  const row = rows[0]
+  const users = (await userResponse.json()) as UserProfileRow[]
+  const identities = identityResponse.ok
+    ? ((await identityResponse.json()) as IdentityProfileRow[])
+    : []
+  const user = users[0]
+  const identity = identities[0]
 
   return {
-    role: normalizeSessionRole(row?.role ?? "user"),
-    tier: normalizeSessionTier(row?.tier ?? "member"),
+    role: normalizeSessionRole(user?.role ?? "user"),
+    tier: normalizeSessionTier(user?.tier ?? "member"),
+    display_name: normalizeNullableString(user?.display_name),
+    image_url: normalizeNullableString(user?.image_url),
+    provider: normalizeSessionProvider(identity?.provider),
+    email: normalizeNullableString(identity?.email),
   }
 }
 
@@ -712,25 +779,52 @@ function resolveLogoutVisibility(session: {
 }
 
 async function withLogoutVisibility(
-  session: Omit<AppSession, "can_logout" | "can_start_line_oauth" | "role" | "tier"> & {
+  session: Omit<
+    AppSession,
+    | "can_logout"
+    | "can_start_line_oauth"
+    | "role"
+    | "tier"
+    | "display_name"
+    | "image_url"
+    | "provider"
+    | "email"
+  > & {
     can_logout?: boolean
     can_start_line_oauth?: boolean
     role?: SessionRole
     tier?: SessionTier
+    display_name?: string | null
+    image_url?: string | null
+    provider?: SessionProvider | null
+    email?: string | null
   },
   request_id?: string | null,
 ): Promise<AppSession> {
   const profile =
-    session.role && session.tier
+    session.role &&
+    session.tier &&
+    "display_name" in session &&
+    "image_url" in session &&
+    "provider" in session &&
+    "email" in session
       ? {
           role: session.role,
           tier: session.tier,
+          display_name: session.display_name ?? null,
+          image_url: session.image_url ?? null,
+          provider: session.provider ?? null,
+          email: session.email ?? null,
         }
       : await resolveSessionProfile(session.user_uuid)
   const resolved: AppSession = {
     ...session,
     role: profile.role,
     tier: profile.tier,
+    display_name: profile.display_name,
+    image_url: profile.image_url,
+    provider: profile.provider,
+    email: profile.email,
     can_logout: resolveLogoutVisibility(session),
     can_start_line_oauth:
       session.source_channel === "web" || session.source_channel === "pwa",
@@ -1353,6 +1447,16 @@ async function getResolvedSessionFromRequestHeaders(): Promise<AppSession | null
       user_uuid: requestHeaders.get("x-amp-session-user-uuid"),
       role: normalizeSessionRole(requestHeaders.get("x-amp-session-role")),
       tier: normalizeSessionTier(requestHeaders.get("x-amp-session-tier")),
+      display_name: normalizeNullableString(
+        requestHeaders.get("x-amp-session-display-name"),
+      ),
+      image_url: normalizeNullableString(
+        requestHeaders.get("x-amp-session-image-url"),
+      ),
+      provider: normalizeSessionProvider(
+        requestHeaders.get("x-amp-session-provider"),
+      ),
+      email: normalizeNullableString(requestHeaders.get("x-amp-session-email")),
       source_channel,
     })
   } catch {

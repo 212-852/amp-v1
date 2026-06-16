@@ -71,6 +71,22 @@ const content = {
   },
 }
 
+function resolveInitials(value: string | null | undefined) {
+  const normalized = value?.trim()
+
+  if (!normalized) {
+    return "U"
+  }
+
+  const parts = normalized.split(/\s+/).filter(Boolean)
+
+  if (parts.length >= 2) {
+    return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase()
+  }
+
+  return normalized.slice(0, 2).toUpperCase()
+}
+
 function MemberPill({ label, filled = false }: { label: string; filled?: boolean }) {
   return (
     <span
@@ -155,7 +171,11 @@ function UserAvatar({ auth }: { auth: AppHeaderAuth }) {
     )
   }
 
-  return <ProviderIcon provider={auth.provider} className="h-4 w-4" />
+  return (
+    <span className="text-[13px] font-bold leading-none">
+      {resolveInitials(auth.display_name ?? auth.email ?? auth.role ?? auth.user_uuid)}
+    </span>
+  )
 }
 
 export default function AppHeader({ auth }: { auth: AppHeaderAuth }) {
@@ -165,7 +185,7 @@ export default function AppHeader({ auth }: { auth: AppHeaderAuth }) {
   const is_logged_in = Boolean(auth.user_uuid)
   const is_linked = Boolean(auth.provider)
   const user_name = is_logged_in
-    ? auth.display_name ?? content.member[locale]
+    ? auth.display_name ?? auth.email ?? auth.role
     : content.guest[locale]
   const open_account_link = () => {
     if (!is_logged_in) {
@@ -216,7 +236,8 @@ export default function AppHeader({ auth }: { auth: AppHeaderAuth }) {
               </>
             ) : is_linked ? (
               <>
-                <MemberPill label={content.member[locale]} filled />
+                <MemberPill label={auth.role} filled />
+                <MemberPill label={auth.tier} />
                 <LinkPill
                   label={content.linked[locale]}
                   provider={auth.provider}
@@ -225,7 +246,8 @@ export default function AppHeader({ auth }: { auth: AppHeaderAuth }) {
               </>
             ) : (
               <>
-                <MemberPill label={content.member[locale]} filled />
+                <MemberPill label={auth.role} filled />
+                <MemberPill label={auth.tier} />
                 <LinkPill
                   label={content.link[locale]}
                   onClick={open_account_link}

@@ -116,6 +116,22 @@ export async function proxy(request: NextRequest) {
     requestHeaders.set("x-amp-session-user-uuid", session.user_uuid)
   }
 
+  if (session.display_name) {
+    requestHeaders.set("x-amp-session-display-name", session.display_name)
+  }
+
+  if (session.image_url) {
+    requestHeaders.set("x-amp-session-image-url", session.image_url)
+  }
+
+  if (session.provider) {
+    requestHeaders.set("x-amp-session-provider", session.provider)
+  }
+
+  if (session.email) {
+    requestHeaders.set("x-amp-session-email", session.email)
+  }
+
   const redirectPath = resolveRoleRedirectPath(context, session)
 
   if (redirectPath && redirectPath !== request.nextUrl.pathname) {

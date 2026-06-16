@@ -4,8 +4,15 @@ import { Menu, MessageCircle, Settings } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
-import OpsNeko from "@/components/ops/neko"
 import { useOverlay, type OverlayType } from "@/components/overlay"
+
+export type OpsHeaderSession = {
+  user_uuid: string | null
+  role: string
+  tier: string
+  display_name: string | null
+  image_url: string | null
+}
 
 const headerActions = [
   { label: "Chat", icon: MessageCircle },
@@ -24,10 +31,31 @@ const pageLabels: Record<string, string> = {
   "/admin/settings": "設定",
 }
 
-export default function OpsHeader() {
+function resolveInitials(value: string | null | undefined) {
+  const normalized = value?.trim()
+
+  if (!normalized) {
+    return "U"
+  }
+
+  const parts = normalized.split(/\s+/).filter(Boolean)
+
+  if (parts.length >= 2) {
+    return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase()
+  }
+
+  return normalized.slice(0, 2).toUpperCase()
+}
+
+export default function OpsHeader({ session }: { session: OpsHeaderSession }) {
   const pathname = usePathname()
   const { openOverlay } = useOverlay()
-  const displayName = "Guest"
+  const isLoggedIn = Boolean(session.user_uuid)
+  const displayName = isLoggedIn
+    ? session.display_name ?? session.role
+    : "Guest"
+  const roleLabel = isLoggedIn ? session.role : "Guest"
+  const tierLabel = isLoggedIn ? session.tier : null
   const pageLabel = pageLabels[pathname] ?? "ダッシュボード"
   const breadcrumbs = [
     { label: "ホーム", href: "/admin" },
@@ -39,9 +67,17 @@ export default function OpsHeader() {
       <div className="mx-auto flex w-full max-w-[430px] items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <div className="relative h-[52px] w-[52px] shrink-0 overflow-hidden rounded-full border border-neutral-200 bg-neutral-50">
-            <div className="absolute left-1/2 top-1.5 origin-top -translate-x-1/2 scale-[0.38]">
-              <OpsNeko />
-            </div>
+            {session.image_url ? (
+              <span
+                className="block h-full w-full bg-cover bg-center"
+                style={{ backgroundImage: `url(${session.image_url})` }}
+                aria-hidden="true"
+              />
+            ) : (
+              <span className="flex h-full w-full items-center justify-center text-[17px] font-bold text-neutral-800">
+                {resolveInitials(displayName)}
+              </span>
+            )}
           </div>
 
           <div className="min-w-0">
@@ -49,7 +85,7 @@ export default function OpsHeader() {
               {displayName}
             </p>
             <p className="mt-0.5 text-[12px] font-medium leading-tight text-neutral-500">
-              admin
+              {tierLabel ? `${roleLabel} / ${tierLabel}` : roleLabel}
             </p>
             <nav
               aria-label="Breadcrumb"
