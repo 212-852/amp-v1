@@ -64,7 +64,7 @@ a {
 .robo_cat_frame {
   width: 99.6px;
   height: 96px;
-  overflow: hidden;
+  overflow: visible;
   position: absolute;
   left: 0;
   bottom: 0;
@@ -73,7 +73,7 @@ a {
 .robo_cat_sprite {
   position: absolute;
   left: 0;
-  bottom: -6px;
+  bottom: -20px;
   width: 99.6px;
   height: 120px;
   background-image: url("/images/robo_neko.svg");
