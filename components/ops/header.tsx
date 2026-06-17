@@ -3,7 +3,6 @@
 import {
   ChevronDown,
   MessageCircle,
-  MessageCircleOff,
   Settings,
   X,
 } from "lucide-react"
@@ -246,24 +245,17 @@ export default function OpsHeader({
               can_toggle_concierge ? toggle_concierge_availability : undefined
             }
             className={[
-              "flex h-9 w-9 shrink-0 flex-col items-center justify-center rounded-full border transition-colors",
+              "flex h-9 w-9 shrink-0 flex-row items-center justify-center gap-0.5 rounded-full border transition-colors",
               concierge_available_state
-                ? "border-[#22c55e] bg-[#dcfce7] text-[#16a34a]"
-                : "border-[#d1d5db] bg-[#f3f4f6] text-[#9ca3af]",
+                ? "border-[#22c55e] bg-[#22c55e] text-white"
+                : "border-[#d1d5db] bg-[#f3f4f6] text-neutral-900",
               !can_toggle_concierge ? "opacity-60" : "",
             ].join(" ")}
           >
-            {concierge_available_state ? (
-              <>
-                <MessageCircle className="h-3.5 w-3.5" strokeWidth={1.8} />
-                <span className="text-[8px] font-semibold leading-none">ON</span>
-              </>
-            ) : (
-              <>
-                <MessageCircleOff className="h-3.5 w-3.5" strokeWidth={1.8} />
-                <span className="text-[8px] font-semibold leading-none">OFF</span>
-              </>
-            )}
+            <MessageCircle className="h-3 w-3 shrink-0" strokeWidth={1.8} />
+            <span className="text-[8px] font-semibold leading-none">
+              {concierge_available_state ? "ON" : "OFF"}
+            </span>
           </button>
 
           <Link
