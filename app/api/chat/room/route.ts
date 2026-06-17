@@ -1,8 +1,8 @@
 import {
   handleIncomingChatMessage,
   handleQuickMenuRequested,
+  loadChatRoom,
   resolveAdminChatRoom,
-  resolveChatRoom,
 } from "@/core/chat/action"
 import { resolveChatApiSession } from "@/core/chat/api"
 
@@ -16,10 +16,20 @@ export async function GET(request: Request) {
           source_channel: context.source_channel,
           locale: context.locale,
         })
-      : await resolveChatRoom(session, {
+      : await loadChatRoom(session, {
           source_channel: context.source_channel,
           locale: context.locale,
         })
+
+    if (!state) {
+      return Response.json({
+        room: null,
+        participant: null,
+        messages: [],
+        presence: [],
+        concierge_available: true,
+      })
+    }
 
     return Response.json({
       room: state.room,

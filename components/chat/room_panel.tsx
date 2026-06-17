@@ -50,9 +50,13 @@ export default function ChatRoomPanel({
     }
 
     const payload = (await response.json()) as {
-      room: ChatRoomRecord
+      room: ChatRoomRecord | null
       messages: ChatMessageRecord[]
       presence?: PresenceView[]
+    }
+
+    if (!payload.room) {
+      return
     }
 
     set_room(payload.room)

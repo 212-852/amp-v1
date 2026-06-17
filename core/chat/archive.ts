@@ -97,12 +97,26 @@ async function findParticipantRow(filter: string) {
 }
 
 export async function findOldestParticipantByUserUuid(user_uuid: string) {
-  return findParticipantRow(`user_uuid=eq.${encodeURIComponent(user_uuid)}`)
+  return findParticipantRow(
+    `user_uuid=eq.${encodeURIComponent(user_uuid)}&role=in.(guest,user)`,
+  )
 }
 
 export async function findOldestParticipantByVisitorUuid(visitor_uuid: string) {
+  const guest_owner = await findParticipantRow(
+    [
+      `visitor_uuid=eq.${encodeURIComponent(visitor_uuid)}`,
+      "role=eq.guest",
+      "user_uuid=is.null",
+    ].join("&"),
+  )
+
+  if (guest_owner) {
+    return guest_owner
+  }
+
   return findParticipantRow(
-    `visitor_uuid=eq.${encodeURIComponent(visitor_uuid)}`,
+    `visitor_uuid=eq.${encodeURIComponent(visitor_uuid)}&role=in.(guest,user)`,
   )
 }
 
@@ -133,7 +147,9 @@ export async function findOwnerParticipantInRoom(input: {
 export async function resolveRoomFromParticipants(input: {
   visitor_uuid: string | null
   user_uuid: string | null
+  mode?: ChatRoomMode
 }) {
+  const mode = input.mode ?? "bot"
   let participant: ChatParticipantRecord | null = null
 
   if (input.user_uuid) {
@@ -161,7 +177,7 @@ export async function resolveRoomFromParticipants(input: {
 
   const room = await findRoomByUuid(participant.room_uuid)
 
-  if (!room) {
+  if (!room || room.mode !== mode) {
     return null
   }
 

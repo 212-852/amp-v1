@@ -32,6 +32,7 @@ import {
 import { broadcastTypingEvent, resolveTypingEvent } from "@/core/chat/realtime"
 import {
   bootstrapChatRoom,
+  findChatRoomState,
   loadChatRoomState,
   loadChatRoomStateByUuid,
 } from "@/core/chat/room"
@@ -63,6 +64,21 @@ export async function resolveChatRoom(
   })
 
   return loadChatRoomState(context, session)
+}
+
+export async function loadChatRoom(
+  session: Session,
+  input?: {
+    source_channel?: Session["source_channel"]
+    locale?: string | null
+  },
+): Promise<ChatRoomState | null> {
+  const context = buildChatContext(session, {
+    source_channel: input?.source_channel ?? session.source_channel,
+    locale: input?.locale ?? null,
+  })
+
+  return findChatRoomState(context, session)
 }
 
 export async function handleIncomingChatMessage(

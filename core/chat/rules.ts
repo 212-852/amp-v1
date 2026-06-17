@@ -1,14 +1,8 @@
-import type { Session, SourceChannel } from "@/core/auth/types"
+import type { Session } from "@/core/auth/types"
 import { isCarouselPayload } from "@/core/bot/rules"
 import {
   countRoomMessages,
-  findOwnerParticipantInRoom,
-  insertParticipant,
-  insertRoom,
-  resolveRoomFromParticipants,
   roomHasWelcomeMessage,
-  updateRoomChannel,
-  updateRoomLocale,
 } from "@/core/chat/archive"
 import {
   type ChatLocale,
@@ -17,9 +11,7 @@ import {
   type ChatMessagePayload,
   type ChatMessageRecord,
   type ChatMessageType,
-  type ChatParticipantRecord,
   type ChatRoomMode,
-  type ChatRoomRecord,
   type ChatTranslations,
   type TranslationStatus,
   CHAT_MESSAGE_TYPES,
@@ -352,18 +344,6 @@ export function buildMessagePayload(input: {
   }
 }
 
-export type RoomIdentity = {
-  visitor_uuid: string | null
-  user_uuid: string | null
-}
-
-export type ResolvedOwnedRoom = {
-  room: ChatRoomRecord
-  participant: ChatParticipantRecord
-  created: boolean
-  participant_created: boolean
-}
-
 export async function shouldBootstrapWelcome(room_uuid: string) {
   if (await roomHasWelcomeMessage(room_uuid)) {
     return false
@@ -374,94 +354,4 @@ export async function shouldBootstrapWelcome(room_uuid: string) {
   }
 
   return true
-}
-
-export async function resolveOwnedRoom(input: {
-  identity: RoomIdentity
-  locale: ChatLocale
-  channel: SourceChannel
-  owner_role: "guest" | "user"
-}): Promise<ResolvedOwnedRoom> {
-  const resolved = await resolveRoomFromParticipants(input.identity)
-
-  if (resolved) {
-    let room = await updateRoomChannel({
-      room_uuid: resolved.room.room_uuid,
-      channel: input.channel,
-    })
-
-    if (room.locale !== input.locale) {
-      room = await updateRoomLocale({
-        room_uuid: room.room_uuid,
-        locale: input.locale,
-      })
-    }
-
-    const participant =
-      (await findOwnerParticipantInRoom({
-        room_uuid: room.room_uuid,
-        user_uuid: input.identity.user_uuid,
-        visitor_uuid: input.identity.visitor_uuid,
-      })) ?? resolved.participant
-
-    return {
-      room,
-      participant,
-      created: false,
-      participant_created: false,
-    }
-  }
-
-  let room = await insertRoom({
-    mode: "bot",
-    locale: input.locale,
-    channel: input.channel,
-  })
-
-  let participant: ChatParticipantRecord
-  let participant_created = true
-
-  try {
-    participant = await insertParticipant({
-      room_uuid: room.room_uuid,
-      role: input.owner_role,
-      visitor_uuid: input.identity.visitor_uuid,
-      user_uuid: input.identity.user_uuid,
-    })
-  } catch {
-    const existing = await resolveRoomFromParticipants(input.identity)
-
-    if (!existing) {
-      throw new Error("Failed to create room participant")
-    }
-
-    room = await updateRoomChannel({
-      room_uuid: existing.room.room_uuid,
-      channel: input.channel,
-    })
-
-    if (room.locale !== input.locale) {
-      room = await updateRoomLocale({
-        room_uuid: room.room_uuid,
-        locale: input.locale,
-      })
-    }
-
-    participant = existing.participant
-    participant_created = false
-
-    return {
-      room,
-      participant,
-      created: false,
-      participant_created,
-    }
-  }
-
-  return {
-    room,
-    participant,
-    created: true,
-    participant_created,
-  }
 }

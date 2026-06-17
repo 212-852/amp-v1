@@ -5,6 +5,7 @@ export {
   handleChatTyping,
   handleQuickMenuRequested,
   handleIncomingChatMessage,
+  loadChatRoom,
   resolveAdminChatRoom,
   resolveChatRoom,
   resolveRoomPresence,
@@ -12,7 +13,7 @@ export {
 } from "@/core/chat/action"
 export { normalizeIncomingChatInput, resolveParticipantRole } from "@/core/chat/context"
 export { toMessageBundle, bootstrapRoomWelcome } from "@/core/chat/message"
-export { bootstrapChatRoom, resolveOrCreateRoom } from "@/core/chat/room"
+export { bootstrapChatRoom, findChatRoomState, resolveOrCreateRoom } from "@/core/chat/room"
 export { resolveChatSupportAccess } from "@/core/chat/support"
 export {
   readFlexCarouselBubbles,
