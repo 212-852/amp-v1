@@ -5,8 +5,10 @@ import type { ChatRoomState } from "@/core/chat/types"
 
 export default function AppChatSection({
   chat_state,
+  viewer_display_name = null,
 }: Readonly<{
   chat_state: ChatRoomState | null
+  viewer_display_name?: string | null
 }>) {
   if (!chat_state) {
     return null
@@ -18,6 +20,7 @@ export default function AppChatSection({
       initial_messages={chat_state.messages}
       initial_presence={chat_state.presence}
       participant_uuid={chat_state.participant.participant_uuid}
+      viewer_display_name={viewer_display_name}
     />
   )
 }

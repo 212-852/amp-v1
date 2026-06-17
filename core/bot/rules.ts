@@ -57,6 +57,33 @@ const MEETUP_SUPPORT_BODY: LocaleText = {
   es: "Usa el chat si necesitas ayuda con puntos de encuentro o reservas.",
 }
 
+const WELCOME_QUICK_MENU_BUTTONS: Array<{ label: LocaleText; action: string }> = [
+  {
+    label: {
+      ja: "空き状況を確認",
+      en: "Check availability",
+      es: "Ver disponibilidad",
+    },
+    action: "check_availability",
+  },
+  {
+    label: {
+      ja: "予約する",
+      en: "Reserve",
+      es: "Reservar",
+    },
+    action: "reserve",
+  },
+  {
+    label: {
+      ja: "予約を確認する",
+      en: "Check reservation",
+      es: "Ver reserva",
+    },
+    action: "check_reservation",
+  },
+]
+
 const WELCOME_BUBBLES: Array<{
   image: string
   title: LocaleText
@@ -72,26 +99,30 @@ const WELCOME_BUBBLES: Array<{
     },
     body: {
       ja: "予約や確認を素早く選べます。",
-      en: "Choose booking options quickly.",
+      en: "Choose booking and support options quickly.",
       es: "Elige opciones de reserva rapidamente.",
     },
-    buttons: [],
+    buttons: WELCOME_QUICK_MENU_BUTTONS,
   },
   {
     image: BOT_IMAGE.how_to_use,
     title: {
-      ja: "使い方",
+      ja: "ご利用方法",
       en: "How to use",
       es: "Como usar",
     },
     body: {
-      ja: "チャットで予約相談や確認ができます。",
-      en: "Book, ask, and confirm through chat.",
-      es: "Reserva, consulta y confirma por chat.",
+      ja: "予約までの流れを確認できます。",
+      en: "See how to complete a booking.",
+      es: "Consulta el flujo de reserva.",
     },
     buttons: [
       {
-        label: { ja: "詳しく見る", en: "Learn more", es: "Ver mas" },
+        label: {
+          ja: "ご利用方法を見る",
+          en: "View how to use",
+          es: "Ver como usar",
+        },
         action: "how_to_use",
       },
     ],
@@ -104,13 +135,13 @@ const WELCOME_BUBBLES: Array<{
       es: "FAQ",
     },
     body: {
-      ja: "料金や予約方法などを確認できます。",
-      en: "Check pricing, areas, and booking steps.",
-      es: "Consulta precios, zonas y reservas.",
+      ja: "よくある質問を確認できます。",
+      en: "Check frequently asked questions.",
+      es: "Consulta preguntas frecuentes.",
     },
     buttons: [
       {
-        label: { ja: "見る", en: "View", es: "Ver" },
+        label: { ja: "FAQを見る", en: "View FAQ", es: "Ver FAQ" },
         action: "faq",
       },
     ],
@@ -328,16 +359,15 @@ function buildBubble(input: {
 export function buildWelcomeCarousel(locale: ChatLocale): LineFlexCarouselPayload {
   return {
     type: "carousel",
-    contents: WELCOME_BUBBLES.map((bubble, index) =>
+    contents: WELCOME_BUBBLES.map((bubble) =>
       buildBubble({
         image_path: bubble.image,
         title: resolveLocaleText(bubble.title, locale),
         body: resolveLocaleText(bubble.body, locale),
-        buttons: (index === 0 ? QUICK_MENU_BUTTONS : bubble.buttons).map((button) => ({
+        buttons: bubble.buttons.map((button) => ({
           label: resolveLocaleText(button.label, locale),
           action: button.action,
         })),
-        body_node: index === 0 ? buildQuickMenuBody(locale) : undefined,
       }),
     ),
   }

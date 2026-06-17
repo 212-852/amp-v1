@@ -287,14 +287,16 @@ export default function FlexMessage({
   }
 
   return (
-    <div className="m-0 flex min-w-0 flex-1 snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain rounded-none border-0 bg-transparent p-0 shadow-none [scroll-snap-type:x_mandatory] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {payload.contents.map((bubble, index) => (
-        <FlexBubble
-          key={index}
-          bubble={readRecord(bubble) ?? {}}
-          onAction={handleAction}
-        />
-      ))}
+    <div className="w-full min-w-0 overflow-x-auto overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex w-max snap-x snap-mandatory gap-2">
+        {payload.contents.map((bubble, index) => (
+          <FlexBubble
+            key={index}
+            bubble={readRecord(bubble) ?? {}}
+            onAction={handleAction}
+          />
+        ))}
+      </div>
     </div>
   )
 }

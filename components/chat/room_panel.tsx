@@ -18,6 +18,7 @@ type ChatRoomPanelProps = {
   initial_messages: ChatMessageRecord[]
   initial_presence?: PresenceView[]
   participant_uuid: string
+  viewer_display_name?: string | null
   show_presence?: boolean
 }
 
@@ -26,6 +27,7 @@ export default function ChatRoomPanel({
   initial_messages,
   initial_presence = [],
   participant_uuid,
+  viewer_display_name = null,
   show_presence = false,
 }: Readonly<ChatRoomPanelProps>) {
   const [room, set_room] = useState(initial_room)
@@ -129,12 +131,13 @@ export default function ChatRoomPanel({
           ))}
         </div>
       ) : null}
-      <div className="max-h-[280px] space-y-3 overflow-y-auto pr-1">
+      <div className="space-y-4">
         {messages.map((message) => (
           <ChatMessageBubble
             key={message.message_uuid}
             message={message}
             room_locale={(room.locale as Locale) ?? "ja"}
+            viewer_display_name={viewer_display_name}
           />
         ))}
         {typing_label ? (

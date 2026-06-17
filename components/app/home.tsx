@@ -5,12 +5,17 @@ import type { ChatRoomState } from "@/core/chat/types"
 
 export default function AppHome({
   chat_state,
+  viewer_display_name = null,
 }: Readonly<{
   chat_state: ChatRoomState | null
+  viewer_display_name?: string | null
 }>) {
   return (
     <main className="mx-auto w-full max-w-[390px] px-4 pb-[calc(196px+env(safe-area-inset-bottom,0px))] pt-[118px]">
-      <AppChatSection chat_state={chat_state} />
+      <AppChatSection
+        chat_state={chat_state}
+        viewer_display_name={viewer_display_name}
+      />
     </main>
   )
 }
