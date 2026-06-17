@@ -38,7 +38,10 @@ export default async function AppPage() {
   }
 
   return (
-    <div className="min-h-dvh bg-[#f5e8d5] text-[#3d2a19]">
+    <div
+      className="flex h-dvh min-h-dvh flex-col overflow-hidden bg-[#f5e8d5] text-[#3d2a19] pt-[calc(108px+env(safe-area-inset-top,0px))] [--chat-input-height:186px]"
+      style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+    >
       <AppHeader auth={session} />
       <AppHome
         chat_state={chat_state}

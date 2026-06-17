@@ -355,6 +355,7 @@ function buildWelcomeFlexLink(label: string, action: string) {
     type: "button",
     style: "link",
     color: "#8F5D28",
+    align: "center",
     action: {
       type: "postback",
       label,

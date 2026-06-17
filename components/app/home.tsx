@@ -11,11 +11,13 @@ export default function AppHome({
   viewer_display_name?: string | null
 }>) {
   return (
-    <main className="mx-auto w-full max-w-[390px] px-4 pb-[calc(196px+env(safe-area-inset-bottom,0px))] pt-[118px]">
-      <AppChatSection
-        chat_state={chat_state}
-        viewer_display_name={viewer_display_name}
-      />
+    <main className="flex min-h-0 flex-1 flex-col overflow-hidden px-4">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain pt-4 pb-[calc(var(--chat-input-height,186px)+env(safe-area-inset-bottom,0px))]">
+        <AppChatSection
+          chat_state={chat_state}
+          viewer_display_name={viewer_display_name}
+        />
+      </div>
     </main>
   )
 }

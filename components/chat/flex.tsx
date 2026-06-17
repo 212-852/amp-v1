@@ -1,7 +1,5 @@
 "use client"
 
-import Image from "next/image"
-
 import { useOverlay } from "@/components/overlay"
 import { isQuickMenuTriggerAction } from "@/core/bot/rules"
 import type { ChatMessagePayload } from "@/core/chat/types"
@@ -68,15 +66,8 @@ function readGap(value: unknown) {
   return "10px"
 }
 
-function readAspectRatio(value: unknown) {
-  const ratio = readText(value)
-  const [width, height] = ratio.split(":").map(Number)
-
-  if (width > 0 && height > 0) {
-    return `${width} / ${height}`
-  }
-
-  return "20 / 13"
+function readAlign(value: unknown) {
+  return value === "center" ? "center" : "start"
 }
 
 async function requestQuickMenu() {
@@ -99,20 +90,12 @@ function FlexHero({ node }: Readonly<{ node: FlexRecord }>) {
   }
 
   return (
-    <div
-      className="relative w-full overflow-hidden bg-[#f3e7d7]"
-      style={{ aspectRatio: readAspectRatio(node.aspectRatio) }}
-    >
-      <Image
-        src={url}
-        alt=""
-        fill
-        className={
-          node.aspectMode === "contain" ? "object-contain" : "object-cover"
-        }
-        sizes="320px"
-      />
-    </div>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={url}
+      alt=""
+      className="block h-auto w-full rounded-t-[18px] object-cover"
+    />
   )
 }
 
@@ -157,6 +140,7 @@ function FlexButton({
   const label = readText(action?.label)
   const data = readText(action?.data) || label
   const is_link = node.style === "link"
+  const is_centered = readAlign(node.align) === "center"
 
   if (!label) {
     return null
@@ -167,8 +151,10 @@ function FlexButton({
       <button
         type="button"
         onClick={() => onAction(data)}
-        className="w-full py-1 text-left text-[13px] font-semibold underline decoration-[#8F5D28]/40 underline-offset-2"
-        style={{ color: readText(node.color) || "#8F5D28" }}
+        className={[
+          "w-full bg-transparent py-1 text-[13px] font-semibold text-[#8F5D28] underline decoration-[#8F5D28]/40 underline-offset-2",
+          is_centered ? "text-center" : "text-left",
+        ].join(" ")}
       >
         {label}
       </button>
@@ -275,7 +261,7 @@ function FlexBubble({
   const footer = readRecord(bubble.footer)
 
   return (
-    <article className="h-auto w-[300px] max-w-[calc(100vw-76px)] shrink-0 snap-start overflow-visible rounded-[14px] bg-white">
+    <article className="h-auto max-h-none w-[300px] max-w-[calc(100vw-76px)] shrink-0 snap-start overflow-hidden rounded-[18px] bg-white">
       {hero ? <FlexHero node={hero} /> : null}
       {body ? <FlexBox node={body} onAction={onAction} /> : null}
       {footer ? <FlexBox node={footer} onAction={onAction} /> : null}
@@ -306,7 +292,7 @@ export default function FlexMessage({
   }
 
   return (
-    <div className="w-full min-w-0 overflow-x-auto overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="h-auto max-h-none w-full min-w-0 overflow-x-auto overflow-y-visible overscroll-x-contain pb-0 pt-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <div className="flex w-max snap-x snap-mandatory gap-2">
         {payload.contents.map((bubble, index) => (
           <FlexBubble

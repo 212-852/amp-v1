@@ -135,7 +135,7 @@ export default function ChatRoomPanel({
           ))}
         </div>
       ) : null}
-      <div className="space-y-4">
+      <div className="space-y-4 overflow-visible pt-0">
         {messages.map((message) => (
           <ChatMessageBubble
             key={message.message_uuid}

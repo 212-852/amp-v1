@@ -163,32 +163,41 @@ export default function ChatMessageBubble({
     ? "bg-[#f3e2c7] text-[#3d2a19]"
     : "bg-white text-[#3d2a19]"
 
+  if (is_flex) {
+    return (
+      <div className="relative flex w-full justify-start overflow-visible pt-0">
+        <div className="w-full min-w-0 max-w-full">
+          <MessageHeader
+            kind={source_kind}
+            created_at={message.created_at}
+            locale={active_locale}
+            align={align}
+          />
+          <FlexMessage payload={message.payload} />
+        </div>
+      </div>
+    )
+  }
+
   const text_bubble = (
     <div
       className={[
-        "rounded-[18px] px-4 py-3 text-[14px] leading-relaxed",
+        "max-w-full rounded-[18px] px-4 py-3 text-[14px] leading-relaxed",
         bubble_class,
-        is_flex ? "w-full min-w-0 overflow-visible p-2" : "max-w-full",
       ].join(" ")}
     >
-      {is_flex ? (
-        <FlexMessage payload={message.payload} />
-      ) : (
-        <>
-          <p>{body}</p>
-          {can_toggle ? (
-            <button
-              type="button"
-              onClick={() => set_show_original((current) => !current)}
-              className="mt-2 text-[11px] font-semibold text-[#8f5d28]"
-            >
-              {show_original
-                ? content.show_translation[active_locale]
-                : content.show_original[active_locale]}
-            </button>
-          ) : null}
-        </>
-      )}
+      <p>{body}</p>
+      {can_toggle ? (
+        <button
+          type="button"
+          onClick={() => set_show_original((current) => !current)}
+          className="mt-2 text-[11px] font-semibold text-[#8f5d28]"
+        >
+          {show_original
+            ? content.show_translation[active_locale]
+            : content.show_original[active_locale]}
+        </button>
+      ) : null}
     </div>
   )
 
