@@ -147,3 +147,51 @@ export function resolveAuthRoute(
 ): AmpRouteResult {
   return resolveEntryPath(context, entrance, session, identity)
 }
+
+export type AdminAccessNotifyMeta = {
+  request_id?: string | null
+  user_agent?: string | null
+  ip?: string | null
+}
+
+export async function emitAdminAccessNotifications(
+  context: AuthContext,
+  session: Session,
+  meta: AdminAccessNotifyMeta,
+) {
+  const pathname = context.requested_route ?? ""
+
+  if (!pathname.startsWith("/admin")) {
+    return
+  }
+
+  const { notifyEvent } = await import("@/core/notify")
+
+  const base_payload = {
+    pathname,
+    role: session.role,
+    tier: session.tier,
+    user_uuid: session.user_uuid,
+    visitor_uuid: session.visitor_uuid,
+    request_id: meta.request_id ?? null,
+    user_agent: meta.user_agent ?? null,
+    ip: meta.ip ?? null,
+  }
+
+  await notifyEvent({
+    event: "admin_page_accessed",
+    request_id: meta.request_id ?? null,
+    payload: base_payload,
+  })
+
+  if (session.role !== "admin") {
+    await notifyEvent({
+      event: "admin_page_unauthorized_access",
+      request_id: meta.request_id ?? null,
+      payload: {
+        ...base_payload,
+        resolved_role: session.role,
+      },
+    })
+  }
+}

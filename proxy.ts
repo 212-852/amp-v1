@@ -2,7 +2,10 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
 import type { AuthContext, SourceChannel } from "@/core/auth/types"
-import { resolveRoleRedirectPath } from "@/core/auth/route"
+import {
+  emitAdminAccessNotifications,
+  resolveRoleRedirectPath,
+} from "@/core/auth/route"
 import { sendAuthDebug } from "@/core/debug"
 import {
   resolve_session_context,
@@ -143,6 +146,16 @@ async function runProxy(request: NextRequest) {
 
   if (session.email) {
     requestHeaders.set("x-amp-session-email", session.email)
+  }
+
+  if (request.nextUrl.pathname.startsWith("/admin")) {
+    await emitAdminAccessNotifications(context, session, {
+      request_id: requestId,
+      user_agent: request.headers.get("user-agent"),
+      ip:
+        request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+        request.headers.get("x-real-ip"),
+    }).catch(() => null)
   }
 
   const redirectPath = resolveRoleRedirectPath(context, session)

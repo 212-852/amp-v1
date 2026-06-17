@@ -1,4 +1,15 @@
-import { notifyDiscord } from "@/core/notify/discord"
+import {
+  hasNotifyBeenDelivered,
+  markNotifyDelivered,
+} from "@/core/notify/dedup"
+import {
+  deliverDiscordNotification,
+  notifyDiscord,
+} from "@/core/notify/discord"
+import {
+  resolveNotifyDelivery,
+  type NotifyEventInput,
+} from "@/core/notify/rules"
 
 export type NotifyMessage = {
   channel: "discord"
@@ -8,8 +19,71 @@ export type NotifyMessage = {
   payload: Record<string, unknown>
 }
 
+async function logNotifyDebug(
+  event: string,
+  payload: Record<string, unknown>,
+) {
+  console.warn(`[notify] ${event}`, payload)
+
+  try {
+    const { sendAuthDebug } = await import("@/core/debug")
+    await sendAuthDebug(event, payload, payload.request_id as string | null)
+  } catch (error) {
+    console.warn(`[notify] debug_log_failed`, { event, error })
+  }
+}
+
+export async function notifyEvent(input: NotifyEventInput) {
+  if (hasNotifyBeenDelivered(input.request_id, input.event)) {
+    await logNotifyDebug("notify_delivery_skipped", {
+      reason: "duplicate_request",
+      event: input.event,
+      request_id: input.request_id ?? null,
+    })
+    return
+  }
+
+  const delivery = resolveNotifyDelivery(input)
+
+  if (!delivery.webhook_url) {
+    await logNotifyDebug("notify_delivery_skipped", {
+      reason: "webhook_missing",
+      event: input.event,
+      request_id: input.request_id ?? null,
+      webhook: "NOTIFY_WOLF_WEBHOOK",
+      payload: input.payload,
+    })
+    return
+  }
+
+  markNotifyDelivered(input.request_id, input.event)
+
+  try {
+    if (delivery.channel === "discord") {
+      await deliverDiscordNotification(delivery)
+    }
+
+    await logNotifyDebug("notify_delivery_sent", {
+      event: input.event,
+      request_id: input.request_id ?? null,
+      priority: delivery.priority,
+      channel: delivery.channel,
+      payload: input.payload,
+    })
+  } catch (error) {
+    await logNotifyDebug("notify_delivery_failed", {
+      event: input.event,
+      request_id: input.request_id ?? null,
+      error_message: error instanceof Error ? error.message : String(error),
+      payload: input.payload,
+    })
+  }
+}
+
 export async function notify(message: NotifyMessage) {
   if (message.channel === "discord") {
     await notifyDiscord(message)
   }
 }
+
+export type { NotifyEventInput, NotifyEventName } from "@/core/notify/rules"
