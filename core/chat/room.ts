@@ -39,7 +39,14 @@ export type ResolvedOwnedRoom = {
   participant_created: boolean
 }
 
-type RoomDebugEvent = "room_found" | "room_reused" | "room_created"
+type RoomDebugEvent =
+  | "room_resolve_start"
+  | "room_found_by_user_uuid"
+  | "room_found_by_visitor_uuid"
+  | "room_reused"
+  | "room_created"
+  | "participant_created"
+  | "duplicate_room_prevented"
 
 function logRoomDebug(
   event: RoomDebugEvent,
@@ -105,6 +112,70 @@ async function touchOwnedRoom(input: {
   } satisfies ResolvedOwnedRoom
 }
 
+async function resolveExistingOwnedRoom(input: {
+  identity: RoomIdentity
+  locale: ChatLocale
+  channel: SourceChannel
+  mode: ChatRoomMode
+  pass?: string
+}): Promise<ResolvedOwnedRoom | null> {
+  logRoomDebug("room_resolve_start", {
+    mode: input.mode,
+    visitor_uuid: input.identity.visitor_uuid,
+    user_uuid: input.identity.user_uuid,
+    pass: input.pass ?? "primary",
+  })
+
+  const resolved = await resolveRoomFromParticipants({
+    visitor_uuid: input.identity.visitor_uuid,
+    user_uuid: input.identity.user_uuid,
+    mode: input.mode,
+  })
+
+  if (!resolved) {
+    return null
+  }
+
+  if (resolved.found_by === "user_uuid") {
+    logRoomDebug("room_found_by_user_uuid", {
+      room_uuid: resolved.room.room_uuid,
+      participant_uuid: resolved.participant.participant_uuid,
+      mode: input.mode,
+      visitor_uuid: input.identity.visitor_uuid,
+      user_uuid: input.identity.user_uuid,
+      pass: input.pass ?? "primary",
+    })
+  } else {
+    logRoomDebug("room_found_by_visitor_uuid", {
+      room_uuid: resolved.room.room_uuid,
+      participant_uuid: resolved.participant.participant_uuid,
+      mode: input.mode,
+      visitor_uuid: input.identity.visitor_uuid,
+      user_uuid: input.identity.user_uuid,
+      pass: input.pass ?? "primary",
+    })
+  }
+
+  const reused = await touchOwnedRoom({
+    room: resolved.room,
+    participant: resolved.participant,
+    locale: input.locale,
+    channel: input.channel,
+    identity: input.identity,
+  })
+
+  logRoomDebug("room_reused", {
+    room_uuid: reused.room.room_uuid,
+    participant_uuid: reused.participant.participant_uuid,
+    mode: input.mode,
+    visitor_uuid: input.identity.visitor_uuid,
+    user_uuid: input.identity.user_uuid,
+    pass: input.pass ?? "primary",
+  })
+
+  return reused
+}
+
 export async function resolveOwnedRoom(input: {
   identity: RoomIdentity
   locale: ChatLocale
@@ -112,65 +183,35 @@ export async function resolveOwnedRoom(input: {
   owner_role: "guest" | "user"
   mode: ChatRoomMode
 }): Promise<ResolvedOwnedRoom> {
-  const lookup = async () =>
-    resolveRoomFromParticipants({
-      visitor_uuid: input.identity.visitor_uuid,
-      user_uuid: input.identity.user_uuid,
-      mode: input.mode,
-    })
+  const existing = await resolveExistingOwnedRoom({
+    identity: input.identity,
+    locale: input.locale,
+    channel: input.channel,
+    mode: input.mode,
+  })
 
-  let resolved = await lookup()
-
-  if (resolved) {
-    logRoomDebug("room_found", {
-      room_uuid: resolved.room.room_uuid,
-      participant_uuid: resolved.participant.participant_uuid,
-      mode: input.mode,
-      visitor_uuid: input.identity.visitor_uuid,
-      user_uuid: input.identity.user_uuid,
-    })
-    logRoomDebug("room_reused", {
-      room_uuid: resolved.room.room_uuid,
-      mode: input.mode,
-      visitor_uuid: input.identity.visitor_uuid,
-      user_uuid: input.identity.user_uuid,
-    })
-
-    return touchOwnedRoom({
-      room: resolved.room,
-      participant: resolved.participant,
-      locale: input.locale,
-      channel: input.channel,
-      identity: input.identity,
-    })
+  if (existing) {
+    return existing
   }
 
-  resolved = await lookup()
+  const recheck = await resolveExistingOwnedRoom({
+    identity: input.identity,
+    locale: input.locale,
+    channel: input.channel,
+    mode: input.mode,
+    pass: "pre_insert_recheck",
+  })
 
-  if (resolved) {
-    logRoomDebug("room_found", {
-      room_uuid: resolved.room.room_uuid,
-      participant_uuid: resolved.participant.participant_uuid,
-      mode: input.mode,
-      visitor_uuid: input.identity.visitor_uuid,
-      user_uuid: input.identity.user_uuid,
-      pass: "pre_insert_recheck",
-    })
-    logRoomDebug("room_reused", {
-      room_uuid: resolved.room.room_uuid,
+  if (recheck) {
+    logRoomDebug("duplicate_room_prevented", {
+      room_uuid: recheck.room.room_uuid,
       mode: input.mode,
       visitor_uuid: input.identity.visitor_uuid,
       user_uuid: input.identity.user_uuid,
       pass: "pre_insert_recheck",
     })
 
-    return touchOwnedRoom({
-      room: resolved.room,
-      participant: resolved.participant,
-      locale: input.locale,
-      channel: input.channel,
-      identity: input.identity,
-    })
+    return recheck
   }
 
   const room = await insertRoom({
@@ -196,10 +237,24 @@ export async function resolveOwnedRoom(input: {
       visitor_uuid: input.identity.visitor_uuid,
       user_uuid: input.identity.user_uuid,
     })
-  } catch (error) {
-    const existing = await lookup()
 
-    if (!existing) {
+    logRoomDebug("participant_created", {
+      room_uuid: room.room_uuid,
+      participant_uuid: participant.participant_uuid,
+      role: input.owner_role,
+      visitor_uuid: input.identity.visitor_uuid,
+      user_uuid: input.identity.user_uuid,
+    })
+  } catch (error) {
+    const recovered = await resolveExistingOwnedRoom({
+      identity: input.identity,
+      locale: input.locale,
+      channel: input.channel,
+      mode: input.mode,
+      pass: "participant_conflict_recovery",
+    })
+
+    if (!recovered) {
       throw new Error(
         `Failed to create room participant: ${
           error instanceof Error ? error.message : "unknown"
@@ -207,16 +262,8 @@ export async function resolveOwnedRoom(input: {
       )
     }
 
-    logRoomDebug("room_found", {
-      room_uuid: existing.room.room_uuid,
-      participant_uuid: existing.participant.participant_uuid,
-      mode: input.mode,
-      visitor_uuid: input.identity.visitor_uuid,
-      user_uuid: input.identity.user_uuid,
-      pass: "participant_conflict_recovery",
-    })
-    logRoomDebug("room_reused", {
-      room_uuid: existing.room.room_uuid,
+    logRoomDebug("duplicate_room_prevented", {
+      room_uuid: recovered.room.room_uuid,
       mode: input.mode,
       visitor_uuid: input.identity.visitor_uuid,
       user_uuid: input.identity.user_uuid,
@@ -224,13 +271,7 @@ export async function resolveOwnedRoom(input: {
       orphan_room_uuid: room.room_uuid,
     })
 
-    return touchOwnedRoom({
-      room: existing.room,
-      participant: existing.participant,
-      locale: input.locale,
-      channel: input.channel,
-      identity: input.identity,
-    })
+    return recovered
   }
 
   return {
@@ -247,23 +288,17 @@ export async function findChatRoomState(
 ): Promise<ChatRoomState | null> {
   const identity = resolveRoomIdentity(context, session)
   const mode = resolveRoomMode(session)
-  const resolved = await resolveRoomFromParticipants({
-    ...identity,
+  const resolved = await resolveExistingOwnedRoom({
+    identity,
+    locale: resolveChatLocale(context.locale, null),
+    channel: context.source_channel,
     mode,
+    pass: "find_only",
   })
 
   if (!resolved) {
     return null
   }
-
-  logRoomDebug("room_found", {
-    room_uuid: resolved.room.room_uuid,
-    participant_uuid: resolved.participant.participant_uuid,
-    mode,
-    visitor_uuid: identity.visitor_uuid,
-    user_uuid: identity.user_uuid,
-    pass: "find_only",
-  })
 
   return {
     room: resolved.room,
@@ -316,22 +351,8 @@ export async function resolveOrCreateRoom(
 export async function loadChatRoomState(
   context: ChatContext,
   session: Session,
-): Promise<ChatRoomState> {
-  const existing = await findChatRoomState(context, session)
-
-  if (existing) {
-    return existing
-  }
-
-  const { room, participant } = await bootstrapChatRoom(context, session)
-
-  return {
-    room,
-    participant,
-    messages: await loadRoomMessages(room.room_uuid),
-    presence: await loadOnlinePresenceViews(room.room_uuid),
-    concierge_available: await loadConciergeAvailability(),
-  }
+): Promise<ChatRoomState | null> {
+  return findChatRoomState(context, session)
 }
 
 export async function loadChatRoomStateByUuid(
@@ -373,6 +394,15 @@ export async function loadChatRoomStateByUuid(
       role: participant_role,
       visitor_uuid: identity.visitor_uuid,
       user_uuid: identity.user_uuid,
+    })
+
+    logRoomDebug("participant_created", {
+      room_uuid: room.room_uuid,
+      participant_uuid: participant.participant_uuid,
+      role: participant_role,
+      visitor_uuid: identity.visitor_uuid,
+      user_uuid: identity.user_uuid,
+      pass: "admin_room_join",
     })
   }
 

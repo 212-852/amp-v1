@@ -103,18 +103,6 @@ export async function findOldestParticipantByUserUuid(user_uuid: string) {
 }
 
 export async function findOldestParticipantByVisitorUuid(visitor_uuid: string) {
-  const guest_owner = await findParticipantRow(
-    [
-      `visitor_uuid=eq.${encodeURIComponent(visitor_uuid)}`,
-      "role=eq.guest",
-      "user_uuid=is.null",
-    ].join("&"),
-  )
-
-  if (guest_owner) {
-    return guest_owner
-  }
-
   return findParticipantRow(
     `visitor_uuid=eq.${encodeURIComponent(visitor_uuid)}&role=in.(guest,user)`,
   )
@@ -144,20 +132,36 @@ export async function findOwnerParticipantInRoom(input: {
   return null
 }
 
+export type ResolvedOwnerParticipant = {
+  room: ChatRoomRecord
+  participant: ChatParticipantRecord
+  found_by: "user_uuid" | "visitor_uuid"
+}
+
 export async function resolveRoomFromParticipants(input: {
   visitor_uuid: string | null
   user_uuid: string | null
   mode?: ChatRoomMode
-}) {
-  const mode = input.mode ?? "bot"
+}): Promise<ResolvedOwnerParticipant | null> {
+  void input.mode
+
   let participant: ChatParticipantRecord | null = null
+  let found_by: ResolvedOwnerParticipant["found_by"] | null = null
 
   if (input.user_uuid) {
     participant = await findOldestParticipantByUserUuid(input.user_uuid)
+
+    if (participant) {
+      found_by = "user_uuid"
+    }
   }
 
   if (!participant && input.visitor_uuid) {
     participant = await findOldestParticipantByVisitorUuid(input.visitor_uuid)
+
+    if (participant) {
+      found_by = "visitor_uuid"
+    }
 
     if (participant && input.user_uuid) {
       try {
@@ -165,23 +169,29 @@ export async function resolveRoomFromParticipants(input: {
           participant_uuid: participant.participant_uuid,
           user_uuid: input.user_uuid,
         })
+        found_by = "user_uuid"
       } catch {
-        participant = await findOldestParticipantByUserUuid(input.user_uuid)
+        const linked = await findOldestParticipantByUserUuid(input.user_uuid)
+
+        if (linked) {
+          participant = linked
+          found_by = "user_uuid"
+        }
       }
     }
   }
 
-  if (!participant) {
+  if (!participant || !found_by) {
     return null
   }
 
   const room = await findRoomByUuid(participant.room_uuid)
 
-  if (!room || room.mode !== mode) {
+  if (!room) {
     return null
   }
 
-  return { room, participant }
+  return { room, participant, found_by }
 }
 
 /** @deprecated Use resolveRoomFromParticipants */

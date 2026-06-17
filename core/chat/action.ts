@@ -33,7 +33,6 @@ import { broadcastTypingEvent, resolveTypingEvent } from "@/core/chat/realtime"
 import {
   bootstrapChatRoom,
   findChatRoomState,
-  loadChatRoomState,
   loadChatRoomStateByUuid,
 } from "@/core/chat/room"
 import type {
@@ -57,13 +56,13 @@ export async function resolveChatRoom(
     source_channel?: Session["source_channel"]
     locale?: string | null
   },
-): Promise<ChatRoomState> {
+): Promise<ChatRoomState | null> {
   const context = buildChatContext(session, {
     source_channel: input?.source_channel ?? session.source_channel,
     locale: input?.locale ?? null,
   })
 
-  return loadChatRoomState(context, session)
+  return findChatRoomState(context, session)
 }
 
 export async function loadChatRoom(
@@ -185,7 +184,16 @@ export async function handleQuickMenuRequested(input: {
 
 export async function handleChatTyping(input: ChatTypingInput) {
   const context = normalizeTypingInput(input)
-  const { room, participant } = await bootstrapChatRoom(context, input.session)
+  const state = await findChatRoomState(context, input.session)
+
+  if (!state) {
+    return {
+      event: resolveTypingEvent(input.is_typing),
+      timeout_ms: input.is_typing ? 5000 : null,
+    }
+  }
+
+  const { room, participant } = state
 
   await broadcastTypingEvent({
     room_uuid: room.room_uuid,
