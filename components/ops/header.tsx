@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronDown, MessageCircle, MessageCircleOff, Settings, X } from "lucide-react"
+import { ChevronDown, MessageCircleOff, Settings, X } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 
@@ -122,20 +122,20 @@ export default function OpsHeader({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ available: next }),
+        body: JSON.stringify({ enabled: next }),
       })
 
       if (!response.ok) {
         throw new Error("concierge_toggle_failed")
       }
 
-      const payload = (await response.json()) as { available?: boolean }
-      const resolved_available = payload.available ?? next
+      const payload = (await response.json()) as { enabled?: boolean }
+      const resolved_enabled = payload.enabled ?? next
 
-      set_concierge_available_state(resolved_available)
+      set_concierge_available_state(resolved_enabled)
       toast({
         tone: "success",
-        message: resolved_available
+        message: resolved_enabled
           ? concierge_toggle_content.on_success[locale]
           : concierge_toggle_content.off_success[locale],
       })
@@ -223,10 +223,10 @@ export default function OpsHeader({
               can_toggle_concierge ? toggle_concierge_availability : undefined
             }
             className={[
-              "relative flex h-9 w-9 items-center justify-center rounded-full border transition-colors",
+              "flex h-9 items-center justify-center gap-1 rounded-full border px-2.5 text-[11px] font-semibold transition-colors",
               concierge_available_state
-                ? "border-[#22c55e] bg-[#dcfce7] ring-2 ring-[#22c55e]/30"
-                : "border-[#d1d5db] bg-[#f3f4f6]",
+                ? "border-[#22c55e] bg-[#dcfce7] text-[#16a34a]"
+                : "border-[#d1d5db] bg-[#f3f4f6] text-[#9ca3af]",
               !can_toggle_concierge ? "opacity-60" : "",
             ].join(" ")}
           >
@@ -234,18 +234,15 @@ export default function OpsHeader({
               <>
                 <span
                   aria-hidden="true"
-                  className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-[#22c55e]"
+                  className="h-1.5 w-1.5 rounded-full bg-[#22c55e]"
                 />
-                <MessageCircle
-                  className="h-4 w-4 text-[#16a34a]"
-                  strokeWidth={1.8}
-                />
+                <span>ON</span>
               </>
             ) : (
-              <MessageCircleOff
-                className="h-4 w-4 text-[#9ca3af]"
-                strokeWidth={1.8}
-              />
+              <>
+                <MessageCircleOff className="h-3 w-3" aria-hidden="true" />
+                <span>OFF</span>
+              </>
             )}
           </button>
 

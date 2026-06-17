@@ -7,6 +7,7 @@ export {
   handleQuickMenuRequested,
   handleIncomingChatMessage,
   loadChatRoom,
+  loadConciergeQueueForSession,
   resolveAdminChatRoom,
   resolveChatRoom,
   resolveRoomPresence,

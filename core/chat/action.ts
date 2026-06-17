@@ -432,11 +432,19 @@ export async function resolveAdminChatRoom(
   return state
 }
 
+export async function loadConciergeQueueForSession(
+  session: Session,
+  options?: { limit?: number },
+) {
+  const { loadConciergeQueue } = await import("@/core/chat/concierge_queue")
+  return loadConciergeQueue(session, options)
+}
+
 type ConciergeToggleDebugEvent =
-  | "concierge_toggle_requested"
+  | "concierge_toggle_request"
+  | "concierge_toggle_success"
+  | "concierge_toggle_failed"
   | "concierge_toggle_denied"
-  | "concierge_toggle_allowed"
-  | "concierge_toggle_updated"
 
 async function readConciergeToggleDebugContext(session: Session) {
   let request_id: string | null = null
@@ -482,14 +490,16 @@ function logConciergeToggle(
 }
 
 export async function toggleConciergeAvailability(input: {
-  available: boolean
+  enabled: boolean
   session: Session
+  request_body?: Record<string, unknown>
 }) {
   const debug = await readConciergeToggleDebugContext(input.session)
 
-  logConciergeToggle("concierge_toggle_requested", {
+  logConciergeToggle("concierge_toggle_request", {
     ...debug,
-    available: input.available,
+    request_body: input.request_body ?? null,
+    enabled: input.enabled,
   })
 
   if (!canToggleConciergeAvailability(input.session)) {
@@ -516,22 +526,30 @@ export async function toggleConciergeAvailability(input: {
     throw new ConciergeToggleDeniedError("Concierge toggle denied")
   }
 
-  logConciergeToggle("concierge_toggle_allowed", debug)
+  try {
+    const result = await setConciergeAvailability({
+      available: input.enabled,
+      updated_by: input.session.user_uuid,
+    })
 
-  const result = await setConciergeAvailability({
-    available: input.available,
-    updated_by: input.session.user_uuid,
-  })
+    logConciergeToggle("concierge_toggle_success", {
+      ...debug,
+      enabled: result.enabled,
+    })
 
-  logConciergeToggle("concierge_toggle_updated", {
-    ...debug,
-    available: result.available,
-  })
+    return result
+  } catch (error) {
+    logConciergeToggle("concierge_toggle_failed", {
+      ...debug,
+      enabled: input.enabled,
+      error_message: error instanceof Error ? error.message : String(error),
+    })
 
-  return result
+    throw error
+  }
 }
 
 export async function getConciergeAvailabilityState() {
   const { loadConciergeAvailability } = await import("@/core/chat/archive")
-  return { available: await loadConciergeAvailability() }
+  return { enabled: await loadConciergeAvailability() }
 }

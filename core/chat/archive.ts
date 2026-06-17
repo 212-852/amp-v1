@@ -70,7 +70,7 @@ export async function setConciergeAvailability(input: {
     )
   }
 
-  return { available: input.available }
+  return { enabled: input.available }
 }
 
 async function findParticipantRow(filter: string) {
@@ -674,4 +674,122 @@ export async function loadUserDisplayNames(user_uuids: string[]) {
   return new Map(
     rows.map((row) => [row.user_uuid, row.display_name?.trim() || row.user_uuid]),
   )
+}
+
+export async function loadUserProfiles(user_uuids: string[]) {
+  const config = getRestConfig()
+
+  if (!config || user_uuids.length === 0) {
+    return new Map<
+      string,
+      { display_name: string | null; image_url: string | null }
+    >()
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "users",
+      `user_uuid=in.(${user_uuids.map((uuid) => encodeURIComponent(uuid)).join(",")})&select=user_uuid,display_name,image_url`,
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return new Map()
+  }
+
+  const rows = (await response.json()) as Array<{
+    user_uuid: string
+    display_name: string | null
+    image_url: string | null
+  }>
+
+  return new Map(
+    rows.map((row) => [
+      row.user_uuid,
+      {
+        display_name: row.display_name?.trim() || null,
+        image_url: row.image_url?.trim() || null,
+      },
+    ]),
+  )
+}
+
+export async function loadConciergeQueueRooms(limit = 10) {
+  const config = getRestConfig()
+
+  if (!config) {
+    return []
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "rooms",
+      [
+        "mode=eq.concierge",
+        "select=*",
+        "order=updated_at.desc",
+        `limit=${limit}`,
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return []
+  }
+
+  return (await response.json()) as ChatRoomRecord[]
+}
+
+export async function loadLatestRoomMessages(room_uuids: string[]) {
+  const entries = await Promise.all(
+    room_uuids.map(async (room_uuid) => {
+      const message = await loadLatestRoomMessage(room_uuid)
+      return [room_uuid, message] as const
+    }),
+  )
+
+  return new Map(entries)
+}
+
+export async function loadLatestRoomMessage(room_uuid: string) {
+  const config = getRestConfig()
+
+  if (!config) {
+    return null
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "messages",
+      [
+        `room_uuid=eq.${encodeURIComponent(room_uuid)}`,
+        "type=neq.typing",
+        "select=*",
+        "order=created_at.desc",
+        "limit=1",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return null
+  }
+
+  const rows = (await response.json()) as ChatMessageRecord[]
+  return rows[0] ?? null
 }

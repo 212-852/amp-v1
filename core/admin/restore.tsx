@@ -1,10 +1,13 @@
 import { redirect, unstable_rethrow } from "next/navigation"
 
-import AdminComingSoon from "@/components/admin/coming-soon"
+import AdminConciergeQueue from "@/components/admin/concierge_queue"
 import AdminDataSections from "@/components/admin/data_sections"
 import AdminFooter from "@/components/admin/footer"
 import AdminHeader from "@/components/admin/header"
-import { getConciergeAvailabilityState } from "@/core/chat/action"
+import {
+  getConciergeAvailabilityState,
+  loadConciergeQueueForSession,
+} from "@/core/chat/action"
 import AdminPageFallback from "@/components/admin/page_fallback"
 import AdminSessionPanel from "@/components/admin/session_panel"
 import AdminShellLayout from "@/components/admin/shell_layout"
@@ -110,9 +113,17 @@ async function resolveAdminAccess() {
 async function resolveConciergeAvailability() {
   try {
     const state = await getConciergeAvailabilityState()
-    return state.available
+    return state.enabled
   } catch {
     return true
+  }
+}
+
+async function resolveConciergeQueue(session: Session) {
+  try {
+    return await loadConciergeQueueForSession(session, { limit: 10 })
+  } catch {
+    return []
   }
 }
 
@@ -120,6 +131,7 @@ function renderAdminUiShell(
   session: Session | null | undefined,
   pathname: string,
   concierge_available: boolean,
+  queue_items: Awaited<ReturnType<typeof resolveConciergeQueue>>,
 ) {
   const header_session = normalizeOpsHeaderDisplay(session)
   const page_label = resolvePageLabel(pathname)
@@ -132,7 +144,7 @@ function renderAdminUiShell(
         concierge_available={concierge_available}
       />
       <main className="mx-auto flex w-full max-w-[430px] flex-col gap-3 px-5 pb-[calc(118px+env(safe-area-inset-bottom,0px))] pt-4">
-        <AdminComingSoon title="本日の状況" />
+        <AdminConciergeQueue items={queue_items} />
       </main>
       <AdminFooter />
     </div>
@@ -155,6 +167,7 @@ export async function renderAdminRestorePage() {
         session,
         context.requested_route ?? ADMIN_PATH,
         await resolveConciergeAvailability(),
+        await resolveConciergeQueue(session),
       )
     }
 
