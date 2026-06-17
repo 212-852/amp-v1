@@ -166,7 +166,7 @@ export async function renderAdminIsolationPage() {
           <OpsHeader
             session={safe_session}
             page_label={page_label}
-            concierge_available={(await getConciergeAvailabilityState()).enabled}
+            concierge_available={(await getConciergeAvailabilityState(session)).enabled}
           />
           <main style={{ padding: 24 }}>
             <div>admin alive stage 4 header ok</div>

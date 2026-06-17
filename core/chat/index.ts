@@ -28,6 +28,7 @@ export {
   resolveConciergeToggleResolvedRole,
 } from "@/core/chat/concierge_access"
 export type {
+  AvailabilityRecord,
   ChatMessageRecord,
   ChatMessageType,
   ChatRoomMode,

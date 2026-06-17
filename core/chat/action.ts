@@ -549,7 +549,24 @@ export async function toggleConciergeAvailability(input: {
   }
 }
 
-export async function getConciergeAvailabilityState() {
+export async function getConciergeAvailabilityState(
+  session?: { user_uuid?: string | null } | null,
+) {
   const { loadConciergeAvailability } = await import("@/core/chat/archive")
-  return { enabled: await loadConciergeAvailability() }
+
+  let user_uuid = session?.user_uuid ?? null
+
+  if (!user_uuid) {
+    try {
+      const { resolveAuthContext } = await import("@/core/auth/context")
+      const { resolveSession } = await import("@/core/auth/session")
+      const context = await resolveAuthContext()
+      const resolved_session = await resolveSession(context)
+      user_uuid = resolved_session.user_uuid
+    } catch {
+      user_uuid = null
+    }
+  }
+
+  return { enabled: await loadConciergeAvailability(user_uuid) }
 }

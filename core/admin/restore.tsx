@@ -110,9 +110,11 @@ async function resolveAdminAccess() {
   return { context, session }
 }
 
-async function resolveConciergeAvailability() {
+async function resolveConciergeAvailability(
+  session?: { user_uuid?: string | null } | null,
+) {
   try {
-    const state = await getConciergeAvailabilityState()
+    const state = await getConciergeAvailabilityState(session)
     return state.enabled
   } catch {
     return true
@@ -166,7 +168,7 @@ export async function renderAdminRestorePage() {
       return renderAdminUiShell(
         session,
         context.requested_route ?? ADMIN_PATH,
-        await resolveConciergeAvailability(),
+        await resolveConciergeAvailability(session),
         await resolveConciergeQueue(session),
       )
     }
@@ -197,7 +199,7 @@ export async function renderAdminRestorePage() {
       <AdminHeader
         session={header_session}
         page_label={page_label}
-        concierge_available={await resolveConciergeAvailability()}
+        concierge_available={await resolveConciergeAvailability(session)}
       />
     )
 

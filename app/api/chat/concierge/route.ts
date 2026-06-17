@@ -9,7 +9,8 @@ import { ConciergeToggleDeniedError } from "@/core/chat/concierge_access"
 
 export async function GET() {
   try {
-    const state = await getConciergeAvailabilityState()
+    const { session } = await resolveChatApiSession()
+    const state = await getConciergeAvailabilityState(session)
     return NextResponse.json({
       ok: true,
       enabled: state.enabled,

@@ -189,6 +189,12 @@ export type MessageBundle = {
   created_at: string
 }
 
+export type AvailabilityRecord = {
+  user_uuid: string
+  enabled: boolean
+  updated_at: string
+}
+
 export type ChatRoomState = {
   room: ChatRoomRecord
   participant: ChatParticipantRecord

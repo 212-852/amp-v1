@@ -1,5 +1,6 @@
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
 import type {
+  AvailabilityRecord,
   ChatLocale,
   ChatMessageRecord,
   ChatMessageStatus,
@@ -20,27 +21,35 @@ function requireConfig() {
   return config
 }
 
-export async function loadConciergeAvailability() {
+export async function loadConciergeAvailability(user_uuid?: string | null) {
   const config = getRestConfig()
 
   if (!config) {
     return true
   }
 
-  const response = await fetch(
-    restUrl(config, "concierge_availability", "id=eq.1&select=available"),
-    {
-      headers: restHeaders(config),
-      cache: "no-store",
-    },
-  )
+  const filter = user_uuid
+    ? `user_uuid=eq.${encodeURIComponent(user_uuid)}&select=enabled&limit=1`
+    : "enabled=eq.true&select=user_uuid&limit=1"
+
+  const response = await fetch(restUrl(config, "availability", filter), {
+    headers: restHeaders(config),
+    cache: "no-store",
+  })
 
   if (!response.ok) {
-    return true
+    return false
   }
 
-  const rows = (await response.json()) as Array<{ available?: boolean }>
-  return rows[0]?.available ?? true
+  const rows = (await response.json()) as Array<
+    Pick<AvailabilityRecord, "enabled" | "user_uuid">
+  >
+
+  if (user_uuid) {
+    return rows[0]?.enabled ?? false
+  }
+
+  return rows.length > 0
 }
 
 export async function setConciergeAvailability(input: {
@@ -53,48 +62,18 @@ export async function setConciergeAvailability(input: {
     return { enabled: input.available }
   }
 
-  const patch_body: Record<string, unknown> = {
-    available: input.available,
+  if (!input.updated_by) {
+    throw new Error("user_uuid is required")
+  }
+
+  const upsert_body: AvailabilityRecord = {
+    user_uuid: input.updated_by,
+    enabled: input.available,
     updated_at: new Date().toISOString(),
   }
 
-  if (input.updated_by) {
-    patch_body.updated_by = input.updated_by
-  }
-
-  const patch_response = await fetch(
-    restUrl(config, "concierge_availability", "id=eq.1"),
-    {
-      method: "PATCH",
-      headers: {
-        ...restHeaders(config),
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify(patch_body),
-      cache: "no-store",
-    },
-  )
-
-  if (patch_response.ok) {
-    const rows = (await patch_response.json()) as Array<{ available?: boolean }>
-
-    if (rows.length > 0) {
-      return { enabled: rows[0]?.available ?? input.available }
-    }
-  }
-
-  const upsert_body: Record<string, unknown> = {
-    id: 1,
-    available: input.available,
-    updated_at: new Date().toISOString(),
-  }
-
-  if (input.updated_by) {
-    upsert_body.updated_by = input.updated_by
-  }
-
-  const upsert_response = await fetch(
-    restUrl(config, "concierge_availability", "on_conflict=id"),
+  const response = await fetch(
+    restUrl(config, "availability", "on_conflict=user_uuid"),
     {
       method: "POST",
       headers: {
@@ -106,17 +85,17 @@ export async function setConciergeAvailability(input: {
     },
   )
 
-  if (!upsert_response.ok) {
-    const error = await readRestError(upsert_response)
+  if (!response.ok) {
+    const error = await readRestError(response)
     throw new Error(
-      `Failed to update concierge availability: ${error.message ?? "unknown"}`,
+      `Failed to update availability: ${error.message ?? "unknown"}`,
     )
   }
 
-  const rows = (await upsert_response.json()) as Array<{ available?: boolean }>
-  const available = rows[0]?.available ?? input.available
+  const rows = (await response.json()) as AvailabilityRecord[]
+  const enabled = rows[0]?.enabled ?? input.available
 
-  return { enabled: available }
+  return { enabled }
 }
 
 async function findParticipantRow(filter: string) {

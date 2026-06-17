@@ -21,7 +21,7 @@ export default async function AdminShell({
     default_role: "admin",
   })
   const page_label = resolvePageLabel(pathname)
-  const concierge_available = (await getConciergeAvailabilityState()).enabled
+  const concierge_available = (await getConciergeAvailabilityState(session)).enabled
 
   return (
     <div className="min-h-dvh bg-neutral-50 text-neutral-900">
