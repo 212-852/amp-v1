@@ -12,6 +12,8 @@ export type NotifyEventInput = {
   payload: Record<string, unknown>
 }
 
+export type NotifyFormat = "plain" | "security_alert"
+
 export type NotifyDelivery = {
   channel: NotifyChannel
   webhook_url: string | null
@@ -20,6 +22,8 @@ export type NotifyDelivery = {
   priority: NotifyPriority
   mention: string | null
   summary: string
+  format: NotifyFormat
+  embed_color?: number | null
   request_id?: string | null
   payload: Record<string, unknown>
 }
@@ -47,6 +51,8 @@ export function resolveNotifyDelivery(input: NotifyEventInput): NotifyDelivery {
       priority: "normal",
       mention,
       summary: "admin page accessed",
+      format: "plain",
+      embed_color: null,
       request_id: input.request_id,
       payload: input.payload,
     }
@@ -56,11 +62,13 @@ export function resolveNotifyDelivery(input: NotifyEventInput): NotifyDelivery {
     return {
       channel: "discord",
       webhook_url,
-      title: "Admin Unauthorized Access",
+      title: "Security Alert",
       event: input.event,
       priority: "high",
       mention,
       summary: "unauthorized admin access detected",
+      format: "security_alert",
+      embed_color: 15158332,
       request_id: input.request_id,
       payload: input.payload,
     }
