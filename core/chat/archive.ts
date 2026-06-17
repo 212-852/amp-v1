@@ -47,21 +47,31 @@ export async function setConciergeAvailability(input: {
   available: boolean
   updated_by: string | null
 }) {
-  const config = requireConfig()
+  const config = getRestConfig()
 
-  const response = await fetch(
-    restUrl(config, "concierge_availability", "id=eq.1"),
-    {
-      method: "PATCH",
-      headers: restHeaders(config),
-      body: JSON.stringify({
-        available: input.available,
-        updated_by: input.updated_by,
-        updated_at: new Date().toISOString(),
-      }),
-      cache: "no-store",
+  if (!config) {
+    throw new Error("Database is unavailable")
+  }
+
+  const payload: Record<string, unknown> = {
+    id: 1,
+    available: input.available,
+    updated_at: new Date().toISOString(),
+  }
+
+  if (input.updated_by) {
+    payload.updated_by = input.updated_by
+  }
+
+  const response = await fetch(restUrl(config, "concierge_availability", ""), {
+    method: "POST",
+    headers: {
+      ...restHeaders(config),
+      Prefer: "resolution=merge-duplicates,return=representation",
     },
-  )
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  })
 
   if (!response.ok) {
     const error = await readRestError(response)
@@ -70,7 +80,10 @@ export async function setConciergeAvailability(input: {
     )
   }
 
-  return { enabled: input.available }
+  const rows = (await response.json()) as Array<{ available?: boolean }>
+  const available = rows[0]?.available ?? input.available
+
+  return { enabled: available }
 }
 
 async function findParticipantRow(filter: string) {

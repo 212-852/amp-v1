@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronDown, MessageCircleOff, Settings, X } from "lucide-react"
+import { ChevronDown, MessageCircle, MessageCircleOff, Settings, X } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 
@@ -113,29 +113,38 @@ export default function OpsHeader({
       return
     }
 
-    const next = !concierge_available_state
+    const next_enabled = !concierge_available_state
     set_is_toggling_concierge(true)
+
+    console.log("concierge toggle request", { enabled: next_enabled })
 
     try {
       const response = await fetch("/api/chat/concierge", {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ enabled: next }),
+        body: JSON.stringify({ enabled: next_enabled }),
       })
 
-      if (!response.ok) {
-        throw new Error("concierge_toggle_failed")
+      const payload = (await response.json().catch(() => ({}))) as {
+        enabled?: boolean
+        error?: string
       }
 
-      const payload = (await response.json()) as { enabled?: boolean }
-      const resolved_enabled = payload.enabled ?? next
+      if (!response.ok) {
+        throw new Error(payload.error ?? "concierge_toggle_failed")
+      }
 
-      set_concierge_available_state(resolved_enabled)
+      if (typeof payload.enabled !== "boolean") {
+        throw new Error("concierge_toggle_invalid_response")
+      }
+
+      set_concierge_available_state(payload.enabled)
       toast({
         tone: "success",
-        message: resolved_enabled
+        message: payload.enabled
           ? concierge_toggle_content.on_success[locale]
           : concierge_toggle_content.off_success[locale],
       })
@@ -223,7 +232,7 @@ export default function OpsHeader({
               can_toggle_concierge ? toggle_concierge_availability : undefined
             }
             className={[
-              "flex h-9 items-center justify-center gap-1 rounded-full border px-2.5 text-[11px] font-semibold transition-colors",
+              "flex h-9 w-9 shrink-0 flex-col items-center justify-center rounded-full border transition-colors",
               concierge_available_state
                 ? "border-[#22c55e] bg-[#dcfce7] text-[#16a34a]"
                 : "border-[#d1d5db] bg-[#f3f4f6] text-[#9ca3af]",
@@ -232,16 +241,13 @@ export default function OpsHeader({
           >
             {concierge_available_state ? (
               <>
-                <span
-                  aria-hidden="true"
-                  className="h-1.5 w-1.5 rounded-full bg-[#22c55e]"
-                />
-                <span>ON</span>
+                <MessageCircle className="h-3.5 w-3.5" strokeWidth={1.8} />
+                <span className="text-[8px] font-semibold leading-none">ON</span>
               </>
             ) : (
               <>
-                <MessageCircleOff className="h-3 w-3" aria-hidden="true" />
-                <span>OFF</span>
+                <MessageCircleOff className="h-3.5 w-3.5" strokeWidth={1.8} />
+                <span className="text-[8px] font-semibold leading-none">OFF</span>
               </>
             )}
           </button>

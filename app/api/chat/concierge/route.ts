@@ -59,9 +59,9 @@ export async function POST(request: Request) {
   try {
     request_body = await request.json()
   } catch {
-    console.info("[concierge_toggle] concierge_toggle_failed", {
-      reason: "invalid_json",
+    console.info("[concierge_toggle] concierge_toggle_invalid_body", {
       request_body: null,
+      error: "Invalid JSON body",
     })
 
     return Response.json(
@@ -72,11 +72,14 @@ export async function POST(request: Request) {
     )
   }
 
+  console.info("[concierge_toggle] concierge_toggle_body_received", {
+    request_body,
+  })
+
   const parsed = parseToggleBody(request_body)
 
   if (!parsed.ok) {
-    console.info("[concierge_toggle] concierge_toggle_failed", {
-      reason: "invalid_body",
+    console.info("[concierge_toggle] concierge_toggle_invalid_body", {
       request_body,
       error: parsed.error,
     })
@@ -98,6 +101,11 @@ export async function POST(request: Request) {
       request_body: parsed.request_body,
     })
 
+    console.info("[concierge_toggle] concierge_toggle_success", {
+      enabled: result.enabled,
+      request_body: parsed.request_body,
+    })
+
     return Response.json(result)
   } catch (error) {
     if (error instanceof ConciergeToggleDeniedError) {
@@ -108,6 +116,11 @@ export async function POST(request: Request) {
         { status: 403 },
       )
     }
+
+    console.info("[concierge_toggle] concierge_toggle_failed", {
+      request_body,
+      error_message: error instanceof Error ? error.message : String(error),
+    })
 
     return Response.json(
       {

@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react"
+import { createPortal } from "react-dom"
 
 import { ToastStack, type ToastItem } from "@/components/ui/toast"
 import type { ToastInput, ToastTone } from "@/components/ui/use_toast"
@@ -34,7 +35,12 @@ export function ToastProvider({
   children: React.ReactNode
 }>) {
   const [items, set_items] = useState<ToastItem[]>([])
+  const [mounted, set_mounted] = useState(false)
   const timers_ref = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+
+  useEffect(() => {
+    set_mounted(true)
+  }, [])
 
   const dismiss = useCallback((id: string) => {
     const timer = timers_ref.current.get(id)
@@ -92,7 +98,9 @@ export function ToastProvider({
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <ToastStack items={items} />
+      {mounted
+        ? createPortal(<ToastStack items={items} />, document.body)
+        : null}
     </ToastContext.Provider>
   )
 }

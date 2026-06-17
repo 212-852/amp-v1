@@ -2,14 +2,14 @@ import type { Locale } from "@/src/lib/locale"
 
 export const concierge_toggle_content = {
   on_success: {
-    ja: "コンシェルジュ対応を開始しました",
-    en: "Concierge support started",
-    es: "Se inicio el soporte de concierge",
+    ja: "コンシェルジュ対応をONにしました",
+    en: "Concierge is now ON",
+    es: "Concierge activado",
   },
   off_success: {
-    ja: "コンシェルジュ対応を停止しました",
-    en: "Concierge support stopped",
-    es: "Se detuvo el soporte de concierge",
+    ja: "コンシェルジュ対応をOFFにしました",
+    en: "Concierge is now OFF",
+    es: "Concierge desactivado",
   },
   error: {
     ja: "切り替えに失敗しました",

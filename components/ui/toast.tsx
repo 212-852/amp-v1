@@ -59,7 +59,7 @@ export function ToastStack({ items }: { items: ToastItem[] }) {
   return (
     <div
       className={[
-        "pointer-events-none fixed left-1/2 z-[60] flex w-[min(92vw,360px)] -translate-x-1/2 flex-col gap-2",
+        "pointer-events-none fixed left-1/2 z-[200] flex w-[min(92vw,360px)] -translate-x-1/2 flex-col gap-2",
         "bottom-[calc(16px+env(safe-area-inset-bottom,0px))]",
         "md:bottom-auto md:top-[calc(88px+env(safe-area-inset-top,0px))]",
       ].join(" ")}
