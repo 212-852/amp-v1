@@ -56,14 +56,41 @@ function readGap(value: unknown) {
   }
 
   if (value === "sm") {
-    return "8px"
-  }
-
-  if (value === "md") {
     return "12px"
   }
 
+  if (value === "md") {
+    return "14px"
+  }
+
+  if (value === "lg") {
+    return "18px"
+  }
+
   return "10px"
+}
+
+function readAlignItems(value: unknown) {
+  if (value === "center") {
+    return "center"
+  }
+
+  if (value === "flex-end" || value === "end") {
+    return "flex-end"
+  }
+
+  return "flex-start"
+}
+
+function readBoxPadding(node: FlexRecord) {
+  const all = readPadding(node.paddingAll, "")
+
+  return {
+    paddingTop: readPadding(node.paddingTop, all || "0"),
+    paddingRight: readPadding(node.paddingRight, all || "0"),
+    paddingBottom: readPadding(node.paddingBottom, all || "0"),
+    paddingLeft: readPadding(node.paddingLeft, all || "0"),
+  }
 }
 
 function readAlign(value: unknown) {
@@ -121,8 +148,17 @@ function FlexText({ node }: Readonly<{ node: FlexRecord }>) {
   )
 }
 
-function FlexSeparator() {
-  return <div className="h-px w-full bg-[#eadfce]" />
+function FlexSeparator({ node }: Readonly<{ node?: FlexRecord | null }>) {
+  const margin = readText(node?.margin)
+
+  return (
+    <div
+      className={[
+        "h-px w-full bg-[#eadfce]",
+        margin === "md" ? "my-3" : margin === "sm" ? "my-2" : "",
+      ].join(" ")}
+    />
+  )
 }
 
 function readCornerRadius(value: unknown) {
@@ -152,9 +188,10 @@ function FlexButton({
         type="button"
         onClick={() => onAction(data)}
         className={[
-          "w-full bg-transparent py-1 text-[13px] font-semibold text-[#8F5D28] underline decoration-[#8F5D28]/40 underline-offset-2",
-          is_centered ? "text-center" : "text-left",
+          "bg-transparent px-1 py-0.5 text-[13px] font-medium underline decoration-[#007AFF]/50 underline-offset-2",
+          is_centered ? "w-auto text-center" : "w-full text-left",
         ].join(" ")}
+        style={{ color: readText(node.color) || "#007AFF" }}
       >
         {label}
       </button>
@@ -165,7 +202,7 @@ function FlexButton({
     <button
       type="button"
       onClick={() => onAction(data)}
-      className="min-h-[40px] w-full px-3 text-[14px] font-semibold"
+      className="min-h-[44px] w-full px-3 text-[14px] font-semibold"
       style={{
         borderRadius: readCornerRadius(node.cornerRadius),
         backgroundColor:
@@ -188,16 +225,22 @@ function FlexBox({
   onAction: (action: string) => void
 }>) {
   const is_horizontal = node.layout === "horizontal"
+  const padding = readBoxPadding(node)
+  const align_items = readAlignItems(node.alignItems)
 
   return (
     <div
       className={[
         "flex",
-        is_horizontal ? "flex-row items-center" : "flex-col",
+        is_horizontal ? "flex-row" : "flex-col",
+        align_items === "center" ? "items-center text-center" : "items-stretch",
       ].join(" ")}
       style={{
         gap: readGap(node.spacing),
-        padding: readPadding(node.paddingAll, "0"),
+        paddingTop: padding.paddingTop,
+        paddingRight: padding.paddingRight,
+        paddingBottom: padding.paddingBottom,
+        paddingLeft: padding.paddingLeft,
       }}
     >
       {readContents(node.contents).map((child, index) => (
@@ -231,7 +274,7 @@ function FlexNode({
   }
 
   if (node.type === "separator") {
-    return <FlexSeparator />
+    return <FlexSeparator node={node} />
   }
 
   if (node.type === "button") {

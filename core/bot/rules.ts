@@ -354,7 +354,7 @@ function buildWelcomeFlexLink(label: string, action: string) {
   return {
     type: "button",
     style: "link",
-    color: "#8F5D28",
+    color: "#007AFF",
     align: "center",
     action: {
       type: "postback",
@@ -371,8 +371,8 @@ function buildWelcomeQuickMenuBubble(locale: ChatLocale) {
     body: {
       type: "box",
       layout: "vertical",
-      spacing: "sm",
-      paddingAll: "16px",
+      spacing: "md",
+      paddingAll: "20px",
       contents: [
         {
           type: "text",
@@ -393,8 +393,8 @@ function buildWelcomeQuickMenuBubble(locale: ChatLocale) {
     footer: {
       type: "box",
       layout: "vertical",
-      spacing: "sm",
-      paddingAll: "12px",
+      spacing: "md",
+      paddingAll: "18px",
       contents: [
         ...WELCOME_QUICK_MENU_BUTTONS.map((button) =>
           buildWelcomeFlexButton(
@@ -402,29 +402,47 @@ function buildWelcomeQuickMenuBubble(locale: ChatLocale) {
             button.action,
           ),
         ),
-        { type: "separator" },
+        { type: "separator", margin: "md" },
         {
-          type: "text",
-          text: resolveLocaleText(MEETUP_SUPPORT_TITLE, locale),
-          weight: "bold",
-          size: "sm",
-          color: "#3D2A19",
+          type: "box",
+          layout: "vertical",
+          spacing: "sm",
+          paddingTop: "12px",
+          paddingBottom: "8px",
+          contents: [
+            {
+              type: "text",
+              text: resolveLocaleText(MEETUP_SUPPORT_TITLE, locale),
+              weight: "bold",
+              size: "sm",
+              color: "#3D2A19",
+            },
+            {
+              type: "text",
+              text: resolveLocaleText(MEETUP_SUPPORT_BODY, locale),
+              wrap: true,
+              size: "sm",
+              color: "#8C7358",
+            },
+            {
+              type: "box",
+              layout: "vertical",
+              spacing: "sm",
+              alignItems: "center",
+              paddingTop: "12px",
+              contents: [
+                buildWelcomeFlexLink(
+                  resolveLocaleText(SHARE_MEETUP_LINK, locale),
+                  "share_meeting_place",
+                ),
+                buildWelcomeFlexLink(
+                  resolveLocaleText(CANCEL_RESERVATION_LINK, locale),
+                  "cancel_reservation",
+                ),
+              ],
+            },
+          ],
         },
-        {
-          type: "text",
-          text: resolveLocaleText(MEETUP_SUPPORT_BODY, locale),
-          wrap: true,
-          size: "sm",
-          color: "#8C7358",
-        },
-        buildWelcomeFlexLink(
-          resolveLocaleText(SHARE_MEETUP_LINK, locale),
-          "share_meeting_place",
-        ),
-        buildWelcomeFlexLink(
-          resolveLocaleText(CANCEL_RESERVATION_LINK, locale),
-          "cancel_reservation",
-        ),
       ],
     },
   }
