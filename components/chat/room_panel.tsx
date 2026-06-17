@@ -116,7 +116,7 @@ export default function ChatRoomPanel({
       : null
 
   return (
-    <section className="rounded-[30px] bg-[#fdfaf6] px-4 py-4 shadow-[inset_0_0_0_1px_#dcc7aa]">
+    <section className="rounded-none bg-transparent p-0 shadow-none">
       {show_presence && presence.length > 0 ? (
         <div className="mb-3 flex flex-wrap gap-2">
           {presence.map((entry) => (

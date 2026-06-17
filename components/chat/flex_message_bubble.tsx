@@ -42,7 +42,7 @@ export default function FlexMessageBubble({
   }
 
   return (
-    <div className="w-full min-w-0 overflow-x-auto overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="w-full min-w-0 overflow-x-auto overscroll-x-contain rounded-none border-0 bg-transparent p-0 shadow-none [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <div className="flex w-max snap-x snap-mandatory gap-2">
         {bubbles.map((bubble, index) => {
           const title = bubble.texts[0] ?? ""

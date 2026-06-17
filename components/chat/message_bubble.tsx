@@ -43,13 +43,7 @@ export default function ChatMessageBubble({
     : resolveMessageBodyDisplay(message, room_locale)
 
   if (is_flex) {
-    return (
-      <div className="flex w-full justify-start">
-        <div className="w-full min-w-0">
-          <FlexMessageBubble message={message} />
-        </div>
-      </div>
-    )
+    return <FlexMessageBubble message={message} />
   }
 
   return (
