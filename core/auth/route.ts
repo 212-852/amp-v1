@@ -24,13 +24,15 @@ type AccessZone = "admin" | "driver" | "user"
 
 const ZONE_ACCESS: Record<SessionRole, AccessZone[]> = {
   admin: ["admin", "driver", "user"],
+  owner: ["admin", "driver", "user"],
+  concierge: ["admin", "driver", "user"],
   driver: ["driver", "user"],
   user: ["user"],
   guest: ["user"],
 }
 
 function homePathForRole(role: SessionRole) {
-  if (role === "admin") {
+  if (role === "admin" || role === "owner" || role === "concierge") {
     return "/admin"
   }
 
@@ -110,7 +112,13 @@ export function resolveRoleRedirectPath(context: AuthContext, session: Session) 
     return homePathForRole(session.role)
   }
 
-  if (pathname === "/app" && (session.role === "admin" || session.role === "driver")) {
+  if (
+    pathname === "/app" &&
+    (session.role === "admin" ||
+      session.role === "owner" ||
+      session.role === "concierge" ||
+      session.role === "driver")
+  ) {
     return homePathForRole(session.role)
   }
 

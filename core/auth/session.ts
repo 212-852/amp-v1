@@ -641,7 +641,13 @@ function buildAnonymousSession(context: AuthContext): AppSession {
 }
 
 function normalizeSessionRole(value: string | null | undefined): SessionRole {
-  if (value === "admin" || value === "driver" || value === "user") {
+  if (
+    value === "admin" ||
+    value === "driver" ||
+    value === "user" ||
+    value === "owner" ||
+    value === "concierge"
+  ) {
     return value
   }
 

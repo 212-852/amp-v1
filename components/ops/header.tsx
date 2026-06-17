@@ -4,11 +4,15 @@ import { ChevronDown, MessageCircle, MessageCircleOff, Settings, X } from "lucid
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 
+import { useToast } from "@/components/ui/use_toast"
+import { canToggleConciergeAvailability } from "@/core/chat/concierge_access"
 import {
   normalizeOpsHeaderDisplay,
   type HeaderSessionLike,
   type OpsHeaderSession,
 } from "@/core/ops/header_session"
+import { concierge_toggle_content } from "@/core/ops/concierge_toggle_content"
+import { useLocale } from "@/src/components/locale/provider"
 
 export type { OpsHeaderSession, HeaderSessionLike } from "@/core/ops/header_session"
 
@@ -45,6 +49,8 @@ export default function OpsHeader({
   concierge_available?: boolean
 }) {
   const safe_session = normalizeOpsHeaderDisplay(session)
+  const { locale } = useLocale()
+  const { toast } = useToast()
   const is_logged_in = Boolean(safe_session.user_uuid)
   const displayName = safe_session.display_name
   const roleLabel = is_logged_in ? safe_session.role : "Guest"
@@ -56,7 +62,11 @@ export default function OpsHeader({
   const [concierge_available_state, set_concierge_available_state] = useState(
     concierge_available,
   )
-  const is_admin = safe_session.role === "admin"
+  const [is_toggling_concierge, set_is_toggling_concierge] = useState(false)
+  const can_toggle_concierge = canToggleConciergeAvailability({
+    role: safe_session.role,
+    tier: safe_session.tier,
+  })
 
   useEffect(() => {
     set_concierge_available_state(concierge_available)
@@ -99,21 +109,44 @@ export default function OpsHeader({
   }
 
   async function toggle_concierge_availability() {
-    if (!is_admin) {
+    if (!can_toggle_concierge || is_toggling_concierge) {
       return
     }
 
     const next = !concierge_available_state
+    set_is_toggling_concierge(true)
 
-    await fetch("/api/chat/concierge", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ available: next }),
-    }).catch(() => null)
+    try {
+      const response = await fetch("/api/chat/concierge", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ available: next }),
+      })
 
-    set_concierge_available_state(next)
+      if (!response.ok) {
+        throw new Error("concierge_toggle_failed")
+      }
+
+      const payload = (await response.json()) as { available?: boolean }
+      const resolved_available = payload.available ?? next
+
+      set_concierge_available_state(resolved_available)
+      toast({
+        tone: "success",
+        message: resolved_available
+          ? concierge_toggle_content.on_success[locale]
+          : concierge_toggle_content.off_success[locale],
+      })
+    } catch {
+      toast({
+        tone: "error",
+        message: concierge_toggle_content.error[locale],
+      })
+    } finally {
+      set_is_toggling_concierge(false)
+    }
   }
 
   function handle_logout() {
@@ -181,15 +214,38 @@ export default function OpsHeader({
         <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
-            aria-label="Chat"
+            aria-label={
+              concierge_available_state ? "Concierge ON" : "Concierge OFF"
+            }
             aria-pressed={concierge_available_state}
-            onClick={is_admin ? toggle_concierge_availability : undefined}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-900"
+            disabled={!can_toggle_concierge || is_toggling_concierge}
+            onClick={
+              can_toggle_concierge ? toggle_concierge_availability : undefined
+            }
+            className={[
+              "relative flex h-9 w-9 items-center justify-center rounded-full border transition-colors",
+              concierge_available_state
+                ? "border-[#22c55e] bg-[#dcfce7] ring-2 ring-[#22c55e]/30"
+                : "border-[#d1d5db] bg-[#f3f4f6]",
+              !can_toggle_concierge ? "opacity-60" : "",
+            ].join(" ")}
           >
             {concierge_available_state ? (
-              <MessageCircle className="h-4 w-4 text-green-600" strokeWidth={1.8} />
+              <>
+                <span
+                  aria-hidden="true"
+                  className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-[#22c55e]"
+                />
+                <MessageCircle
+                  className="h-4 w-4 text-[#16a34a]"
+                  strokeWidth={1.8}
+                />
+              </>
             ) : (
-              <MessageCircleOff className="h-4 w-4 text-neutral-400" strokeWidth={1.8} />
+              <MessageCircleOff
+                className="h-4 w-4 text-[#9ca3af]"
+                strokeWidth={1.8}
+              />
             )}
           </button>
 

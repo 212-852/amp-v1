@@ -22,15 +22,10 @@ export {
 } from "@/core/chat/flex"
 export { createBotMessageBundle } from "@/core/bot/message"
 export {
-  resolveTypingLabel,
-  assertChatMessageType,
-  isChatMessageType,
-  resolveArchivedMessageType,
-  resolveMessageBodyDisplay,
-  resolveMessageBodyOriginal,
-  hasMessageTranslation,
-  readMessageSourceKind,
-} from "@/core/chat/rules"
+  canToggleConciergeAvailability,
+  ConciergeToggleDeniedError,
+  resolveConciergeToggleResolvedRole,
+} from "@/core/chat/concierge_access"
 export type {
   ChatMessageRecord,
   ChatMessageType,

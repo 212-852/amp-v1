@@ -133,27 +133,6 @@ function readAlign(value: unknown) {
   return value === "center" ? "center" : "start"
 }
 
-function readAspectRatio(value: unknown) {
-  if (typeof value !== "string") {
-    return "20 / 13"
-  }
-
-  const parts = value.split(":")
-
-  if (parts.length !== 2) {
-    return "20 / 13"
-  }
-
-  const width = Number(parts[0])
-  const height = Number(parts[1])
-
-  if (!width || !height) {
-    return "20 / 13"
-  }
-
-  return `${width} / ${height}`
-}
-
 function readCarouselPayload(payload: ChatMessagePayload | null) {
   if (payload?.type === "carousel" && Array.isArray(payload.contents)) {
     return payload
@@ -195,17 +174,12 @@ function FlexHero({ node }: Readonly<{ node: FlexRecord }>) {
   }
 
   return (
-    <div
-      className="w-full shrink-0 overflow-hidden rounded-t-[18px] bg-[#eadfce]"
-      style={{ aspectRatio: readAspectRatio(node.aspectRatio) }}
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={url}
-        alt=""
-        className="block h-full w-full object-cover"
-      />
-    </div>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={url}
+      alt=""
+      className="block h-auto w-full rounded-t-[18px]"
+    />
   )
 }
 

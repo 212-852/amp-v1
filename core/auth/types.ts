@@ -1,4 +1,10 @@
-export type SessionRole = "guest" | "user" | "driver" | "admin"
+export type SessionRole =
+  | "guest"
+  | "user"
+  | "driver"
+  | "admin"
+  | "owner"
+  | "concierge"
 
 export type SessionTier =
   | "guest"

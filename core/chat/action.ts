@@ -48,7 +48,13 @@ import {
   assertRoomMode,
   resolveModeChangeSystemMessage,
 } from "@/core/chat/rules"
+import { recordSecurityAccessEvent } from "@/core/access"
 import type { Session } from "@/core/auth/types"
+import {
+  canToggleConciergeAvailability,
+  ConciergeToggleDeniedError,
+  resolveConciergeToggleResolvedRole,
+} from "@/core/chat/concierge_access"
 
 type ChatBootstrapDebugEvent =
   | "chat_bootstrap_requested"
@@ -426,18 +432,103 @@ export async function resolveAdminChatRoom(
   return state
 }
 
+type ConciergeToggleDebugEvent =
+  | "concierge_toggle_requested"
+  | "concierge_toggle_denied"
+  | "concierge_toggle_allowed"
+  | "concierge_toggle_updated"
+
+async function readConciergeToggleDebugContext(session: Session) {
+  let request_id: string | null = null
+  let pathname: string | null = null
+  let ip: string | null = null
+  let user_agent: string | null = null
+
+  try {
+    const { headers } = await import("next/headers")
+    const request_headers = await headers()
+
+    request_id = request_headers.get("x-amp-request-id")
+    pathname =
+      request_headers.get("x-amp-pathname") ??
+      request_headers.get("x-amp-route") ??
+      "/api/chat/concierge"
+    ip =
+      request_headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      request_headers.get("x-real-ip")
+    user_agent = request_headers.get("user-agent")
+  } catch {
+    // headers unavailable outside request scope
+  }
+
+  return {
+    request_id,
+    pathname,
+    user_uuid: session.user_uuid,
+    visitor_uuid: session.visitor_uuid,
+    role: session.role,
+    tier: session.tier,
+    resolved_role: resolveConciergeToggleResolvedRole(session),
+    ip,
+    user_agent,
+  }
+}
+
+function logConciergeToggle(
+  event: ConciergeToggleDebugEvent,
+  data: Record<string, unknown>,
+) {
+  console.info(`[concierge_toggle] ${event}`, data)
+}
+
 export async function toggleConciergeAvailability(input: {
   available: boolean
   session: Session
 }) {
-  if (input.session.role !== "admin") {
-    throw new Error("Admin role required")
+  const debug = await readConciergeToggleDebugContext(input.session)
+
+  logConciergeToggle("concierge_toggle_requested", {
+    ...debug,
+    available: input.available,
+  })
+
+  if (!canToggleConciergeAvailability(input.session)) {
+    logConciergeToggle("concierge_toggle_denied", debug)
+
+    await recordSecurityAccessEvent({
+      request_id: debug.request_id,
+      category: "security",
+      severity: "warning",
+      event: "admin_page_forbidden",
+      pathname: debug.pathname ?? "/api/chat/concierge",
+      user_uuid: debug.user_uuid,
+      visitor_uuid: debug.visitor_uuid,
+      role: debug.role,
+      tier: typeof debug.tier === "string" ? debug.tier : null,
+      ip: debug.ip,
+      user_agent: debug.user_agent,
+      notify_payload: {
+        resolved_role: debug.resolved_role,
+        source: "concierge_toggle",
+      },
+    }).catch(() => null)
+
+    throw new ConciergeToggleDeniedError("Concierge toggle denied")
   }
 
-  return setConciergeAvailability({
+  logConciergeToggle("concierge_toggle_allowed", debug)
+
+  const result = await setConciergeAvailability({
     available: input.available,
     updated_by: input.session.user_uuid,
   })
+
+  logConciergeToggle("concierge_toggle_updated", {
+    ...debug,
+    available: result.available,
+  })
+
+  return result
 }
 
 export async function getConciergeAvailabilityState() {

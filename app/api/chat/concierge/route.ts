@@ -3,6 +3,7 @@ import {
   toggleConciergeAvailability,
 } from "@/core/chat/action"
 import { resolveChatApiSession } from "@/core/chat/api"
+import { ConciergeToggleDeniedError } from "@/core/chat/concierge_access"
 
 export async function GET() {
   try {
@@ -35,6 +36,15 @@ export async function POST(request: Request) {
 
     return Response.json(result)
   } catch (error) {
+    if (error instanceof ConciergeToggleDeniedError) {
+      return Response.json(
+        {
+          error: error.message,
+        },
+        { status: 403 },
+      )
+    }
+
     return Response.json(
       {
         error:
@@ -42,7 +52,7 @@ export async function POST(request: Request) {
             ? error.message
             : "Failed to update concierge availability",
       },
-      { status: 403 },
+      { status: 400 },
     )
   }
 }
