@@ -1,7 +1,7 @@
 import type { Session } from "@/core/auth/types"
+import { isCarouselPayload } from "@/core/bot/rules"
 import {
   type ChatLocale,
-  type BotMessageKey,
   type ChatMessageKind,
   type ChatMessageMeta,
   type ChatMessagePayload,
@@ -51,6 +51,10 @@ export function readMessageSourceKind(
   message: ChatMessageRecord,
   fallback: ChatMessageKind = "user",
 ): ChatMessageKind {
+  if (isCarouselPayload(message.payload)) {
+    return "bot"
+  }
+
   const kind = readMessageMeta(message.payload).source_kind
 
   if (
@@ -283,7 +287,6 @@ export function buildMessagePayload(input: {
   source_kind: ChatMessageKind
   type: ChatMessageType
   created_at: string
-  bot_key?: BotMessageKey
   existing_payload?: Record<string, unknown> | null
 }): ChatMessagePayload {
   const existing = input.existing_payload ?? {}
@@ -329,7 +332,6 @@ export function buildMessagePayload(input: {
       translations: input.translations,
       translation_status: input.translation_status,
       source_kind: input.source_kind,
-      ...(input.bot_key ? { bot_key: input.bot_key } : {}),
     },
   }
 }

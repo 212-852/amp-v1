@@ -3,7 +3,7 @@ export {
   handleChatModeSwitch,
   handleChatRoomPresence,
   handleChatTyping,
-  handleBotFixedMessage,
+  handleQuickMenuRequested,
   handleIncomingChatMessage,
   resolveAdminChatRoom,
   resolveChatRoom,
@@ -15,6 +15,11 @@ export { toMessageBundle, bootstrapRoomWelcome } from "@/core/chat/message"
 export { bootstrapChatRoom, resolveOrCreateRoom } from "@/core/chat/room"
 export { resolveChatSupportAccess } from "@/core/chat/support"
 export {
+  readFlexCarouselCards,
+  isQuickMenuTriggerAction,
+} from "@/core/chat/flex"
+export { createBotMessageBundle } from "@/core/bot/message"
+export {
   resolveTypingLabel,
   assertChatMessageType,
   isChatMessageType,
@@ -25,7 +30,6 @@ export {
   readMessageSourceKind,
 } from "@/core/chat/rules"
 export type {
-  BotMessageKey,
   ChatMessageRecord,
   ChatMessageType,
   ChatRoomMode,

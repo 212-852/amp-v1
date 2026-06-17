@@ -1,7 +1,5 @@
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
 import type {
-  BotMessageKey,
-  BotMessageRecord,
   ChatLocale,
   ChatMessageRecord,
   ChatMessageStatus,
@@ -102,16 +100,6 @@ export async function findRoomForIdentity(input: {
   visitor_uuid: string | null
   user_uuid: string | null
 }) {
-  if (input.user_uuid) {
-    const participant = await findParticipantRow(
-      `user_uuid=eq.${encodeURIComponent(input.user_uuid)}&role=eq.user`,
-    )
-
-    if (participant) {
-      return findRoomByUuid(participant.room_uuid)
-    }
-  }
-
   if (input.visitor_uuid) {
     const participant = await findParticipantRow(
       `visitor_uuid=eq.${encodeURIComponent(input.visitor_uuid)}&role=eq.guest`,
@@ -128,6 +116,16 @@ export async function findRoomForIdentity(input: {
       }
 
       return room
+    }
+  }
+
+  if (input.user_uuid) {
+    const participant = await findParticipantRow(
+      `user_uuid=eq.${encodeURIComponent(input.user_uuid)}&role=eq.user`,
+    )
+
+    if (participant) {
+      return findRoomByUuid(participant.room_uuid)
     }
   }
 
@@ -439,46 +437,6 @@ export async function insertParticipant(input: {
 
   const rows = (await response.json()) as ChatParticipantRecord[]
   return rows[0]
-}
-
-export async function loadBotMessage(input: {
-  key: BotMessageKey
-  locale: ChatLocale
-}) {
-  const config = requireConfig()
-  const locales = input.locale === "ja" ? ["ja"] : [input.locale, "ja"]
-
-  const response = await fetch(
-    restUrl(
-      config,
-      "bot_messages",
-      [
-        `key=eq.${encodeURIComponent(input.key)}`,
-        `locale=in.(${locales.map((locale) => encodeURIComponent(locale)).join(",")})`,
-        "select=*",
-      ].join("&"),
-    ),
-    {
-      headers: restHeaders(config),
-      cache: "no-store",
-    },
-  )
-
-  if (!response.ok) {
-    const error = await readRestError(response)
-    throw new Error(`Failed to load bot message: ${error.message ?? "unknown"}`)
-  }
-
-  const rows = (await response.json()) as BotMessageRecord[]
-  const localized = rows.find((row) => row.locale === input.locale)
-  const fallback = rows.find((row) => row.locale === "ja")
-  const message = localized ?? fallback
-
-  if (!message) {
-    throw new Error(`Bot message is missing: ${input.key}`)
-  }
-
-  return message
 }
 
 export async function insertMessage(input: {

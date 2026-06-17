@@ -1,6 +1,6 @@
 import {
-  handleBotFixedMessage,
   handleIncomingChatMessage,
+  handleQuickMenuRequested,
   resolveAdminChatRoom,
   resolveChatRoom,
 } from "@/core/chat/action"
@@ -43,12 +43,11 @@ export async function POST(request: Request) {
     const { context, session } = await resolveChatApiSession()
     const body = (await request.json().catch(() => ({}))) as {
       message?: string
-      bot_message_key?: "quick_menu"
+      trigger?: "quick_menu_requested"
     }
 
-    if (body.bot_message_key) {
-      const message = await handleBotFixedMessage({
-        key: body.bot_message_key,
+    if (body.trigger === "quick_menu_requested") {
+      const message = await handleQuickMenuRequested({
         source_channel: context.source_channel,
         locale: context.locale,
         session,

@@ -1,8 +1,7 @@
-import {
-  insertMessage,
-  loadBotMessage,
-  loadRoomMessages,
-} from "@/core/chat/archive"
+import { countRoomMessages, insertMessage } from "@/core/chat/archive"
+import { carouselPayloadToLineFlex } from "@/core/bot/rules"
+import { createBotMessageBundle, type BotMessageBundle } from "@/core/bot/message"
+import type { BotMessageTrigger } from "@/core/bot/rules"
 import {
   buildMessagePayload,
   readMessageSourceKind,
@@ -13,9 +12,9 @@ import {
   resolveMessageOriginalLocale,
   resolveMessageTranslations,
 } from "@/core/chat/rules"
+import { isCarouselPayload } from "@/core/bot/rules"
 import { ensureRoomLocaleTranslation } from "@/core/chat/translate"
 import type {
-  BotMessageKey,
   ChatLocale,
   ChatMessageKind,
   ChatMessageRecord,
@@ -116,6 +115,22 @@ export async function archivePreparedMessage(input: PreparedMessageInput) {
   })
 }
 
+export async function archiveBotMessageBundle(input: {
+  bundle: BotMessageBundle
+  room: ChatRoomRecord
+  participant: ChatParticipantRecord | null
+}) {
+  return insertMessage({
+    message_uuid: randomUUID(),
+    room_uuid: input.room.room_uuid,
+    participant_uuid: input.participant?.participant_uuid ?? null,
+    type: input.bundle.type,
+    status: "sent",
+    body: input.bundle.body,
+    payload: input.bundle.payload,
+  })
+}
+
 export async function deliverMessageBundle(input: {
   message: ChatMessageRecord
   room: ChatRoomRecord
@@ -123,8 +138,16 @@ export async function deliverMessageBundle(input: {
   source_channel: SourceChannel
 }) {
   const body_display = resolveMessageBodyDisplay(input.message, input.room.locale)
-  const line_messages = input.message.payload?.line
-    ? [input.message.payload.line]
+  const payload = input.message.payload
+
+  const line_messages = isCarouselPayload(payload)
+    ? [
+        carouselPayloadToLineFlex({
+          payload,
+          locale: input.room.locale,
+          alt_text: input.message.body,
+        }),
+      ]
     : undefined
 
   return deliverOutput(
@@ -135,35 +158,10 @@ export async function deliverMessageBundle(input: {
     },
     {
       text: body_display,
-      data: input.message.payload?.web as Record<string, unknown> | undefined,
+      data: payload as Record<string, unknown> | undefined,
       line_messages,
     },
   )
-}
-
-export async function archiveBotFixedMessage(input: {
-  key: BotMessageKey
-  room: ChatRoomRecord
-  participant: ChatParticipantRecord | null
-  session: Session
-  source_channel: SourceChannel
-}) {
-  const bot_message = await loadBotMessage({
-    key: input.key,
-    locale: input.room.locale,
-  })
-
-  return archivePreparedMessage({
-    room: input.room,
-    participant: input.participant,
-    source_channel: input.source_channel,
-    source_kind: "bot",
-    type: bot_message.type,
-    body: bot_message.body,
-    original_locale: bot_message.locale,
-    session: input.session,
-    payload: bot_message.payload,
-  })
 }
 
 export async function bootstrapRoomWelcome(input: {
@@ -171,19 +169,49 @@ export async function bootstrapRoomWelcome(input: {
   participant: ChatParticipantRecord
   session: Session
   source_channel: SourceChannel
+  room_created: boolean
 }) {
-  const existing_messages = await loadRoomMessages(input.room.room_uuid)
-
-  if (existing_messages.length > 0) {
+  if (!input.room_created && (await countRoomMessages(input.room.room_uuid)) > 0) {
     return null
   }
 
-  const message = await archiveBotFixedMessage({
-    key: "welcome",
+  const bundle = createBotMessageBundle({
+    trigger: "chat_opened",
+    locale: input.room.locale,
+  })
+
+  const message = await archiveBotMessageBundle({
+    bundle,
     room: input.room,
     participant: input.participant,
+  })
+
+  await deliverMessageBundle({
+    message,
+    room: input.room,
     session: input.session,
     source_channel: input.source_channel,
+  })
+
+  return message
+}
+
+export async function archiveBotTriggerMessage(input: {
+  trigger: BotMessageTrigger
+  room: ChatRoomRecord
+  participant: ChatParticipantRecord | null
+  session: Session
+  source_channel: SourceChannel
+}) {
+  const bundle = createBotMessageBundle({
+    trigger: input.trigger,
+    locale: input.room.locale,
+  })
+
+  const message = await archiveBotMessageBundle({
+    bundle,
+    room: input.room,
+    participant: input.participant,
   })
 
   await deliverMessageBundle({

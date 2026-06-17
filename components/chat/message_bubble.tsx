@@ -1,7 +1,9 @@
 "use client"
 
+import Image from "next/image"
 import { useState } from "react"
 
+import { isQuickMenuTriggerAction, readFlexCarouselCards } from "@/core/chat/flex"
 import {
   hasMessageTranslation,
   resolveMessageBodyDisplay,
@@ -24,27 +26,20 @@ const content = {
   },
 }
 
-type WebCard = {
-  title?: unknown
-  body?: unknown
-}
-
-function readWebCards(payload: ChatMessageRecord["payload"]) {
-  const web = payload?.web
-
-  if (!web || typeof web !== "object" || Array.isArray(web)) {
-    return []
+async function requestCarouselAction(action: string) {
+  if (!isQuickMenuTriggerAction(action)) {
+    return
   }
 
-  const cards = (web as { cards?: unknown }).cards
+  await fetch("/api/chat/room", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ trigger: "quick_menu_requested" }),
+  }).catch(() => null)
 
-  if (!Array.isArray(cards)) {
-    return []
-  }
-
-  return cards.filter((card): card is WebCard => {
-    return Boolean(card && typeof card === "object" && !Array.isArray(card))
-  })
+  window.dispatchEvent(new CustomEvent("amp-chat-message-created"))
 }
 
 export default function ChatMessageBubble({
@@ -57,12 +52,15 @@ export default function ChatMessageBubble({
   const { locale } = useLocale()
   const can_toggle = hasMessageTranslation(message, room_locale)
   const [show_original, set_show_original] = useState(false)
+  const is_system = message.type === "system"
+  const is_flex = message.type === "flex"
+  const flex_cards = is_flex
+    ? readFlexCarouselCards(message.payload, room_locale)
+    : []
 
   const body = show_original
     ? resolveMessageBodyOriginal(message)
     : resolveMessageBodyDisplay(message, room_locale)
-  const is_system = message.type === "system"
-  const cards = readWebCards(message.payload)
 
   return (
     <div
@@ -73,31 +71,62 @@ export default function ChatMessageBubble({
     >
       <div
         className={[
-          "max-w-[85%] rounded-[22px] px-4 py-3 text-[14px] leading-relaxed",
+          "max-w-[85%] rounded-[22px] px-4 py-4 text-[14px] leading-relaxed",
           is_system
             ? "bg-[#ead7c3]/70 text-[#8c7358]"
             : "bg-[#fdfaf6] text-[#3d2a19] shadow-[0_4px_12px_rgba(107,74,38,0.08)]",
+          is_flex ? "w-full max-w-full px-3" : "",
         ].join(" ")}
       >
-        <p>{body}</p>
-        {cards.length > 0 ? (
-          <div className="mt-3 flex snap-x gap-2 overflow-x-auto pb-1">
-            {cards.map((card, index) => (
+        {is_flex && flex_cards.length > 0 ? (
+          <div className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1">
+            {flex_cards.map((card) => (
               <article
-                key={`${String(card.title ?? "card")}-${index}`}
-                className="min-w-[168px] snap-start rounded-[14px] bg-white px-3 py-3 shadow-[inset_0_0_0_1px_#ead7c3]"
+                key={card.key}
+                className="w-[220px] shrink-0 snap-center overflow-hidden rounded-[18px] bg-white shadow-[inset_0_0_0_1px_#ead7c3]"
               >
-                <h3 className="text-[13px] font-semibold leading-snug text-[#3d2a19]">
-                  {String(card.title ?? "")}
-                </h3>
-                <p className="mt-1 text-[12px] leading-relaxed text-[#8c7358]">
-                  {String(card.body ?? "")}
-                </p>
+                {card.image_url ? (
+                  <div className="relative h-[132px] w-full overflow-hidden bg-[#f3e7d7]">
+                    <Image
+                      src={card.image_url}
+                      alt=""
+                      fill
+                      className="object-cover"
+                      sizes="220px"
+                    />
+                  </div>
+                ) : null}
+                <div className="space-y-2 px-4 py-3">
+                  <h3 className="text-[14px] font-bold leading-snug text-[#3d2a19]">
+                    {card.title}
+                  </h3>
+                  <p className="text-[12px] leading-relaxed text-[#8c7358]">
+                    {card.body}
+                  </p>
+                  {card.buttons.length > 0 ? (
+                    <div className="flex flex-col gap-2 pt-1">
+                      {card.buttons.map((button) => (
+                        <button
+                          key={`${button.label}-${button.action}`}
+                          type="button"
+                          onClick={() => {
+                            void requestCarouselAction(button.action)
+                          }}
+                          className="h-9 rounded-full bg-[#8f5d28] px-4 text-[12px] font-bold text-[#fdfaf6]"
+                        >
+                          {button.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
               </article>
             ))}
           </div>
-        ) : null}
-        {can_toggle && !is_system ? (
+        ) : (
+          <p>{body}</p>
+        )}
+        {can_toggle && !is_system && !is_flex ? (
           <button
             type="button"
             onClick={() => set_show_original((current) => !current)}

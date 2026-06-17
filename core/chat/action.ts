@@ -16,8 +16,8 @@ import {
   updateRoomMode,
 } from "@/core/chat/archive"
 import {
-  archiveBotFixedMessage,
   archivePreparedMessage,
+  archiveBotTriggerMessage,
   deliverMessageBundle,
   toMessageBundle,
 } from "@/core/chat/message"
@@ -36,7 +36,6 @@ import {
   loadChatRoomStateByUuid,
 } from "@/core/chat/room"
 import type {
-  BotMessageKey,
   ChatIncomingInput,
   ChatModeSwitchInput,
   ChatRoomPresenceInput,
@@ -123,9 +122,7 @@ export async function handleChatModeSwitch(input: ChatModeSwitchInput) {
     mode,
   })
 
-  const message =
-    mode === "group"
-      ? await archivePreparedMessage({
+  const message = await archivePreparedMessage({
           room: updated_room,
           participant,
           source_channel: input.source_channel,
@@ -134,13 +131,6 @@ export async function handleChatModeSwitch(input: ChatModeSwitchInput) {
           body: resolveModeChangeSystemMessage(mode),
           original_locale: updated_room.locale,
           session: input.session,
-        })
-      : await archiveBotFixedMessage({
-          key: mode === "concierge" ? "concierge_mode" : "bot_mode",
-          room: updated_room,
-          participant,
-          session: input.session,
-          source_channel: input.source_channel,
         })
 
   await deliverMessageBundle({
@@ -156,8 +146,7 @@ export async function handleChatModeSwitch(input: ChatModeSwitchInput) {
   }
 }
 
-export async function handleBotFixedMessage(input: {
-  key: BotMessageKey
+export async function handleQuickMenuRequested(input: {
   source_channel: Session["source_channel"]
   locale?: string | null
   session: Session
@@ -167,17 +156,10 @@ export async function handleBotFixedMessage(input: {
     locale: input.locale ?? null,
   })
   const { room, participant } = await bootstrapChatRoom(context, input.session)
-  const message = await archiveBotFixedMessage({
-    key: input.key,
+  const message = await archiveBotTriggerMessage({
+    trigger: "quick_menu_requested",
     room,
     participant,
-    session: input.session,
-    source_channel: input.source_channel,
-  })
-
-  await deliverMessageBundle({
-    message,
-    room,
     session: input.session,
     source_channel: input.source_channel,
   })

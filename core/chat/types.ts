@@ -57,6 +57,9 @@ export type ChatMessageMeta = {
 }
 
 export type ChatMessagePayload = {
+  kind?: "carousel"
+  bot_trigger?: string
+  cards?: unknown[]
   web?: Record<string, unknown>
   line?: Record<string, unknown>
   meta?: ChatMessageMeta
@@ -95,16 +98,6 @@ export type ChatMessageRecord = {
   status: ChatMessageStatus
   body: string
   payload: ChatMessagePayload | null
-  created_at: string
-}
-
-export type BotMessageRecord = {
-  bot_message_uuid: string
-  key: BotMessageKey
-  locale: ChatLocale
-  type: ChatMessageType
-  body: string
-  payload: Record<string, unknown>
   created_at: string
 }
 

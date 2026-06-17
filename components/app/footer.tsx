@@ -485,7 +485,7 @@ export default function AppFooter({
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ bot_message_key: "quick_menu" }),
+      body: JSON.stringify({ trigger: "quick_menu_requested" }),
     }).catch(() => null)
 
     window.dispatchEvent(new CustomEvent("amp-chat-message-created"))

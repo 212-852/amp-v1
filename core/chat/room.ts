@@ -102,6 +102,7 @@ export async function bootstrapChatRoom(
     participant,
     session,
     source_channel: context.source_channel,
+    room_created,
   })
 
   return {
