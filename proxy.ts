@@ -215,6 +215,7 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/api/chat/:path*",
     "/((?!api|_next/static|_next/image|images|.*\\..*).*)",
   ],
 }

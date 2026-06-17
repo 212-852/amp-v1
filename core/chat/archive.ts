@@ -104,7 +104,11 @@ export async function findOldestParticipantByUserUuid(user_uuid: string) {
 
 export async function findOldestParticipantByVisitorUuid(visitor_uuid: string) {
   return findParticipantRow(
-    `visitor_uuid=eq.${encodeURIComponent(visitor_uuid)}&role=in.(guest,user)`,
+    [
+      `visitor_uuid=eq.${encodeURIComponent(visitor_uuid)}`,
+      "user_uuid=is.null",
+      "role=eq.guest",
+    ].join("&"),
   )
 }
 

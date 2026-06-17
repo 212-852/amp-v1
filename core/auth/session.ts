@@ -29,7 +29,7 @@ type VisitorResolution = {
   created_new_visitor: boolean
 }
 
-type VisitorAction = "reuse" | "repair" | "cookie_only" | "skipped"
+type VisitorAction = "reuse" | "repair" | "create"
 
 type VisitorLookupResult = {
   visitor: VisitorRecord | null
@@ -137,7 +137,6 @@ type VisitorUpsertBody = {
   visitor_uuid: string
   source_channel: SourceChannel
   updated_at: string
-  user_uuid: null
 }
 
 const runtimeVisitors = new Map<string, VisitorRecord>()
@@ -408,7 +407,6 @@ const supabaseVisitorStore: VisitorStore = {
       visitor_uuid,
       source_channel: context.source_channel,
       updated_at: now,
-      user_uuid: null,
     }
     const result = await upsertVisitorRow(config, body)
     const visitor = result.visitor
@@ -623,10 +621,6 @@ async function setVisitorCookie(
   } catch {
     // TEMP_AUTH_DEBUG Cookie writes require a response-capable server context.
   }
-}
-
-function isProxyRuntime(runtime?: SessionRuntime) {
-  return Boolean(runtime?.set_cookie)
 }
 
 function buildAnonymousSession(context: AuthContext): AppSession {
@@ -845,10 +839,52 @@ function buildFailedSessionCacheEntry(context: AuthContext): SessionCacheEntry {
 
   return {
     session,
-    visitor_action: "skipped",
+    visitor_action: "create",
     created_new_visitor: false,
     cookie_found: false,
     cookie_value: null,
+  }
+}
+
+async function createVisitorRecord(input: {
+  context: AuthContext
+  visitorStore: VisitorStore
+  runtime?: SessionRuntime
+  request_id?: string | null
+  pathname: string | null
+  reason: string
+}): Promise<VisitorResolution> {
+  const visitor_uuid = crypto.randomUUID()
+  const visitor = await input.visitorStore.upsertVisitor(
+    input.context,
+    visitor_uuid,
+    {
+      pathname: input.pathname,
+      request_id: input.request_id ?? null,
+    },
+  )
+
+  await setVisitorCookie(visitor_uuid, input.runtime, input.request_id)
+
+  await send_auth_debug(
+    "visitor_created",
+    {
+      pathname: input.pathname,
+      visitor_uuid: visitor.visitor_uuid,
+      source_channel: visitor.source_channel,
+      reason: input.reason,
+      created_new_visitor: true,
+    },
+    input.request_id,
+  )
+
+  return {
+    visitor,
+    visitor_uuid: visitor.visitor_uuid,
+    action: "create",
+    cookie_found: false,
+    cookie_value: visitor_uuid,
+    created_new_visitor: true,
   }
 }
 
@@ -861,6 +897,17 @@ async function resolveVisitorRecord(
   const cookie_value = await getRequestVisitorCookie(runtime)
   const cookie_found = Boolean(cookie_value)
   const pathname = runtime?.pathname ?? context.requested_route ?? null
+
+  await send_auth_debug(
+    cookie_found ? "session_cookie_found" : "session_cookie_missing",
+    {
+      pathname,
+      visitor_uuid: cookie_found ? cookie_value : null,
+      user_uuid: null,
+      request_id: request_id ?? null,
+    },
+    request_id,
+  )
 
   await send_auth_debug(
     "visitor_cookie_read",
@@ -910,6 +957,8 @@ async function resolveVisitorRecord(
         {
           pathname,
           visitor_uuid: existingVisitor.visitor_uuid,
+          user_uuid: existingVisitor.user_uuid,
+          request_id: request_id ?? null,
           created_new_visitor: false,
         },
         request_id,
@@ -976,49 +1025,14 @@ async function resolveVisitorRecord(
     }
   }
 
-  if (isProxyRuntime(runtime)) {
-    const visitor_uuid = crypto.randomUUID()
-    await setVisitorCookie(visitor_uuid, runtime, request_id)
-
-    await send_auth_debug(
-      "visitor_cookie_only",
-      {
-        pathname,
-        visitor_uuid,
-        reason: "safari_parallel_first_request",
-        created_new_visitor: false,
-      },
-      request_id,
-    )
-
-    return {
-      visitor: null,
-      visitor_uuid,
-      action: "cookie_only",
-      cookie_found: false,
-      cookie_value: null,
-      created_new_visitor: false,
-    }
-  }
-
-  await send_auth_debug(
-    "visitor_skipped_no_cookie",
-    {
-      pathname,
-      reason: "cookie_missing_no_db_write",
-      created_new_visitor: false,
-    },
+  return createVisitorRecord({
+    context,
+    visitorStore,
+    runtime,
     request_id,
-  )
-
-  return {
-    visitor: null,
-    visitor_uuid: null,
-    action: "skipped",
-    cookie_found: false,
-    cookie_value: null,
-    created_new_visitor: false,
-  }
+    pathname,
+    reason: "cookie_missing",
+  })
 }
 
 function buildRequestSummary(
