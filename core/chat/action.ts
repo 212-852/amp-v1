@@ -50,6 +50,82 @@ import {
 } from "@/core/chat/rules"
 import type { Session } from "@/core/auth/types"
 
+type ChatBootstrapDebugEvent =
+  | "chat_bootstrap_requested"
+  | "chat_bootstrap_room_created"
+  | "chat_bootstrap_room_reused"
+  | "chat_bootstrap_welcome_created"
+
+async function readChatBootstrapDebugContext(session: Session) {
+  let request_id: string | null = null
+  let pathname: string | null = null
+
+  try {
+    const { headers } = await import("next/headers")
+    const request_headers = await headers()
+
+    request_id = request_headers.get("x-amp-request-id")
+    pathname =
+      request_headers.get("x-amp-pathname") ??
+      request_headers.get("x-amp-route")
+  } catch {
+    // headers unavailable outside request scope
+  }
+
+  return {
+    visitor_uuid: session.visitor_uuid,
+    user_uuid: session.user_uuid,
+    room_uuid: null as string | null,
+    request_id,
+    pathname,
+  }
+}
+
+function logChatBootstrap(
+  event: ChatBootstrapDebugEvent,
+  data: Record<string, unknown>,
+) {
+  console.info(`[chat_bootstrap] ${event}`, data)
+}
+
+export async function handleChatRoomBootstrap(input: {
+  source_channel: Session["source_channel"]
+  locale?: string | null
+  session: Session
+}): Promise<ChatRoomState> {
+  const debug = await readChatBootstrapDebugContext(input.session)
+
+  logChatBootstrap("chat_bootstrap_requested", debug)
+
+  const context = buildChatContext(input.session, {
+    source_channel: input.source_channel,
+    locale: input.locale ?? null,
+  })
+  const result = await bootstrapChatRoom(context, input.session)
+  const state = await findChatRoomState(context, input.session)
+
+  if (!state) {
+    throw new Error("Failed to bootstrap chat room")
+  }
+
+  const debug_with_room = {
+    ...debug,
+    room_uuid: state.room.room_uuid,
+  }
+
+  if (result.created) {
+    logChatBootstrap("chat_bootstrap_room_created", debug_with_room)
+  } else {
+    logChatBootstrap("chat_bootstrap_room_reused", debug_with_room)
+  }
+
+  if (result.welcome_created) {
+    logChatBootstrap("chat_bootstrap_welcome_created", debug_with_room)
+  }
+
+  return state
+}
+
 export async function resolveChatRoom(
   session: Session,
   input?: {

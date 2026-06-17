@@ -1,6 +1,7 @@
 export {
   getConciergeAvailabilityState,
   handleChatModeSwitch,
+  handleChatRoomBootstrap,
   handleChatRoomPresence,
   handleChatTyping,
   handleQuickMenuRequested,

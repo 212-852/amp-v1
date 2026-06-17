@@ -78,6 +78,7 @@ export type ChatRoomBootstrapResult = {
   participant: ChatParticipantRecord
   created: boolean
   participant_created: boolean
+  welcome_created: boolean
 }
 
 export type ChatParticipantRecord = {

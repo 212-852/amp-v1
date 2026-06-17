@@ -353,7 +353,7 @@ export async function bootstrapChatRoom(
     mode,
   })
 
-  await bootstrapRoomWelcome({
+  const welcome = await bootstrapRoomWelcome({
     room: resolved.room,
     participant: resolved.participant,
     session,
@@ -365,6 +365,7 @@ export async function bootstrapChatRoom(
     participant: resolved.participant,
     created: resolved.created,
     participant_created: resolved.participant_created,
+    welcome_created: Boolean(welcome),
   }
 }
 
