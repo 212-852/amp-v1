@@ -12,6 +12,7 @@ import type { Session } from "@/core/auth/types"
 import { sendAuthDebug } from "@/core/debug"
 import { resolveEntranceContext } from "@/core/entrance/context"
 import { normalizeOpsHeaderSession } from "@/core/ops/header_session"
+import { resolvePageLabel } from "@/core/ops/page_label"
 
 const ADMIN_PATH = "/admin"
 
@@ -132,6 +133,8 @@ export async function renderAdminIsolationPage() {
       default_display_name: "Admin",
       default_role: "admin",
     })
+    const pathname = context.requested_route ?? ADMIN_PATH
+    const page_label = resolvePageLabel(pathname)
 
     await sendStageDebug("admin_page_header_props_ready", {
       pathname: ADMIN_PATH,
@@ -159,7 +162,7 @@ export async function renderAdminIsolationPage() {
 
       return (
         <div className="min-h-dvh bg-neutral-50 text-neutral-900">
-          <OpsHeader session={safe_session} />
+          <OpsHeader session={safe_session} page_label={page_label} />
           <main style={{ padding: 24 }}>
             <div>admin alive stage 4 header ok</div>
           </main>
@@ -173,7 +176,7 @@ export async function renderAdminIsolationPage() {
     )
 
     return (
-      <AdminShell session={safe_session}>
+      <AdminShell session={safe_session} pathname={pathname}>
         <AdminComingSoon title="本日の状況" />
       </AdminShell>
     )

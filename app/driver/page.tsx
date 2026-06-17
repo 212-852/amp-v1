@@ -10,6 +10,7 @@ export default async function DriverPage() {
 
   return (
     <OpsShell
+      pathname={context.requested_route ?? "/driver"}
       session={normalizeOpsHeaderSession(session, {
         default_display_name: "Driver",
         default_role: "driver",

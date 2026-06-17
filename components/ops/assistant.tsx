@@ -22,15 +22,9 @@ export default function OpsAssistant() {
       className="fixed inset-x-0 bottom-0 z-50 px-5 pb-[env(safe-area-inset-bottom)]"
     >
       <div className="relative mx-auto w-full max-w-[430px]">
-        <div className="relative overflow-visible rounded-t-[24px] rounded-b-[4px] border border-b-0 border-neutral-200 bg-white px-2.5 py-2 shadow-[0_-4px_16px_rgba(0,0,0,0.04)]">
+        <div className="rounded-t-[24px] rounded-b-[4px] border border-b-0 border-neutral-200 bg-white px-2.5 py-2 shadow-[0_-4px_16px_rgba(0,0,0,0.04)]">
           <div className="flex items-center gap-2">
-            <div className="relative h-[72px] w-[76px] shrink-0">
-              <div className="pointer-events-none absolute bottom-[-14px] -left-4 z-10">
-                <div className="h-[74px] w-[88px] overflow-hidden">
-                  <OpsNeko />
-                </div>
-              </div>
-            </div>
+            <OpsNeko className="footer" />
 
             <div className="min-w-0 flex-1 space-y-0.5 py-0.5">
               {visible_notifications.map((item) => (

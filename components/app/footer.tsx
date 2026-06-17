@@ -4,12 +4,17 @@ import { Menu, MessageCircle, PawPrint, User } from "lucide-react"
 import Image from "next/image"
 import { useEffect, useState } from "react"
 
+import ConciergeMemberModal from "@/components/app/concierge_member_modal"
 import { useOverlay, type OverlayType } from "@/components/overlay"
+import {
+  applyChatSupportSwitch,
+  type ChatSupportAccess,
+  type ChatSupportMode,
+} from "@/core/chat/support"
 import { useLocale } from "@/src/components/locale/provider"
 import type { Locale } from "@/src/lib/locale"
 
 type FooterMode = "normal" | "input"
-type AssistantMode = "bot" | "concierge"
 
 const content = {
   open_message_input: {
@@ -144,11 +149,11 @@ function PinkPawButton({
 
 function AssistantToggle({
   assistantMode,
-  onChange,
+  onAttemptChange,
   locale,
 }: {
-  assistantMode: AssistantMode
-  onChange: (mode: AssistantMode) => void
+  assistantMode: ChatSupportMode
+  onAttemptChange: (mode: ChatSupportMode) => boolean
   locale: Locale
 }) {
   const isConcierge = assistantMode === "concierge"
@@ -169,13 +174,16 @@ function AssistantToggle({
     }
   }, [is_sliding])
 
-  function handleChange(mode: AssistantMode) {
+  function handleChange(mode: ChatSupportMode) {
     if (mode === assistantMode) {
       return
     }
 
-    set_is_sliding(true)
-    onChange(mode)
+    const accepted = onAttemptChange(mode)
+
+    if (accepted) {
+      set_is_sliding(true)
+    }
   }
 
   return (
@@ -346,14 +354,54 @@ function CopyrightText() {
   )
 }
 
-export default function AppFooter() {
+export default function AppFooter({
+  support_access,
+  can_start_line_oauth,
+}: Readonly<{
+  support_access: ChatSupportAccess
+  can_start_line_oauth: boolean
+}>) {
   const [footerMode, setFooterMode] = useState<FooterMode>("normal")
-  const [assistantMode, setAssistantMode] = useState<AssistantMode>("bot")
+  const [assistantMode, setAssistantMode] = useState<ChatSupportMode>("bot")
+  const [member_modal_open, set_member_modal_open] = useState(false)
   const { locale } = useLocale()
+  const { openOverlay } = useOverlay()
   const isInputMode = footerMode === "input"
 
   function toggleFooterMode() {
     setFooterMode((current) => (current === "normal" ? "input" : "normal"))
+  }
+
+  function handleAssistantModeAttempt(mode: ChatSupportMode) {
+    const result = applyChatSupportSwitch({
+      requested_mode: mode,
+      current_mode: assistantMode,
+      access: support_access,
+    })
+
+    if (result.outcome === "switch") {
+      setAssistantMode(result.mode)
+      return true
+    }
+
+    if (result.show_member_modal) {
+      set_member_modal_open(true)
+    }
+
+    if (result.mode !== assistantMode) {
+      setAssistantMode(result.mode)
+    }
+
+    return false
+  }
+
+  function handleLinkAccount() {
+    set_member_modal_open(false)
+    openOverlay({
+      type: "link",
+      source: "user",
+      can_start_line_oauth,
+    })
   }
 
   return (
@@ -394,7 +442,7 @@ export default function AppFooter() {
                 <AssistantToggle
                   assistantMode={assistantMode}
                   locale={locale}
-                  onChange={setAssistantMode}
+                  onAttemptChange={handleAssistantModeAttempt}
                 />
               </div>
 
@@ -422,6 +470,11 @@ export default function AppFooter() {
         </div>
       </div>
 
+      <ConciergeMemberModal
+        open={member_modal_open}
+        onClose={() => set_member_modal_open(false)}
+        onLinkAccount={handleLinkAccount}
+      />
     </footer>
   )
 }

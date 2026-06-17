@@ -61,6 +61,11 @@ a {
   align-self: flex-end;
 }
 
+.robo_cat_area.footer {
+  flex: 0 0 100px;
+  align-self: flex-end;
+}
+
 .robo_cat_viewport {
   width: 100px;
   height: 130px;

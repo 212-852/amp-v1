@@ -12,8 +12,6 @@ import {
 
 export type { OpsHeaderSession, HeaderSessionLike } from "@/core/ops/header_session"
 
-const page_label = "Home"
-
 function resolveInitials(value: string | null | undefined) {
   const normalized = value?.trim()
 
@@ -39,8 +37,10 @@ type HeaderMenuItem = {
 
 export default function OpsHeader({
   session,
+  page_label,
 }: {
   session?: HeaderSessionLike | null
+  page_label: string
 }) {
   const safe_session = normalizeOpsHeaderDisplay(session)
   const is_logged_in = Boolean(safe_session.user_uuid)

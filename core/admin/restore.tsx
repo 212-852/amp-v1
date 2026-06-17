@@ -16,6 +16,7 @@ import type { Session } from "@/core/auth/types"
 import { sendAuthDebug } from "@/core/debug"
 import { resolveEntranceContext } from "@/core/entrance/context"
 import { normalizeOpsHeaderDisplay } from "@/core/ops/header_session"
+import { resolvePageLabel } from "@/core/ops/page_label"
 
 const ADMIN_PATH = "/admin"
 
@@ -105,12 +106,16 @@ async function resolveAdminAccess() {
   return { context, session }
 }
 
-function renderAdminUiShell(session: Session | null | undefined) {
+function renderAdminUiShell(
+  session: Session | null | undefined,
+  pathname: string,
+) {
   const header_session = normalizeOpsHeaderDisplay(session)
+  const page_label = resolvePageLabel(pathname)
 
   return (
     <div className="min-h-dvh bg-neutral-50 text-neutral-900">
-      <AdminHeader session={header_session} />
+      <AdminHeader session={header_session} page_label={page_label} />
       <main className="mx-auto flex w-full max-w-[430px] flex-col gap-3 px-5 pb-[calc(118px+env(safe-area-inset-bottom,0px))] pt-4">
         <AdminComingSoon title="本日の状況" />
       </main>
@@ -124,17 +129,22 @@ export async function renderAdminRestorePage() {
 
   try {
     if (step === 0) {
-      const { session } = await resolveAdminAccess()
+      const { context, session } = await resolveAdminAccess()
 
       await sendRestoreDebug("admin_restore_step_header_ok", {
         pathname: ADMIN_PATH,
         ...normalizeOpsHeaderDisplay(session),
       })
 
-      return renderAdminUiShell(session)
+      return renderAdminUiShell(
+        session,
+        context.requested_route ?? ADMIN_PATH,
+      )
     }
 
-    const { session } = await resolveAdminAccess()
+    const { context, session } = await resolveAdminAccess()
+    const pathname = context.requested_route ?? ADMIN_PATH
+    const page_label = resolvePageLabel(pathname)
 
     if (step === 1) {
       return (
@@ -154,7 +164,7 @@ export async function renderAdminRestorePage() {
     }
 
     const header_session = normalizeOpsHeaderDisplay(session)
-    const header = <AdminHeader session={header_session} />
+    const header = <AdminHeader session={header_session} page_label={page_label} />
 
     if (step === 3) {
       await sendRestoreDebug("admin_restore_step_header_ok", {

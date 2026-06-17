@@ -78,6 +78,14 @@ function resolveAccessZone(pathname: string): AccessZone | null {
     return "user"
   }
 
+  if (pathname.startsWith("/user")) {
+    return "user"
+  }
+
+  if (pathname.startsWith("/mypage")) {
+    return "user"
+  }
+
   return null
 }
 
