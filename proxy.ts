@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server"
 
 import type { AuthContext, SourceChannel } from "@/core/auth/types"
 import {
-  emitAdminAccessNotifications,
+  emitGuardedAccessSecurityEvents,
   resolveRoleRedirectPath,
 } from "@/core/auth/route"
 import { sendAuthDebug } from "@/core/debug"
@@ -148,8 +148,10 @@ async function runProxy(request: NextRequest) {
     requestHeaders.set("x-amp-session-email", session.email)
   }
 
-  if (request.nextUrl.pathname.startsWith("/admin")) {
-    await emitAdminAccessNotifications(context, session, {
+  const pathname = request.nextUrl.pathname
+
+  if (pathname.startsWith("/admin") || pathname.startsWith("/driver")) {
+    await emitGuardedAccessSecurityEvents(context, session, {
       request_id: requestId,
       user_agent: request.headers.get("user-agent"),
       ip:

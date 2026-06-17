@@ -56,13 +56,18 @@ function buildSecurityAlertMessage(delivery: NotifyDelivery) {
     readPayloadValue(payload, "request_id") !== "unknown"
       ? readPayloadValue(payload, "request_id")
       : delivery.request_id ?? "unknown"
+  const headline =
+    delivery.alert_headline ?? "🚨🚨🚨 SECURITY ALERT 🚨🚨🚨"
+  const description =
+    delivery.alert_description ?? "Unauthorized access attempt detected."
+  const embed_title = delivery.embed_title ?? "Security Alert"
 
   const content = [
-    "🚨🚨🚨 UNAUTHORIZED ADMIN ACCESS DETECTED 🚨🚨🚨",
+    headline,
     "",
     mention_line,
     "",
-    "⚠️ Non-admin user attempted to access admin page.",
+    `⚠️ ${description}`,
     "",
     `📍 Path: ${readPayloadValue(payload, "pathname")}`,
     `👤 Role: ${readPayloadValue(payload, "resolved_role")}`,
@@ -89,8 +94,8 @@ function buildSecurityAlertMessage(delivery: NotifyDelivery) {
     .join("\n")
 
   const embed = {
-    title: "🚨 Unauthorized Admin Access",
-    description: "Non-admin user attempted to access admin page.",
+    title: embed_title,
+    description,
     color: delivery.embed_color ?? 15158332,
     timestamp: new Date().toISOString(),
     fields: [
@@ -151,7 +156,11 @@ function buildPlainMessage(delivery: NotifyDelivery) {
   const mention_prefix = delivery.mention ? `${delivery.mention} ` : ""
   const fields = formatPayloadFields(delivery.payload)
   const priority_line =
-    delivery.priority === "high" ? "priority: high\n" : ""
+    delivery.priority === "high"
+      ? "priority: high\n"
+      : delivery.priority === "warning"
+        ? "priority: warning\n"
+        : ""
 
   return {
     username: delivery.title,

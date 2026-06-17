@@ -7,6 +7,7 @@ import type { NotifyEventName } from "@/core/notify/rules"
 
 export type SecurityAccessEventName =
   | "admin_page_unauthorized_access"
+  | "driver_page_unauthorized_access"
   | "admin_page_forbidden"
   | "admin_role_mismatch"
   | "auth_session_tampering"
@@ -14,7 +15,7 @@ export type SecurityAccessEventName =
 export type SecurityAccessEventInput = {
   request_id: string | null
   category: "security"
-  severity: "high" | "normal"
+  severity: "high" | "normal" | "warning"
   event: SecurityAccessEventName
   pathname: string
   user_uuid: string | null
@@ -28,6 +29,7 @@ export type SecurityAccessEventInput = {
 
 const notify_events = new Set<NotifyEventName>([
   "admin_page_unauthorized_access",
+  "driver_page_unauthorized_access",
 ])
 
 async function logAccessDebug(

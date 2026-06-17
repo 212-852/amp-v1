@@ -3,7 +3,7 @@ import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/re
 export type SecurityAccessArchiveInput = {
   request_id: string
   category: "security"
-  severity: "high" | "normal"
+  severity: "high" | "normal" | "warning"
   event: string
   pathname: string
   user_uuid: string | null

@@ -20,6 +20,15 @@ export type AmpRouteResult = AuthRouteResult & {
   title: string
 }
 
+type AccessZone = "admin" | "driver" | "user"
+
+const ZONE_ACCESS: Record<SessionRole, AccessZone[]> = {
+  admin: ["admin", "driver", "user"],
+  driver: ["driver", "user"],
+  user: ["user"],
+  guest: ["user"],
+}
+
 function homePathForRole(role: SessionRole) {
   if (role === "admin") {
     return "/admin"
@@ -56,33 +65,45 @@ function titleForPath(path: string) {
   return "App Top"
 }
 
-function guardedRoleForPath(pathname: string | null): SessionRole | null {
-  if (pathname?.startsWith("/admin")) {
+function resolveAccessZone(pathname: string): AccessZone | null {
+  if (pathname.startsWith("/admin")) {
     return "admin"
   }
 
-  if (pathname?.startsWith("/driver")) {
+  if (pathname.startsWith("/driver")) {
     return "driver"
+  }
+
+  if (pathname.startsWith("/app")) {
+    return "user"
   }
 
   return null
 }
 
+export function canAccessPath(role: SessionRole, pathname: string) {
+  const zone = resolveAccessZone(pathname)
+
+  if (!zone) {
+    return true
+  }
+
+  return ZONE_ACCESS[role].includes(zone)
+}
+
 export function resolveRoleRedirectPath(context: AuthContext, session: Session) {
   const pathname = context.requested_route ?? "/"
-  const homePath = homePathForRole(session.role)
-  const requiredRole = guardedRoleForPath(pathname)
 
-  if (requiredRole && requiredRole !== session.role) {
-    return homePath
+  if (!canAccessPath(session.role, pathname)) {
+    return homePathForRole(session.role)
   }
 
   if (pathname === "/" || pathname === "") {
-    return homePath
+    return homePathForRole(session.role)
   }
 
   if (pathname === "/app" && (session.role === "admin" || session.role === "driver")) {
-    return homePath
+    return homePathForRole(session.role)
   }
 
   return null
@@ -148,24 +169,20 @@ export function resolveAuthRoute(
   return resolveEntryPath(context, entrance, session, identity)
 }
 
-export type AdminAccessNotifyMeta = {
+export type GuardedAccessMeta = {
   request_id?: string | null
   user_agent?: string | null
   ip?: string | null
 }
 
-export async function emitAdminAccessNotifications(
+function buildAccessPayload(
   context: AuthContext,
   session: Session,
-  meta: AdminAccessNotifyMeta,
+  meta: GuardedAccessMeta,
 ) {
   const pathname = context.requested_route ?? ""
 
-  if (!pathname.startsWith("/admin")) {
-    return
-  }
-
-  const base_payload = {
+  return {
     pathname,
     role: session.role,
     tier: session.tier,
@@ -175,35 +192,81 @@ export async function emitAdminAccessNotifications(
     user_agent: meta.user_agent ?? null,
     ip: meta.ip ?? null,
   }
+}
 
-  if (session.role === "admin") {
-    const { notifyEvent } = await import("@/core/notify")
+export async function emitGuardedAccessSecurityEvents(
+  context: AuthContext,
+  session: Session,
+  meta: GuardedAccessMeta,
+) {
+  const pathname = context.requested_route ?? ""
+  const base_payload = buildAccessPayload(context, session, meta)
 
-    await notifyEvent({
-      event: "admin_page_accessed",
+  if (pathname.startsWith("/admin")) {
+    if (session.role === "admin") {
+      const { notifyEvent } = await import("@/core/notify")
+
+      await notifyEvent({
+        event: "admin_page_accessed",
+        request_id: meta.request_id ?? null,
+        payload: base_payload,
+      })
+      return
+    }
+
+    const { recordSecurityAccessEvent } = await import("@/core/access")
+
+    await recordSecurityAccessEvent({
       request_id: meta.request_id ?? null,
-      payload: base_payload,
+      category: "security",
+      severity: "high",
+      event: "admin_page_unauthorized_access",
+      pathname,
+      user_uuid: session.user_uuid,
+      visitor_uuid: session.visitor_uuid,
+      role: session.role,
+      tier: session.tier,
+      ip: meta.ip ?? null,
+      user_agent: meta.user_agent ?? null,
+      notify_payload: {
+        ...base_payload,
+        resolved_role: session.role,
+      },
     })
     return
   }
 
-  const { recordSecurityAccessEvent } = await import("@/core/access")
+  if (pathname.startsWith("/driver")) {
+    if (canAccessPath(session.role, pathname)) {
+      return
+    }
 
-  await recordSecurityAccessEvent({
-    request_id: meta.request_id ?? null,
-    category: "security",
-    severity: "high",
-    event: "admin_page_unauthorized_access",
-    pathname,
-    user_uuid: session.user_uuid,
-    visitor_uuid: session.visitor_uuid,
-    role: session.role,
-    tier: session.tier,
-    ip: meta.ip ?? null,
-    user_agent: meta.user_agent ?? null,
-    notify_payload: {
-      ...base_payload,
-      resolved_role: session.role,
-    },
-  })
+    const { recordSecurityAccessEvent } = await import("@/core/access")
+
+    await recordSecurityAccessEvent({
+      request_id: meta.request_id ?? null,
+      category: "security",
+      severity: "warning",
+      event: "driver_page_unauthorized_access",
+      pathname,
+      user_uuid: session.user_uuid,
+      visitor_uuid: session.visitor_uuid,
+      role: session.role,
+      tier: session.tier,
+      ip: meta.ip ?? null,
+      user_agent: meta.user_agent ?? null,
+      notify_payload: {
+        ...base_payload,
+        resolved_role: session.role,
+      },
+    })
+  }
+}
+
+export async function emitAdminAccessNotifications(
+  context: AuthContext,
+  session: Session,
+  meta: GuardedAccessMeta,
+) {
+  return emitGuardedAccessSecurityEvents(context, session, meta)
 }
