@@ -97,6 +97,48 @@ function readAlign(value: unknown) {
   return value === "center" ? "center" : "start"
 }
 
+function readAspectRatio(value: unknown) {
+  if (typeof value !== "string") {
+    return "20 / 13"
+  }
+
+  const parts = value.split(":")
+
+  if (parts.length !== 2) {
+    return "20 / 13"
+  }
+
+  const width = Number(parts[0])
+  const height = Number(parts[1])
+
+  if (!width || !height) {
+    return "20 / 13"
+  }
+
+  return `${width} / ${height}`
+}
+
+function readCarouselPayload(payload: ChatMessagePayload | null) {
+  if (payload?.type === "carousel" && Array.isArray(payload.contents)) {
+    return payload
+  }
+
+  const line = readRecord(payload?.line)
+  const line_contents = readRecord(line?.contents)
+
+  if (
+    line_contents?.type === "carousel" &&
+    Array.isArray(line_contents.contents)
+  ) {
+    return {
+      type: "carousel" as const,
+      contents: line_contents.contents,
+    }
+  }
+
+  return null
+}
+
 async function requestQuickMenu() {
   await fetch("/api/chat/room", {
     method: "POST",
@@ -117,12 +159,17 @@ function FlexHero({ node }: Readonly<{ node: FlexRecord }>) {
   }
 
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={url}
-      alt=""
-      className="block h-auto w-full rounded-t-[18px] object-cover"
-    />
+    <div
+      className="w-full shrink-0 overflow-hidden rounded-t-[18px] bg-[#eadfce]"
+      style={{ aspectRatio: readAspectRatio(node.aspectRatio) }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={url}
+        alt=""
+        className="block h-full w-full object-cover"
+      />
+    </div>
   )
 }
 
@@ -134,8 +181,12 @@ function FlexText({ node }: Readonly<{ node: FlexRecord }>) {
   }
 
   return (
-    <p
-      className={node.wrap === true ? "whitespace-pre-wrap" : ""}
+    <div
+      role="text"
+      className={[
+        "m-0 block w-full shrink-0",
+        node.wrap === true ? "whitespace-pre-wrap" : "",
+      ].join(" ")}
       style={{
         color: readText(node.color) || "#3D2A19",
         fontSize: readSize(node.size),
@@ -144,7 +195,7 @@ function FlexText({ node }: Readonly<{ node: FlexRecord }>) {
       }}
     >
       {text}
-    </p>
+    </div>
   )
 }
 
@@ -244,7 +295,7 @@ function FlexBox({
   return (
     <div
       className={[
-        "flex",
+        "flex w-full shrink-0",
         is_horizontal ? "flex-row" : "flex-col",
         align_items === "center" ? "items-center text-center" : "items-stretch",
       ].join(" ")}
@@ -312,12 +363,14 @@ function FlexBubble({
     return null
   }
 
+  const header = readRecord(bubble.header)
   const hero = readRecord(bubble.hero)
   const body = readRecord(bubble.body)
   const footer = readRecord(bubble.footer)
 
   return (
-    <article className="h-auto max-h-none w-[300px] max-w-[calc(100vw-76px)] shrink-0 snap-start overflow-hidden rounded-[18px] bg-white">
+    <article className="flex h-auto max-h-none w-[300px] max-w-[calc(100vw-76px)] shrink-0 snap-start flex-col self-start overflow-hidden rounded-[18px] bg-white">
+      {header ? <FlexBox node={header} onAction={onAction} /> : null}
       {hero ? <FlexHero node={hero} /> : null}
       {body ? <FlexBox node={body} onAction={onAction} /> : null}
       {footer ? <FlexBox node={footer} onAction={onAction} /> : null}
@@ -331,8 +384,9 @@ export default function FlexMessage({
   payload: ChatMessagePayload | null
 }>) {
   const { openOverlay } = useOverlay()
+  const carousel = readCarouselPayload(payload)
 
-  if (payload?.type !== "carousel" || !Array.isArray(payload.contents)) {
+  if (!carousel?.contents) {
     return null
   }
 
@@ -349,8 +403,8 @@ export default function FlexMessage({
 
   return (
     <div className="h-auto max-h-none w-full min-w-0 overflow-x-auto overflow-y-visible overscroll-x-contain pb-0 pt-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      <div className="flex w-max snap-x snap-mandatory gap-2">
-        {payload.contents.map((bubble, index) => (
+      <div className="flex w-max snap-x snap-mandatory items-start gap-2">
+        {carousel.contents.map((bubble, index) => (
           <FlexBubble
             key={index}
             bubble={readRecord(bubble) ?? {}}
