@@ -24,14 +24,44 @@ const tone_styles: Record<
   },
 }
 
+export type ToastAnchorRect = {
+  top: number
+  left: number
+  width: number
+  height: number
+  bottom: number
+  right: number
+}
+
 export type ToastItem = {
   id: string
   message: string
   tone: ToastTone
+  anchor_rect?: ToastAnchorRect | null
+  compact?: boolean
 }
 
-export function ToastView({ item }: { item: ToastItem }) {
+export function ToastView({
+  item,
+}: Readonly<{
+  item: ToastItem
+}>) {
   const styles = tone_styles[item.tone]
+
+  if (item.compact) {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className={[
+          "rounded-xl border px-3 py-2 text-[12px] font-medium leading-snug shadow-[0_8px_24px_rgba(0,0,0,0.12)]",
+          styles.container,
+        ].join(" ")}
+      >
+        {item.message}
+      </div>
+    )
+  }
 
   return (
     <div
@@ -51,22 +81,52 @@ export function ToastView({ item }: { item: ToastItem }) {
   )
 }
 
-export function ToastStack({ items }: { items: ToastItem[] }) {
+function AnchoredToastView({ item }: Readonly<{ item: ToastItem }>) {
+  if (!item.anchor_rect) {
+    return null
+  }
+
+  const center_x = item.anchor_rect.left + item.anchor_rect.width / 2
+
+  return (
+    <div
+      className="pointer-events-none fixed z-[200] max-w-[min(92vw,240px)] -translate-x-1/2"
+      style={{
+        top: item.anchor_rect.bottom + 6,
+        left: center_x,
+      }}
+    >
+      <ToastView item={{ ...item, compact: true }} />
+    </div>
+  )
+}
+
+export function ToastStack({ items }: Readonly<{ items: ToastItem[] }>) {
   if (items.length === 0) {
     return null
   }
 
+  const default_items = items.filter((item) => !item.anchor_rect)
+  const anchored_items = items.filter((item) => item.anchor_rect)
+
   return (
-    <div
-      className={[
-        "pointer-events-none fixed left-1/2 z-[200] flex w-[min(92vw,360px)] -translate-x-1/2 flex-col gap-2",
-        "bottom-[calc(16px+env(safe-area-inset-bottom,0px))]",
-        "md:bottom-auto md:top-[calc(88px+env(safe-area-inset-top,0px))]",
-      ].join(" ")}
-    >
-      {items.map((item) => (
-        <ToastView key={item.id} item={item} />
+    <>
+      {default_items.length > 0 ? (
+        <div
+          className={[
+            "pointer-events-none fixed left-1/2 z-[200] flex w-[min(92vw,360px)] -translate-x-1/2 flex-col gap-2",
+            "bottom-[calc(16px+env(safe-area-inset-bottom,0px))]",
+            "md:bottom-auto md:top-[calc(88px+env(safe-area-inset-top,0px))]",
+          ].join(" ")}
+        >
+          {default_items.map((item) => (
+            <ToastView key={item.id} item={item} />
+          ))}
+        </div>
+      ) : null}
+      {anchored_items.map((item) => (
+        <AnchoredToastView key={item.id} item={item} />
       ))}
-    </div>
+    </>
   )
 }

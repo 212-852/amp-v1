@@ -10,10 +10,10 @@ import {
 } from "react"
 import { createPortal } from "react-dom"
 
-import { ToastStack, type ToastItem } from "@/components/ui/toast"
+import { ToastStack, type ToastAnchorRect, type ToastItem } from "@/components/ui/toast"
 import type { ToastInput, ToastTone } from "@/components/ui/use_toast"
 
-const default_duration_ms = 3000
+const default_duration_ms = 2750
 
 type ToastContextValue = {
   showToast: (input: ToastInput) => void
@@ -26,7 +26,28 @@ function clampDuration(duration_ms: number | undefined) {
     return default_duration_ms
   }
 
-  return Math.min(3500, Math.max(2500, duration_ms))
+  return Math.min(3000, Math.max(2500, duration_ms))
+}
+
+function resolveAnchorRect(
+  anchor_ref: ToastInput["anchor_ref"],
+): ToastAnchorRect | null {
+  const element = anchor_ref?.current
+
+  if (!element) {
+    return null
+  }
+
+  const rect = element.getBoundingClientRect()
+
+  return {
+    top: rect.top,
+    left: rect.left,
+    width: rect.width,
+    height: rect.height,
+    bottom: rect.bottom,
+    right: rect.right,
+  }
 }
 
 export function ToastProvider({
@@ -58,6 +79,10 @@ export function ToastProvider({
       const id = crypto.randomUUID()
       const tone: ToastTone = input.tone ?? "info"
       const duration_ms = clampDuration(input.duration_ms)
+      const anchor_rect =
+        input.placement === "anchor"
+          ? resolveAnchorRect(input.anchor_ref)
+          : null
 
       set_items((current) => [
         ...current,
@@ -65,6 +90,8 @@ export function ToastProvider({
           id,
           message: input.message,
           tone,
+          anchor_rect,
+          compact: input.compact,
         },
       ])
 

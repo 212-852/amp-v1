@@ -61,6 +61,7 @@ export default function OpsHeader({
   const tierLabel = is_logged_in ? safe_session.tier : null
   const avatar_image_url = safe_session.image_url
   const menu_ref = useRef<HTMLDivElement>(null)
+  const concierge_toggle_ref = useRef<HTMLButtonElement>(null)
   const [menu_open, set_menu_open] = useState(false)
   const [is_logging_out, set_is_logging_out] = useState(false)
   const [concierge_available_state, set_concierge_available_state] = useState(
@@ -71,6 +72,10 @@ export default function OpsHeader({
     role: safe_session.role,
     tier: safe_session.tier,
   })
+
+  useEffect(() => {
+    set_concierge_available_state(concierge_available)
+  }, [concierge_available])
 
   useEffect(() => {
     if (!menu_open) {
@@ -156,6 +161,10 @@ export default function OpsHeader({
       set_concierge_available_state(payload.enabled)
       toast({
         tone: "success",
+        placement: "anchor",
+        anchor_ref: concierge_toggle_ref,
+        compact: true,
+        duration_ms: 2750,
         message: payload.enabled
           ? concierge_toggle_content.on_success[locale]
           : concierge_toggle_content.off_success[locale],
@@ -164,6 +173,10 @@ export default function OpsHeader({
       console.error("concierge toggle error", error)
       toast({
         tone: "error",
+        placement: "anchor",
+        anchor_ref: concierge_toggle_ref,
+        compact: true,
+        duration_ms: 2750,
         message: concierge_toggle_content.error[locale],
       })
     } finally {
@@ -235,6 +248,7 @@ export default function OpsHeader({
 
         <div className="flex shrink-0 items-center gap-2">
           <button
+            ref={concierge_toggle_ref}
             type="button"
             aria-label={
               concierge_available_state ? "Concierge ON" : "Concierge OFF"
@@ -245,15 +259,29 @@ export default function OpsHeader({
               can_toggle_concierge ? toggle_concierge_availability : undefined
             }
             className={[
-              "flex h-9 w-9 shrink-0 flex-row items-center justify-center gap-0.5 rounded-full border transition-colors",
+              "flex h-9 shrink-0 flex-row items-center justify-center gap-1 rounded-full border px-2 transition-colors",
               concierge_available_state
                 ? "border-[#22c55e] bg-[#22c55e] text-white"
                 : "border-[#d1d5db] bg-[#f3f4f6] text-neutral-900",
               !can_toggle_concierge ? "opacity-60" : "",
             ].join(" ")}
           >
-            <MessageCircle className="h-3 w-3 shrink-0" strokeWidth={1.8} />
-            <span className="text-[8px] font-semibold leading-none">
+            <span className="relative flex h-4 w-4 shrink-0 items-center justify-center">
+              <MessageCircle
+                className={[
+                  "h-4 w-4",
+                  concierge_available_state ? "text-white" : "text-neutral-400",
+                ].join(" ")}
+                strokeWidth={1.8}
+              />
+              {!concierge_available_state ? (
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-1/2 top-1/2 h-[1.5px] w-[18px] -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-full bg-neutral-600"
+                />
+              ) : null}
+            </span>
+            <span className="text-[12px] font-bold leading-none">
               {concierge_available_state ? "ON" : "OFF"}
             </span>
           </button>
