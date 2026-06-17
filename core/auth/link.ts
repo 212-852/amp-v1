@@ -113,7 +113,7 @@ async function linkParticipantsToUser(visitor_uuid: string, user_uuid: string) {
   const response = await fetch(
     restUrl(
       config,
-      "room_participants",
+      "participants",
       `visitor_uuid=eq.${encodeURIComponent(visitor_uuid)}&user_uuid=is.null`,
     ),
     {

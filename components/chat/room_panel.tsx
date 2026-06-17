@@ -3,37 +3,45 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import ChatMessageBubble from "@/components/chat/message_bubble"
+import { useRoomTyping } from "@/components/chat/use_room_typing"
 import { resolveTypingLabel } from "@/core/chat/rules"
 import type {
   ChatMessageRecord,
   ChatRoomMode,
   ChatRoomRecord,
-  ChatTypingRecord,
+  PresenceView,
 } from "@/core/chat/types"
-import { useLocale } from "@/src/components/locale/provider"
 import type { Locale } from "@/src/lib/locale"
 
 type ChatRoomPanelProps = {
   initial_room: ChatRoomRecord
   initial_messages: ChatMessageRecord[]
-  initial_typing: ChatTypingRecord[]
+  initial_presence?: PresenceView[]
   participant_uuid: string
+  show_presence?: boolean
 }
 
 export default function ChatRoomPanel({
   initial_room,
   initial_messages,
-  initial_typing,
+  initial_presence = [],
   participant_uuid,
+  show_presence = false,
 }: Readonly<ChatRoomPanelProps>) {
-  const { locale } = useLocale()
   const [room, set_room] = useState(initial_room)
   const [messages, set_messages] = useState(initial_messages)
-  const [typing, set_typing] = useState(initial_typing)
+  const [presence, set_presence] = useState(initial_presence)
+  const typing = useRoomTyping({
+    room_uuid: room.room_uuid,
+    participant_uuid,
+  })
   const bottom_ref = useRef<HTMLDivElement>(null)
 
   const refresh = useCallback(async () => {
-    const response = await fetch("/api/chat/room", { cache: "no-store" })
+    const query = show_presence
+      ? `?room_uuid=${encodeURIComponent(room.room_uuid)}`
+      : ""
+    const response = await fetch(`/api/chat/room${query}`, { cache: "no-store" })
 
     if (!response.ok) {
       return
@@ -42,17 +50,16 @@ export default function ChatRoomPanel({
     const payload = (await response.json()) as {
       room: ChatRoomRecord
       messages: ChatMessageRecord[]
-      typing: ChatTypingRecord[]
+      presence?: PresenceView[]
     }
 
     set_room(payload.room)
     set_messages(payload.messages)
-    set_typing(
-      payload.typing.filter(
-        (entry) => entry.participant_uuid !== participant_uuid,
-      ),
-    )
-  }, [participant_uuid])
+
+    if (payload.presence) {
+      set_presence(payload.presence)
+    }
+  }, [room.room_uuid, show_presence])
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -85,6 +92,21 @@ export default function ChatRoomPanel({
     }
   }, [refresh])
 
+  useEffect(() => {
+    function handle_message_created() {
+      void refresh()
+    }
+
+    window.addEventListener("amp-chat-message-created", handle_message_created)
+
+    return () => {
+      window.removeEventListener(
+        "amp-chat-message-created",
+        handle_message_created,
+      )
+    }
+  }, [refresh])
+
   const typing_label =
     typing.length > 0
       ? resolveTypingLabel(
@@ -95,9 +117,25 @@ export default function ChatRoomPanel({
 
   return (
     <section className="rounded-[30px] bg-[#fdfaf6] px-4 py-4 shadow-[inset_0_0_0_1px_#dcc7aa]">
+      {show_presence && presence.length > 0 ? (
+        <div className="mb-3 flex flex-wrap gap-2">
+          {presence.map((entry) => (
+            <span
+              key={entry.participant_uuid}
+              className="rounded-full bg-[#efe4d4] px-3 py-1 text-[11px] font-medium text-[#6f5842]"
+            >
+              {entry.display_name}
+            </span>
+          ))}
+        </div>
+      ) : null}
       <div className="max-h-[280px] space-y-3 overflow-y-auto pr-1">
         {messages.map((message) => (
-          <ChatMessageBubble key={message.message_uuid} message={message} />
+          <ChatMessageBubble
+            key={message.message_uuid}
+            message={message}
+            room_locale={(room.locale as Locale) ?? "ja"}
+          />
         ))}
         {typing_label ? (
           <p className="px-2 text-[12px] font-medium text-[#8c7358]">

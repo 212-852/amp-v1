@@ -14,8 +14,16 @@ export async function deliverOutput(
   target: OutputTarget,
   message: OutputMessage,
 ): Promise<DeliveryResult[]> {
+  if (
+    target.channel === "web" ||
+    target.channel === "pwa" ||
+    target.channel === "liff"
+  ) {
+    return [await deliverWeb(null, message)]
+  }
+
   const contacts = await loadOutputContacts(target)
-  const destinations = resolveOutputDestinations(contacts)
+  const destinations = resolveOutputDestinations(contacts, target)
 
   return Promise.all(
     destinations.map(async (destination) => {

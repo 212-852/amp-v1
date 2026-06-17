@@ -347,12 +347,16 @@ function MessageInputRow({
   )
 }
 
-function BottomMenuRow() {
+function BottomMenuRow({
+  onQuickMenu,
+}: Readonly<{
+  onQuickMenu: () => void
+}>) {
   const { openOverlay } = useOverlay()
   const { locale } = useLocale()
   const items = [
     { label: content.my_page[locale], icon: User, overlayType: "my_page" },
-    { label: content.quick_menu[locale], icon: MessageCircle },
+    { label: content.quick_menu[locale], icon: MessageCircle, quickMenu: true },
     { label: content.menu[locale], icon: Menu, overlayType: "menu" },
   ]
 
@@ -369,6 +373,11 @@ function BottomMenuRow() {
             key={item.label}
             type="button"
             onClick={() => {
+              if (item.quickMenu) {
+                onQuickMenu()
+                return
+              }
+
               if (item.overlayType) {
                 openOverlay({
                   type: item.overlayType as OverlayType,
@@ -413,10 +422,6 @@ export default function AppFooter({
   const { locale } = useLocale()
   const { openOverlay } = useOverlay()
   const isInputMode = footerMode === "input"
-
-  useEffect(() => {
-    setAssistantMode(initial_mode === "concierge" ? "concierge" : "bot")
-  }, [initial_mode])
 
   function toggleFooterMode() {
     setFooterMode((current) => (current === "normal" ? "input" : "normal"))
@@ -470,6 +475,20 @@ export default function AppFooter({
       },
       body: JSON.stringify({ message }),
     })
+
+    window.dispatchEvent(new CustomEvent("amp-chat-message-created"))
+  }
+
+  async function handleQuickMenu() {
+    await fetch("/api/chat/room", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ bot_message_key: "quick_menu" }),
+    }).catch(() => null)
+
+    window.dispatchEvent(new CustomEvent("amp-chat-message-created"))
   }
 
   function handleTyping(is_typing: boolean) {
@@ -572,7 +591,7 @@ export default function AppFooter({
 
           {!isInputMode ? (
             <div className="mt-auto h-[102px] shrink-0">
-              <BottomMenuRow />
+              <BottomMenuRow onQuickMenu={() => void handleQuickMenu()} />
             </div>
           ) : null}
         </div>

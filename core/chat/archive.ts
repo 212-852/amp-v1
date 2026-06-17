@@ -1,15 +1,15 @@
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
 import type {
+  BotMessageKey,
+  BotMessageRecord,
   ChatLocale,
-  ChatMessageKind,
   ChatMessageRecord,
+  ChatMessageStatus,
   ChatMessageType,
   ChatParticipantRecord,
+  ChatParticipantRole,
   ChatRoomMode,
   ChatRoomRecord,
-  ChatTranslations,
-  ChatTypingRecord,
-  TranslationStatus,
 } from "@/core/chat/types"
 
 function requireConfig() {
@@ -75,39 +75,59 @@ export async function setConciergeAvailability(input: {
   return { available: input.available }
 }
 
-export async function findRoomForOwner(input: {
-  visitor_uuid: string | null
-  user_uuid: string | null
-}) {
+async function findParticipantRow(filter: string) {
   const config = getRestConfig()
 
   if (!config) {
     return null
   }
 
+  const response = await fetch(
+    restUrl(config, "participants", `${filter}&select=*&order=joined_at.asc&limit=1`),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return null
+  }
+
+  const rows = (await response.json()) as ChatParticipantRecord[]
+  return rows[0] ?? null
+}
+
+export async function findRoomForIdentity(input: {
+  visitor_uuid: string | null
+  user_uuid: string | null
+}) {
   if (input.user_uuid) {
-    const by_user = await fetchRoomByFilter(
-      config,
-      `owner_user_uuid=eq.${encodeURIComponent(input.user_uuid)}`,
+    const participant = await findParticipantRow(
+      `user_uuid=eq.${encodeURIComponent(input.user_uuid)}&role=eq.user`,
     )
 
-    if (by_user) {
-      return by_user
+    if (participant) {
+      return findRoomByUuid(participant.room_uuid)
     }
   }
 
   if (input.visitor_uuid) {
-    const by_visitor = await fetchRoomByFilter(
-      config,
-      `owner_visitor_uuid=eq.${encodeURIComponent(input.visitor_uuid)}`,
+    const participant = await findParticipantRow(
+      `visitor_uuid=eq.${encodeURIComponent(input.visitor_uuid)}&role=eq.guest`,
     )
 
-    if (by_visitor) {
-      if (input.user_uuid && !by_visitor.owner_user_uuid) {
-        return linkRoomToUser(by_visitor.room_uuid, input.user_uuid)
+    if (participant) {
+      const room = await findRoomByUuid(participant.room_uuid)
+
+      if (room && input.user_uuid) {
+        await linkParticipantToUser({
+          participant_uuid: participant.participant_uuid,
+          user_uuid: input.user_uuid,
+        })
       }
 
-      return by_visitor
+      return room
     }
   }
 
@@ -141,31 +161,18 @@ export async function findVisitorUuidByUser(user_uuid: string) {
   return rows[0]?.visitor_uuid ?? null
 }
 
-async function fetchRoomByFilter(
-  config: NonNullable<ReturnType<typeof getRestConfig>>,
-  filter: string,
-) {
-  const response = await fetch(
-    restUrl(config, "rooms", `${filter}&select=*&order=created_at.asc&limit=1`),
-    {
-      headers: restHeaders(config),
-      cache: "no-store",
-    },
-  )
-
-  if (!response.ok) {
-    return null
-  }
-
-  const rows = (await response.json()) as ChatRoomRecord[]
-  return rows[0] ?? null
-}
-
-export async function linkRoomToUser(room_uuid: string, user_uuid: string) {
+export async function linkParticipantToUser(input: {
+  participant_uuid: string
+  user_uuid: string
+}) {
   const config = requireConfig()
 
   const response = await fetch(
-    restUrl(config, "rooms", `room_uuid=eq.${encodeURIComponent(room_uuid)}&select=*`),
+    restUrl(
+      config,
+      "participants",
+      `participant_uuid=eq.${encodeURIComponent(input.participant_uuid)}&select=*`,
+    ),
     {
       method: "PATCH",
       headers: {
@@ -173,8 +180,8 @@ export async function linkRoomToUser(room_uuid: string, user_uuid: string) {
         Prefer: "return=representation",
       },
       body: JSON.stringify({
-        owner_user_uuid: user_uuid,
-        updated_at: new Date().toISOString(),
+        user_uuid: input.user_uuid,
+        role: "user",
       }),
       cache: "no-store",
     },
@@ -182,28 +189,18 @@ export async function linkRoomToUser(room_uuid: string, user_uuid: string) {
 
   if (!response.ok) {
     const error = await readRestError(response)
-    throw new Error(`Failed to link room to user: ${error.message ?? "unknown"}`)
+    throw new Error(`Failed to link participant to user: ${error.message ?? "unknown"}`)
   }
 
-  const rows = (await response.json()) as ChatRoomRecord[]
+  const rows = (await response.json()) as ChatParticipantRecord[]
   return rows[0]
 }
 
 export async function updateRoomChannel(input: {
   room_uuid: string
   channel: ChatRoomRecord["channel"]
-  user_uuid?: string | null
 }) {
   const config = requireConfig()
-
-  const patch: Record<string, unknown> = {
-    channel: input.channel,
-    updated_at: new Date().toISOString(),
-  }
-
-  if (input.user_uuid) {
-    patch.owner_user_uuid = input.user_uuid
-  }
 
   const response = await fetch(
     restUrl(config, "rooms", `room_uuid=eq.${encodeURIComponent(input.room_uuid)}&select=*`),
@@ -213,7 +210,10 @@ export async function updateRoomChannel(input: {
         ...restHeaders(config),
         Prefer: "return=representation",
       },
-      body: JSON.stringify(patch),
+      body: JSON.stringify({
+        channel: input.channel,
+        updated_at: new Date().toISOString(),
+      }),
       cache: "no-store",
     },
   )
@@ -227,12 +227,41 @@ export async function updateRoomChannel(input: {
   return rows[0]
 }
 
+export async function updateRoomLocale(input: {
+  room_uuid: string
+  locale: ChatLocale
+}) {
+  const config = requireConfig()
+
+  const response = await fetch(
+    restUrl(config, "rooms", `room_uuid=eq.${encodeURIComponent(input.room_uuid)}&select=*`),
+    {
+      method: "PATCH",
+      headers: {
+        ...restHeaders(config),
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        locale: input.locale,
+        updated_at: new Date().toISOString(),
+      }),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+    throw new Error(`Failed to update room locale: ${error.message ?? "unknown"}`)
+  }
+
+  const rows = (await response.json()) as ChatRoomRecord[]
+  return rows[0]
+}
+
 export async function insertRoom(input: {
   mode: ChatRoomMode
   locale: ChatLocale
   channel: ChatRoomRecord["channel"]
-  owner_visitor_uuid: string | null
-  owner_user_uuid: string | null
 }) {
   const config = requireConfig()
 
@@ -245,17 +274,6 @@ export async function insertRoom(input: {
     body: JSON.stringify(input),
     cache: "no-store",
   })
-
-  if (response.status === 409) {
-    const existing = await findRoomForOwner({
-      visitor_uuid: input.owner_visitor_uuid,
-      user_uuid: input.owner_user_uuid,
-    })
-
-    if (existing) {
-      return existing
-    }
-  }
 
   if (!response.ok) {
     const error = await readRestError(response)
@@ -297,6 +315,33 @@ export async function updateRoomMode(input: {
   return rows[0]
 }
 
+export async function findRoomByUuid(room_uuid: string) {
+  const config = getRestConfig()
+
+  if (!config) {
+    return null
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "rooms",
+      `room_uuid=eq.${encodeURIComponent(room_uuid)}&select=*&limit=1`,
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return null
+  }
+
+  const rows = (await response.json()) as ChatRoomRecord[]
+  return rows[0] ?? null
+}
+
 export async function findParticipant(input: {
   room_uuid: string
   visitor_uuid: string | null
@@ -319,7 +364,7 @@ export async function findParticipant(input: {
   }
 
   const response = await fetch(
-    restUrl(config, "room_participants", `${filter}&select=*&limit=1`),
+    restUrl(config, "participants", `${filter}&select=*&limit=1`),
     {
       headers: restHeaders(config),
       cache: "no-store",
@@ -334,24 +379,55 @@ export async function findParticipant(input: {
   return rows[0] ?? null
 }
 
+export async function loadRoomParticipants(room_uuid: string) {
+  const config = getRestConfig()
+
+  if (!config) {
+    return []
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "participants",
+      `room_uuid=eq.${encodeURIComponent(room_uuid)}&select=*&order=joined_at.asc`,
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return []
+  }
+
+  return (await response.json()) as ChatParticipantRecord[]
+}
+
 export async function insertParticipant(input: {
   room_uuid: string
-  role: ChatParticipantRecord["role"]
+  role: ChatParticipantRole
   visitor_uuid: string | null
   user_uuid: string | null
-  display_name: string | null
 }) {
   const config = requireConfig()
 
   const response = await fetch(
-    restUrl(config, "room_participants", "select=*"),
+    restUrl(config, "participants", "select=*"),
     {
       method: "POST",
       headers: {
         ...restHeaders(config),
         Prefer: "return=representation",
       },
-      body: JSON.stringify(input),
+      body: JSON.stringify({
+        room_uuid: input.room_uuid,
+        role: input.role,
+        visitor_uuid: input.visitor_uuid,
+        user_uuid: input.user_uuid,
+        joined_at: new Date().toISOString(),
+      }),
       cache: "no-store",
     },
   )
@@ -365,19 +441,53 @@ export async function insertParticipant(input: {
   return rows[0]
 }
 
+export async function loadBotMessage(input: {
+  key: BotMessageKey
+  locale: ChatLocale
+}) {
+  const config = requireConfig()
+  const locales = input.locale === "ja" ? ["ja"] : [input.locale, "ja"]
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "bot_messages",
+      [
+        `key=eq.${encodeURIComponent(input.key)}`,
+        `locale=in.(${locales.map((locale) => encodeURIComponent(locale)).join(",")})`,
+        "select=*",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+    throw new Error(`Failed to load bot message: ${error.message ?? "unknown"}`)
+  }
+
+  const rows = (await response.json()) as BotMessageRecord[]
+  const localized = rows.find((row) => row.locale === input.locale)
+  const fallback = rows.find((row) => row.locale === "ja")
+  const message = localized ?? fallback
+
+  if (!message) {
+    throw new Error(`Bot message is missing: ${input.key}`)
+  }
+
+  return message
+}
+
 export async function insertMessage(input: {
   message_uuid?: string
   room_uuid: string
   participant_uuid: string | null
-  source_channel: ChatMessageRecord["source_channel"]
-  kind: ChatMessageKind
   type: ChatMessageType
-  body_original: string
-  original_locale: ChatLocale
-  body_display: string
-  display_locale: ChatLocale
-  translations: ChatTranslations
-  translation_status: TranslationStatus
+  status?: ChatMessageStatus
+  body: string
   payload: Record<string, unknown> | null
 }) {
   const config = requireConfig()
@@ -388,7 +498,10 @@ export async function insertMessage(input: {
       ...restHeaders(config),
       Prefer: "return=representation",
     },
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      ...input,
+      status: input.status ?? "sent",
+    }),
     cache: "no-store",
   })
 
@@ -427,110 +540,6 @@ export async function loadRoomMessages(room_uuid: string, limit = 50) {
   return (await response.json()) as ChatMessageRecord[]
 }
 
-export async function upsertTypingState(input: {
-  room_uuid: string
-  participant_uuid: string
-  display_name: string
-  locale: ChatLocale
-}) {
-  const config = requireConfig()
-
-  const response = await fetch(
-    restUrl(config, "room_typing_states", "on_conflict=room_uuid,participant_uuid"),
-    {
-      method: "POST",
-      headers: {
-        ...restHeaders(config),
-        Prefer: "resolution=merge-duplicates,return=minimal",
-      },
-      body: JSON.stringify({
-        ...input,
-        updated_at: new Date().toISOString(),
-      }),
-      cache: "no-store",
-    },
-  )
-
-  if (!response.ok) {
-    const error = await readRestError(response)
-    throw new Error(`Failed to update typing state: ${error.message ?? "unknown"}`)
-  }
-}
-
-export async function clearTypingState(input: {
-  room_uuid: string
-  participant_uuid: string
-}) {
-  const config = getRestConfig()
-
-  if (!config) {
-    return
-  }
-
-  await fetch(
-    restUrl(
-      config,
-      "room_typing_states",
-      `room_uuid=eq.${encodeURIComponent(input.room_uuid)}&participant_uuid=eq.${encodeURIComponent(input.participant_uuid)}`,
-    ),
-    {
-      method: "DELETE",
-      headers: restHeaders(config),
-      cache: "no-store",
-    },
-  )
-}
-
-export async function clearStaleTypingStates(
-  room_uuid: string,
-  cutoff_iso: string,
-) {
-  const config = getRestConfig()
-
-  if (!config) {
-    return
-  }
-
-  await fetch(
-    restUrl(
-      config,
-      "room_typing_states",
-      `room_uuid=eq.${encodeURIComponent(room_uuid)}&updated_at=lt.${encodeURIComponent(cutoff_iso)}`,
-    ),
-    {
-      method: "DELETE",
-      headers: restHeaders(config),
-      cache: "no-store",
-    },
-  )
-}
-
-export async function loadTypingStates(room_uuid: string) {
-  const config = getRestConfig()
-
-  if (!config) {
-    return []
-  }
-
-  const response = await fetch(
-    restUrl(
-      config,
-      "room_typing_states",
-      `room_uuid=eq.${encodeURIComponent(room_uuid)}&select=*&order=updated_at.desc`,
-    ),
-    {
-      headers: restHeaders(config),
-      cache: "no-store",
-    },
-  )
-
-  if (!response.ok) {
-    return []
-  }
-
-  return (await response.json()) as ChatTypingRecord[]
-}
-
 export async function countRoomMessages(room_uuid: string) {
   const config = getRestConfig()
 
@@ -566,4 +575,37 @@ export async function countRoomMessages(room_uuid: string) {
 
   const rows = (await response.json()) as Array<{ message_uuid: string }>
   return rows.length
+}
+
+export async function loadUserDisplayNames(user_uuids: string[]) {
+  const config = getRestConfig()
+
+  if (!config || user_uuids.length === 0) {
+    return new Map<string, string>()
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "users",
+      `user_uuid=in.(${user_uuids.map((uuid) => encodeURIComponent(uuid)).join(",")})&select=user_uuid,display_name`,
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return new Map<string, string>()
+  }
+
+  const rows = (await response.json()) as Array<{
+    user_uuid: string
+    display_name: string | null
+  }>
+
+  return new Map(
+    rows.map((row) => [row.user_uuid, row.display_name?.trim() || row.user_uuid]),
+  )
 }

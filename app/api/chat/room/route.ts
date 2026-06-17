@@ -1,26 +1,31 @@
 import {
-  getConciergeAvailabilityState,
-  handleChatModeSwitch,
-  handleChatTyping,
+  handleBotFixedMessage,
   handleIncomingChatMessage,
+  resolveAdminChatRoom,
   resolveChatRoom,
-  toggleConciergeAvailability,
 } from "@/core/chat/action"
 import { resolveChatApiSession } from "@/core/chat/api"
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const { context, session } = await resolveChatApiSession()
-    const state = await resolveChatRoom(session, {
-      source_channel: context.source_channel,
-      locale: context.locale,
-    })
+    const room_uuid = new URL(request.url).searchParams.get("room_uuid")
+
+    const state = room_uuid
+      ? await resolveAdminChatRoom(room_uuid, session, {
+          source_channel: context.source_channel,
+          locale: context.locale,
+        })
+      : await resolveChatRoom(session, {
+          source_channel: context.source_channel,
+          locale: context.locale,
+        })
 
     return Response.json({
       room: state.room,
       participant: state.participant,
       messages: state.messages,
-      typing: state.typing,
+      presence: state.presence,
       concierge_available: state.concierge_available,
     })
   } catch (error) {
@@ -38,6 +43,18 @@ export async function POST(request: Request) {
     const { context, session } = await resolveChatApiSession()
     const body = (await request.json().catch(() => ({}))) as {
       message?: string
+      bot_message_key?: "quick_menu"
+    }
+
+    if (body.bot_message_key) {
+      const message = await handleBotFixedMessage({
+        key: body.bot_message_key,
+        source_channel: context.source_channel,
+        locale: context.locale,
+        session,
+      })
+
+      return Response.json({ message })
     }
 
     if (!body.message) {

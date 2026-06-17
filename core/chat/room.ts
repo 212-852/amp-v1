@@ -1,20 +1,20 @@
 import {
-  clearStaleTypingStates,
   findParticipant,
-  findRoomForOwner,
+  findRoomByUuid,
+  findRoomForIdentity,
   insertParticipant,
   insertRoom,
   loadConciergeAvailability,
   loadRoomMessages,
-  loadTypingStates,
   updateRoomChannel,
+  updateRoomLocale,
 } from "@/core/chat/archive"
 import {
   resolveChatLocale,
-  resolveParticipantDisplayName,
   resolveParticipantRole,
 } from "@/core/chat/context"
 import { bootstrapRoomWelcome } from "@/core/chat/message"
+import { loadOnlinePresenceViews } from "@/core/chat/presence"
 import type {
   ChatContext,
   ChatRoomBootstrapResult,
@@ -33,6 +33,21 @@ function resolveRoomIdentity(context: ChatContext, session: Session) {
   return { visitor_uuid, user_uuid }
 }
 
+function resolveOwnerParticipantRole(
+  session: Session,
+  user_uuid: string | null,
+): "guest" | "user" {
+  if (user_uuid && session.role === "user") {
+    return "user"
+  }
+
+  if (user_uuid) {
+    return "user"
+  }
+
+  return "guest"
+}
+
 export async function bootstrapChatRoom(
   context: ChatContext,
   session: Session,
@@ -40,7 +55,7 @@ export async function bootstrapChatRoom(
   const identity = resolveRoomIdentity(context, session)
   const locale = resolveChatLocale(context.locale, null)
 
-  let room = await findRoomForOwner(identity)
+  let room = await findRoomForIdentity(identity)
   let room_created = false
 
   if (!room) {
@@ -48,19 +63,23 @@ export async function bootstrapChatRoom(
       mode: "bot",
       locale,
       channel: context.source_channel,
-      owner_visitor_uuid: identity.user_uuid ? null : identity.visitor_uuid,
-      owner_user_uuid: identity.user_uuid,
     })
     room_created = true
   } else {
     room = await updateRoomChannel({
       room_uuid: room.room_uuid,
       channel: context.source_channel,
-      user_uuid: identity.user_uuid,
     })
+
+    if (room.locale !== locale) {
+      room = await updateRoomLocale({
+        room_uuid: room.room_uuid,
+        locale,
+      })
+    }
   }
 
-  const participant_role = resolveParticipantRole(session.role)
+  const owner_role = resolveOwnerParticipantRole(session, identity.user_uuid)
   let participant = await findParticipant({
     room_uuid: room.room_uuid,
     visitor_uuid: identity.visitor_uuid,
@@ -71,22 +90,19 @@ export async function bootstrapChatRoom(
   if (!participant) {
     participant = await insertParticipant({
       room_uuid: room.room_uuid,
-      role: participant_role,
+      role: owner_role,
       visitor_uuid: identity.visitor_uuid,
       user_uuid: identity.user_uuid,
-      display_name: resolveParticipantDisplayName(session, participant_role),
     })
     participant_created = true
   }
 
-  if (room_created) {
-    await bootstrapRoomWelcome({
-      room,
-      participant,
-      session,
-      source_channel: context.source_channel,
-    })
-  }
+  await bootstrapRoomWelcome({
+    room,
+    participant,
+    session,
+    source_channel: context.source_channel,
+  })
 
   return {
     room,
@@ -108,21 +124,63 @@ export async function loadChatRoomState(
   session: Session,
 ): Promise<ChatRoomState> {
   const { room, participant } = await bootstrapChatRoom(context, session)
-  const cutoff = new Date(Date.now() - 5000).toISOString()
-
-  await clearStaleTypingStates(room.room_uuid, cutoff)
-
-  const typing = (await loadTypingStates(room.room_uuid)).filter(
-    (entry) =>
-      entry.participant_uuid !== participant.participant_uuid &&
-      entry.updated_at >= cutoff,
-  )
 
   return {
     room,
     participant,
     messages: await loadRoomMessages(room.room_uuid),
-    typing,
+    presence: await loadOnlinePresenceViews(room.room_uuid),
+    concierge_available: await loadConciergeAvailability(),
+  }
+}
+
+export async function loadChatRoomStateByUuid(
+  room_uuid: string,
+  session: Session,
+  source_channel: Session["source_channel"],
+  locale?: string | null,
+): Promise<ChatRoomState | null> {
+  const room = await findRoomByUuid(room_uuid)
+
+  if (!room) {
+    return null
+  }
+
+  const identity = resolveRoomIdentity(
+    {
+      source_channel,
+      locale: resolveChatLocale(locale, room.locale),
+      visitor_uuid: session.visitor_uuid,
+      user_uuid: session.user_uuid,
+      session_role: session.role,
+      display_name: session.display_name,
+      participant_uuid: null,
+      room_uuid,
+    },
+    session,
+  )
+
+  let participant = await findParticipant({
+    room_uuid: room.room_uuid,
+    visitor_uuid: identity.visitor_uuid,
+    user_uuid: identity.user_uuid,
+  })
+
+  if (!participant) {
+    const participant_role = resolveParticipantRole(session.role)
+    participant = await insertParticipant({
+      room_uuid: room.room_uuid,
+      role: participant_role,
+      visitor_uuid: identity.visitor_uuid,
+      user_uuid: identity.user_uuid,
+    })
+  }
+
+  return {
+    room,
+    participant,
+    messages: await loadRoomMessages(room.room_uuid),
+    presence: await loadOnlinePresenceViews(room.room_uuid),
     concierge_available: await loadConciergeAvailability(),
   }
 }

@@ -16,7 +16,7 @@ export default function AppChatSection({
     <ChatRoomPanel
       initial_room={chat_state.room}
       initial_messages={chat_state.messages}
-      initial_typing={chat_state.typing}
+      initial_presence={chat_state.presence}
       participant_uuid={chat_state.participant.participant_uuid}
     />
   )

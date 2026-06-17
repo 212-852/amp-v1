@@ -1,7 +1,11 @@
 import type { Session } from "@/core/auth/types"
 import {
   type ChatLocale,
+  type BotMessageKey,
   type ChatMessageKind,
+  type ChatMessageMeta,
+  type ChatMessagePayload,
+  type ChatMessageRecord,
   type ChatMessageType,
   type ChatRoomMode,
   type ChatTranslations,
@@ -9,45 +13,10 @@ import {
   CHAT_MESSAGE_TYPES,
 } from "@/core/chat/types"
 
-export const WELCOME_MESSAGES: Record<ChatLocale, string> = {
-  ja: "こんにちは！PET TAXIへようこそ。ご用件をお知らせください。",
-  en: "Hello! Welcome to PET TAXI. How can we help you today?",
-  es: "Hola! Bienvenido a PET TAXI. Como podemos ayudarte hoy?",
-}
-
-export const MODE_SWITCH_MESSAGES: Record<
-  ChatRoomMode,
-  Record<ChatLocale, string>
-> = {
-  bot: {
-    ja: "Botモードに切り替えました。",
-    en: "Switched to Bot mode.",
-    es: "Cambiado al modo Bot.",
-  },
-  concierge: {
-    ja: "Conciergeモードに切り替えました。",
-    en: "Switched to Concierge mode.",
-    es: "Cambiado al modo Concierge.",
-  },
-  group: {
-    ja: "グループモードに切り替えました。",
-    en: "Switched to Group mode.",
-    es: "Cambiado al modo Group.",
-  },
-}
-
 export const TYPING_LABELS: Record<ChatLocale, string> = {
   ja: "{name}が入力中",
   en: "{name} is typing",
   es: "{name} esta escribiendo",
-}
-
-export function resolveWelcomeMessage(locale: ChatLocale) {
-  return WELCOME_MESSAGES[locale] ?? WELCOME_MESSAGES.ja
-}
-
-export function resolveModeSwitchMessage(mode: ChatRoomMode, locale: ChatLocale) {
-  return MODE_SWITCH_MESSAGES[mode][locale] ?? MODE_SWITCH_MESSAGES[mode].ja
 }
 
 export function resolveTypingLabel(locale: ChatLocale, name: string) {
@@ -66,8 +35,98 @@ export function assertChatMessageType(value: string): ChatMessageType {
   return value
 }
 
+export function readMessageMeta(
+  payload: ChatMessagePayload | null | undefined,
+): ChatMessageMeta {
+  const meta = payload?.meta
+
+  if (!meta || typeof meta !== "object" || Array.isArray(meta)) {
+    return {}
+  }
+
+  return meta
+}
+
+export function readMessageSourceKind(
+  message: ChatMessageRecord,
+  fallback: ChatMessageKind = "user",
+): ChatMessageKind {
+  const kind = readMessageMeta(message.payload).source_kind
+
+  if (
+    kind === "user" ||
+    kind === "system" ||
+    kind === "bot" ||
+    kind === "concierge"
+  ) {
+    return kind
+  }
+
+  if (message.type === "system") {
+    return "system"
+  }
+
+  return fallback
+}
+
+export function resolveMessageOriginalLocale(
+  message: ChatMessageRecord,
+  room_locale: ChatLocale,
+): ChatLocale {
+  return readMessageMeta(message.payload).original_locale ?? room_locale
+}
+
+export function resolveMessageDisplayLocale(
+  message: ChatMessageRecord,
+  room_locale: ChatLocale,
+): ChatLocale {
+  return readMessageMeta(message.payload).display_locale ?? room_locale
+}
+
+export function resolveMessageTranslations(
+  message: ChatMessageRecord,
+): ChatTranslations {
+  return readMessageMeta(message.payload).translations ?? {}
+}
+
+export function resolveMessageBodyOriginal(message: ChatMessageRecord) {
+  return message.body
+}
+
+export function resolveMessageBodyDisplay(
+  message: ChatMessageRecord,
+  room_locale: ChatLocale,
+) {
+  const meta = readMessageMeta(message.payload)
+  const translations = meta.translations ?? {}
+  const display_locale = meta.display_locale ?? room_locale
+  const original_locale = meta.original_locale ?? room_locale
+
+  if (original_locale === display_locale) {
+    return message.body
+  }
+
+  return translations[display_locale] ?? message.body
+}
+
+export function hasMessageTranslation(
+  message: ChatMessageRecord,
+  room_locale: ChatLocale,
+) {
+  const meta = readMessageMeta(message.payload)
+  const translations = meta.translations ?? {}
+  const display_locale = meta.display_locale ?? room_locale
+  const original_locale = meta.original_locale ?? room_locale
+
+  return (
+    original_locale !== display_locale ||
+    Object.keys(translations).length > 0 ||
+    resolveMessageBodyDisplay(message, room_locale) !== message.body
+  )
+}
+
 export function resolveArchivedMessageType(input: {
-  kind: ChatMessageKind
+  source_kind: ChatMessageKind
   type?: ChatMessageType | null
 }): ChatMessageType {
   if (input.type && isChatMessageType(input.type)) {
@@ -78,7 +137,7 @@ export function resolveArchivedMessageType(input: {
     return input.type
   }
 
-  if (input.kind === "system") {
+  if (input.source_kind === "system") {
     return "system"
   }
 
@@ -150,6 +209,14 @@ export function assertRoomMode(mode: string): ChatRoomMode {
   throw new Error(`Invalid room mode: ${mode}`)
 }
 
+export function resolveModeChangeSystemMessage(mode: ChatRoomMode) {
+  if (mode === "group") {
+    return "Group support started"
+  }
+
+  return `Room mode changed to ${mode}`
+}
+
 export function resolveInitialRoomMode(session: Session): ChatRoomMode {
   void session
   return "bot"
@@ -157,7 +224,7 @@ export function resolveInitialRoomMode(session: Session): ChatRoomMode {
 
 export function buildLineFlexPayload(input: {
   body_display: string
-  kind: ChatMessageKind
+  source_kind: ChatMessageKind
 }) {
   return {
     type: "flex",
@@ -173,7 +240,7 @@ export function buildLineFlexPayload(input: {
             text: input.body_display,
             wrap: true,
             size: "md",
-            color: input.kind === "system" ? "#8c7358" : "#3d2a19",
+            color: input.source_kind === "system" ? "#8c7358" : "#3d2a19",
           },
         ],
       },
@@ -188,7 +255,7 @@ export function buildWebMessagePayload(input: {
   display_locale: ChatLocale
   original_locale: ChatLocale
   translations: ChatTranslations
-  kind: ChatMessageKind
+  source_kind: ChatMessageKind
   type: ChatMessageType
   created_at: string
 }) {
@@ -199,8 +266,70 @@ export function buildWebMessagePayload(input: {
     display_locale: input.display_locale,
     original_locale: input.original_locale,
     translations: input.translations,
-    kind: input.kind,
+    source_kind: input.source_kind,
     type: input.type,
     created_at: input.created_at,
+  }
+}
+
+export function buildMessagePayload(input: {
+  message_uuid: string
+  body_display: string
+  body_original: string
+  display_locale: ChatLocale
+  original_locale: ChatLocale
+  translations: ChatTranslations
+  translation_status: TranslationStatus
+  source_kind: ChatMessageKind
+  type: ChatMessageType
+  created_at: string
+  bot_key?: BotMessageKey
+  existing_payload?: Record<string, unknown> | null
+}): ChatMessagePayload {
+  const existing = input.existing_payload ?? {}
+  const existing_web =
+    existing.web &&
+    typeof existing.web === "object" &&
+    !Array.isArray(existing.web)
+      ? (existing.web as Record<string, unknown>)
+      : {}
+  const existing_line = existing.line
+  const existing_meta =
+    existing.meta &&
+    typeof existing.meta === "object" &&
+    !Array.isArray(existing.meta)
+      ? (existing.meta as Record<string, unknown>)
+      : {}
+
+  return {
+    ...existing,
+    web: {
+      ...existing_web,
+      ...buildWebMessagePayload({
+        message_uuid: input.message_uuid,
+        body_display: input.body_display,
+        body_original: input.body_original,
+        display_locale: input.display_locale,
+        original_locale: input.original_locale,
+        translations: input.translations,
+        source_kind: input.source_kind,
+        type: input.type,
+        created_at: input.created_at,
+      }),
+    },
+    line: (existing_line as Record<string, unknown> | undefined) ??
+      buildLineFlexPayload({
+        body_display: input.body_display,
+        source_kind: input.source_kind,
+      }),
+    meta: {
+      ...existing_meta,
+      original_locale: input.original_locale,
+      display_locale: input.display_locale,
+      translations: input.translations,
+      translation_status: input.translation_status,
+      source_kind: input.source_kind,
+      ...(input.bot_key ? { bot_key: input.bot_key } : {}),
+    },
   }
 }

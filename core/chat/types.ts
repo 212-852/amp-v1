@@ -2,6 +2,14 @@ import type { Session, SessionRole, SourceChannel } from "@/core/auth/types"
 
 export type ChatRoomMode = "bot" | "concierge" | "group"
 
+export type BotMessageKey =
+  | "welcome"
+  | "quick_menu"
+  | "bot_mode"
+  | "concierge_mode"
+  | "how_to_use"
+  | "faq"
+
 export type ChatParticipantRole =
   | "guest"
   | "user"
@@ -31,19 +39,34 @@ export const CHAT_MESSAGE_TYPES: ChatMessageType[] = [
   "typing",
 ]
 
+export type ChatMessageStatus = "sent" | "failed"
+
 export type ChatLocale = "ja" | "en" | "es"
 
 export type TranslationStatus = "none" | "pending" | "complete" | "failed"
 
 export type ChatTranslations = Partial<Record<ChatLocale, string>>
 
+export type ChatMessageMeta = {
+  original_locale?: ChatLocale
+  display_locale?: ChatLocale
+  translations?: ChatTranslations
+  translation_status?: TranslationStatus
+  source_kind?: ChatMessageKind
+  bot_key?: BotMessageKey
+}
+
+export type ChatMessagePayload = {
+  web?: Record<string, unknown>
+  line?: Record<string, unknown>
+  meta?: ChatMessageMeta
+}
+
 export type ChatRoomRecord = {
   room_uuid: string
   mode: ChatRoomMode
   locale: ChatLocale
   channel: SourceChannel
-  owner_visitor_uuid: string | null
-  owner_user_uuid: string | null
   created_at: string
   updated_at: string
 }
@@ -58,28 +81,30 @@ export type ChatRoomBootstrapResult = {
 export type ChatParticipantRecord = {
   participant_uuid: string
   room_uuid: string
-  role: ChatParticipantRole
-  visitor_uuid: string | null
   user_uuid: string | null
-  display_name: string | null
-  created_at: string
-  updated_at: string
+  visitor_uuid: string | null
+  role: ChatParticipantRole
+  joined_at: string
 }
 
 export type ChatMessageRecord = {
   message_uuid: string
   room_uuid: string
   participant_uuid: string | null
-  source_channel: SourceChannel
-  kind: ChatMessageKind
   type: ChatMessageType
-  body_original: string
-  original_locale: ChatLocale
-  body_display: string
-  display_locale: ChatLocale
-  translations: ChatTranslations
-  translation_status: TranslationStatus
-  payload: Record<string, unknown> | null
+  status: ChatMessageStatus
+  body: string
+  payload: ChatMessagePayload | null
+  created_at: string
+}
+
+export type BotMessageRecord = {
+  bot_message_uuid: string
+  key: BotMessageKey
+  locale: ChatLocale
+  type: ChatMessageType
+  body: string
+  payload: Record<string, unknown>
   created_at: string
 }
 
@@ -88,7 +113,33 @@ export type ChatTypingRecord = {
   participant_uuid: string
   display_name: string
   locale: ChatLocale
+}
+
+export type RealtimeTypingEvent = "typing_start" | "typing_stop"
+
+export type PresenceStatus = "entered" | "left"
+
+export type PresenceRecord = {
+  room_uuid: string
+  participant_uuid: string
+  status: PresenceStatus
+  entered_at: string
+  left_at: string | null
+  last_seen_at: string
   updated_at: string
+}
+
+export type PresenceView = PresenceRecord & {
+  display_name: string
+  role: ChatParticipantRole
+}
+
+export type ChatRoomPresenceInput = {
+  room_uuid: string
+  action: "enter" | "leave"
+  source_channel: SourceChannel
+  locale?: string | null
+  session: Session
 }
 
 export type ChatContext = {
@@ -132,15 +183,16 @@ export type ChatTypingInput = {
 export type MessageBundle = {
   message_uuid: string
   room_uuid: string
-  kind: ChatMessageKind
   type: ChatMessageType
-  source_channel: SourceChannel
+  status: ChatMessageStatus
+  body: string
   body_display: string
   body_original: string
   display_locale: ChatLocale
   original_locale: ChatLocale
   translations: ChatTranslations
-  payload: Record<string, unknown> | null
+  source_kind: ChatMessageKind
+  payload: ChatMessagePayload | null
   created_at: string
 }
 
@@ -148,7 +200,7 @@ export type ChatRoomState = {
   room: ChatRoomRecord
   participant: ChatParticipantRecord
   messages: ChatMessageRecord[]
-  typing: ChatTypingRecord[]
+  presence: PresenceView[]
   concierge_available: boolean
 }
 

@@ -214,3 +214,86 @@ Do not create separate message logic for LINE and Web.
 source_channel records where the message came from.
 
 output rules decide where the reply is delivered.
+
+#########################
+BOT FIXED MESSAGE RULE
+#########################
+
+Bot fixed messages must be stored in bot_messages.
+
+Do not hardcode bot welcome messages or quick menu messages inside UI.
+
+Required bot message keys:
+- welcome
+- quick_menu
+- bot_mode
+- concierge_mode
+- how_to_use
+- faq
+
+Messages must be resolved by:
+bot_message.key
++
+rooms.locale
+
+Fallback locale:
+ja
+
+#########################
+ROOM BOOTSTRAP RULE
+#########################
+
+If a user or guest has no room, create the room automatically.
+
+Flow:
+request
+-> chat/context.ts
+-> chat/room.ts
+-> chat/action.ts
+-> chat/message.ts
+-> chat/archive.ts
+-> output/index.ts
+
+On room creation:
+- create room
+- create participant
+- insert welcome message
+- send welcome message
+
+Do not create duplicate rooms.
+
+LINE, LIFF, PWA, and Web must reuse the same room.
+
+#########################
+ROOM CHANNEL RULE
+#########################
+
+rooms.channel stores the latest incoming channel.
+
+Allowed:
+- web
+- pwa
+- liff
+- line
+
+Do not store source_channel or delivery_channel on messages.
+
+Output destination is decided by rooms.channel.
+
+#########################
+QUICK MENU RULE
+#########################
+
+Quick Menu is a bot fixed message.
+
+The center Quick Menu button must request bot_messages.key = quick_menu.
+
+Quick Menu is not the same as the welcome message.
+
+Use the same message payload for:
+- Web chat
+- PWA
+- LIFF
+- LINE Flex Message
+
+Do not create separate Quick Menu logic per channel.

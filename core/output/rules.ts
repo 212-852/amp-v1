@@ -1,5 +1,6 @@
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
 import { isContactOnline, type ContactRecord } from "@/core/contacts/rules"
+import type { SourceChannel } from "@/core/auth/types"
 
 export type OutputMessage = {
   text: string
@@ -10,6 +11,7 @@ export type OutputMessage = {
 export type OutputTarget = {
   user_uuid?: string | null
   visitor_uuid?: string | null
+  channel?: SourceChannel | null
 }
 
 export type OutputDestination = {
@@ -72,8 +74,25 @@ export async function loadOutputContacts(target: OutputTarget) {
 
 export function resolveOutputDestinations(
   contacts: ContactRecord[],
+  target: OutputTarget = {},
   now: Date = new Date(),
 ): OutputDestination[] {
+  if (
+    target.channel === "web" ||
+    target.channel === "pwa" ||
+    target.channel === "liff"
+  ) {
+    return [{ contact: null, transport: "web" }]
+  }
+
+  if (target.channel === "line") {
+    const line_contact = contacts.find((contact) => {
+      return contact.receive && contact.type === "line"
+    })
+
+    return [{ contact: line_contact ?? null, transport: "line" }]
+  }
+
   const destinations: OutputDestination[] = []
   const onlineContact = contacts.find((contact) => {
     return (
