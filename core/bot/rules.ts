@@ -260,28 +260,78 @@ function buildHero(image_path: string) {
   }
 }
 
-function buildBody(title: string, body: string) {
+function buildWelcomeBodyBox(input: {
+  title: string
+  body?: string
+  subtitle?: string
+}) {
+  const contents: Record<string, unknown>[] = [
+    {
+      type: "text",
+      text: input.title,
+      weight: "bold",
+      size: "md",
+      color: "#3D2A19",
+    },
+  ]
+
+  if (input.subtitle) {
+    contents.push({
+      type: "text",
+      text: input.subtitle,
+      wrap: true,
+      size: "xs",
+      color: "#8C7358",
+    })
+  }
+
+  if (input.body) {
+    contents.push({
+      type: "text",
+      text: input.body,
+      wrap: true,
+      size: "sm",
+      color: "#8C7358",
+    })
+  }
+
   return {
     type: "box",
     layout: "vertical",
-    spacing: "sm",
-    paddingAll: "16px",
-    contents: [
-      {
-        type: "text",
-        text: title,
-        weight: "bold",
-        size: "md",
-        color: "#3D2A19",
-      },
-      {
-        type: "text",
-        text: body,
-        wrap: true,
-        size: "sm",
-        color: "#8C7358",
-      },
-    ],
+    spacing: "md",
+    paddingAll: "20px",
+    contents,
+  }
+}
+
+function buildWelcomePrimaryFooter(
+  buttons: Array<{ label: string; action: string }>,
+) {
+  return {
+    type: "box",
+    layout: "vertical",
+    spacing: "md",
+    paddingAll: "18px",
+    contents: buttons.map((button) =>
+      buildWelcomeFlexButton(button.label, button.action),
+    ),
+  }
+}
+
+function buildWelcomeInfoBubble(input: {
+  image_path: string
+  title: string
+  body: string
+  buttons: Array<{ label: string; action: string }>
+}) {
+  return {
+    type: "bubble",
+    hero: buildHero(input.image_path),
+    body: buildWelcomeBodyBox({
+      title: input.title,
+      body: input.body,
+    }),
+    footer: buildWelcomePrimaryFooter(input.buttons),
   }
 }
 
@@ -368,28 +418,10 @@ function buildWelcomeQuickMenuBubble(locale: ChatLocale) {
   return {
     type: "bubble",
     hero: buildHero(BOT_IMAGE.quick_menu),
-    body: {
-      type: "box",
-      layout: "vertical",
-      spacing: "md",
-      paddingAll: "20px",
-      contents: [
-        {
-          type: "text",
-          text: resolveLocaleText(QUICK_MENU_TITLE, locale),
-          weight: "bold",
-          size: "md",
-          color: "#3D2A19",
-        },
-        {
-          type: "text",
-          text: resolveLocaleText(TERMS_OF_USE, locale),
-          wrap: true,
-          size: "xs",
-          color: "#8C7358",
-        },
-      ],
-    },
+    body: buildWelcomeBodyBox({
+      title: resolveLocaleText(QUICK_MENU_TITLE, locale),
+      subtitle: resolveLocaleText(TERMS_OF_USE, locale),
+    }),
     footer: {
       type: "box",
       layout: "vertical",
@@ -468,6 +500,31 @@ function buildFooter(buttons: Array<{ label: string; action: string }>) {
   }
 }
 
+function buildBody(title: string, body: string) {
+  return {
+    type: "box",
+    layout: "vertical",
+    spacing: "sm",
+    paddingAll: "16px",
+    contents: [
+      {
+        type: "text",
+        text: title,
+        weight: "bold",
+        size: "md",
+        color: "#3D2A19",
+      },
+      {
+        type: "text",
+        text: body,
+        wrap: true,
+        size: "sm",
+        color: "#8C7358",
+      },
+    ],
+  }
+}
+
 function buildBubble(input: {
   image_path: string
   title: string
@@ -485,7 +542,7 @@ function buildBubble(input: {
 
 export function buildWelcomeCarousel(locale: ChatLocale): LineFlexCarouselPayload {
   const other_bubbles = WELCOME_BUBBLES.map((bubble) =>
-    buildBubble({
+    buildWelcomeInfoBubble({
       image_path: bubble.image,
       title: resolveLocaleText(bubble.title, locale),
       body: resolveLocaleText(bubble.body, locale),

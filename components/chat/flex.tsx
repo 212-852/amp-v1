@@ -161,8 +161,25 @@ function FlexSeparator({ node }: Readonly<{ node?: FlexRecord | null }>) {
   )
 }
 
+const FLEX_ACTION_BUTTON_CLASS =
+  "flex min-h-[44px] w-full items-center justify-center px-4 text-[14px] font-semibold"
+
 function readCornerRadius(value: unknown) {
-  return typeof value === "string" ? value : "4px"
+  return typeof value === "string" ? value : "16px"
+}
+
+function readFlexActionColors(node: FlexRecord) {
+  if (node.style === "secondary") {
+    return {
+      backgroundColor: "#F4E8D8",
+      color: "#3D2A19",
+    }
+  }
+
+  return {
+    backgroundColor: readText(node.color) || "#8F5D28",
+    color: "#FFFFFF",
+  }
 }
 
 function FlexButton({
@@ -202,14 +219,10 @@ function FlexButton({
     <button
       type="button"
       onClick={() => onAction(data)}
-      className="min-h-[44px] w-full px-3 text-[14px] font-semibold"
+      className={FLEX_ACTION_BUTTON_CLASS}
       style={{
         borderRadius: readCornerRadius(node.cornerRadius),
-        backgroundColor:
-          node.style === "secondary"
-            ? "#F4E8D8"
-            : readText(node.color) || "#8F5D28",
-        color: node.style === "secondary" ? "#3D2A19" : "#FFFFFF",
+        ...readFlexActionColors(node),
       }}
     >
       {label}
