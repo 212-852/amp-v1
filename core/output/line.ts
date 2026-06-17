@@ -12,6 +12,16 @@ export async function deliverLine(
     return { transport: "line", delivered: false }
   }
 
+  const line_payloads =
+    Array.isArray(message.line_messages) && message.line_messages.length > 0
+      ? message.line_messages
+      : [
+          {
+            type: "text",
+            text: message.text,
+          },
+        ]
+
   const response = await fetch("https://api.line.me/v2/bot/message/push", {
     method: "POST",
     headers: {
@@ -20,12 +30,7 @@ export async function deliverLine(
     },
     body: JSON.stringify({
       to: contact.value,
-      messages: [
-        {
-          type: "text",
-          text: message.text,
-        },
-      ],
+      messages: line_payloads,
     }),
     cache: "no-store",
   })

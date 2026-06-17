@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronDown, MessageCircle, Settings, X } from "lucide-react"
+import { ChevronDown, MessageCircle, MessageCircleOff, Settings, X } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 
@@ -38,9 +38,11 @@ type HeaderMenuItem = {
 export default function OpsHeader({
   session,
   page_label,
+  concierge_available = true,
 }: {
   session?: HeaderSessionLike | null
   page_label: string
+  concierge_available?: boolean
 }) {
   const safe_session = normalizeOpsHeaderDisplay(session)
   const is_logged_in = Boolean(safe_session.user_uuid)
@@ -51,6 +53,14 @@ export default function OpsHeader({
   const menu_ref = useRef<HTMLDivElement>(null)
   const [menu_open, set_menu_open] = useState(false)
   const [is_logging_out, set_is_logging_out] = useState(false)
+  const [concierge_available_state, set_concierge_available_state] = useState(
+    concierge_available,
+  )
+  const is_admin = safe_session.role === "admin"
+
+  useEffect(() => {
+    set_concierge_available_state(concierge_available)
+  }, [concierge_available])
 
   useEffect(() => {
     if (!menu_open) {
@@ -86,6 +96,24 @@ export default function OpsHeader({
 
   function toggle_menu() {
     set_menu_open((current) => !current)
+  }
+
+  async function toggle_concierge_availability() {
+    if (!is_admin) {
+      return
+    }
+
+    const next = !concierge_available_state
+
+    await fetch("/api/chat/concierge", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ available: next }),
+    }).catch(() => null)
+
+    set_concierge_available_state(next)
   }
 
   function handle_logout() {
@@ -154,9 +182,15 @@ export default function OpsHeader({
           <button
             type="button"
             aria-label="Chat"
+            aria-pressed={concierge_available_state}
+            onClick={is_admin ? toggle_concierge_availability : undefined}
             className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-900"
           >
-            <MessageCircle className="h-4 w-4" strokeWidth={1.8} />
+            {concierge_available_state ? (
+              <MessageCircle className="h-4 w-4 text-green-600" strokeWidth={1.8} />
+            ) : (
+              <MessageCircleOff className="h-4 w-4 text-neutral-400" strokeWidth={1.8} />
+            )}
           </button>
 
           <Link

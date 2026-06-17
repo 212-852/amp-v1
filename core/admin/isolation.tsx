@@ -3,6 +3,7 @@ import { redirect, unstable_rethrow } from "next/navigation"
 import AdminComingSoon from "@/components/admin/coming-soon"
 import AdminPageFallback from "@/components/admin/page_fallback"
 import AdminShell from "@/components/admin/shell"
+import { getConciergeAvailabilityState } from "@/core/chat/action"
 import OpsHeader from "@/components/ops/header"
 import { resolveAuthContext } from "@/core/auth/context"
 import { resolveIdentity } from "@/core/auth/identity"
@@ -162,7 +163,11 @@ export async function renderAdminIsolationPage() {
 
       return (
         <div className="min-h-dvh bg-neutral-50 text-neutral-900">
-          <OpsHeader session={safe_session} page_label={page_label} />
+          <OpsHeader
+            session={safe_session}
+            page_label={page_label}
+            concierge_available={(await getConciergeAvailabilityState()).available}
+          />
           <main style={{ padding: 24 }}>
             <div>admin alive stage 4 header ok</div>
           </main>

@@ -2,7 +2,7 @@
 
 import { Menu, MessageCircle, PawPrint, User } from "lucide-react"
 import Image from "next/image"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import ConciergeMemberModal from "@/components/app/concierge_member_modal"
 import { useOverlay, type OverlayType } from "@/components/overlay"
@@ -286,7 +286,36 @@ function SendPawButton({ locale }: Readonly<{ locale: Locale }>) {
   )
 }
 
-function MessageInputRow({ locale }: Readonly<{ locale: Locale }>) {
+function MessageInputRow({
+  locale,
+  onSend,
+  onTyping,
+}: Readonly<{
+  locale: Locale
+  onSend: (message: string) => Promise<void>
+  onTyping: (is_typing: boolean) => void
+}>) {
+  const [draft, set_draft] = useState("")
+  const [is_sending, set_is_sending] = useState(false)
+
+  async function handleSend() {
+    const message = draft.trim()
+
+    if (!message || is_sending) {
+      return
+    }
+
+    set_is_sending(true)
+
+    try {
+      await onSend(message)
+      set_draft("")
+      onTyping(false)
+    } finally {
+      set_is_sending(false)
+    }
+  }
+
   return (
     <div className="flex w-full translate-y-[4px] items-center gap-4 px-4">
       <div className="min-w-0 flex-1">
@@ -296,12 +325,24 @@ function MessageInputRow({ locale }: Readonly<{ locale: Locale }>) {
         <input
           id="app-message-input"
           type="text"
-          readOnly
+          value={draft}
+          onChange={(event) => {
+            set_draft(event.target.value)
+            onTyping(event.target.value.trim().length > 0)
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault()
+              void handleSend()
+            }
+          }}
           placeholder={content.message_placeholder[locale]}
           className="h-[68px] w-full min-w-0 rounded-full bg-[#fdfaf6] px-5 text-[16px] font-semibold text-[#3d2a19] placeholder:text-[#8c7358]"
         />
       </div>
-      <SendPawButton locale={locale} />
+      <button type="button" onClick={() => void handleSend()} disabled={is_sending}>
+        <SendPawButton locale={locale} />
+      </button>
     </div>
   )
 }
@@ -357,19 +398,44 @@ function CopyrightText() {
 export default function AppFooter({
   support_access,
   can_start_line_oauth,
+  initial_mode = "bot",
 }: Readonly<{
   support_access: ChatSupportAccess
   can_start_line_oauth: boolean
+  initial_mode?: ChatSupportMode
 }>) {
   const [footerMode, setFooterMode] = useState<FooterMode>("normal")
-  const [assistantMode, setAssistantMode] = useState<ChatSupportMode>("bot")
+  const [assistantMode, setAssistantMode] = useState<ChatSupportMode>(
+    initial_mode === "concierge" ? "concierge" : "bot",
+  )
   const [member_modal_open, set_member_modal_open] = useState(false)
+  const typing_timer_ref = useRef<number | null>(null)
   const { locale } = useLocale()
   const { openOverlay } = useOverlay()
   const isInputMode = footerMode === "input"
 
+  useEffect(() => {
+    setAssistantMode(initial_mode === "concierge" ? "concierge" : "bot")
+  }, [initial_mode])
+
   function toggleFooterMode() {
     setFooterMode((current) => (current === "normal" ? "input" : "normal"))
+  }
+
+  async function persistModeSwitch(mode: ChatSupportMode) {
+    await fetch("/api/chat/mode", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ mode }),
+    }).catch(() => null)
+
+    window.dispatchEvent(
+      new CustomEvent("amp-chat-mode-changed", {
+        detail: { mode },
+      }),
+    )
   }
 
   function handleAssistantModeAttempt(mode: ChatSupportMode) {
@@ -381,6 +447,7 @@ export default function AppFooter({
 
     if (result.outcome === "switch") {
       setAssistantMode(result.mode)
+      void persistModeSwitch(result.mode)
       return true
     }
 
@@ -393,6 +460,43 @@ export default function AppFooter({
     }
 
     return false
+  }
+
+  async function handleSendMessage(message: string) {
+    await fetch("/api/chat/room", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ message }),
+    })
+  }
+
+  function handleTyping(is_typing: boolean) {
+    if (typing_timer_ref.current) {
+      window.clearTimeout(typing_timer_ref.current)
+      typing_timer_ref.current = null
+    }
+
+    void fetch("/api/chat/typing", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ is_typing }),
+    }).catch(() => null)
+
+    if (is_typing) {
+      typing_timer_ref.current = window.setTimeout(() => {
+        void fetch("/api/chat/typing", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ is_typing: false }),
+        }).catch(() => null)
+      }, 5000)
+    }
   }
 
   function handleLinkAccount() {
@@ -456,7 +560,11 @@ export default function AppFooter({
                     : "pointer-events-none opacity-0 [transform:translateX(38px)_rotateY(58deg)]",
                 ].join(" ")}
               >
-                <MessageInputRow locale={locale} />
+                <MessageInputRow
+                  locale={locale}
+                  onSend={handleSendMessage}
+                  onTyping={handleTyping}
+                />
                 <CopyrightText />
               </div>
             </div>

@@ -6,6 +6,7 @@ import AppHome from "@/components/app/home"
 import { resolveAuthContext } from "@/core/auth/context"
 import { resolveSession } from "@/core/auth/session"
 import { resolveChatSupportAccess } from "@/core/chat/support"
+import { resolveChatRoom } from "@/core/chat/action"
 import { resolveAmpRoute } from "@/core/route/rules"
 
 export default async function AppPage() {
@@ -25,13 +26,27 @@ export default async function AppPage() {
     tier: session.tier,
   })
 
+  let chat_state = null
+
+  try {
+    chat_state = await resolveChatRoom(session, {
+      source_channel: context.source_channel,
+      locale: context.locale,
+    })
+  } catch {
+    chat_state = null
+  }
+
   return (
     <div className="min-h-dvh bg-[#f5e8d5] text-[#3d2a19]">
       <AppHeader auth={session} />
-      <AppHome />
+      <AppHome chat_state={chat_state} />
       <AppFooter
         support_access={support_access}
         can_start_line_oauth={session.can_start_line_oauth}
+        initial_mode={
+          chat_state?.room.mode === "concierge" ? "concierge" : "bot"
+        }
       />
     </div>
   )

@@ -1,6 +1,8 @@
 "use client"
 
+import AppChatSection from "@/components/app/chat_section"
 import { useLocale } from "@/src/components/locale/provider"
+import type { ChatRoomState } from "@/core/chat/types"
 
 const content = {
   quick_menu_title: {
@@ -45,7 +47,11 @@ const content = {
   },
 }
 
-export default function AppHome() {
+export default function AppHome({
+  chat_state,
+}: Readonly<{
+  chat_state: ChatRoomState | null
+}>) {
   const { locale } = useLocale()
   const quick_menu_items = [
     content.availability[locale],
@@ -57,7 +63,10 @@ export default function AppHome() {
 
   return (
     <main className="mx-auto w-full max-w-[390px] px-4 pb-[calc(196px+env(safe-area-inset-bottom,0px))] pt-[118px]">
-      <section className="rounded-[36px] bg-[#fdfaf6] p-5 shadow-[0_12px_28px_rgba(107,74,38,0.13)]">
+      <div className="space-y-4">
+        <AppChatSection chat_state={chat_state} />
+
+        <section className="rounded-[36px] bg-[#fdfaf6] p-5 shadow-[0_12px_28px_rgba(107,74,38,0.13)]">
         <div className="rounded-[30px] bg-[#fdfaf6] px-4 py-5 shadow-[inset_0_0_0_1px_#dcc7aa]">
           <p className="text-[12px] font-black tracking-[0.08em] text-[#8c7358]">
             {content.quick_menu_title[locale]}
@@ -84,6 +93,7 @@ export default function AppHome() {
           </p>
         </div>
       </section>
+      </div>
     </main>
   )
 }

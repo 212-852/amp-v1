@@ -4,6 +4,7 @@ import AdminComingSoon from "@/components/admin/coming-soon"
 import AdminDataSections from "@/components/admin/data_sections"
 import AdminFooter from "@/components/admin/footer"
 import AdminHeader from "@/components/admin/header"
+import { getConciergeAvailabilityState } from "@/core/chat/action"
 import AdminPageFallback from "@/components/admin/page_fallback"
 import AdminSessionPanel from "@/components/admin/session_panel"
 import AdminShellLayout from "@/components/admin/shell_layout"
@@ -106,16 +107,30 @@ async function resolveAdminAccess() {
   return { context, session }
 }
 
+async function resolveConciergeAvailability() {
+  try {
+    const state = await getConciergeAvailabilityState()
+    return state.available
+  } catch {
+    return true
+  }
+}
+
 function renderAdminUiShell(
   session: Session | null | undefined,
   pathname: string,
+  concierge_available: boolean,
 ) {
   const header_session = normalizeOpsHeaderDisplay(session)
   const page_label = resolvePageLabel(pathname)
 
   return (
     <div className="min-h-dvh bg-neutral-50 text-neutral-900">
-      <AdminHeader session={header_session} page_label={page_label} />
+      <AdminHeader
+        session={header_session}
+        page_label={page_label}
+        concierge_available={concierge_available}
+      />
       <main className="mx-auto flex w-full max-w-[430px] flex-col gap-3 px-5 pb-[calc(118px+env(safe-area-inset-bottom,0px))] pt-4">
         <AdminComingSoon title="本日の状況" />
       </main>
@@ -139,6 +154,7 @@ export async function renderAdminRestorePage() {
       return renderAdminUiShell(
         session,
         context.requested_route ?? ADMIN_PATH,
+        await resolveConciergeAvailability(),
       )
     }
 
@@ -164,7 +180,13 @@ export async function renderAdminRestorePage() {
     }
 
     const header_session = normalizeOpsHeaderDisplay(session)
-    const header = <AdminHeader session={header_session} page_label={page_label} />
+    const header = (
+      <AdminHeader
+        session={header_session}
+        page_label={page_label}
+        concierge_available={await resolveConciergeAvailability()}
+      />
+    )
 
     if (step === 3) {
       await sendRestoreDebug("admin_restore_step_header_ok", {

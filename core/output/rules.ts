@@ -4,6 +4,7 @@ import { isContactOnline, type ContactRecord } from "@/core/contacts/rules"
 export type OutputMessage = {
   text: string
   data?: Record<string, unknown>
+  line_messages?: unknown[]
 }
 
 export type OutputTarget = {
