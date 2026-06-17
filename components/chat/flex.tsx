@@ -125,12 +125,12 @@ function FlexText({ node }: Readonly<{ node: FlexRecord }>) {
 
   return (
     <p
-      className={node.wrap === true ? "whitespace-pre-wrap" : "truncate"}
+      className={node.wrap === true ? "whitespace-pre-wrap" : ""}
       style={{
         color: readText(node.color) || "#3D2A19",
         fontSize: readSize(node.size),
         fontWeight: readWeight(node.weight),
-        lineHeight: 1.35,
+        lineHeight: 1.45,
       }}
     >
       {text}
@@ -140,6 +140,10 @@ function FlexText({ node }: Readonly<{ node: FlexRecord }>) {
 
 function FlexSeparator() {
   return <div className="h-px w-full bg-[#eadfce]" />
+}
+
+function readCornerRadius(value: unknown) {
+  return typeof value === "string" ? value : "4px"
 }
 
 function FlexButton({
@@ -152,17 +156,32 @@ function FlexButton({
   const action = readRecord(node.action)
   const label = readText(action?.label)
   const data = readText(action?.data) || label
+  const is_link = node.style === "link"
 
   if (!label) {
     return null
+  }
+
+  if (is_link) {
+    return (
+      <button
+        type="button"
+        onClick={() => onAction(data)}
+        className="w-full py-1 text-left text-[13px] font-semibold underline decoration-[#8F5D28]/40 underline-offset-2"
+        style={{ color: readText(node.color) || "#8F5D28" }}
+      >
+        {label}
+      </button>
+    )
   }
 
   return (
     <button
       type="button"
       onClick={() => onAction(data)}
-      className="min-h-[40px] w-full rounded-[4px] px-3 text-[14px] font-semibold"
+      className="min-h-[40px] w-full px-3 text-[14px] font-semibold"
       style={{
+        borderRadius: readCornerRadius(node.cornerRadius),
         backgroundColor:
           node.style === "secondary"
             ? "#F4E8D8"
@@ -256,7 +275,7 @@ function FlexBubble({
   const footer = readRecord(bubble.footer)
 
   return (
-    <article className="w-[300px] max-w-[calc(100vw-76px)] shrink-0 snap-start overflow-hidden rounded-[14px] bg-white">
+    <article className="h-auto w-[300px] max-w-[calc(100vw-76px)] shrink-0 snap-start overflow-visible rounded-[14px] bg-white">
       {hero ? <FlexHero node={hero} /> : null}
       {body ? <FlexBox node={body} onAction={onAction} /> : null}
       {footer ? <FlexBox node={footer} onAction={onAction} /> : null}

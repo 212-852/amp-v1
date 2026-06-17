@@ -40,7 +40,7 @@ const QUICK_MENU_BODY: LocaleText = {
 }
 
 const TERMS_OF_USE: LocaleText = {
-  ja: "利用規約",
+  ja: "ご利用規約",
   en: "Terms of use",
   es: "Terminos de uso",
 }
@@ -52,9 +52,21 @@ const MEETUP_SUPPORT_TITLE: LocaleText = {
 }
 
 const MEETUP_SUPPORT_BODY: LocaleText = {
-  ja: "待ち合わせ場所や予約内容で困ったときは、チャットから確認できます。",
-  en: "Use chat when you need help with meetup locations or reservation details.",
-  es: "Usa el chat si necesitas ayuda con puntos de encuentro o reservas.",
+  ja: "当日は診察終了や空港手続き完了のタイミングに合わせ、ドライバーがお客様とペットが確実に合流できるようサポートいたします。",
+  en: "On the day, we align with clinic finish or airport procedures so the driver can meet you and your pet reliably.",
+  es: "El dia del servicio, nos coordinamos con el fin de la consulta o los tramites del aeropuerto para que el conductor se encuentre contigo y tu mascota sin problemas.",
+}
+
+const SHARE_MEETUP_LINK: LocaleText = {
+  ja: "待ち合わせ場所を共有する",
+  en: "Share meetup location",
+  es: "Compartir punto de encuentro",
+}
+
+const CANCEL_RESERVATION_LINK: LocaleText = {
+  ja: "予約をキャンセルする",
+  en: "Cancel reservation",
+  es: "Cancelar reserva",
 }
 
 const WELCOME_QUICK_MENU_BUTTONS: Array<{ label: LocaleText; action: string }> = [
@@ -69,7 +81,7 @@ const WELCOME_QUICK_MENU_BUTTONS: Array<{ label: LocaleText; action: string }> =
   {
     label: {
       ja: "予約する",
-      en: "Reserve",
+      en: "Request a ride",
       es: "Reservar",
     },
     action: "reserve",
@@ -77,10 +89,26 @@ const WELCOME_QUICK_MENU_BUTTONS: Array<{ label: LocaleText; action: string }> =
   {
     label: {
       ja: "予約を確認する",
-      en: "Check reservation",
+      en: "Review reservation",
       es: "Ver reserva",
     },
     action: "check_reservation",
+  },
+  {
+    label: {
+      ja: "待ち合わせ場所を共有",
+      en: "Share meetup location",
+      es: "Compartir punto de encuentro",
+    },
+    action: "share_meeting_place",
+  },
+  {
+    label: {
+      ja: "予約をキャンセル",
+      en: "Cancel reservation",
+      es: "Cancelar reserva",
+    },
+    action: "cancel_reservation",
   },
 ]
 
@@ -90,20 +118,6 @@ const WELCOME_BUBBLES: Array<{
   body: LocaleText
   buttons: Array<{ label: LocaleText; action: string }>
 }> = [
-  {
-    image: BOT_IMAGE.quick_menu,
-    title: {
-      ja: "クイックメニュー",
-      en: "Quick Menu",
-      es: "Menu rapido",
-    },
-    body: {
-      ja: "予約や確認を素早く選べます。",
-      en: "Choose booking and support options quickly.",
-      es: "Elige opciones de reserva rapidamente.",
-    },
-    buttons: WELCOME_QUICK_MENU_BUTTONS,
-  },
   {
     image: BOT_IMAGE.how_to_use,
     title: {
@@ -321,6 +335,100 @@ function buildQuickMenuBody(locale: ChatLocale) {
   }
 }
 
+function buildWelcomeFlexButton(label: string, action: string) {
+  return {
+    type: "button",
+    style: "primary",
+    color: "#8F5D28",
+    height: "sm",
+    cornerRadius: "16px",
+    action: {
+      type: "postback",
+      label,
+      data: action,
+    },
+  }
+}
+
+function buildWelcomeFlexLink(label: string, action: string) {
+  return {
+    type: "button",
+    style: "link",
+    color: "#8F5D28",
+    action: {
+      type: "postback",
+      label,
+      data: action,
+    },
+  }
+}
+
+function buildWelcomeQuickMenuBubble(locale: ChatLocale) {
+  return {
+    type: "bubble",
+    hero: buildHero(BOT_IMAGE.quick_menu),
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      paddingAll: "16px",
+      contents: [
+        {
+          type: "text",
+          text: resolveLocaleText(QUICK_MENU_TITLE, locale),
+          weight: "bold",
+          size: "md",
+          color: "#3D2A19",
+        },
+        {
+          type: "text",
+          text: resolveLocaleText(TERMS_OF_USE, locale),
+          wrap: true,
+          size: "xs",
+          color: "#8C7358",
+        },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      paddingAll: "12px",
+      contents: [
+        ...WELCOME_QUICK_MENU_BUTTONS.map((button) =>
+          buildWelcomeFlexButton(
+            resolveLocaleText(button.label, locale),
+            button.action,
+          ),
+        ),
+        { type: "separator" },
+        {
+          type: "text",
+          text: resolveLocaleText(MEETUP_SUPPORT_TITLE, locale),
+          weight: "bold",
+          size: "sm",
+          color: "#3D2A19",
+        },
+        {
+          type: "text",
+          text: resolveLocaleText(MEETUP_SUPPORT_BODY, locale),
+          wrap: true,
+          size: "sm",
+          color: "#8C7358",
+        },
+        buildWelcomeFlexLink(
+          resolveLocaleText(SHARE_MEETUP_LINK, locale),
+          "share_meeting_place",
+        ),
+        buildWelcomeFlexLink(
+          resolveLocaleText(CANCEL_RESERVATION_LINK, locale),
+          "cancel_reservation",
+        ),
+      ],
+    },
+  }
+}
+
 function buildFooter(buttons: Array<{ label: string; action: string }>) {
   return {
     type: "box",
@@ -357,19 +465,21 @@ function buildBubble(input: {
 }
 
 export function buildWelcomeCarousel(locale: ChatLocale): LineFlexCarouselPayload {
+  const other_bubbles = WELCOME_BUBBLES.map((bubble) =>
+    buildBubble({
+      image_path: bubble.image,
+      title: resolveLocaleText(bubble.title, locale),
+      body: resolveLocaleText(bubble.body, locale),
+      buttons: bubble.buttons.map((button) => ({
+        label: resolveLocaleText(button.label, locale),
+        action: button.action,
+      })),
+    }),
+  )
+
   return {
     type: "carousel",
-    contents: WELCOME_BUBBLES.map((bubble) =>
-      buildBubble({
-        image_path: bubble.image,
-        title: resolveLocaleText(bubble.title, locale),
-        body: resolveLocaleText(bubble.body, locale),
-        buttons: bubble.buttons.map((button) => ({
-          label: resolveLocaleText(button.label, locale),
-          action: button.action,
-        })),
-      }),
-    ),
+    contents: [buildWelcomeQuickMenuBubble(locale), ...other_bubbles],
   }
 }
 

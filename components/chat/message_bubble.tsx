@@ -168,7 +168,7 @@ export default function ChatMessageBubble({
       className={[
         "rounded-[18px] px-4 py-3 text-[14px] leading-relaxed",
         bubble_class,
-        is_flex ? "w-full min-w-0 overflow-hidden p-2" : "max-w-full",
+        is_flex ? "w-full min-w-0 overflow-visible p-2" : "max-w-full",
       ].join(" ")}
     >
       {is_flex ? (
