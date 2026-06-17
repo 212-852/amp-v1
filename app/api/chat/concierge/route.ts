@@ -30,19 +30,14 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null)
-  const enabled = (body as { enabled?: unknown } | null)?.enabled
+  console.log("concierge body", body)
 
-  console.info("[concierge_toggle] concierge_toggle_body_received", {
-    request_body: body,
-  })
+  const enabled = (body as { enabled?: unknown } | null)?.enabled
+  console.log("concierge enabled", enabled, typeof enabled)
 
   if (typeof enabled !== "boolean") {
-    console.info("[concierge_toggle] concierge_toggle_invalid_body", {
-      request_body: body,
-    })
-
     return NextResponse.json(
-      { ok: false, error: "enabled_boolean_required" },
+      { ok: false, error: "enabled_boolean_required", received: body },
       { status: 400 },
     )
   }
@@ -66,7 +61,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
-      enabled: result.enabled,
+      enabled,
     })
   } catch (error) {
     if (error instanceof ConciergeToggleDeniedError) {

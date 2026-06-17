@@ -1,6 +1,12 @@
 "use client"
 
-import { ChevronDown, MessageCircle, MessageCircleOff, Settings, X } from "lucide-react"
+import {
+  ChevronDown,
+  MessageCircle,
+  MessageCircleOff,
+  Settings,
+  X,
+} from "lucide-react"
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 
@@ -9,12 +15,11 @@ import { canToggleConciergeAvailability } from "@/core/chat/concierge_access"
 import {
   normalizeOpsHeaderDisplay,
   type HeaderSessionLike,
-  type OpsHeaderSession,
 } from "@/core/ops/header_session"
 import { concierge_toggle_content } from "@/core/ops/concierge_toggle_content"
 import { useLocale } from "@/src/components/locale/provider"
 
-export type { OpsHeaderSession, HeaderSessionLike } from "@/core/ops/header_session"
+export type { HeaderSessionLike, OpsHeaderSession } from "@/core/ops/header_session"
 
 function resolveInitials(value: string | null | undefined) {
   const normalized = value?.trim()
@@ -62,15 +67,11 @@ export default function OpsHeader({
   const [concierge_available_state, set_concierge_available_state] = useState(
     concierge_available,
   )
-  const [is_toggling_concierge, set_is_toggling_concierge] = useState(false)
+  const [is_saving_concierge, set_is_saving_concierge] = useState(false)
   const can_toggle_concierge = canToggleConciergeAvailability({
     role: safe_session.role,
     tier: safe_session.tier,
   })
-
-  useEffect(() => {
-    set_concierge_available_state(concierge_available)
-  }, [concierge_available])
 
   useEffect(() => {
     if (!menu_open) {
@@ -109,12 +110,12 @@ export default function OpsHeader({
   }
 
   async function toggle_concierge_availability() {
-    if (!can_toggle_concierge || is_toggling_concierge) {
+    if (!can_toggle_concierge || is_saving_concierge) {
       return
     }
 
     const next_enabled = !concierge_available_state
-    set_is_toggling_concierge(true)
+    set_is_saving_concierge(true)
 
     console.log("concierge toggle request", { enabled: next_enabled })
 
@@ -128,13 +129,28 @@ export default function OpsHeader({
         body: JSON.stringify({ enabled: next_enabled }),
       })
 
-      const payload = (await response.json().catch(() => ({}))) as {
+      const response_text = await response.text()
+      let payload: {
         ok?: boolean
         enabled?: boolean
         error?: string
+        [key: string]: unknown
+      } = {}
+
+      if (response_text) {
+        try {
+          payload = JSON.parse(response_text) as typeof payload
+        } catch {
+          payload = { error: response_text }
+        }
       }
 
       if (!response.ok || payload.ok !== true || typeof payload.enabled !== "boolean") {
+        console.error("concierge toggle failed", {
+          status: response.status,
+          body: payload,
+          raw: response_text,
+        })
         throw new Error(payload.error ?? "concierge_toggle_failed")
       }
 
@@ -145,13 +161,14 @@ export default function OpsHeader({
           ? concierge_toggle_content.on_success[locale]
           : concierge_toggle_content.off_success[locale],
       })
-    } catch {
+    } catch (error) {
+      console.error("concierge toggle error", error)
       toast({
         tone: "error",
         message: concierge_toggle_content.error[locale],
       })
     } finally {
-      set_is_toggling_concierge(false)
+      set_is_saving_concierge(false)
     }
   }
 
@@ -224,7 +241,7 @@ export default function OpsHeader({
               concierge_available_state ? "Concierge ON" : "Concierge OFF"
             }
             aria-pressed={concierge_available_state}
-            disabled={!can_toggle_concierge || is_toggling_concierge}
+            disabled={!can_toggle_concierge || is_saving_concierge}
             onClick={
               can_toggle_concierge ? toggle_concierge_availability : undefined
             }
