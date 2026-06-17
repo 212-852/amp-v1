@@ -47,7 +47,43 @@ function readWeight(value: unknown) {
 }
 
 function readPadding(value: unknown, fallback: string) {
-  return typeof value === "string" ? value : fallback
+  if (typeof value !== "string") {
+    return fallback
+  }
+
+  if (value.endsWith("px") || value.endsWith("%")) {
+    return value
+  }
+
+  if (value === "none") {
+    return "0"
+  }
+
+  if (value === "xs") {
+    return "4px"
+  }
+
+  if (value === "sm") {
+    return "8px"
+  }
+
+  if (value === "md") {
+    return "12px"
+  }
+
+  if (value === "lg") {
+    return "16px"
+  }
+
+  if (value === "xl") {
+    return "20px"
+  }
+
+  if (value === "xxl") {
+    return "24px"
+  }
+
+  return value
 }
 
 function readGap(value: unknown) {
@@ -182,10 +218,9 @@ function FlexText({ node }: Readonly<{ node: FlexRecord }>) {
 
   return (
     <div
-      role="text"
       className={[
-        "m-0 block w-full shrink-0",
-        node.wrap === true ? "whitespace-pre-wrap" : "",
+        "m-0 block w-full",
+        node.wrap === true ? "whitespace-pre-wrap break-words" : "break-words",
       ].join(" ")}
       style={{
         color: readText(node.color) || "#3D2A19",
@@ -295,7 +330,7 @@ function FlexBox({
   return (
     <div
       className={[
-        "flex w-full shrink-0",
+        "box-border flex w-full",
         is_horizontal ? "flex-row" : "flex-col",
         align_items === "center" ? "items-center text-center" : "items-stretch",
       ].join(" ")}
@@ -315,6 +350,20 @@ function FlexBox({
         />
       ))}
     </div>
+  )
+}
+
+function FlexBubbleSection({
+  node,
+  onAction,
+}: Readonly<{
+  node: FlexRecord
+  onAction: (action: string) => void
+}>) {
+  return (
+    <section className="relative z-[1] w-full bg-white">
+      <FlexBox node={node} onAction={onAction} />
+    </section>
   )
 }
 
@@ -369,11 +418,19 @@ function FlexBubble({
   const footer = readRecord(bubble.footer)
 
   return (
-    <article className="flex h-auto max-h-none w-[300px] max-w-[calc(100vw-76px)] shrink-0 snap-start flex-col self-start overflow-hidden rounded-[18px] bg-white">
-      {header ? <FlexBox node={header} onAction={onAction} /> : null}
-      {hero ? <FlexHero node={hero} /> : null}
-      {body ? <FlexBox node={body} onAction={onAction} /> : null}
-      {footer ? <FlexBox node={footer} onAction={onAction} /> : null}
+    <article className="block h-auto max-h-none w-[300px] max-w-[calc(100vw-76px)] shrink-0 snap-start self-start overflow-visible rounded-[18px] bg-white">
+      {header ? (
+        <FlexBubbleSection node={header} onAction={onAction} />
+      ) : null}
+      {hero ? (
+        <div className="relative z-0 w-full">
+          <FlexHero node={hero} />
+        </div>
+      ) : null}
+      {body ? <FlexBubbleSection node={body} onAction={onAction} /> : null}
+      {footer ? (
+        <FlexBubbleSection node={footer} onAction={onAction} />
+      ) : null}
     </article>
   )
 }
