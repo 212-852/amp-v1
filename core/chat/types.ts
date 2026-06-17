@@ -57,9 +57,8 @@ export type ChatMessageMeta = {
 }
 
 export type ChatMessagePayload = {
-  kind?: "carousel"
-  bot_trigger?: string
-  cards?: unknown[]
+  type?: "carousel"
+  contents?: Record<string, unknown>[]
   web?: Record<string, unknown>
   line?: Record<string, unknown>
   meta?: ChatMessageMeta

@@ -15,7 +15,7 @@ export { toMessageBundle, bootstrapRoomWelcome } from "@/core/chat/message"
 export { bootstrapChatRoom, resolveOrCreateRoom } from "@/core/chat/room"
 export { resolveChatSupportAccess } from "@/core/chat/support"
 export {
-  readFlexCarouselCards,
+  readFlexCarouselBubbles,
   isQuickMenuTriggerAction,
 } from "@/core/chat/flex"
 export { createBotMessageBundle } from "@/core/bot/message"

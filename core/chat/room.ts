@@ -1,13 +1,9 @@
 import {
   findParticipant,
   findRoomByUuid,
-  findRoomForIdentity,
   insertParticipant,
-  insertRoom,
   loadConciergeAvailability,
   loadRoomMessages,
-  updateRoomChannel,
-  updateRoomLocale,
 } from "@/core/chat/archive"
 import {
   resolveChatLocale,
@@ -15,6 +11,7 @@ import {
 } from "@/core/chat/context"
 import { bootstrapRoomWelcome } from "@/core/chat/message"
 import { loadOnlinePresenceViews } from "@/core/chat/presence"
+import { resolveOwnedRoom } from "@/core/chat/rules"
 import type {
   ChatContext,
   ChatRoomBootstrapResult,
@@ -54,62 +51,27 @@ export async function bootstrapChatRoom(
 ): Promise<ChatRoomBootstrapResult> {
   const identity = resolveRoomIdentity(context, session)
   const locale = resolveChatLocale(context.locale, null)
-
-  let room = await findRoomForIdentity(identity)
-  let room_created = false
-
-  if (!room) {
-    room = await insertRoom({
-      mode: "bot",
-      locale,
-      channel: context.source_channel,
-    })
-    room_created = true
-  } else {
-    room = await updateRoomChannel({
-      room_uuid: room.room_uuid,
-      channel: context.source_channel,
-    })
-
-    if (room.locale !== locale) {
-      room = await updateRoomLocale({
-        room_uuid: room.room_uuid,
-        locale,
-      })
-    }
-  }
-
   const owner_role = resolveOwnerParticipantRole(session, identity.user_uuid)
-  let participant = await findParticipant({
-    room_uuid: room.room_uuid,
-    visitor_uuid: identity.visitor_uuid,
-    user_uuid: identity.user_uuid,
-  })
-  let participant_created = false
 
-  if (!participant) {
-    participant = await insertParticipant({
-      room_uuid: room.room_uuid,
-      role: owner_role,
-      visitor_uuid: identity.visitor_uuid,
-      user_uuid: identity.user_uuid,
-    })
-    participant_created = true
-  }
+  const resolved = await resolveOwnedRoom({
+    identity,
+    locale,
+    channel: context.source_channel,
+    owner_role,
+  })
 
   await bootstrapRoomWelcome({
-    room,
-    participant,
+    room: resolved.room,
+    participant: resolved.participant,
     session,
     source_channel: context.source_channel,
-    room_created,
   })
 
   return {
-    room,
-    participant,
-    created: room_created,
-    participant_created,
+    room: resolved.room,
+    participant: resolved.participant,
+    created: resolved.created,
+    participant_created: resolved.participant_created,
   }
 }
 

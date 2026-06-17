@@ -96,40 +96,85 @@ async function findParticipantRow(filter: string) {
   return rows[0] ?? null
 }
 
+export async function findOldestParticipantByUserUuid(user_uuid: string) {
+  return findParticipantRow(`user_uuid=eq.${encodeURIComponent(user_uuid)}`)
+}
+
+export async function findOldestParticipantByVisitorUuid(visitor_uuid: string) {
+  return findParticipantRow(
+    `visitor_uuid=eq.${encodeURIComponent(visitor_uuid)}`,
+  )
+}
+
+export async function findOwnerParticipantInRoom(input: {
+  room_uuid: string
+  user_uuid: string | null
+  visitor_uuid: string | null
+}) {
+  if (input.user_uuid) {
+    const by_user = await findParticipantRow(
+      `room_uuid=eq.${encodeURIComponent(input.room_uuid)}&user_uuid=eq.${encodeURIComponent(input.user_uuid)}`,
+    )
+
+    if (by_user) {
+      return by_user
+    }
+  }
+
+  if (input.visitor_uuid) {
+    return findParticipantRow(
+      `room_uuid=eq.${encodeURIComponent(input.room_uuid)}&visitor_uuid=eq.${encodeURIComponent(input.visitor_uuid)}`,
+    )
+  }
+
+  return null
+}
+
+export async function resolveRoomFromParticipants(input: {
+  visitor_uuid: string | null
+  user_uuid: string | null
+}) {
+  let participant: ChatParticipantRecord | null = null
+
+  if (input.user_uuid) {
+    participant = await findOldestParticipantByUserUuid(input.user_uuid)
+  }
+
+  if (!participant && input.visitor_uuid) {
+    participant = await findOldestParticipantByVisitorUuid(input.visitor_uuid)
+
+    if (participant && input.user_uuid) {
+      try {
+        participant = await linkParticipantToUser({
+          participant_uuid: participant.participant_uuid,
+          user_uuid: input.user_uuid,
+        })
+      } catch {
+        participant = await findOldestParticipantByUserUuid(input.user_uuid)
+      }
+    }
+  }
+
+  if (!participant) {
+    return null
+  }
+
+  const room = await findRoomByUuid(participant.room_uuid)
+
+  if (!room) {
+    return null
+  }
+
+  return { room, participant }
+}
+
+/** @deprecated Use resolveRoomFromParticipants */
 export async function findRoomForIdentity(input: {
   visitor_uuid: string | null
   user_uuid: string | null
 }) {
-  if (input.visitor_uuid) {
-    const participant = await findParticipantRow(
-      `visitor_uuid=eq.${encodeURIComponent(input.visitor_uuid)}&role=eq.guest`,
-    )
-
-    if (participant) {
-      const room = await findRoomByUuid(participant.room_uuid)
-
-      if (room && input.user_uuid) {
-        await linkParticipantToUser({
-          participant_uuid: participant.participant_uuid,
-          user_uuid: input.user_uuid,
-        })
-      }
-
-      return room
-    }
-  }
-
-  if (input.user_uuid) {
-    const participant = await findParticipantRow(
-      `user_uuid=eq.${encodeURIComponent(input.user_uuid)}&role=eq.user`,
-    )
-
-    if (participant) {
-      return findRoomByUuid(participant.room_uuid)
-    }
-  }
-
-  return null
+  const resolved = await resolveRoomFromParticipants(input)
+  return resolved?.room ?? null
 }
 
 export async function findVisitorUuidByUser(user_uuid: string) {
@@ -533,6 +578,39 @@ export async function countRoomMessages(room_uuid: string) {
 
   const rows = (await response.json()) as Array<{ message_uuid: string }>
   return rows.length
+}
+
+export async function roomHasWelcomeMessage(room_uuid: string) {
+  const config = getRestConfig()
+
+  if (!config) {
+    return false
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "messages",
+      [
+        `room_uuid=eq.${encodeURIComponent(room_uuid)}`,
+        "body=eq.welcome",
+        "type=eq.flex",
+        "select=message_uuid",
+        "limit=1",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return false
+  }
+
+  const rows = (await response.json()) as Array<{ message_uuid: string }>
+  return rows.length > 0
 }
 
 export async function loadUserDisplayNames(user_uuids: string[]) {

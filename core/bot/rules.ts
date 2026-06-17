@@ -4,58 +4,48 @@ export type BotMessageTrigger = "chat_opened" | "quick_menu_requested"
 
 export type LocaleText = Record<ChatLocale, string>
 
-export type BotCarouselCardDefinition = {
-  key: string
-  image: string
-  title: LocaleText
-  body: LocaleText
-  buttons: Array<{
-    label: LocaleText
-    action: string
-  }>
-}
-
-export type BotCarouselPayload = {
-  kind: "carousel"
-  bot_trigger: BotMessageTrigger
-  cards: BotCarouselCardDefinition[]
-}
-
-export type BotCarouselCardView = {
-  key: string
-  image_url: string
-  title: string
-  body: string
-  buttons: Array<{
-    label: string
-    action: string
-  }>
+export type LineFlexCarouselPayload = {
+  type: "carousel"
+  contents: Record<string, unknown>[]
 }
 
 export const BOT_IMAGE = {
   quick_menu: "/images/quick-menu.jpg",
   how_to_use: "/images/how-yo-use.jpg",
   faq: "/images/FAQ.jpg",
-  bot_mode: "/images/bot-mode.jpg",
-  concierge_mode: "/images/concierge-mode.jpg",
-  reserve: "/images/recruit.jpg",
 } as const
 
-const WELCOME_BODY: LocaleText = {
-  ja: "PET TAXIへようこそ。まずはこちらからご確認ください。",
-  en: "Welcome to PET TAXI. Start here.",
-  es: "Bienvenido a PET TAXI. Empieza aqui.",
+const WELCOME_ALT: LocaleText = {
+  ja: "PET TAXIへようこそ",
+  en: "Welcome to PET TAXI",
+  es: "Bienvenido a PET TAXI",
+}
+
+const QUICK_MENU_ALT: LocaleText = {
+  ja: "クイックメニュー",
+  en: "Quick Menu",
+  es: "Menu rapido",
+}
+
+const QUICK_MENU_TITLE: LocaleText = {
+  ja: "クイックメニュー",
+  en: "Quick Menu",
+  es: "Menu rapido",
 }
 
 const QUICK_MENU_BODY: LocaleText = {
-  ja: "クイックメニューからご希望の内容を選んでください。",
-  en: "Choose an option from the quick menu.",
-  es: "Elige una opcion del menu rapido.",
+  ja: "ご希望の内容を選んでください。",
+  en: "Choose an option below.",
+  es: "Elige una opcion.",
 }
 
-export const WELCOME_CARDS: BotCarouselCardDefinition[] = [
+const WELCOME_BUBBLES: Array<{
+  image: string
+  title: LocaleText
+  body: LocaleText
+  buttons: Array<{ label: LocaleText; action: string }>
+}> = [
   {
-    key: "quick_menu",
     image: BOT_IMAGE.quick_menu,
     title: {
       ja: "クイックメニュー",
@@ -75,7 +65,6 @@ export const WELCOME_CARDS: BotCarouselCardDefinition[] = [
     ],
   },
   {
-    key: "how_to_use",
     image: BOT_IMAGE.how_to_use,
     title: {
       ja: "使い方",
@@ -95,7 +84,6 @@ export const WELCOME_CARDS: BotCarouselCardDefinition[] = [
     ],
   },
   {
-    key: "faq",
     image: BOT_IMAGE.faq,
     title: {
       ja: "FAQ",
@@ -116,106 +104,46 @@ export const WELCOME_CARDS: BotCarouselCardDefinition[] = [
   },
 ]
 
-export const QUICK_MENU_CARDS: BotCarouselCardDefinition[] = [
+const QUICK_MENU_BUTTONS: Array<{ label: LocaleText; action: string }> = [
   {
-    key: "check_availability",
-    image: BOT_IMAGE.quick_menu,
-    title: {
+    label: {
       ja: "空き状況を確認",
       en: "Check availability",
       es: "Ver disponibilidad",
     },
-    body: {
-      ja: "希望日時の空き状況を確認できます。",
-      en: "Check availability for your preferred date and time.",
-      es: "Consulta disponibilidad para tu fecha y hora.",
-    },
-    buttons: [
-      {
-        label: { ja: "確認する", en: "Check", es: "Consultar" },
-        action: "check_availability",
-      },
-    ],
+    action: "check_availability",
   },
   {
-    key: "reserve",
-    image: BOT_IMAGE.reserve,
-    title: {
+    label: {
       ja: "予約する",
       en: "Reserve",
       es: "Reservar",
     },
-    body: {
-      ja: "送迎の予約を進められます。",
-      en: "Start a new ride reservation.",
-      es: "Inicia una nueva reserva.",
-    },
-    buttons: [
-      {
-        label: { ja: "予約する", en: "Reserve", es: "Reservar" },
-        action: "reserve",
-      },
-    ],
+    action: "reserve",
   },
   {
-    key: "check_reservation",
-    image: BOT_IMAGE.how_to_use,
-    title: {
+    label: {
       ja: "予約を確認する",
       en: "Check reservation",
       es: "Ver reserva",
     },
-    body: {
-      ja: "現在の予約内容を確認できます。",
-      en: "Review your current reservation details.",
-      es: "Revisa los detalles de tu reserva.",
-    },
-    buttons: [
-      {
-        label: { ja: "確認する", en: "Check", es: "Ver" },
-        action: "check_reservation",
-      },
-    ],
+    action: "check_reservation",
   },
   {
-    key: "share_meeting_place",
-    image: BOT_IMAGE.faq,
-    title: {
+    label: {
       ja: "待ち合わせ場所を共有",
       en: "Share meeting place",
       es: "Compartir punto de encuentro",
     },
-    body: {
-      ja: "待ち合わせ場所を共有できます。",
-      en: "Share your meeting location.",
-      es: "Comparte tu punto de encuentro.",
-    },
-    buttons: [
-      {
-        label: { ja: "共有する", en: "Share", es: "Compartir" },
-        action: "share_meeting_place",
-      },
-    ],
+    action: "share_meeting_place",
   },
   {
-    key: "cancel_reservation",
-    image: BOT_IMAGE.bot_mode,
-    title: {
+    label: {
       ja: "予約をキャンセル",
       en: "Cancel reservation",
       es: "Cancelar reserva",
     },
-    body: {
-      ja: "予約のキャンセルを依頼できます。",
-      en: "Request to cancel your reservation.",
-      es: "Solicita cancelar tu reserva.",
-    },
-    buttons: [
-      {
-        label: { ja: "キャンセル", en: "Cancel", es: "Cancelar" },
-        action: "cancel_reservation",
-      },
-    ],
+    action: "cancel_reservation",
   },
 ]
 
@@ -231,17 +159,6 @@ export function resolveLocaleText(text: LocaleText, locale: ChatLocale) {
   return text[locale] ?? text.ja
 }
 
-export function buildCarouselPayload(input: {
-  trigger: BotMessageTrigger
-  cards: BotCarouselCardDefinition[]
-}): BotCarouselPayload {
-  return {
-    kind: "carousel",
-    bot_trigger: input.trigger,
-    cards: input.cards,
-  }
-}
-
 function readRecord(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null
@@ -250,30 +167,12 @@ function readRecord(value: unknown) {
   return value as Record<string, unknown>
 }
 
-export function isCarouselPayload(
+export function isLineFlexCarouselPayload(
   payload: Record<string, unknown> | null | undefined,
-): payload is BotCarouselPayload {
-  return readRecord(payload)?.kind === "carousel"
-}
+): payload is LineFlexCarouselPayload {
+  const record = readRecord(payload)
 
-export function resolveCarouselCardsForLocale(
-  payload: BotCarouselPayload | Record<string, unknown> | null | undefined,
-  locale: ChatLocale,
-): BotCarouselCardView[] {
-  if (!isCarouselPayload(payload)) {
-    return []
-  }
-
-  return payload.cards.map((card) => ({
-    key: card.key,
-    image_url: card.image,
-    title: resolveLocaleText(card.title, locale),
-    body: resolveLocaleText(card.body, locale),
-    buttons: card.buttons.map((button) => ({
-      label: resolveLocaleText(button.label, locale),
-      action: button.action,
-    })),
-  }))
+  return record?.type === "carousel" && Array.isArray(record.contents)
 }
 
 export function resolvePublicAssetUrl(path: string, base_url?: string | null) {
@@ -293,95 +192,195 @@ export function resolvePublicAssetUrl(path: string, base_url?: string | null) {
   return `${base}${path.startsWith("/") ? path : `/${path}`}`
 }
 
-function buildLineBubble(card: BotCarouselCardView, base_url?: string | null) {
+function buildHero(image_path: string) {
   return {
-    type: "bubble",
-    hero: {
-      type: "image",
-      url: resolvePublicAssetUrl(card.image_url, base_url),
-      size: "full",
-      aspectRatio: "20:13",
-      aspectMode: "cover",
-    },
-    body: {
-      type: "box",
-      layout: "vertical",
-      spacing: "sm",
-      paddingAll: "16px",
-      contents: [
-        {
-          type: "text",
-          text: card.title,
-          weight: "bold",
-          size: "md",
-          color: "#3d2a19",
-        },
-        {
-          type: "text",
-          text: card.body,
-          wrap: true,
-          size: "sm",
-          color: "#8c7358",
-        },
-      ],
-    },
-    footer: {
-      type: "box",
-      layout: "vertical",
-      spacing: "sm",
-      paddingAll: "12px",
-      contents: card.buttons.map((button) => ({
-        type: "button",
-        style: "primary",
-        color: "#8f5d28",
-        height: "sm",
-        action: {
-          type: "postback",
-          label: button.label,
-          data: button.action,
-        },
-      })),
-    },
+    type: "image",
+    url: image_path,
+    size: "full",
+    aspectRatio: "20:13",
+    aspectMode: "cover",
   }
 }
 
-export function carouselPayloadToLineFlex(input: {
-  payload: BotCarouselPayload | Record<string, unknown>
+function buildBody(title: string, body: string) {
+  return {
+    type: "box",
+    layout: "vertical",
+    spacing: "sm",
+    paddingAll: "16px",
+    contents: [
+      {
+        type: "text",
+        text: title,
+        weight: "bold",
+        size: "md",
+        color: "#3D2A19",
+      },
+      {
+        type: "text",
+        text: body,
+        wrap: true,
+        size: "sm",
+        color: "#8C7358",
+      },
+    ],
+  }
+}
+
+function buildFooter(buttons: Array<{ label: string; action: string }>) {
+  return {
+    type: "box",
+    layout: "vertical",
+    spacing: "sm",
+    paddingAll: "12px",
+    contents: buttons.map((button) => ({
+      type: "button",
+      style: "primary",
+      color: "#8F5D28",
+      height: "sm",
+      action: {
+        type: "postback",
+        label: button.label,
+        data: button.action,
+      },
+    })),
+  }
+}
+
+function buildBubble(input: {
+  image_path: string
+  title: string
+  body: string
+  buttons: Array<{ label: string; action: string }>
+}) {
+  return {
+    type: "bubble",
+    hero: buildHero(input.image_path),
+    body: buildBody(input.title, input.body),
+    footer: buildFooter(input.buttons),
+  }
+}
+
+export function buildWelcomeCarousel(locale: ChatLocale): LineFlexCarouselPayload {
+  return {
+    type: "carousel",
+    contents: WELCOME_BUBBLES.map((bubble) =>
+      buildBubble({
+        image_path: bubble.image,
+        title: resolveLocaleText(bubble.title, locale),
+        body: resolveLocaleText(bubble.body, locale),
+        buttons: bubble.buttons.map((button) => ({
+          label: resolveLocaleText(button.label, locale),
+          action: button.action,
+        })),
+      }),
+    ),
+  }
+}
+
+export function buildQuickMenuCarousel(
+  locale: ChatLocale,
+): LineFlexCarouselPayload {
+  return {
+    type: "carousel",
+    contents: [
+      buildBubble({
+        image_path: BOT_IMAGE.quick_menu,
+        title: resolveLocaleText(QUICK_MENU_TITLE, locale),
+        body: resolveLocaleText(QUICK_MENU_BODY, locale),
+        buttons: QUICK_MENU_BUTTONS.map((button) => ({
+          label: resolveLocaleText(button.label, locale),
+          action: button.action,
+        })),
+      }),
+    ],
+  }
+}
+
+export function buildBotCarouselPayload(input: {
+  trigger: BotMessageTrigger
   locale: ChatLocale
+}): LineFlexCarouselPayload {
+  if (input.trigger === "quick_menu_requested") {
+    return buildQuickMenuCarousel(input.locale)
+  }
+
+  return buildWelcomeCarousel(input.locale)
+}
+
+export function resolveBotMessageBody(trigger: BotMessageTrigger) {
+  if (trigger === "quick_menu_requested") {
+    return "quick_menu"
+  }
+
+  return "welcome"
+}
+
+export function resolveBotAltText(
+  trigger: BotMessageTrigger,
+  locale: ChatLocale,
+) {
+  if (trigger === "quick_menu_requested") {
+    return resolveLocaleText(QUICK_MENU_ALT, locale)
+  }
+
+  return resolveLocaleText(WELCOME_ALT, locale)
+}
+
+export function carouselPayloadToLineFlex(input: {
+  payload: LineFlexCarouselPayload
   alt_text: string
   base_url?: string | null
 }) {
-  const cards = resolveCarouselCardsForLocale(input.payload, input.locale)
+  const contents = input.payload.contents.map((bubble) =>
+    resolveFlexNodeImages(bubble, input.base_url),
+  )
 
   return {
     type: "flex",
     altText: input.alt_text,
     contents: {
       type: "carousel",
-      contents: cards.map((card) => buildLineBubble(card, input.base_url)),
+      contents,
     },
   }
 }
 
-export function resolveBotMessageBody(
-  trigger: BotMessageTrigger,
-  locale: ChatLocale,
-) {
-  if (trigger === "quick_menu_requested") {
-    return resolveLocaleText(QUICK_MENU_BODY, locale)
+function resolveFlexNodeImages(
+  value: unknown,
+  base_url?: string | null,
+): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => resolveFlexNodeImages(item, base_url))
   }
 
-  return resolveLocaleText(WELCOME_BODY, locale)
-}
+  const record = readRecord(value)
 
-export function resolveBotCarouselCards(trigger: BotMessageTrigger) {
-  if (trigger === "quick_menu_requested") {
-    return QUICK_MENU_CARDS
+  if (!record) {
+    return value
   }
 
-  return WELCOME_CARDS
+  const next: Record<string, unknown> = {}
+
+  for (const [key, child] of Object.entries(record)) {
+    if (key === "url" && typeof child === "string") {
+      next[key] = resolvePublicAssetUrl(child, base_url)
+      continue
+    }
+
+    next[key] = resolveFlexNodeImages(child, base_url)
+  }
+
+  return next
 }
 
 export function isQuickMenuTriggerAction(action: string) {
   return action === "quick_menu_requested"
+}
+
+// Backward-compatible alias used by chat/rules.ts
+export function isCarouselPayload(
+  payload: Record<string, unknown> | null | undefined,
+): payload is LineFlexCarouselPayload {
+  return isLineFlexCarouselPayload(payload)
 }

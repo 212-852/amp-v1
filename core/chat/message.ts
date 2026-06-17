@@ -1,7 +1,11 @@
-import { countRoomMessages, insertMessage } from "@/core/chat/archive"
-import { carouselPayloadToLineFlex } from "@/core/bot/rules"
+import { insertMessage } from "@/core/chat/archive"
+import {
+  carouselPayloadToLineFlex,
+  isLineFlexCarouselPayload,
+  resolveBotAltText,
+  type BotMessageTrigger,
+} from "@/core/bot/rules"
 import { createBotMessageBundle, type BotMessageBundle } from "@/core/bot/message"
-import type { BotMessageTrigger } from "@/core/bot/rules"
 import {
   buildMessagePayload,
   readMessageSourceKind,
@@ -11,8 +15,8 @@ import {
   resolveMessageDisplayLocale,
   resolveMessageOriginalLocale,
   resolveMessageTranslations,
+  shouldBootstrapWelcome,
 } from "@/core/chat/rules"
-import { isCarouselPayload } from "@/core/bot/rules"
 import { ensureRoomLocaleTranslation } from "@/core/chat/translate"
 import type {
   ChatLocale,
@@ -39,6 +43,18 @@ export type PreparedMessageInput = {
   session: Session
   translations?: ChatTranslations
   payload?: Record<string, unknown> | null
+}
+
+function resolveFlexAltText(body: string, locale: ChatLocale) {
+  if (body === "quick_menu") {
+    return resolveBotAltText("quick_menu_requested", locale)
+  }
+
+  if (body === "welcome") {
+    return resolveBotAltText("chat_opened", locale)
+  }
+
+  return body
 }
 
 export function toMessageBundle(
@@ -137,15 +153,14 @@ export async function deliverMessageBundle(input: {
   session: Session
   source_channel: SourceChannel
 }) {
-  const body_display = resolveMessageBodyDisplay(input.message, input.room.locale)
   const payload = input.message.payload
+  const alt_text = resolveFlexAltText(input.message.body, input.room.locale)
 
-  const line_messages = isCarouselPayload(payload)
+  const line_messages = isLineFlexCarouselPayload(payload)
     ? [
         carouselPayloadToLineFlex({
           payload,
-          locale: input.room.locale,
-          alt_text: input.message.body,
+          alt_text,
         }),
       ]
     : undefined
@@ -157,7 +172,7 @@ export async function deliverMessageBundle(input: {
       channel: input.room.channel,
     },
     {
-      text: body_display,
+      text: alt_text,
       data: payload as Record<string, unknown> | undefined,
       line_messages,
     },
@@ -169,9 +184,8 @@ export async function bootstrapRoomWelcome(input: {
   participant: ChatParticipantRecord
   session: Session
   source_channel: SourceChannel
-  room_created: boolean
 }) {
-  if (!input.room_created && (await countRoomMessages(input.room.room_uuid)) > 0) {
+  if (!(await shouldBootstrapWelcome(input.room.room_uuid))) {
     return null
   }
 
