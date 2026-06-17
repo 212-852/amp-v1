@@ -17,8 +17,9 @@ export const metadata: Metadata = {
   description: "AMP v1 user app shell",
   manifest: "/manifest.json",
   icons: {
-    icon: "/images/icon_192.png",
-    apple: "/images/icon_192.png",
+    icon: "/images/icon.svg",
+    shortcut: "/images/icon.svg",
+    apple: "/images/icon.svg",
   },
   appleWebApp: {
     capable: true,

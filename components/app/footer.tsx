@@ -100,7 +100,7 @@ function FooterCurve() {
 function PinkPawIcon() {
   return (
     <Image
-      src="/icon.svg"
+      src="/images/icon.svg"
       alt=""
       width={40}
       height={40}
