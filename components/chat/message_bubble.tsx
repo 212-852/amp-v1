@@ -1,8 +1,9 @@
 "use client"
 
+import Image from "next/image"
 import { useState } from "react"
 
-import FlexMessageBubble from "@/components/chat/flex_message_bubble"
+import FlexMessage from "@/components/chat/flex"
 import {
   hasMessageTranslation,
   resolveMessageBodyDisplay,
@@ -43,7 +44,20 @@ export default function ChatMessageBubble({
     : resolveMessageBodyDisplay(message, room_locale)
 
   if (is_flex) {
-    return <FlexMessageBubble message={message} />
+    return (
+      <div className="m-0 flex w-full items-start gap-2 rounded-none border-0 bg-transparent p-0 shadow-none">
+        <div className="relative mt-1 h-8 w-8 shrink-0 overflow-hidden rounded-full bg-white">
+          <Image
+            src="/images/robo_neko.svg"
+            alt=""
+            fill
+            className="object-contain p-1"
+            sizes="32px"
+          />
+        </div>
+        <FlexMessage payload={message.payload} />
+      </div>
+    )
   }
 
   return (

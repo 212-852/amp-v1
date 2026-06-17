@@ -13,7 +13,6 @@ export const BOT_IMAGE = {
   quick_menu: "/images/quick-menu.jpg",
   how_to_use: "/images/how-yo-use.jpg",
   faq: "/images/FAQ.jpg",
-  support: "/images/concierge-mode.jpg",
 } as const
 
 const WELCOME_ALT: LocaleText = {
@@ -40,6 +39,24 @@ const QUICK_MENU_BODY: LocaleText = {
   es: "Elige una opcion.",
 }
 
+const TERMS_OF_USE: LocaleText = {
+  ja: "利用規約",
+  en: "Terms of use",
+  es: "Terminos de uso",
+}
+
+const MEETUP_SUPPORT_TITLE: LocaleText = {
+  ja: "待ち合わせサポート",
+  en: "Meetup support",
+  es: "Soporte de encuentro",
+}
+
+const MEETUP_SUPPORT_BODY: LocaleText = {
+  ja: "待ち合わせ場所や予約内容で困ったときは、チャットから確認できます。",
+  en: "Use chat when you need help with meetup locations or reservation details.",
+  es: "Usa el chat si necesitas ayuda con puntos de encuentro o reservas.",
+}
+
 const WELCOME_BUBBLES: Array<{
   image: string
   title: LocaleText
@@ -55,15 +72,10 @@ const WELCOME_BUBBLES: Array<{
     },
     body: {
       ja: "予約や確認を素早く選べます。",
-      en: "Choose booking and support options quickly.",
-      es: "Elige reservas y soporte rapidamente.",
+      en: "Choose booking options quickly.",
+      es: "Elige opciones de reserva rapidamente.",
     },
-    buttons: [
-      {
-        label: { ja: "開く", en: "Open", es: "Abrir" },
-        action: "quick_menu_requested",
-      },
-    ],
+    buttons: [],
   },
   {
     image: BOT_IMAGE.how_to_use,
@@ -100,25 +112,6 @@ const WELCOME_BUBBLES: Array<{
       {
         label: { ja: "見る", en: "View", es: "Ver" },
         action: "faq",
-      },
-    ],
-  },
-  {
-    image: BOT_IMAGE.support,
-    title: {
-      ja: "サポート",
-      en: "Support",
-      es: "Soporte",
-    },
-    body: {
-      ja: "予約や待ち合わせ場所について、必要なときにサポートを確認できます。",
-      en: "Check support when you need help with reservations or meeting places.",
-      es: "Consulta soporte cuando necesites ayuda con reservas o puntos de encuentro.",
-    },
-    buttons: [
-      {
-        label: { ja: "相談する", en: "Get support", es: "Contactar" },
-        action: "support",
       },
     ],
   },
@@ -247,6 +240,56 @@ function buildBody(title: string, body: string) {
   }
 }
 
+function buildQuickMenuBody(locale: ChatLocale) {
+  return {
+    type: "box",
+    layout: "vertical",
+    spacing: "sm",
+    paddingAll: "16px",
+    contents: [
+      {
+        type: "text",
+        text: resolveLocaleText(QUICK_MENU_TITLE, locale),
+        weight: "bold",
+        size: "md",
+        color: "#3D2A19",
+      },
+      {
+        type: "text",
+        text: resolveLocaleText(TERMS_OF_USE, locale),
+        wrap: true,
+        size: "xs",
+        color: "#8C7358",
+      },
+      {
+        type: "separator",
+      },
+      {
+        type: "box",
+        layout: "vertical",
+        spacing: "xs",
+        paddingAll: "0",
+        contents: [
+          {
+            type: "text",
+            text: resolveLocaleText(MEETUP_SUPPORT_TITLE, locale),
+            weight: "bold",
+            size: "sm",
+            color: "#3D2A19",
+          },
+          {
+            type: "text",
+            text: resolveLocaleText(MEETUP_SUPPORT_BODY, locale),
+            wrap: true,
+            size: "sm",
+            color: "#8C7358",
+          },
+        ],
+      },
+    ],
+  }
+}
+
 function buildFooter(buttons: Array<{ label: string; action: string }>) {
   return {
     type: "box",
@@ -272,11 +315,12 @@ function buildBubble(input: {
   title: string
   body: string
   buttons: Array<{ label: string; action: string }>
+  body_node?: Record<string, unknown>
 }) {
   return {
     type: "bubble",
     hero: buildHero(input.image_path),
-    body: buildBody(input.title, input.body),
+    body: input.body_node ?? buildBody(input.title, input.body),
     footer: buildFooter(input.buttons),
   }
 }
@@ -284,15 +328,16 @@ function buildBubble(input: {
 export function buildWelcomeCarousel(locale: ChatLocale): LineFlexCarouselPayload {
   return {
     type: "carousel",
-    contents: WELCOME_BUBBLES.map((bubble) =>
+    contents: WELCOME_BUBBLES.map((bubble, index) =>
       buildBubble({
         image_path: bubble.image,
         title: resolveLocaleText(bubble.title, locale),
         body: resolveLocaleText(bubble.body, locale),
-        buttons: bubble.buttons.map((button) => ({
+        buttons: (index === 0 ? QUICK_MENU_BUTTONS : bubble.buttons).map((button) => ({
           label: resolveLocaleText(button.label, locale),
           action: button.action,
         })),
+        body_node: index === 0 ? buildQuickMenuBody(locale) : undefined,
       }),
     ),
   }
@@ -312,6 +357,7 @@ export function buildQuickMenuCarousel(
           label: resolveLocaleText(button.label, locale),
           action: button.action,
         })),
+        body_node: buildQuickMenuBody(locale),
       }),
     ],
   }
