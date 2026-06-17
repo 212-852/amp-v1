@@ -248,7 +248,7 @@ function FlexSeparator({ node }: Readonly<{ node?: FlexRecord | null }>) {
 }
 
 const FLEX_ACTION_BUTTON_CLASS =
-  "flex min-h-[44px] w-full items-center justify-center px-4 text-[14px] font-semibold"
+  "flex h-[44px] w-full items-center justify-center px-4 text-[14px] font-semibold"
 
 function readCornerRadius(value: unknown) {
   return typeof value === "string" ? value : "16px"
@@ -356,12 +356,20 @@ function FlexBox({
 function FlexBubbleSection({
   node,
   onAction,
+  kind,
 }: Readonly<{
   node: FlexRecord
   onAction: (action: string) => void
+  kind: "header" | "body" | "footer"
 }>) {
   return (
-    <section className="relative z-[1] w-full bg-white">
+    <section
+      className={[
+        "relative z-[1] w-full bg-white",
+        kind === "body" ? "flex-1" : "",
+        kind === "footer" ? "mt-auto" : "",
+      ].join(" ")}
+    >
       <FlexBox node={node} onAction={onAction} />
     </section>
   )
@@ -418,18 +426,28 @@ function FlexBubble({
   const footer = readRecord(bubble.footer)
 
   return (
-    <article className="block h-auto max-h-none w-[300px] max-w-[calc(100vw-76px)] shrink-0 snap-start self-start overflow-visible rounded-[18px] bg-white">
+    <article className="flex h-auto max-h-none w-[300px] max-w-[calc(100vw-76px)] shrink-0 snap-start self-stretch flex-col overflow-hidden rounded-[18px] bg-white">
       {header ? (
-        <FlexBubbleSection node={header} onAction={onAction} />
+        <FlexBubbleSection
+          node={header}
+          onAction={onAction}
+          kind="header"
+        />
       ) : null}
       {hero ? (
         <div className="relative z-0 w-full">
           <FlexHero node={hero} />
         </div>
       ) : null}
-      {body ? <FlexBubbleSection node={body} onAction={onAction} /> : null}
+      {body ? (
+        <FlexBubbleSection node={body} onAction={onAction} kind="body" />
+      ) : null}
       {footer ? (
-        <FlexBubbleSection node={footer} onAction={onAction} />
+        <FlexBubbleSection
+          node={footer}
+          onAction={onAction}
+          kind="footer"
+        />
       ) : null}
     </article>
   )
@@ -460,7 +478,7 @@ export default function FlexMessage({
 
   return (
     <div className="h-auto max-h-none w-full min-w-0 overflow-x-auto overflow-y-visible overscroll-x-contain pb-0 pt-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      <div className="flex w-max snap-x snap-mandatory items-start gap-2">
+      <div className="flex w-max snap-x snap-mandatory items-stretch gap-3">
         {carousel.contents.map((bubble, index) => (
           <FlexBubble
             key={index}

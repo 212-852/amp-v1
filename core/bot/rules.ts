@@ -11,7 +11,7 @@ export type LineFlexCarouselPayload = {
 
 export const BOT_IMAGE = {
   quick_menu: "/images/quick-menu.jpg",
-  how_to_use: "/images/how-yo-use.jpg",
+  how_to_use: "/images/how-to-use.jpg",
   faq: "/images/FAQ.jpg",
 } as const
 
@@ -112,53 +112,99 @@ const WELCOME_QUICK_MENU_BUTTONS: Array<{ label: LocaleText; action: string }> =
   },
 ]
 
-const WELCOME_BUBBLES: Array<{
-  image: string
-  title: LocaleText
-  body: LocaleText
-  buttons: Array<{ label: LocaleText; action: string }>
-}> = [
+const HOW_TO_USE_TITLE: LocaleText = {
+  ja: "ご利用方法",
+  en: "How to use",
+  es: "Como usar",
+}
+
+const HOW_TO_USE_BODY: LocaleText = {
+  ja: [
+    "1. 空き状況を確認します。",
+    "2. 予約内容を入力します。",
+    "3. 内容を確認して送信します。",
+    "4. 当日の合流場所を共有できます。",
+  ].join("\n"),
+  en: [
+    '1) Tap "Check availability"',
+    '2) If available, tap "Request a ride"',
+    "3) Enter pickup, drop-off, time, and pet details",
+    "4) Review and send",
+  ].join("\n"),
+  es: [
+    "1) Consulta disponibilidad",
+    "2) Si hay disponibilidad, solicita el traslado",
+    "3) Ingresa origen, destino, hora y detalles de la mascota",
+    "4) Revisa y envia",
+  ].join("\n"),
+}
+
+const HOW_TO_USE_NOTE_TITLE: LocaleText = {
+  ja: "ご注意",
+  en: "Notes",
+  es: "Notas",
+}
+
+const HOW_TO_USE_NOTE_BODY: LocaleText = {
+  ja: "料金は時間帯、エリア、道路状況により変わります。夜間や緊急のご依頼は対応できない場合があります。キャンセル料が発生する場合があります。",
+  en: "Fares vary by time, area, and traffic. Night and urgent requests may be limited. Cancellation fees may apply.",
+  es: "Las tarifas varian por hora, area y trafico. Los servicios nocturnos o urgentes pueden ser limitados. Pueden aplicarse cargos por cancelacion.",
+}
+
+const HOW_TO_USE_LINK: LocaleText = {
+  ja: "ご利用方法をもっと見る",
+  en: "See more how to use",
+  es: "Ver mas sobre como usar",
+}
+
+const FAQ_TITLE: LocaleText = {
+  ja: "FAQ",
+  en: "FAQ",
+  es: "FAQ",
+}
+
+const FAQ_BODY_LINES: LocaleText = {
+  ja: ["お支払い方法", "料金の仕組み", "ケージとサイズ制限"].join("\n"),
+  en: ["Payment methods", "How pricing works", "Carrier and size limits"].join(
+    "\n",
+  ),
+  es: ["Metodos de pago", "Como funcionan los precios", "Transportin y limites de tamano"].join(
+    "\n",
+  ),
+}
+
+const FAQ_BUTTONS: Array<{ label: LocaleText; action: string }> = [
   {
-    image: BOT_IMAGE.how_to_use,
-    title: {
-      ja: "ご利用方法",
-      en: "How to use",
-      es: "Como usar",
+    label: {
+      ja: "お支払い方法",
+      en: "Payment methods",
+      es: "Metodos de pago",
     },
-    body: {
-      ja: "予約までの流れを確認できます。",
-      en: "See how to complete a booking.",
-      es: "Consulta el flujo de reserva.",
-    },
-    buttons: [
-      {
-        label: {
-          ja: "ご利用方法を見る",
-          en: "View how to use",
-          es: "Ver como usar",
-        },
-        action: "how_to_use",
-      },
-    ],
+    action: "faq_payment_methods",
   },
   {
-    image: BOT_IMAGE.faq,
-    title: {
-      ja: "FAQ",
-      en: "FAQ",
-      es: "FAQ",
+    label: {
+      ja: "料金の仕組み",
+      en: "How pricing works",
+      es: "Como funcionan los precios",
     },
-    body: {
-      ja: "よくある質問を確認できます。",
-      en: "Check frequently asked questions.",
-      es: "Consulta preguntas frecuentes.",
+    action: "faq_pricing",
+  },
+  {
+    label: {
+      ja: "ケージとサイズ制限",
+      en: "Carrier and size limits",
+      es: "Transportin y limites de tamano",
     },
-    buttons: [
-      {
-        label: { ja: "FAQを見る", en: "View FAQ", es: "Ver FAQ" },
-        action: "faq",
-      },
-    ],
+    action: "faq_carrier_size",
+  },
+  {
+    label: {
+      ja: "FAQをすべて見る",
+      en: "Open all FAQs",
+      es: "Abrir todas las FAQ",
+    },
+    action: "faq",
   },
 ]
 
@@ -318,20 +364,114 @@ function buildWelcomePrimaryFooter(
   }
 }
 
-function buildWelcomeInfoBubble(input: {
-  image_path: string
-  title: string
-  body: string
-  buttons: Array<{ label: string; action: string }>
-}) {
+function buildHowToUseBody(locale: ChatLocale) {
+  return {
+    type: "box",
+    layout: "vertical",
+    spacing: "md",
+    paddingAll: "20px",
+    contents: [
+      {
+        type: "text",
+        text: resolveLocaleText(HOW_TO_USE_TITLE, locale),
+        weight: "bold",
+        size: "md",
+        color: "#3D2A19",
+      },
+      {
+        type: "text",
+        text: resolveLocaleText(HOW_TO_USE_BODY, locale),
+        wrap: true,
+        size: "sm",
+        color: "#8C7358",
+      },
+      {
+        type: "separator",
+        margin: "sm",
+      },
+      {
+        type: "box",
+        layout: "vertical",
+        spacing: "xs",
+        paddingAll: "0",
+        contents: [
+          {
+            type: "text",
+            text: resolveLocaleText(HOW_TO_USE_NOTE_TITLE, locale),
+            weight: "bold",
+            size: "sm",
+            color: "#3D2A19",
+          },
+          {
+            type: "text",
+            text: resolveLocaleText(HOW_TO_USE_NOTE_BODY, locale),
+            wrap: true,
+            size: "sm",
+            color: "#8C7358",
+          },
+        ],
+      },
+    ],
+  }
+}
+
+function buildHowToUseBubble(locale: ChatLocale) {
   return {
     type: "bubble",
-    hero: buildHero(input.image_path),
-    body: buildWelcomeBodyBox({
-      title: input.title,
-      body: input.body,
-    }),
-    footer: buildWelcomePrimaryFooter(input.buttons),
+    hero: buildHero(BOT_IMAGE.how_to_use),
+    body: buildHowToUseBody(locale),
+    footer: {
+      type: "box",
+      layout: "vertical",
+      spacing: "md",
+      alignItems: "center",
+      paddingAll: "18px",
+      contents: [
+        buildWelcomeFlexLink(
+          resolveLocaleText(HOW_TO_USE_LINK, locale),
+          "how_to_use",
+        ),
+      ],
+    },
+  }
+}
+
+function buildFaqBody(locale: ChatLocale) {
+  return {
+    type: "box",
+    layout: "vertical",
+    spacing: "md",
+    paddingAll: "20px",
+    contents: [
+      {
+        type: "text",
+        text: resolveLocaleText(FAQ_TITLE, locale),
+        weight: "bold",
+        size: "md",
+        color: "#3D2A19",
+      },
+      {
+        type: "text",
+        text: resolveLocaleText(FAQ_BODY_LINES, locale),
+        wrap: true,
+        size: "sm",
+        color: "#8C7358",
+      },
+    ],
+  }
+}
+
+function buildFaqBubble(locale: ChatLocale) {
+  return {
+    type: "bubble",
+    hero: buildHero(BOT_IMAGE.faq),
+    body: buildFaqBody(locale),
+    footer: buildWelcomePrimaryFooter(
+      FAQ_BUTTONS.map((button) => ({
+        label: resolveLocaleText(button.label, locale),
+        action: button.action,
+      })),
+    ),
   }
 }
 
@@ -541,21 +681,13 @@ function buildBubble(input: {
 }
 
 export function buildWelcomeCarousel(locale: ChatLocale): LineFlexCarouselPayload {
-  const other_bubbles = WELCOME_BUBBLES.map((bubble) =>
-    buildWelcomeInfoBubble({
-      image_path: bubble.image,
-      title: resolveLocaleText(bubble.title, locale),
-      body: resolveLocaleText(bubble.body, locale),
-      buttons: bubble.buttons.map((button) => ({
-        label: resolveLocaleText(button.label, locale),
-        action: button.action,
-      })),
-    }),
-  )
-
   return {
     type: "carousel",
-    contents: [buildWelcomeQuickMenuBubble(locale), ...other_bubbles],
+    contents: [
+      buildWelcomeQuickMenuBubble(locale),
+      buildHowToUseBubble(locale),
+      buildFaqBubble(locale),
+    ],
   }
 }
 
