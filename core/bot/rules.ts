@@ -13,6 +13,7 @@ export const BOT_IMAGE = {
   quick_menu: "/images/quick-menu.jpg",
   how_to_use: "/images/how-yo-use.jpg",
   faq: "/images/FAQ.jpg",
+  support: "/images/concierge-mode.jpg",
 } as const
 
 const WELCOME_ALT: LocaleText = {
@@ -99,6 +100,25 @@ const WELCOME_BUBBLES: Array<{
       {
         label: { ja: "見る", en: "View", es: "Ver" },
         action: "faq",
+      },
+    ],
+  },
+  {
+    image: BOT_IMAGE.support,
+    title: {
+      ja: "サポート",
+      en: "Support",
+      es: "Soporte",
+    },
+    body: {
+      ja: "予約や待ち合わせ場所について、必要なときにサポートを確認できます。",
+      en: "Check support when you need help with reservations or meeting places.",
+      es: "Consulta soporte cuando necesites ayuda con reservas o puntos de encuentro.",
+    },
+    buttons: [
+      {
+        label: { ja: "相談する", en: "Get support", es: "Contactar" },
+        action: "support",
       },
     ],
   },

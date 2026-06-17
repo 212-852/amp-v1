@@ -98,7 +98,12 @@ export function readFlexCarouselBubbles(
 
   return payload.contents
     .map((bubble) => readFlexBubble(readRecord(bubble) ?? {}))
-    .filter((bubble) => bubble.image_url || bubble.texts.length > 0)
+    .filter(
+      (bubble) =>
+        bubble.image_url ||
+        bubble.texts.length > 0 ||
+        bubble.buttons.length > 0,
+    )
 }
 
 export { isQuickMenuTriggerAction }

@@ -365,11 +365,15 @@ export type ResolvedOwnedRoom = {
 }
 
 export async function shouldBootstrapWelcome(room_uuid: string) {
-  if ((await countRoomMessages(room_uuid)) === 0) {
-    return true
+  if (await roomHasWelcomeMessage(room_uuid)) {
+    return false
   }
 
-  return !(await roomHasWelcomeMessage(room_uuid))
+  if ((await countRoomMessages(room_uuid)) > 0) {
+    return false
+  }
+
+  return true
 }
 
 export async function resolveOwnedRoom(input: {
