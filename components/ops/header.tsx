@@ -129,16 +129,13 @@ export default function OpsHeader({
       })
 
       const payload = (await response.json().catch(() => ({}))) as {
+        ok?: boolean
         enabled?: boolean
         error?: string
       }
 
-      if (!response.ok) {
+      if (!response.ok || payload.ok !== true || typeof payload.enabled !== "boolean") {
         throw new Error(payload.error ?? "concierge_toggle_failed")
-      }
-
-      if (typeof payload.enabled !== "boolean") {
-        throw new Error("concierge_toggle_invalid_response")
       }
 
       set_concierge_available_state(payload.enabled)

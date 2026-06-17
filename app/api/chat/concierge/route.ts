@@ -1,3 +1,5 @@
+import { NextResponse } from "next/server"
+
 import {
   getConciergeAvailabilityState,
   toggleConciergeAvailability,
@@ -5,44 +7,17 @@ import {
 import { resolveChatApiSession } from "@/core/chat/api"
 import { ConciergeToggleDeniedError } from "@/core/chat/concierge_access"
 
-function parseToggleBody(body: unknown) {
-  if (!body || typeof body !== "object" || Array.isArray(body)) {
-    return {
-      ok: false as const,
-      error: "Request body must be a JSON object",
-    }
-  }
-
-  const enabled = (body as { enabled?: unknown }).enabled
-
-  if (enabled === null || enabled === undefined) {
-    return {
-      ok: false as const,
-      error: "enabled is required",
-    }
-  }
-
-  if (typeof enabled !== "boolean") {
-    return {
-      ok: false as const,
-      error: "enabled must be a boolean",
-    }
-  }
-
-  return {
-    ok: true as const,
-    enabled,
-    request_body: body as Record<string, unknown>,
-  }
-}
-
 export async function GET() {
   try {
     const state = await getConciergeAvailabilityState()
-    return Response.json(state)
+    return NextResponse.json({
+      ok: true,
+      enabled: state.enabled,
+    })
   } catch (error) {
-    return Response.json(
+    return NextResponse.json(
       {
+        ok: false,
         error:
           error instanceof Error
             ? error.message
@@ -54,40 +29,20 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  let request_body: unknown = null
-
-  try {
-    request_body = await request.json()
-  } catch {
-    console.info("[concierge_toggle] concierge_toggle_invalid_body", {
-      request_body: null,
-      error: "Invalid JSON body",
-    })
-
-    return Response.json(
-      {
-        error: "Invalid JSON body",
-      },
-      { status: 400 },
-    )
-  }
+  const body = await request.json().catch(() => null)
+  const enabled = (body as { enabled?: unknown } | null)?.enabled
 
   console.info("[concierge_toggle] concierge_toggle_body_received", {
-    request_body,
+    request_body: body,
   })
 
-  const parsed = parseToggleBody(request_body)
-
-  if (!parsed.ok) {
+  if (typeof enabled !== "boolean") {
     console.info("[concierge_toggle] concierge_toggle_invalid_body", {
-      request_body,
-      error: parsed.error,
+      request_body: body,
     })
 
-    return Response.json(
-      {
-        error: parsed.error,
-      },
+    return NextResponse.json(
+      { ok: false, error: "enabled_boolean_required" },
       { status: 400 },
     )
   }
@@ -96,21 +51,28 @@ export async function POST(request: Request) {
     const { session } = await resolveChatApiSession()
 
     const result = await toggleConciergeAvailability({
-      enabled: parsed.enabled,
+      enabled,
       session,
-      request_body: parsed.request_body,
+      request_body:
+        body && typeof body === "object" && !Array.isArray(body)
+          ? (body as Record<string, unknown>)
+          : { enabled },
     })
 
     console.info("[concierge_toggle] concierge_toggle_success", {
       enabled: result.enabled,
-      request_body: parsed.request_body,
+      request_body: body,
     })
 
-    return Response.json(result)
+    return NextResponse.json({
+      ok: true,
+      enabled: result.enabled,
+    })
   } catch (error) {
     if (error instanceof ConciergeToggleDeniedError) {
-      return Response.json(
+      return NextResponse.json(
         {
+          ok: false,
           error: error.message,
         },
         { status: 403 },
@@ -118,12 +80,14 @@ export async function POST(request: Request) {
     }
 
     console.info("[concierge_toggle] concierge_toggle_failed", {
-      request_body,
+      request_body: body,
+      enabled,
       error_message: error instanceof Error ? error.message : String(error),
     })
 
-    return Response.json(
+    return NextResponse.json(
       {
+        ok: false,
         error:
           error instanceof Error
             ? error.message
