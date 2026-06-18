@@ -1,6 +1,7 @@
 {
   "name": "PET TAXI",
   "short_name": "PET TAXI",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

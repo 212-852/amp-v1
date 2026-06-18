@@ -252,6 +252,7 @@ export async function sendIdentityDebug(
     | "otp_verify_success"
     | "pwa_reload_after_bridge"
     | "pwa_bridge_start_request"
+    | "pwa_launch_entered"
     | "pwa_bridge_fetch_failed"
     | "pwa_bridge_fetch_response"
     | "pwa_bridge_fetch_started"

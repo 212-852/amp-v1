@@ -1369,6 +1369,17 @@ export async function resolveSession(
       request_id,
     )
 
+    if (context.source_channel === "pwa") {
+      await send_auth_debug(
+        "pwa_session_restore_started",
+        {
+          pathname: context.requested_route,
+          source_channel: context.source_channel,
+        },
+        request_id,
+      )
+    }
+
     const session = await getResolvedSessionFromRequestHeaders()
 
     if (session) {
@@ -1382,6 +1393,18 @@ export async function resolveSession(
         },
         request_id,
       )
+      if (session.source_channel === "pwa") {
+        await send_auth_debug(
+          "pwa_session_restore_success",
+          {
+            pathname: context.requested_route,
+            visitor_uuid: session.visitor_uuid,
+            user_uuid: session.user_uuid,
+            source_channel: session.source_channel,
+          },
+          request_id,
+        )
+      }
       await send_auth_debug(
         "resolve_session_exit",
         {
@@ -1407,6 +1430,18 @@ export async function resolveSession(
         },
         request_id,
       )
+      if (customSession.source_channel === "pwa") {
+        await send_auth_debug(
+          "pwa_session_restore_success",
+          {
+            pathname: context.requested_route,
+            visitor_uuid: customSession.visitor_uuid,
+            user_uuid: customSession.user_uuid,
+            source_channel: customSession.source_channel,
+          },
+          request_id,
+        )
+      }
       return customSession
     }
 
@@ -1421,6 +1456,18 @@ export async function resolveSession(
       },
       request_id,
     )
+    if (cachedSession.source_channel === "pwa") {
+      await send_auth_debug(
+        "pwa_session_restore_success",
+        {
+          pathname: context.requested_route,
+          visitor_uuid: cachedSession.visitor_uuid,
+          user_uuid: cachedSession.user_uuid,
+          source_channel: cachedSession.source_channel,
+        },
+        request_id,
+      )
+    }
     return cachedSession
   } catch (error) {
     await send_auth_debug(
@@ -1432,6 +1479,17 @@ export async function resolveSession(
       },
       request_id,
     )
+    if (context.source_channel === "pwa") {
+      await send_auth_debug(
+        "pwa_session_restore_failed",
+        {
+          pathname: context.requested_route,
+          source_channel: context.source_channel,
+          error_message: error instanceof Error ? error.message : String(error),
+        },
+        request_id,
+      )
+    }
     await send_auth_debug(
       "session_failed",
       {

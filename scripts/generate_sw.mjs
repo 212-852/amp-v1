@@ -8,7 +8,8 @@ const build_id =
   process.env.BUILD_ID ??
   Date.now().toString(36)
 
-const sw_source = `const CACHE_VERSION = "amp-${build_id}"
+const sw_source = `const SW_CACHE_VERSION = "amp-pwa-launch-v2-${build_id}"
+const CACHE_NAME = \`\${SW_CACHE_VERSION}-runtime\`
 
 const BYPASS_PREFIXES = [
   "/_next/static/",
@@ -28,15 +29,37 @@ function isDocumentRequest(request) {
   )
 }
 
-self.addEventListener("install", () => {
-  self.skipWaiting()
+async function cacheRootAppShell() {
+  try {
+    const response = await fetch("/", { cache: "no-store" })
+
+    if (response.ok) {
+      const cache = await caches.open(CACHE_NAME)
+      await cache.put("/", response.clone())
+    }
+  } catch {
+    // App shell caching is best effort.
+  }
+}
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    (async () => {
+      await cacheRootAppShell()
+      await self.skipWaiting()
+    })(),
+  )
 })
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
       const keys = await caches.keys()
-      await Promise.all(keys.map((key) => caches.delete(key)))
+      await Promise.all(
+        keys
+          .filter((key) => key !== CACHE_NAME)
+          .map((key) => caches.delete(key)),
+      )
       await self.clients.claim()
     })(),
   )
@@ -61,9 +84,36 @@ self.addEventListener("fetch", (event) => {
 
   if (isDocumentRequest(request)) {
     event.respondWith(
-      fetch(request, {
-        cache: "no-store",
-      }),
+      (async () => {
+        try {
+          const response = await fetch(request, {
+            cache: "no-store",
+          })
+
+          if (response.ok) {
+            const pathname = new URL(request.url).pathname
+
+            if (pathname === "/") {
+              const cache = await caches.open(CACHE_NAME)
+              await cache.put("/", response.clone())
+            } else {
+              event.waitUntil(cacheRootAppShell())
+            }
+
+            return response
+          }
+        } catch {
+          // Fall through to the app shell fallback.
+        }
+
+        const cached = await caches.match("/")
+
+        if (cached) {
+          return cached
+        }
+
+        return fetch("/", { cache: "no-store" })
+      })(),
     )
     return
   }

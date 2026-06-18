@@ -1268,6 +1268,7 @@ export async function sendLoginBridgeDebug(request: NextRequest) {
     event !== "pwa_bridge_fetch_started" &&
     event !== "pwa_bridge_fetch_timeout" &&
     event !== "pwa_bridge_start_request" &&
+    event !== "pwa_launch_entered" &&
     event !== "pwa_bridge_start_failed" &&
     event !== "pwa_bridge_start_success" &&
     event !== "pwa_line_popup_blocked" &&

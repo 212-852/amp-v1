@@ -32,6 +32,34 @@ function reloadOnce(storage_key: string) {
   window.location.reload()
 }
 
+function isStandalonePwa() {
+  if (typeof window === "undefined") {
+    return false
+  }
+
+  const standaloneNavigator = navigator as Navigator & {
+    standalone?: boolean
+  }
+
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    standaloneNavigator.standalone === true
+  )
+}
+
+async function sendPwaDebug(event: string, payload: Record<string, unknown>) {
+  await fetch("/api/auth/bridge/debug", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      event,
+      payload,
+    }),
+  }).catch(() => null)
+}
+
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) {
     return
@@ -80,6 +108,15 @@ function registerServiceWorker() {
 export function PwaRuntime() {
   useEffect(() => {
     sessionStorage.removeItem(CHUNK_RELOAD_KEY)
+
+    if (isStandalonePwa()) {
+      void sendPwaDebug("pwa_launch_entered", {
+        pathname: window.location.pathname,
+        search: window.location.search,
+        referrer: document.referrer || null,
+        display_mode: "standalone",
+      })
+    }
 
     const onError = (event: ErrorEvent) => {
       if (isChunkLoadError(event.error ?? event.message)) {
