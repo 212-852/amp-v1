@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from "crypto"
 import { sendAuthDebug } from "@/core/debug"
 import { handleLineWebhook } from "@/core/line/action"
 import { normalizeLineWebhookRequest } from "@/core/line/context"
+import { is_allowed_line_webhook_user } from "@/core/line/webhook/rules"
 
 function verifyLineSignature(body: string, signature: string | null) {
   const secret = process.env.LINE_MESSAGING_CHANNEL_SECRET
@@ -51,7 +52,46 @@ export async function POST(request: Request) {
   }
 
   const result = await normalizeLineWebhookRequest(payload)
-    .then((request) => handleLineWebhook(request))
+    .then(async (line_request) => {
+      const allowed_events = line_request.events.filter((event) => {
+        const allowed = is_allowed_line_webhook_user(
+          event.provider_user_id,
+          process.env,
+        )
+
+        if (!allowed) {
+          console.info("[line_webhook] line_test_blocked_before_db", {
+            provider_user_id: event.provider_user_id,
+            source_channel: event.source_channel,
+            entry: "webhook",
+          })
+        }
+
+        return allowed
+      })
+
+      if (allowed_events.length === 0) {
+        return {
+          ok: true,
+          results: line_request.events.map((event) => ({
+            provider_user_id: event.provider_user_id,
+            archived: false,
+            processed: false,
+            replied: false,
+          })),
+        }
+      }
+
+      await Promise.all(
+        allowed_events.map((event) =>
+          sendAuthDebug("line_test_allowed_entered", {
+            provider_user_id: event.provider_user_id,
+          }),
+        ),
+      )
+
+      return handleLineWebhook({ events: allowed_events })
+    })
     .catch((error) => ({
       ok: false,
       error: error instanceof Error ? error.message : "line_webhook_failed",

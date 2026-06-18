@@ -9,7 +9,6 @@ import {
   type LineWebhookRequest,
 } from "@/core/line/context"
 import {
-  can_process_line_webhook_user,
   can_reply_to_line_user,
   get_allowed_line_users,
   get_line_webhook_test_mode,
@@ -68,40 +67,10 @@ export async function handleLineWebhook(request: LineWebhookRequest) {
   }> = []
 
   for (const event of request.events) {
-    if (
-      !can_process_line_webhook_user({
-        provider_user_id: event.provider_user_id,
-        source_channel: event.source_channel,
-        entry: "webhook",
-      })
-    ) {
-      console.info("[line_webhook] chat_gate_blocked", {
-        event: "chat_gate_blocked",
-        provider_user_id: event.provider_user_id,
-        reason: "line_test_mode_not_allowed",
-        source_channel: event.source_channel,
-        entry: "webhook",
-        reply_enabled: is_line_webhook_reply_enabled(),
-        test_mode: get_line_webhook_test_mode(),
-      })
-
-      results.push({
-        provider_user_id: event.provider_user_id,
-        archived: false,
-        processed: false,
-        replied: false,
-      })
-      continue
-    }
-
     await sendAuthDebug("chat_gate_passed", {
       provider_user_id: event.provider_user_id,
       source_channel: event.source_channel,
       entry: "webhook",
-    })
-
-    await sendAuthDebug("line_test_allowed_entered", {
-      provider_user_id: event.provider_user_id,
     })
 
     await sendAuthDebug("line_event_normalized", {
