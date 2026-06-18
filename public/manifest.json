@@ -1,8 +1,8 @@
 {
   "name": "PET TAXI",
   "short_name": "PET TAXI",
-  "id": "/",
-  "start_url": "/",
+  "id": "/app",
+  "start_url": "/app",
   "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",

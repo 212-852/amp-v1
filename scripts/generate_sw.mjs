@@ -8,8 +8,9 @@ const build_id =
   process.env.BUILD_ID ??
   Date.now().toString(36)
 
-const sw_source = `const SW_CACHE_VERSION = "amp-pwa-launch-v2-${build_id}"
+const sw_source = `const SW_CACHE_VERSION = "amp-pwa-launch-v3-no-redirect-nav-${build_id}"
 const CACHE_NAME = \`\${SW_CACHE_VERSION}-runtime\`
+const APP_SHELL_URL = "/app"
 
 const BYPASS_PREFIXES = [
   "/_next/static/",
@@ -31,15 +32,41 @@ function isDocumentRequest(request) {
 
 async function cacheRootAppShell() {
   try {
-    const response = await fetch("/", { cache: "no-store" })
+    const response = await fetch(APP_SHELL_URL, {
+      cache: "no-store",
+      credentials: "include",
+    })
 
-    if (response.ok) {
+    if (isCacheableResponse(response)) {
       const cache = await caches.open(CACHE_NAME)
-      await cache.put("/", response.clone())
+      await cache.put(APP_SHELL_URL, response.clone())
     }
   } catch {
     // App shell caching is best effort.
   }
+}
+
+function isCacheableResponse(response) {
+  return (
+    response.ok &&
+    response.status < 300 &&
+    response.redirected !== true &&
+    response.type !== "opaqueredirect"
+  )
+}
+
+async function fetchAppShell() {
+  const response = await fetch(APP_SHELL_URL, {
+    cache: "no-store",
+    credentials: "include",
+  })
+
+  if (isCacheableResponse(response)) {
+    const cache = await caches.open(CACHE_NAME)
+    await cache.put(APP_SHELL_URL, response.clone())
+  }
+
+  return response
 }
 
 self.addEventListener("install", (event) => {
@@ -88,14 +115,15 @@ self.addEventListener("fetch", (event) => {
         try {
           const response = await fetch(request, {
             cache: "no-store",
+            credentials: "include",
           })
 
-          if (response.ok) {
+          if (isCacheableResponse(response)) {
             const pathname = new URL(request.url).pathname
 
-            if (pathname === "/") {
+            if (pathname === APP_SHELL_URL) {
               const cache = await caches.open(CACHE_NAME)
-              await cache.put("/", response.clone())
+              await cache.put(APP_SHELL_URL, response.clone())
             } else {
               event.waitUntil(cacheRootAppShell())
             }
@@ -106,13 +134,38 @@ self.addEventListener("fetch", (event) => {
           // Fall through to the app shell fallback.
         }
 
-        const cached = await caches.match("/")
+        try {
+          const response = await fetchAppShell()
+
+          if (isCacheableResponse(response)) {
+            return response
+          }
+        } catch {
+          // Fall through to cached app shell.
+        }
+
+        const cached = await caches.match(APP_SHELL_URL)
 
         if (cached) {
           return cached
         }
 
-        return fetch("/", { cache: "no-store" })
+        try {
+          const response = await fetchAppShell()
+
+          if (isCacheableResponse(response)) {
+            return response
+          }
+        } catch {
+          // Return a non-redirect response instead of surfacing an iOS PWA error.
+        }
+
+        return new Response("App is temporarily unavailable.", {
+          status: 503,
+          headers: {
+            "content-type": "text/plain; charset=utf-8",
+          },
+        })
       })(),
     )
     return

@@ -1,5 +1,3 @@
-import { redirect } from "next/navigation"
-
 import AppFooter from "@/components/app/footer"
 import AppHeader from "@/components/app/header"
 import AppHome from "@/components/app/home"
@@ -7,18 +5,10 @@ import { resolveAuthContext } from "@/core/auth/context"
 import { resolveSession } from "@/core/auth/session"
 import { resolveChatSupportAccess } from "@/core/chat/support"
 import { resolveChatRoom } from "@/core/chat/action"
-import { resolveAmpRoute } from "@/core/route/rules"
 
 export default async function AppPage() {
   const context = await resolveAuthContext()
-  const [route, session] = await Promise.all([
-    resolveAmpRoute(),
-    resolveSession(context),
-  ])
-
-  if (route.path !== "/app") {
-    redirect(route.path)
-  }
+  const session = await resolveSession(context)
 
   const support_access = resolveChatSupportAccess({
     user_uuid: session.user_uuid,
