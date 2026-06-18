@@ -3,6 +3,7 @@ import {
   normalizeModeSwitchInput,
   normalizeTypingInput,
   resolveChatLocale,
+  resolveOutputLocale,
   resolveParticipantDisplayName,
   resolveParticipantRole,
   buildChatContext,
@@ -340,14 +341,19 @@ async function handleRoomModeCommand(input: {
     source_channel: input.source_channel,
   })
 
+  const output_locale = resolveOutputLocale({
+    preferred: input.locale,
+    room_locale: input.room.locale,
+  })
+
   const message = await archivePreparedMessage({
     room: updated_room,
     participant: input.participant,
     source_channel: input.source_channel,
     source_kind: "system",
     type: "system",
-    body: resolveRoomModeCommandReply(mode),
-    original_locale: updated_room.locale,
+    body: resolveRoomModeCommandReply(mode, output_locale),
+    original_locale: output_locale,
     session: input.session,
   })
 
@@ -388,14 +394,19 @@ export async function handleChatModeSwitch(input: ChatModeSwitchInput) {
     mode,
   })
 
+  const output_locale = resolveOutputLocale({
+    preferred: input.locale,
+    room_locale: updated_room.locale,
+  })
+
   const message = await archivePreparedMessage({
           room: updated_room,
           participant,
           source_channel: input.source_channel,
           source_kind: "system",
           type: "system",
-          body: resolveRoomModeCommandReply(mode),
-          original_locale: updated_room.locale,
+          body: resolveRoomModeCommandReply(mode, output_locale),
+          original_locale: output_locale,
           session: input.session,
         })
 
@@ -435,6 +446,7 @@ export async function handleQuickMenuRequested(input: {
     participant,
     session: input.session,
     source_channel: input.source_channel,
+    locale: context.locale,
     line_reply_token: input.line_reply_token,
     line_provider_user_id: input.line_provider_user_id,
     line_reply_allowed: input.line_reply_allowed,

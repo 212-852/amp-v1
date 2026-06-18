@@ -1,6 +1,6 @@
+import { resolveOutputLocale } from "@/core/chat/context"
 import {
   buildBotCarouselPayload,
-  resolveBotLocale,
   resolveBotMessageBody,
   type BotMessageTrigger,
 } from "@/core/bot/rules"
@@ -17,7 +17,7 @@ export function createBotMessageBundle(input: {
   trigger: BotMessageTrigger
   locale: string | null | undefined
 }): BotMessageBundle {
-  const locale = resolveBotLocale(input.locale)
+  const locale = resolveOutputLocale({ preferred: input.locale })
 
   return {
     trigger: input.trigger,

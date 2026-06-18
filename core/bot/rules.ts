@@ -1,8 +1,11 @@
 import type { ChatLocale } from "@/core/chat/types"
+import {
+  resolveChatContent,
+  resolveChatContentRecord,
+  type LocaleText,
+} from "@/core/chat/content"
 
 export type BotMessageTrigger = "chat_opened" | "quick_menu_requested"
-
-export type LocaleText = Record<ChatLocale, string>
 
 export type LineFlexCarouselPayload = {
   type: "carousel"
@@ -15,47 +18,13 @@ export const BOT_IMAGE = {
   faq: "/images/FAQ.jpg",
 } as const
 
-const WELCOME_ALT: LocaleText = {
-  ja: "PET TAXIへようこそ",
-  en: "Welcome to PET TAXI",
-  es: "Bienvenido a PET TAXI",
-}
-
-const QUICK_MENU_ALT: LocaleText = {
-  ja: "クイックメニュー",
-  en: "Quick Menu",
-  es: "Menu rapido",
-}
-
-const QUICK_MENU_TITLE: LocaleText = {
-  ja: "クイックメニュー",
-  en: "Quick Menu",
-  es: "Menu rapido",
-}
-
-const QUICK_MENU_BODY: LocaleText = {
-  ja: "ご希望の内容を選んでください。",
-  en: "Choose an option below.",
-  es: "Elige una opcion.",
-}
-
-const TERMS_OF_USE: LocaleText = {
-  ja: "ご利用規約",
-  en: "Terms of use",
-  es: "Terminos de uso",
-}
-
-const MEETUP_SUPPORT_TITLE: LocaleText = {
-  ja: "待ち合わせサポート",
-  en: "Meetup support",
-  es: "Soporte de encuentro",
-}
-
-const MEETUP_SUPPORT_BODY: LocaleText = {
-  ja: "当日は診察終了や空港手続き完了のタイミングに合わせ、ドライバーがお客様とペットが確実に合流できるようサポートいたします。",
-  en: "On the day, we align with clinic finish or airport procedures so the driver can meet you and your pet reliably.",
-  es: "El dia del servicio, nos coordinamos con el fin de la consulta o los tramites del aeropuerto para que el conductor se encuentre contigo y tu mascota sin problemas.",
-}
+const WELCOME_ALT = resolveChatContentRecord("welcome_title")
+const QUICK_MENU_ALT = resolveChatContentRecord("quick_menu_title")
+const QUICK_MENU_TITLE = resolveChatContentRecord("quick_menu_title")
+const QUICK_MENU_BODY = resolveChatContentRecord("quick_menu_body")
+const TERMS_OF_USE = resolveChatContentRecord("terms")
+const MEETUP_SUPPORT_TITLE = resolveChatContentRecord("meeting_support_title")
+const MEETUP_SUPPORT_BODY = resolveChatContentRecord("meeting_support_body")
 
 const SHARE_MEETUP_LINK: LocaleText = {
   ja: "待ち合わせ場所を共有する",
@@ -69,45 +38,27 @@ const CANCEL_RESERVATION_LINK: LocaleText = {
   es: "Cancelar reserva",
 }
 
+export type { LocaleText } from "@/core/chat/content"
+
 const WELCOME_QUICK_MENU_BUTTONS: Array<{ label: LocaleText; action: string }> = [
   {
-    label: {
-      ja: "空き状況を確認",
-      en: "Check availability",
-      es: "Ver disponibilidad",
-    },
+    label: resolveChatContentRecord("check_availability"),
     action: "check_availability",
   },
   {
-    label: {
-      ja: "予約する",
-      en: "Request a ride",
-      es: "Reservar",
-    },
+    label: resolveChatContentRecord("create_booking"),
     action: "reserve",
   },
   {
-    label: {
-      ja: "予約を確認する",
-      en: "Review reservation",
-      es: "Ver reserva",
-    },
+    label: resolveChatContentRecord("confirm_booking"),
     action: "check_reservation",
   },
   {
-    label: {
-      ja: "待ち合わせ場所を共有",
-      en: "Share meetup location",
-      es: "Compartir punto de encuentro",
-    },
+    label: resolveChatContentRecord("share_meeting_place"),
     action: "share_meeting_place",
   },
   {
-    label: {
-      ja: "予約をキャンセル",
-      en: "Cancel reservation",
-      es: "Cancelar reserva",
-    },
+    label: resolveChatContentRecord("cancel_booking"),
     action: "cancel_reservation",
   },
 ]
@@ -210,43 +161,23 @@ const FAQ_BUTTONS: Array<{ label: LocaleText; action: string }> = [
 
 const QUICK_MENU_BUTTONS: Array<{ label: LocaleText; action: string }> = [
   {
-    label: {
-      ja: "空き状況を確認",
-      en: "Check availability",
-      es: "Ver disponibilidad",
-    },
+    label: resolveChatContentRecord("check_availability"),
     action: "check_availability",
   },
   {
-    label: {
-      ja: "予約する",
-      en: "Reserve",
-      es: "Reservar",
-    },
+    label: resolveChatContentRecord("create_booking"),
     action: "reserve",
   },
   {
-    label: {
-      ja: "予約を確認する",
-      en: "Check reservation",
-      es: "Ver reserva",
-    },
+    label: resolveChatContentRecord("confirm_booking"),
     action: "check_reservation",
   },
   {
-    label: {
-      ja: "待ち合わせ場所を共有",
-      en: "Share meeting place",
-      es: "Compartir punto de encuentro",
-    },
+    label: resolveChatContentRecord("share_meeting_place"),
     action: "share_meeting_place",
   },
   {
-    label: {
-      ja: "予約をキャンセル",
-      en: "Cancel reservation",
-      es: "Cancelar reserva",
-    },
+    label: resolveChatContentRecord("cancel_booking"),
     action: "cancel_reservation",
   },
 ]

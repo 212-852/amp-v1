@@ -280,14 +280,16 @@ export async function bootstrapRoomWelcome(input: {
   participant: ChatParticipantRecord
   session: Session
   source_channel: SourceChannel
+  locale?: ChatLocale | null
 }) {
   if (!(await shouldBootstrapWelcome(input.room.room_uuid))) {
     return null
   }
 
+  const locale = input.locale ?? input.room.locale
   const bundle = createBotMessageBundle({
     trigger: "chat_opened",
-    locale: input.room.locale,
+    locale,
   })
 
   const message = await archiveBotMessageBundle({
@@ -319,13 +321,15 @@ export async function archiveBotTriggerMessage(input: {
   participant: ChatParticipantRecord | null
   session: Session
   source_channel: SourceChannel
+  locale?: ChatLocale | null
   line_reply_token?: string | null
   line_provider_user_id?: string | null
   line_reply_allowed?: boolean
 }) {
+  const locale = input.locale ?? input.room.locale
   const bundle = createBotMessageBundle({
     trigger: input.trigger,
-    locale: input.room.locale,
+    locale,
   })
 
   const message = await archiveBotMessageBundle({

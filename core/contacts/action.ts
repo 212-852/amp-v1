@@ -48,6 +48,13 @@ function contactConflictTarget(context: ContactContext) {
 }
 
 function contactUpsertIdentity(context: ContactContext) {
+  if (context.type === "line") {
+    return {
+      user_uuid: context.user_uuid,
+      visitor_uuid: context.visitor_uuid,
+    }
+  }
+
   if (context.user_uuid) {
     return {
       user_uuid: context.user_uuid,
@@ -59,6 +66,66 @@ function contactUpsertIdentity(context: ContactContext) {
     user_uuid: null,
     visitor_uuid: context.visitor_uuid,
   }
+}
+
+async function findContactByTypeValue(
+  config: NonNullable<ReturnType<typeof getRestConfig>>,
+  input: { type: ContactRecord["type"]; value: string },
+) {
+  const response = await fetch(
+    restUrl(
+      config,
+      "contacts",
+      [
+        `type=eq.${encodeURIComponent(input.type)}`,
+        `value=eq.${encodeURIComponent(input.value)}`,
+        `select=${CONTACT_SELECT}`,
+        "limit=1",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return null
+  }
+
+  const rows = (await response.json()) as ContactRecord[]
+  return rows[0] ?? null
+}
+
+async function patchContactRecord(
+  config: NonNullable<ReturnType<typeof getRestConfig>>,
+  contact_uuid: string,
+  body: ContactUpsertBody,
+) {
+  const response = await fetch(
+    restUrl(config, "contacts", `contact_uuid=eq.${encodeURIComponent(contact_uuid)}`),
+    {
+      method: "PATCH",
+      headers: {
+        ...restHeaders(config),
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+    throw new Error(
+      `Failed to patch contact: ${error.code ?? "unknown"} ${
+        error.message ?? "No PostgREST error returned"
+      }`,
+    )
+  }
+
+  const rows = (await response.json()) as ContactRecord[]
+  return rows[0] ?? null
 }
 
 export async function upsertContact(context: ContactContext): Promise<ContactRecord | null> {
@@ -104,6 +171,21 @@ export async function upsertContact(context: ContactContext): Promise<ContactRec
 
   if (!response.ok) {
     const error = await readRestError(response)
+
+    if (
+      context.type === "line" &&
+      (error.code === "42P10" || error.message?.includes("ON CONFLICT"))
+    ) {
+      const existing = await findContactByTypeValue(config, {
+        type: context.type,
+        value: context.value,
+      })
+
+      if (existing?.contact_uuid) {
+        return patchContactRecord(config, existing.contact_uuid, body)
+      }
+    }
+
     throw new Error(
       `Failed to upsert contact: ${error.code ?? "unknown"} ${
         error.message ?? "No PostgREST error returned"

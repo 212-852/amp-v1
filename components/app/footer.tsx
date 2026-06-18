@@ -12,8 +12,11 @@ import {
   type ChatSupportAccess,
   type ChatSupportMode,
 } from "@/core/chat/support"
-import { buildModeChangeToast } from "@/core/output/toast"
-import { chat_mode_toast_content } from "@/core/chat/mode_toast_content"
+import {
+  buildModeChangeToast,
+  chat_mode_toast_content,
+  resolveChatContent,
+} from "@/core/chat/mode_toast_content"
 import { useLocale } from "@/src/components/locale/provider"
 import type { Locale } from "@/src/lib/locale"
 
@@ -46,9 +49,9 @@ const content = {
     es: "Mensaje",
   },
   message_placeholder: {
-    ja: "メッセージを入力",
-    en: "Type a message",
-    es: "Escribe un mensaje",
+    ja: resolveChatContent("message_placeholder", "ja"),
+    en: resolveChatContent("message_placeholder", "en"),
+    es: resolveChatContent("message_placeholder", "es"),
   },
   footer_menu: {
     ja: "フッターメニュー",

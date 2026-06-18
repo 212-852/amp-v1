@@ -13,7 +13,8 @@ export {
   resolveRoomPresence,
   toggleConciergeAvailability,
 } from "@/core/chat/action"
-export { normalizeIncomingChatInput, resolveParticipantRole } from "@/core/chat/context"
+export { normalizeIncomingChatInput, resolveOutputLocale, resolveParticipantRole } from "@/core/chat/context"
+export { resolveChatContent, chat_content } from "@/core/chat/content"
 export { toMessageBundle, bootstrapRoomWelcome } from "@/core/chat/message"
 export { bootstrapChatRoom, findChatRoomState, resolveOrCreateRoom } from "@/core/chat/room"
 export {

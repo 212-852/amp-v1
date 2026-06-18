@@ -1,3 +1,4 @@
+import { resolveChatContent } from "@/core/chat/content"
 import type { Session } from "@/core/auth/types"
 import { isCarouselPayload } from "@/core/bot/rules"
 import {
@@ -251,29 +252,35 @@ export function resolve_room_mode_trigger(text: string): "bot" | "concierge" | n
 
 export const resolve_room_mode_command = resolve_room_mode_trigger
 
-export function resolveRoomModeCommandReply(mode: ChatRoomMode) {
+export function resolveRoomModeCommandReply(
+  mode: ChatRoomMode,
+  locale: ChatLocale,
+) {
   if (mode === "bot") {
-    return "Bot mode enabled."
+    return resolveChatContent("bot_mode_enabled", locale)
   }
 
   if (mode === "concierge") {
-    return "Concierge mode enabled."
+    return resolveChatContent("concierge_mode_enabled", locale)
   }
 
-  return resolveModeChangeSystemMessage(mode)
+  return resolveModeChangeSystemMessage(mode, locale)
 }
 
-export function resolveModeChangeSystemMessage(mode: ChatRoomMode) {
+export function resolveModeChangeSystemMessage(
+  mode: ChatRoomMode,
+  locale: ChatLocale = "ja",
+) {
   if (mode === "group") {
     return "Group support started"
   }
 
   if (mode === "bot") {
-    return "Bot mode enabled."
+    return resolveChatContent("bot_mode_enabled", locale)
   }
 
   if (mode === "concierge") {
-    return "Concierge mode enabled."
+    return resolveChatContent("concierge_mode_enabled", locale)
   }
 
   return `Room mode changed to ${mode}`

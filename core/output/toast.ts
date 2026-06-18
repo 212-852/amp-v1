@@ -1,3 +1,9 @@
+import {
+  chat_content,
+  resolveChatContent,
+  type ChatContentKey,
+} from "@/core/chat/content"
+import type { ChatLocale } from "@/core/chat/types"
 import type { Locale } from "@/src/lib/locale"
 
 export type ToastMessageKey =
@@ -5,26 +11,25 @@ export type ToastMessageKey =
   | "concierge_enabled"
   | "mode_change_failed"
 
-export const toast_messages: Record<
+const toast_content_keys: Record<
   ToastMessageKey,
-  Record<Locale, string>
+  Extract<ChatContentKey, "bot_mode_enabled" | "concierge_mode_enabled"> | null
 > = {
-  bot_enabled: {
-    ja: "ボットモードに切り替えました",
-    en: "Bot mode enabled",
-    es: "Modo bot activado",
-  },
-  concierge_enabled: {
-    ja: "コンシェルジュモードに切り替えました",
-    en: "Concierge mode enabled",
-    es: "Modo conserje activado",
-  },
-  mode_change_failed: {
-    ja: "モード変更に失敗しました",
-    en: "Mode change failed",
-    es: "No se pudo cambiar el modo",
-  },
+  bot_enabled: "bot_mode_enabled",
+  concierge_enabled: "concierge_mode_enabled",
+  mode_change_failed: null,
 }
+
+const toast_fallback_messages: Record<ToastMessageKey, Record<Locale, string>> =
+  {
+    bot_enabled: chat_content.bot_mode_enabled,
+    concierge_enabled: chat_content.concierge_mode_enabled,
+    mode_change_failed: {
+      ja: "モード変更に失敗しました",
+      en: "Mode change failed",
+      es: "No se pudo cambiar el modo",
+    },
+  }
 
 export type ToastOutput = {
   tone: "success" | "error"
@@ -32,8 +37,22 @@ export type ToastOutput = {
   key: ToastMessageKey
 }
 
+function toChatLocale(locale: Locale): ChatLocale {
+  if (locale === "en" || locale === "es") {
+    return locale
+  }
+
+  return "ja"
+}
+
 export function resolveToastMessage(key: ToastMessageKey, locale: Locale) {
-  return toast_messages[key][locale] ?? toast_messages[key].ja
+  const content_key = toast_content_keys[key]
+
+  if (content_key) {
+    return resolveChatContent(content_key, toChatLocale(locale))
+  }
+
+  return toast_fallback_messages[key][locale] ?? toast_fallback_messages[key].ja
 }
 
 export function buildModeChangeToast(input: {
