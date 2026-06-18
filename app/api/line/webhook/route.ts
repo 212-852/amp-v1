@@ -43,5 +43,5 @@ export async function POST(request: Request) {
     }),
   )
 
-  return Response.json(result)
+  return Response.json(result, { status: 200 })
 }
