@@ -87,14 +87,24 @@ function AnchoredToastView({ item }: Readonly<{ item: ToastItem }>) {
   }
 
   const center_x = item.anchor_rect.left + item.anchor_rect.width / 2
+  const should_place_above =
+    typeof window !== "undefined" &&
+    item.anchor_rect.bottom + 86 > window.innerHeight
 
   return (
     <div
       className="pointer-events-none fixed z-[200] max-w-[min(92vw,240px)] -translate-x-1/2"
-      style={{
-        top: item.anchor_rect.bottom + 6,
-        left: center_x,
-      }}
+      style={
+        should_place_above
+          ? {
+              bottom: window.innerHeight - item.anchor_rect.top + 6,
+              left: center_x,
+            }
+          : {
+              top: item.anchor_rect.bottom + 6,
+              left: center_x,
+            }
+      }
     >
       <ToastView item={{ ...item, compact: true }} />
     </div>

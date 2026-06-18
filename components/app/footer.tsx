@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react"
 
 import ConciergeMemberModal from "@/components/app/concierge_member_modal"
 import { useOverlay, type OverlayType } from "@/components/overlay"
+import { useToast } from "@/components/ui/use_toast"
 import {
   applyChatSupportSwitch,
   type ChatSupportAccess,
@@ -86,6 +87,21 @@ const content = {
     ja: "Menu",
     en: "Menu",
     es: "Menu",
+  },
+  bot_enabled: {
+    ja: "Bot mode enabled.",
+    en: "Bot mode enabled.",
+    es: "Bot mode enabled.",
+  },
+  concierge_enabled: {
+    ja: "Concierge mode enabled.",
+    en: "Concierge mode enabled.",
+    es: "Concierge mode enabled.",
+  },
+  mode_change_failed: {
+    ja: "Mode change failed.",
+    en: "Mode change failed.",
+    es: "Mode change failed.",
   },
 }
 
@@ -465,8 +481,10 @@ export default function AppFooter({
   )
   const [member_modal_open, set_member_modal_open] = useState(false)
   const typing_timer_ref = useRef<number | null>(null)
+  const footer_ref = useRef<HTMLElement | null>(null)
   const { locale } = useLocale()
   const { openOverlay } = useOverlay()
+  const { toast } = useToast()
   const isInputMode = footerMode === "input"
 
   function toggleFooterMode() {
@@ -498,13 +516,17 @@ export default function AppFooter({
   }
 
   async function persistModeSwitch(mode: ChatSupportMode) {
-    await fetch("/api/chat/mode", {
+    const response = await fetch("/api/chat/mode", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ mode }),
-    }).catch(() => null)
+    })
+
+    if (!response.ok) {
+      throw new Error("mode_change_failed")
+    }
 
     window.dispatchEvent(
       new CustomEvent("amp-chat-mode-changed", {
@@ -521,8 +543,38 @@ export default function AppFooter({
     })
 
     if (result.outcome === "switch") {
+      const previous_mode = assistantMode
       setAssistantMode(result.mode)
       void persistModeSwitch(result.mode)
+        .then(() => {
+          toast({
+            tone: "success",
+            placement: "anchor",
+            anchor_ref: footer_ref,
+            compact: true,
+            duration_ms: 2750,
+            message:
+              result.mode === "concierge"
+                ? content.concierge_enabled[locale]
+                : content.bot_enabled[locale],
+          })
+        })
+        .catch(() => {
+          setAssistantMode(previous_mode)
+          window.dispatchEvent(
+            new CustomEvent("amp-chat-mode-changed", {
+              detail: { mode: previous_mode },
+            }),
+          )
+          toast({
+            tone: "error",
+            placement: "anchor",
+            anchor_ref: footer_ref,
+            compact: true,
+            duration_ms: 2750,
+            message: content.mode_change_failed[locale],
+          })
+        })
       return true
     }
 
@@ -615,7 +667,10 @@ export default function AppFooter({
   }, [])
 
   return (
-    <footer className="fixed inset-x-0 bottom-[-2px] z-50 pb-[env(safe-area-inset-bottom)]">
+    <footer
+      ref={footer_ref}
+      className="fixed inset-x-0 bottom-[-2px] z-50 pb-[env(safe-area-inset-bottom)]"
+    >
       <div className={footer_shell_class}>
         <FooterCurve />
         <PinkPawButton
