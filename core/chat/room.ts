@@ -413,11 +413,22 @@ export async function findChatRoomState(
   if (!resolved) {
     return null
   }
+  await sendAuthDebug("chat_messages_fetch_started", {
+    room_uuid: resolved.room.room_uuid,
+    source_channel: context.source_channel,
+  })
+  const messages = await loadRoomMessages(resolved.room.room_uuid)
+
+  await sendAuthDebug("chat_messages_fetch_completed", {
+    room_uuid: resolved.room.room_uuid,
+    source_channel: context.source_channel,
+    message_count: messages.length,
+  })
 
   return {
     room: resolved.room,
     participant: resolved.participant,
-    messages: await loadRoomMessages(resolved.room.room_uuid),
+    messages,
     presence: await loadOnlinePresenceViews(resolved.room.room_uuid),
     concierge_available: await loadConciergeAvailability(),
   }

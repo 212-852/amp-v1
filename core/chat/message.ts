@@ -440,6 +440,12 @@ export async function bootstrapRoomWelcome(input: {
     locale,
   })
 
+  await sendAuthDebug("chat_welcome_bundle_built", {
+    room_uuid: input.room.room_uuid,
+    final_locale: locale,
+    source: locale_decision.source,
+  })
+
   if (input.defer_archive) {
     const preview = buildBotBundlePreview({
       bundle,

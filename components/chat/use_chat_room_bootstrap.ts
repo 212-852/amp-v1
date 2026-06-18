@@ -22,6 +22,11 @@ const CHAT_BOOTSTRAP_RETRY_MS = 5000
 export type ChatRoomBootstrapViewState = {
   chat_state: ChatRoomState | null
   timed_out: boolean
+  render_state:
+    | "loading"
+    | "ready_with_messages"
+    | "ready_with_welcome"
+    | "empty_error_recoverable"
 }
 
 function logClientBootstrap(
@@ -32,19 +37,33 @@ function logClientBootstrap(
 }
 
 async function getChatRoom(locale: Locale): Promise<ChatRoomApiPayload | null> {
+  logClientBootstrap("chat_messages_fetch_started", { locale })
   const response = await fetch(
     `/api/chat/room?locale=${encodeURIComponent(locale)}`,
     { cache: "no-store" },
   )
 
   if (!response.ok) {
+    logClientBootstrap("chat_messages_fetch_completed", {
+      locale,
+      ok: false,
+      status: response.status,
+    })
     return null
   }
 
-  return (await response.json()) as ChatRoomApiPayload
+  const payload = (await response.json()) as ChatRoomApiPayload
+  logClientBootstrap("chat_messages_fetch_completed", {
+    locale,
+    ok: true,
+    message_count: payload.messages?.length ?? 0,
+    has_room: Boolean(payload.room),
+  })
+  return payload
 }
 
 async function bootstrapChatRoomRequest(locale: Locale): Promise<ChatRoomState | null> {
+  logClientBootstrap("chat_bootstrap_started", { locale })
   const response = await fetch("/api/chat/room", {
     method: "POST",
     headers: {
@@ -54,14 +73,34 @@ async function bootstrapChatRoomRequest(locale: Locale): Promise<ChatRoomState |
   })
 
   if (!response.ok) {
+    logClientBootstrap("chat_bootstrap_completed", {
+      locale,
+      ok: false,
+      status: response.status,
+    })
     return null
   }
 
   const payload = (await response.json()) as ChatRoomApiPayload
 
   if (!payload.room || !payload.participant) {
+    logClientBootstrap("chat_bootstrap_completed", {
+      locale,
+      ok: true,
+      has_room: Boolean(payload.room),
+      has_participant: Boolean(payload.participant),
+      message_count: payload.messages?.length ?? 0,
+    })
     return null
   }
+
+  logClientBootstrap("chat_bootstrap_completed", {
+    locale,
+    ok: true,
+    has_room: true,
+    has_participant: true,
+    message_count: payload.messages?.length ?? 0,
+  })
 
   return {
     room: payload.room,
@@ -171,5 +210,22 @@ export function useChatRoomBootstrap(
     }
   }, [locale, retry_tick])
 
-  return { chat_state, timed_out }
+  const render_state = chat_state
+    ? chat_state.messages.length > 0
+      ? "ready_with_messages"
+      : "ready_with_welcome"
+    : timed_out
+      ? "empty_error_recoverable"
+      : "loading"
+
+  useEffect(() => {
+    logClientBootstrap("chat_render_state_resolved", {
+      locale,
+      render_state,
+      message_count: chat_state?.messages.length ?? 0,
+      has_room: Boolean(chat_state?.room),
+    })
+  }, [chat_state?.messages.length, chat_state?.room, locale, render_state])
+
+  return { chat_state, timed_out, render_state }
 }
