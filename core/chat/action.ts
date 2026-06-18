@@ -119,10 +119,11 @@ export async function handleChatRoomBootstrap(input: {
       defer_welcome_archive: true,
     })
   } catch (error) {
-    logChatBootstrap("chat_bootstrap_requested", {
+    await sendAuthDebug("chat_bootstrap_failed", {
       ...debug,
       error_message: error instanceof Error ? error.message : String(error),
     })
+    throw error
   }
 
   if (result?.welcome_message) {

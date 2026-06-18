@@ -1,8 +1,7 @@
 import { createHmac, timingSafeEqual } from "crypto"
 
 import { sendAuthDebug } from "@/core/debug"
-import { handleLineWebhook } from "@/core/line/action"
-import { normalizeLineWebhookRequest } from "@/core/line/context"
+import { handleLineWebhookPayload } from "@/core/line/action"
 
 function verifyLineSignature(body: string, signature: string | null) {
   const secret = process.env.LINE_MESSAGING_CHANNEL_SECRET
@@ -21,31 +20,6 @@ function verifyLineSignature(body: string, signature: string | null) {
   )
 }
 
-function is_env_true(value: string | undefined) {
-  return value?.trim().toLowerCase() === "true"
-}
-
-function normalize_allowed_line_users(value: string | undefined) {
-  return (value ?? "")
-    .split(",")
-    .map((line_user_id) => line_user_id.trim())
-    .filter(Boolean)
-}
-
-function is_allowed_line_webhook_user(provider_user_id: string | null) {
-  if (!provider_user_id?.trim()) {
-    return false
-  }
-
-  if (!is_env_true(process.env.LINE_WEBHOOK_REPLY_ENABLED)) {
-    return false
-  }
-
-  return normalize_allowed_line_users(process.env.LINE_WEBHOOK_ALLOWED_USERS).includes(
-    provider_user_id.trim(),
-  )
-}
-
 export async function GET() {
   await sendAuthDebug("line_webhook_health_check", {
     route: "line_webhook",
@@ -55,17 +29,30 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  await sendAuthDebug("line_webhook_route_entered", {
+    method: request.method,
+    has_signature: Boolean(request.headers.get("x-line-signature")),
+    content_type: request.headers.get("content-type"),
+  })
+
   const signature = request.headers.get("x-line-signature")
   const body = await request.text()
   let payload: unknown
 
   try {
     payload = JSON.parse(body) as unknown
-  } catch {
+  } catch (error) {
+    await sendAuthDebug("line_webhook_invalid_json", {
+      error_message: error instanceof Error ? error.message : String(error),
+    })
     return Response.json({ ok: false, error: "invalid_json" }, { status: 400 })
   }
 
   const signature_ok = verifyLineSignature(body, signature)
+
+  await sendAuthDebug("line_signature_verified", {
+    ok: signature_ok,
+  })
 
   if (!signature_ok) {
     await sendAuthDebug("line_signature_verification_failed", {
@@ -75,48 +62,24 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, error: "invalid_signature" }, { status: 401 })
   }
 
-  const result = await normalizeLineWebhookRequest(payload)
-    .then(async (line_request) => {
-      const allowed_events = line_request.events.filter((event) => {
-        const allowed = is_allowed_line_webhook_user(event.provider_user_id)
+  try {
+    const result = await handleLineWebhookPayload(payload)
 
-        if (!allowed) {
-          void sendAuthDebug("line_webhook_test_blocked", {
-            provider_user_id: event.provider_user_id,
-            reason: "line_test_mode_not_allowed",
-            source_channel: event.source_channel,
-          })
-        }
-
-        return allowed
-      })
-
-      if (allowed_events.length === 0) {
-        return {
-          ok: true,
-          results: line_request.events.map((event) => ({
-            provider_user_id: event.provider_user_id,
-            archived: false,
-            processed: false,
-            replied: false,
-          })),
-        }
-      }
-
-      await Promise.all(
-        allowed_events.map((event) =>
-          sendAuthDebug("line_test_allowed_entered", {
-            provider_user_id: event.provider_user_id,
-          }),
-        ),
-      )
-
-      return handleLineWebhook({ events: allowed_events })
+    await sendAuthDebug("line_webhook_received", {
+      event_count: result.results.length,
+      ignored_all: result.ignored_all,
     })
-    .catch((error) => ({
-      ok: false,
-      error: error instanceof Error ? error.message : "line_webhook_failed",
-    }))
 
-  return Response.json(result, { status: 200 })
+    if (result.ignored_all) {
+      return new Response(null, { status: 200 })
+    }
+
+    return Response.json(result, { status: 200 })
+  } catch (error) {
+    await sendAuthDebug("line_webhook_failed", {
+      error_message: error instanceof Error ? error.message : String(error),
+    })
+
+    return new Response(null, { status: 200 })
+  }
 }

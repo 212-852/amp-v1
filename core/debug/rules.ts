@@ -8,7 +8,10 @@ const alwaysReportEvents = new Set([
   "line_reply_send_failed",
   "line_webhook_contact_upsert_failed",
   "line_signature_verification_failed",
+  "line_webhook_event_failed",
+  "line_webhook_failed",
   "chat_archive_failed",
+  "chat_bootstrap_failed",
   "output_failed",
 ])
 
@@ -23,18 +26,20 @@ const lineWebhookInfoEvents = new Set([
   "line_reply_send_attempt",
   "line_reply_send_success",
   "line_signature_verified",
-  "line_test_allowed_entered",
+  "line_webhook_gate_resolved",
   "line_webhook_health_check",
+  "line_webhook_ignored_not_allowed",
+  "line_webhook_invalid_json",
   "line_webhook_received",
   "line_webhook_reply_blocked",
   "line_webhook_route_entered",
-  "line_webhook_test_blocked",
 ])
 
 const chatFlowInfoEvents = new Set([
   "app_locale_resolved",
   "chat_archive_incoming_saved",
   "chat_bootstrap_completed",
+  "chat_bootstrap_failed",
   "chat_bootstrap_started",
   "chat_context_locale_resolved",
   "chat_message_locale_used",
