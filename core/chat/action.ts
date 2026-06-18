@@ -212,7 +212,6 @@ export async function handleIncomingChatMessageArchive(
     deliver_mode_reply?: boolean
     bootstrap_welcome?: boolean
     apply_mode_command?: boolean
-    provider_user_id?: string | null
   } = {},
 ): Promise<IncomingChatArchiveResult> {
   const context = normalizeIncomingChatInput(input)
@@ -229,7 +228,6 @@ export async function handleIncomingChatMessageArchive(
       : null
   const { room, participant } = await bootstrapChatRoom(context, input.session, {
     welcome: options.bootstrap_welcome ?? true,
-    provider_user_id: options.provider_user_id,
   })
 
   await sendAuthDebug("chat_room_resolved", {

@@ -19,7 +19,6 @@ const deniedDiscordEvents = new Set([
 const lineWebhookInfoEvents = new Set([
   "line_event_normalized",
   "line_identity_resolved",
-  "line_reply_allowlist_checked",
   "line_reply_blocked",
   "line_reply_send_attempt",
   "line_reply_send_success",
@@ -27,7 +26,6 @@ const lineWebhookInfoEvents = new Set([
   "line_test_allowed_entered",
   "line_webhook_health_check",
   "line_webhook_received",
-  "line_webhook_reply_allowed",
   "line_webhook_reply_blocked",
   "line_webhook_route_entered",
   "line_webhook_test_blocked",
@@ -39,7 +37,6 @@ const chatFlowInfoEvents = new Set([
   "chat_bootstrap_completed",
   "chat_bootstrap_started",
   "chat_context_locale_resolved",
-  "chat_gate_passed",
   "chat_message_locale_used",
   "chat_messages_fetch_completed",
   "chat_messages_fetch_started",

@@ -33,7 +33,6 @@ export async function deliverOutput(
       reply_token_exists: Boolean(target.line_reply_token),
       line_reply_allowed: target.line_reply_allowed === true,
       reply_enabled: isLineWebhookReplyEnabled(),
-      provider_user_id: target.line_provider_user_id ?? null,
     })
     return [await deliverWeb(null, message)]
   }
@@ -51,7 +50,6 @@ export async function deliverOutput(
         reply_token_exists: Boolean(target.line_reply_token),
         line_reply_allowed: target.line_reply_allowed === true,
         reply_enabled: isLineWebhookReplyEnabled(),
-        provider_user_id: target.line_provider_user_id ?? null,
       })
 
       if (!destination.should_send) {

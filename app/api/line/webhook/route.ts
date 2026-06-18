@@ -3,7 +3,6 @@ import { createHmac, timingSafeEqual } from "crypto"
 import { sendAuthDebug } from "@/core/debug"
 import { handleLineWebhook } from "@/core/line/action"
 import { normalizeLineWebhookRequest } from "@/core/line/context"
-import { is_allowed_line_webhook_user } from "@/core/line/webhook/rules"
 
 function verifyLineSignature(body: string, signature: string | null) {
   const secret = process.env.LINE_MESSAGING_CHANNEL_SECRET
@@ -19,6 +18,31 @@ function verifyLineSignature(body: string, signature: string | null) {
   return (
     signature_buffer.length === expected_buffer.length &&
     timingSafeEqual(signature_buffer, expected_buffer)
+  )
+}
+
+function is_env_true(value: string | undefined) {
+  return value?.trim().toLowerCase() === "true"
+}
+
+function normalize_allowed_line_users(value: string | undefined) {
+  return (value ?? "")
+    .split(",")
+    .map((line_user_id) => line_user_id.trim())
+    .filter(Boolean)
+}
+
+function is_allowed_line_webhook_user(provider_user_id: string | null) {
+  if (!provider_user_id?.trim()) {
+    return false
+  }
+
+  if (!is_env_true(process.env.LINE_WEBHOOK_REPLY_ENABLED)) {
+    return false
+  }
+
+  return normalize_allowed_line_users(process.env.LINE_WEBHOOK_ALLOWED_USERS).includes(
+    provider_user_id.trim(),
   )
 }
 
@@ -54,16 +78,13 @@ export async function POST(request: Request) {
   const result = await normalizeLineWebhookRequest(payload)
     .then(async (line_request) => {
       const allowed_events = line_request.events.filter((event) => {
-        const allowed = is_allowed_line_webhook_user(
-          event.provider_user_id,
-          process.env,
-        )
+        const allowed = is_allowed_line_webhook_user(event.provider_user_id)
 
         if (!allowed) {
-          console.info("[line_webhook] line_test_blocked_before_db", {
+          void sendAuthDebug("line_webhook_test_blocked", {
             provider_user_id: event.provider_user_id,
+            reason: "line_test_mode_not_allowed",
             source_channel: event.source_channel,
-            entry: "webhook",
           })
         }
 

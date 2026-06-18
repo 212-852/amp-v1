@@ -190,12 +190,10 @@ async function resolveExistingOwnedRoom(input: {
   owner_role: "guest" | "user"
   output_locale: ChatLocale
   pass?: string
-  provider_user_id?: string | null
 }): Promise<ResolvedOwnedRoom | null> {
   const debug = await readRoomDebugContext(input.identity)
 
   await sendAuthDebug("room_resolve_started", {
-    provider_user_id: input.provider_user_id ?? null,
     user_uuid: input.identity.user_uuid,
     visitor_uuid: input.identity.visitor_uuid,
     source_channel: input.channel,
@@ -269,7 +267,6 @@ export async function resolveOwnedRoom(input: {
   mode: ChatRoomMode
   session_locale?: string | null
   browser_locale?: string | null
-  provider_user_id?: string | null
 }): Promise<ResolvedOwnedRoom> {
   const output_locale = resolveOutputLocale({
     preferred: input.locale,
@@ -292,7 +289,6 @@ export async function resolveOwnedRoom(input: {
     mode: input.mode,
     owner_role: input.owner_role,
     output_locale,
-    provider_user_id: input.provider_user_id,
   })
 
   if (existing) {
@@ -307,7 +303,6 @@ export async function resolveOwnedRoom(input: {
     owner_role: input.owner_role,
     output_locale,
     pass: "pre_insert_recheck",
-    provider_user_id: input.provider_user_id,
   })
 
   if (recheck) {
@@ -390,7 +385,6 @@ export async function resolveOwnedRoom(input: {
       owner_role: input.owner_role,
       output_locale,
       pass: "participant_conflict_recovery",
-      provider_user_id: input.provider_user_id,
     })
 
     if (!recovered) {
@@ -476,7 +470,6 @@ export async function bootstrapChatRoom(
   session: Session,
   options: {
     welcome?: boolean
-    provider_user_id?: string | null
     defer_welcome_archive?: boolean
   } = {},
 ): Promise<ChatRoomBootstrapResult> {
@@ -494,7 +487,6 @@ export async function bootstrapChatRoom(
     channel: context.source_channel,
     owner_role,
     mode,
-    provider_user_id: options.provider_user_id,
   })
 
   const room = await syncRoomLocale(resolved.room, output_locale)
