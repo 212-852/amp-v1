@@ -7,20 +7,20 @@ const tone_styles: Record<
   { container: string; icon: string }
 > = {
   success: {
-    container: "border-[#22c55e] bg-[#dcfce7] text-[#14532d]",
-    icon: "bg-[#16a34a]",
+    container: "border-0 bg-[rgba(0,0,0,0.72)] text-white",
+    icon: "bg-white/85",
   },
   error: {
-    container: "border-[#ef4444] bg-[#fef2f2] text-[#7f1d1d]",
-    icon: "bg-[#dc2626]",
+    container: "border-0 bg-[rgba(0,0,0,0.72)] text-white",
+    icon: "bg-white/85",
   },
   info: {
-    container: "border-[#3b82f6] bg-[#eff6ff] text-[#1e3a8a]",
-    icon: "bg-[#2563eb]",
+    container: "border-0 bg-[rgba(0,0,0,0.72)] text-white",
+    icon: "bg-white/85",
   },
   warning: {
-    container: "border-[#f59e0b] bg-[#fffbeb] text-[#78350f]",
-    icon: "bg-[#d97706]",
+    container: "border-0 bg-[rgba(0,0,0,0.72)] text-white",
+    icon: "bg-white/85",
   },
 }
 
@@ -54,7 +54,7 @@ export function ToastView({
         role="status"
         aria-live="polite"
         className={[
-          "rounded-xl border px-3 py-2 text-[12px] font-medium leading-snug shadow-[0_8px_24px_rgba(0,0,0,0.12)]",
+          "rounded-xl px-3 py-2 text-[12px] font-medium leading-snug shadow-[0_10px_26px_rgba(0,0,0,0.20)] backdrop-blur-sm",
           styles.container,
         ].join(" ")}
       >
@@ -68,7 +68,7 @@ export function ToastView({
       role="status"
       aria-live="polite"
       className={[
-        "flex items-start gap-2.5 rounded-2xl border px-4 py-3 shadow-[0_12px_32px_rgba(0,0,0,0.08)]",
+        "flex items-start gap-2.5 rounded-2xl px-4 py-3 shadow-[0_12px_32px_rgba(0,0,0,0.18)] backdrop-blur-sm",
         styles.container,
       ].join(" ")}
     >

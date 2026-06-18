@@ -1,6 +1,6 @@
 "use client"
 
-import { Bell, Bot, Menu, MessageCircle, PawPrint, RefreshCw, User } from "lucide-react"
+import { Bot, Headphones, Menu, MessageCircle, PawPrint, RefreshCw, User } from "lucide-react"
 import Image from "next/image"
 import { useEffect, useRef, useState } from "react"
 
@@ -12,6 +12,7 @@ import {
   type ChatSupportAccess,
   type ChatSupportMode,
 } from "@/core/chat/support"
+import { chat_mode_toast_content } from "@/core/chat/mode_toast_content"
 import { useLocale } from "@/src/components/locale/provider"
 import type { Locale } from "@/src/lib/locale"
 
@@ -32,26 +33,6 @@ const content = {
     ja: "チャット入力とクイックメニューを切り替える",
     en: "Switch between chat input and quick menu",
     es: "Cambiar entre chat y menu rapido",
-  },
-  bot: {
-    ja: "Bot",
-    en: "Bot",
-    es: "Bot",
-  },
-  bot_mode: {
-    ja: "Bot mode",
-    en: "Bot mode",
-    es: "Modo Bot",
-  },
-  concierge: {
-    ja: "Concierge",
-    en: "Concierge",
-    es: "Conserje",
-  },
-  concierge_mode: {
-    ja: "Concierge mode",
-    en: "Concierge mode",
-    es: "Modo conserje",
   },
   send: {
     ja: "送信",
@@ -87,21 +68,6 @@ const content = {
     ja: "Menu",
     en: "Menu",
     es: "Menu",
-  },
-  bot_enabled: {
-    ja: "Bot mode enabled.",
-    en: "Bot mode enabled.",
-    es: "Bot mode enabled.",
-  },
-  concierge_enabled: {
-    ja: "Concierge mode enabled.",
-    en: "Concierge mode enabled.",
-    es: "Concierge mode enabled.",
-  },
-  mode_change_failed: {
-    ja: "Mode change failed.",
-    en: "Mode change failed.",
-    es: "Mode change failed.",
   },
 }
 
@@ -264,7 +230,7 @@ function AssistantToggle({
             : "text-[rgba(120,85,55,0.72)]",
         ].join(" ")}
       >
-        {content.bot[locale]}
+        {chat_mode_toast_content.mode_bot_label[locale]}
       </button>
       <button
         type="button"
@@ -279,7 +245,7 @@ function AssistantToggle({
             : "text-[rgba(120,85,55,0.72)]",
         ].join(" ")}
       >
-        {content.concierge[locale]}
+        {chat_mode_toast_content.mode_concierge_label[locale]}
       </button>
       <style jsx>{`
         @keyframes bot-concierge-thumb-squish {
@@ -312,16 +278,16 @@ function ModeIndicator({
   locale: Locale
 }>) {
   const isConcierge = assistantMode === "concierge"
-  const Icon = isConcierge ? Bell : Bot
+  const Icon = isConcierge ? Headphones : Bot
 
   return (
-    <div className="mb-1 flex items-center justify-center">
-      <div className="inline-flex h-7 items-center gap-1.5 rounded-full border border-[#dcc7aa] bg-[#fff8ef] px-3 text-[12px] font-bold leading-none text-[#6f4521] shadow-[0_4px_10px_rgba(122,78,34,0.08)]">
-        <Icon className="h-3.5 w-3.5" strokeWidth={2.2} />
+    <div className="mb-1 flex items-center justify-end pr-[76px]">
+      <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold leading-none text-[#8a6847]">
+        <Icon className="h-3.5 w-3.5" strokeWidth={2} />
         <span>
           {isConcierge
-            ? content.concierge_mode[locale]
-            : content.bot_mode[locale]}
+            ? chat_mode_toast_content.mode_concierge_label[locale]
+            : chat_mode_toast_content.mode_bot_label[locale]}
         </span>
       </div>
     </div>
@@ -555,8 +521,8 @@ export default function AppFooter({
             duration_ms: 2750,
             message:
               result.mode === "concierge"
-                ? content.concierge_enabled[locale]
-                : content.bot_enabled[locale],
+                ? chat_mode_toast_content.mode_concierge_enabled[locale]
+                : chat_mode_toast_content.mode_bot_enabled[locale],
           })
         })
         .catch(() => {
@@ -572,7 +538,7 @@ export default function AppFooter({
             anchor_ref: footer_ref,
             compact: true,
             duration_ms: 2750,
-            message: content.mode_change_failed[locale],
+            message: chat_mode_toast_content.mode_change_failed[locale],
           })
         })
       return true
