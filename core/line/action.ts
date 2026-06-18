@@ -69,7 +69,7 @@ export async function handleLineWebhook(request: LineWebhookRequest) {
 
   for (const event of request.events) {
     if (!can_process_line_user(event.provider_user_id)) {
-      await sendAuthDebug("line_webhook_test_blocked", {
+      console.info("[line_webhook] line_webhook_test_blocked", {
         provider_user_id: event.provider_user_id,
         reason: "line_test_mode_not_allowed",
       })
@@ -82,6 +82,14 @@ export async function handleLineWebhook(request: LineWebhookRequest) {
       })
       continue
     }
+
+    await sendAuthDebug("line_event_normalized", {
+      provider_user_id: event.provider_user_id,
+      message_type: event.message_type,
+      text: event.body,
+      external_id: event.external_id,
+      reply_token_exists: Boolean(event.reply_token),
+    })
 
     if (event.external_id) {
       const duplicate = await findMessageByExternalId({

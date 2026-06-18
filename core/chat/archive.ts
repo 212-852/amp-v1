@@ -114,6 +114,12 @@ async function findParticipantRow(filter: string) {
   )
 
   if (!response.ok) {
+    const error = await readRestError(response)
+
+    if (isMissingExternalIdColumn(error)) {
+      return null
+    }
+
     return null
   }
 
@@ -608,6 +614,16 @@ function isMissingMessageKindColumn(error: {
   )
 }
 
+function isMissingExternalIdColumn(error: {
+  code?: string | null
+  message?: string | null
+}) {
+  return (
+    error.code === "PGRST204" &&
+    error.message?.includes("'external_id' column") === true
+  )
+}
+
 async function findLegacyWelcomeMessage(room_uuid: string) {
   const config = getRestConfig()
 
@@ -697,9 +713,14 @@ export async function insertMessage(input: {
     status: input.status ?? "sent",
   }
   delete body.message_kind
+  delete body.external_id
 
   if (input.message_kind) {
     body.message_kind = input.message_kind
+  }
+
+  if (input.external_id) {
+    body.external_id = input.external_id
   }
 
   const response = await fetch(restUrl(config, "messages", "select=*"), {
@@ -719,6 +740,13 @@ export async function insertMessage(input: {
       return insertMessage({
         ...input,
         message_kind: null,
+      })
+    }
+
+    if (input.external_id && isMissingExternalIdColumn(error)) {
+      return insertMessage({
+        ...input,
+        external_id: null,
       })
     }
 

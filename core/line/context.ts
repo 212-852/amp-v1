@@ -84,18 +84,6 @@ export async function normalizeLineWebhookRequest(
     .map((event) => normalizeLineEvent(event as LineWebhookEvent))
     .filter((event): event is LineIncomingEvent => Boolean(event))
 
-  await Promise.all(
-    events.map((event) =>
-      sendAuthDebug("line_event_normalized", {
-        provider_user_id: event.provider_user_id,
-        message_type: event.message_type,
-        text: event.body,
-        external_id: event.external_id,
-        reply_token_exists: Boolean(event.reply_token),
-      }),
-    ),
-  )
-
   return { events }
 }
 

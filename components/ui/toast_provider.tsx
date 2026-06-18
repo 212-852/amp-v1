@@ -60,7 +60,13 @@ export function ToastProvider({
   const timers_ref = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
   useEffect(() => {
-    set_mounted(true)
+    const timer = window.setTimeout(() => {
+      set_mounted(true)
+    }, 0)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
   }, [])
 
   const dismiss = useCallback((id: string) => {
