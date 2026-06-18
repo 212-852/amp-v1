@@ -5,16 +5,12 @@ import { resolveAuthContext } from "@/core/auth/context"
 import { resolveSession } from "@/core/auth/session"
 import { resolveChatSupportAccess } from "@/core/chat/support"
 import { resolveChatRoom } from "@/core/chat/action"
+import { resolveOutputLocaleDecision } from "@/core/chat/context"
 import { sendAuthDebug } from "@/core/debug"
 
 export default async function AppPage() {
   const context = await resolveAuthContext()
   const session = await resolveSession(context)
-
-  await sendAuthDebug("app_locale_resolved", {
-    locale: context.locale ?? null,
-    source: context.locale ? "request_context" : "none",
-  })
 
   const support_access = resolveChatSupportAccess({
     user_uuid: session.user_uuid,
@@ -32,6 +28,21 @@ export default async function AppPage() {
   } catch {
     chat_state = null
   }
+
+  const locale_decision = resolveOutputLocaleDecision({
+    preferred: context.locale,
+    room_locale: chat_state?.room.locale ?? null,
+  })
+
+  await sendAuthDebug("app_locale_resolved", {
+    final_locale: locale_decision.final_locale,
+    source: context.locale ? "request_context" : locale_decision.source,
+    user_locale: null,
+    session_locale: context.locale ?? null,
+    cookie_locale: null,
+    room_locale: chat_state?.room.locale ?? null,
+    browser_locale: null,
+  })
 
   return (
     <div

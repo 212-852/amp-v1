@@ -6,6 +6,7 @@ import {
   resolveAdminChatRoom,
 } from "@/core/chat/action"
 import { resolveChatApiSession } from "@/core/chat/api"
+import { resolveOutputLocaleDecision } from "@/core/chat/context"
 import { sendAuthDebug } from "@/core/debug"
 
 function logChatRoomGetNoRoom(data: Record<string, unknown>) {
@@ -48,14 +49,20 @@ export async function GET(request: Request) {
     const url = new URL(request.url)
     const room_uuid = url.searchParams.get("room_uuid")
     const request_locale = url.searchParams.get("locale") ?? context.locale
+    const locale_decision = resolveOutputLocaleDecision({
+      preferred: request_locale,
+    })
 
     await sendAuthDebug("app_locale_resolved", {
-      locale: request_locale ?? null,
+      final_locale: locale_decision.final_locale,
       source: url.searchParams.get("locale")
         ? "request_query"
-        : context.locale
-          ? "request_context"
-          : "none",
+        : locale_decision.source,
+      user_locale: null,
+      session_locale: context.locale ?? null,
+      cookie_locale: null,
+      room_locale: null,
+      browser_locale: null,
     })
 
     const state = room_uuid
@@ -114,10 +121,18 @@ export async function POST(request: Request) {
       typeof body.locale === "string" && body.locale.trim()
         ? body.locale.trim()
         : context.locale
+    const locale_decision = resolveOutputLocaleDecision({
+      preferred: request_locale,
+    })
 
     await sendAuthDebug("app_locale_resolved", {
-      locale: request_locale ?? null,
-      source: body.locale ? "request_body" : context.locale ? "request_context" : "none",
+      final_locale: locale_decision.final_locale,
+      source: body.locale ? "request_body" : locale_decision.source,
+      user_locale: null,
+      session_locale: context.locale ?? null,
+      cookie_locale: null,
+      room_locale: null,
+      browser_locale: null,
     })
 
     if (body.trigger === "chat_opened") {

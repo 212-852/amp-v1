@@ -1,10 +1,9 @@
-import { resolveOutputLocale } from "@/core/chat/context"
 import {
   buildBotCarouselPayload,
   resolveBotMessageBody,
   type BotMessageTrigger,
 } from "@/core/bot/rules"
-import type { ChatMessageType } from "@/core/chat/types"
+import type { ChatLocale, ChatMessageType } from "@/core/chat/types"
 
 export type BotMessageBundle = {
   trigger: BotMessageTrigger
@@ -15,17 +14,15 @@ export type BotMessageBundle = {
 
 export function createBotMessageBundle(input: {
   trigger: BotMessageTrigger
-  locale: string | null | undefined
+  locale: ChatLocale
 }): BotMessageBundle {
-  const locale = resolveOutputLocale({ preferred: input.locale })
-
   return {
     trigger: input.trigger,
     type: "flex",
     body: resolveBotMessageBody(input.trigger),
     payload: buildBotCarouselPayload({
       trigger: input.trigger,
-      locale,
+      locale: input.locale,
     }),
   }
 }

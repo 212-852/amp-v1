@@ -1,6 +1,9 @@
 import { insertMessage } from "@/core/chat/archive"
 import { ensureRoleParticipant } from "@/core/chat/participant"
-import { resolveOutputLocale } from "@/core/chat/context"
+import {
+  resolveOutputLocaleDecision,
+  type LocaleSource,
+} from "@/core/chat/context"
 import {
   carouselPayloadToLineFlex,
   isLineFlexCarouselPayload,
@@ -20,6 +23,7 @@ import {
   shouldBootstrapWelcome,
 } from "@/core/chat/rules"
 import { ensureRoomLocaleTranslation } from "@/core/chat/translate"
+import { getChatContentKeyCount } from "@/core/chat/content"
 import type {
   ChatLocale,
   ChatMessageKind,
@@ -80,9 +84,9 @@ function resolveLocaleDebugSource(input: {
   session_locale?: string | null
   user_locale?: string | null
   room_locale?: ChatLocale | null
-}) {
+}): LocaleSource {
   if (input.app_locale) {
-    return "app_locale"
+    return "explicit"
   }
 
   if (input.session_locale) {
@@ -315,7 +319,19 @@ export async function bootstrapRoomWelcome(input: {
     return null
   }
 
-  const locale = input.locale ?? input.room.locale
+  const locale_decision = resolveOutputLocaleDecision({
+    preferred: input.locale,
+    room_locale: input.room.locale,
+  })
+  const locale = locale_decision.final_locale
+
+  await sendAuthDebug("chat_message_locale_used", {
+    final_locale: locale,
+    source: locale_decision.source,
+    message_kind: "welcome",
+    content_key_count: getChatContentKeyCount(),
+  })
+
   const bundle = createBotMessageBundle({
     trigger: "chat_opened",
     locale,
@@ -355,10 +371,20 @@ export async function archiveBotTriggerMessage(input: {
   line_provider_user_id?: string | null
   line_reply_allowed?: boolean
 }) {
-  const locale = resolveOutputLocale({
+  const locale_decision = resolveOutputLocaleDecision({
     preferred: input.locale,
     room_locale: input.room.locale,
   })
+  const locale = locale_decision.final_locale
+
+  await sendAuthDebug("chat_message_locale_used", {
+    final_locale: locale,
+    source: locale_decision.source,
+    message_kind:
+      input.trigger === "quick_menu_requested" ? "quick_menu" : "bot_response",
+    content_key_count: getChatContentKeyCount(),
+  })
+
   if (input.trigger === "quick_menu_requested") {
     await sendAuthDebug("chat_quick_menu_locale_resolved", {
       app_locale: input.locale ?? null,
@@ -367,7 +393,7 @@ export async function archiveBotTriggerMessage(input: {
       room_locale: input.room.locale,
       bundle_locale: locale,
       final_locale: locale,
-      source: resolveLocaleDebugSource({
+      source: locale_decision.source ?? resolveLocaleDebugSource({
         app_locale: input.locale ?? null,
         room_locale: input.room.locale,
       }),

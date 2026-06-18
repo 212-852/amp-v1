@@ -14,6 +14,7 @@ export type ChatContentKey =
   | "meeting_support_body"
   | "bot_mode_enabled"
   | "concierge_mode_enabled"
+  | "welcome_message"
   | "message_placeholder"
   | "mode_bot"
   | "mode_concierge"
@@ -86,6 +87,11 @@ export const chat_content: Record<ChatContentKey, LocaleText> = {
     en: "Concierge mode enabled.",
     es: "Modo conserje activado.",
   },
+  welcome_message: {
+    ja: "こんにちは！PET TAXIへようこそ。ご希望の内容を選んでください。",
+    en: "Hello! Welcome to PET TAXI. Choose an option below.",
+    es: "Hola! Bienvenido a PET TAXI. Elige una opcion.",
+  },
   message_placeholder: {
     ja: "メッセージを入力",
     en: "Type a message",
@@ -109,4 +115,8 @@ export function resolveChatContent(key: ChatContentKey, locale: ChatLocale) {
 
 export function resolveChatContentRecord(key: ChatContentKey): LocaleText {
   return chat_content[key]
+}
+
+export function getChatContentKeyCount() {
+  return Object.keys(chat_content).length
 }

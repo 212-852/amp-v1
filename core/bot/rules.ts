@@ -1,5 +1,7 @@
 import type { ChatLocale } from "@/core/chat/types"
+import { sendAuthDebug } from "@/core/debug"
 import {
+  getChatContentKeyCount,
   resolveChatContent,
   resolveChatContentRecord,
   type LocaleText,
@@ -474,11 +476,23 @@ function buildWelcomeFlexLink(label: string, action: string) {
 }
 
 function buildWelcomeQuickMenuBubble(locale: ChatLocale) {
+  void sendAuthDebug("quick_menu_locale_used", {
+    final_locale: locale,
+    source: "builder_argument",
+    title: resolveLocaleText(QUICK_MENU_TITLE, locale),
+    first_action_label: resolveLocaleText(
+      WELCOME_QUICK_MENU_BUTTONS[0].label,
+      locale,
+    ),
+    content_key_count: getChatContentKeyCount(),
+  })
+
   return {
     type: "bubble",
     hero: buildHero(BOT_IMAGE.quick_menu),
     body: buildWelcomeBodyBox({
       title: resolveLocaleText(QUICK_MENU_TITLE, locale),
+      body: resolveChatContent("welcome_message", locale),
       subtitle: resolveLocaleText(TERMS_OF_USE, locale),
     }),
     footer: {
@@ -613,6 +627,14 @@ export function buildWelcomeCarousel(locale: ChatLocale): LineFlexCarouselPayloa
 export function buildQuickMenuCarousel(
   locale: ChatLocale,
 ): LineFlexCarouselPayload {
+  void sendAuthDebug("quick_menu_locale_used", {
+    final_locale: locale,
+    source: "builder_argument",
+    title: resolveLocaleText(QUICK_MENU_TITLE, locale),
+    first_action_label: resolveLocaleText(QUICK_MENU_BUTTONS[0].label, locale),
+    content_key_count: getChatContentKeyCount(),
+  })
+
   return {
     type: "carousel",
     contents: [

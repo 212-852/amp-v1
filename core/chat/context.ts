@@ -1,4 +1,5 @@
 import type { Session, SessionRole } from "@/core/auth/types"
+import { sendAuthDebug } from "@/core/debug"
 import {
   type ChatContext,
   type ChatIncomingInput,
@@ -24,29 +25,61 @@ function isSupportedLocale(value: string | null | undefined): value is ChatLocal
   return normalized === "ja" || normalized === "en" || normalized === "es"
 }
 
-export function resolveOutputLocale(input: {
+export type LocaleSource =
+  | "explicit"
+  | "session_locale"
+  | "user_locale"
+  | "room_locale"
+  | "browser_locale"
+  | "fallback"
+
+export function resolveOutputLocaleDecision(input: {
   preferred?: string | null
   session_locale?: string | null
+  user_locale?: string | null
   room_locale?: ChatLocale | null
   browser_locale?: string | null
-}): ChatLocale {
+}): { final_locale: ChatLocale; source: LocaleSource } {
   if (isSupportedLocale(input.preferred)) {
-    return normalizeLocale(input.preferred)
+    return { final_locale: normalizeLocale(input.preferred), source: "explicit" }
   }
 
   if (isSupportedLocale(input.session_locale)) {
-    return normalizeLocale(input.session_locale)
+    return {
+      final_locale: normalizeLocale(input.session_locale),
+      source: "session_locale",
+    }
+  }
+
+  if (isSupportedLocale(input.user_locale)) {
+    return {
+      final_locale: normalizeLocale(input.user_locale),
+      source: "user_locale",
+    }
   }
 
   if (input.room_locale && SUPPORTED_CHAT_LOCALES.includes(input.room_locale)) {
-    return input.room_locale
+    return { final_locale: input.room_locale, source: "room_locale" }
   }
 
   if (isSupportedLocale(input.browser_locale)) {
-    return normalizeLocale(input.browser_locale)
+    return {
+      final_locale: normalizeLocale(input.browser_locale),
+      source: "browser_locale",
+    }
   }
 
-  return "ja"
+  return { final_locale: "ja", source: "fallback" }
+}
+
+export function resolveOutputLocale(input: {
+  preferred?: string | null
+  session_locale?: string | null
+  user_locale?: string | null
+  room_locale?: ChatLocale | null
+  browser_locale?: string | null
+}): ChatLocale {
+  return resolveOutputLocaleDecision(input).final_locale
 }
 
 export function resolveParticipantRole(session_role: SessionRole): ChatParticipantRole {
@@ -85,20 +118,34 @@ export function buildChatContext(
     source_channel: ChatIncomingInput["source_channel"]
     locale?: string | null
     session_locale?: string | null
+    user_locale?: string | null
     browser_locale?: string | null
     room_locale?: ChatLocale | null
     participant_uuid?: string | null
     room_uuid?: string | null
   },
 ): ChatContext {
+  const locale_decision = resolveOutputLocaleDecision({
+    preferred: input.locale,
+    session_locale: input.session_locale,
+    user_locale: input.user_locale,
+    room_locale: input.room_locale ?? null,
+    browser_locale: input.browser_locale,
+  })
+
+  void sendAuthDebug("chat_context_locale_resolved", {
+    final_locale: locale_decision.final_locale,
+    source: locale_decision.source,
+    user_uuid: session.user_uuid,
+    visitor_uuid: session.visitor_uuid,
+    room_uuid: input.room_uuid ?? null,
+    room_locale: input.room_locale ?? null,
+    source_channel: input.source_channel,
+  })
+
   return {
     source_channel: input.source_channel,
-    locale: resolveOutputLocale({
-      preferred: input.locale,
-      session_locale: input.session_locale,
-      room_locale: input.room_locale ?? null,
-      browser_locale: input.browser_locale,
-    }),
+    locale: locale_decision.final_locale,
     visitor_uuid: session.visitor_uuid,
     user_uuid: session.user_uuid,
     session_role: session.role,
