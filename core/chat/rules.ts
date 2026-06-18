@@ -401,3 +401,51 @@ export function buildMessagePayload(input: {
 export async function shouldBootstrapWelcome(room_uuid: string) {
   return !(await roomHasWelcomeMessage(room_uuid))
 }
+
+export type RoomKeyIdentity = {
+  user_uuid?: string | null
+  visitor_uuid?: string | null
+  order_uuid?: string | null
+}
+
+const FORBIDDEN_ROOM_KEY_PREFIXES = ["web:", "line:", "pwa:", "liff:", "channel:"]
+
+export function assert_valid_room_key(room_key: string) {
+  const normalized = room_key.trim().toLowerCase()
+
+  for (const prefix of FORBIDDEN_ROOM_KEY_PREFIXES) {
+    if (normalized.startsWith(prefix)) {
+      throw new Error(`room_key must not include channel identity: ${room_key}`)
+    }
+  }
+
+  if (
+    !normalized.startsWith("user:") &&
+    !normalized.startsWith("visitor:") &&
+    !normalized.startsWith("order:")
+  ) {
+    throw new Error(`room_key must use user:, visitor:, or order: prefix: ${room_key}`)
+  }
+}
+
+export function resolve_room_key(identity: RoomKeyIdentity) {
+  if (identity.order_uuid) {
+    const room_key = `order:${identity.order_uuid}`
+    assert_valid_room_key(room_key)
+    return room_key
+  }
+
+  if (identity.user_uuid) {
+    const room_key = `user:${identity.user_uuid}`
+    assert_valid_room_key(room_key)
+    return room_key
+  }
+
+  if (identity.visitor_uuid) {
+    const room_key = `visitor:${identity.visitor_uuid}`
+    assert_valid_room_key(room_key)
+    return room_key
+  }
+
+  throw new Error("Chat requires user_uuid or visitor_uuid")
+}

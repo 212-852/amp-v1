@@ -1,13 +1,12 @@
 import {
   findParticipantByRole,
   findOwnerParticipantInRoom,
-  findOldestParticipantByUserUuid,
-  findOldestParticipantByVisitorUuid,
-  findRoomByUuid,
+  findRoomByKey,
   insertParticipant,
   linkParticipantToUser,
   upsertParticipant,
 } from "@/core/chat/archive"
+import { resolve_room_key } from "@/core/chat/rules"
 import type {
   ChatParticipantRecord,
   ChatParticipantRole,
@@ -18,64 +17,62 @@ import { sendAuthDebug } from "@/core/debug"
 export type ParticipantIdentity = {
   visitor_uuid: string | null
   user_uuid: string | null
+  order_uuid?: string | null
 }
 
 export type ResolvedOwnerParticipant = {
   room: ChatRoomRecord
   participant: ChatParticipantRecord
-  found_by: "user_uuid" | "visitor_uuid"
+  found_by: "user_uuid" | "visitor_uuid" | "room_key"
 }
 
 export async function resolveOwnedParticipant(
   input: ParticipantIdentity,
 ): Promise<ResolvedOwnerParticipant | null> {
-  let participant: ChatParticipantRecord | null = null
-  let found_by: ResolvedOwnerParticipant["found_by"] | null = null
-
-  if (input.user_uuid) {
-    participant = await findOldestParticipantByUserUuid(input.user_uuid)
-
-    if (participant) {
-      found_by = "user_uuid"
-    }
-  }
-
-  if (!participant && input.visitor_uuid) {
-    participant = await findOldestParticipantByVisitorUuid(input.visitor_uuid)
-
-    if (participant) {
-      found_by = "visitor_uuid"
-    }
-
-    if (participant && input.user_uuid) {
-      try {
-        participant = await linkParticipantToUser({
-          participant_uuid: participant.participant_uuid,
-          user_uuid: input.user_uuid,
-        })
-        found_by = "user_uuid"
-      } catch {
-        const linked = await findOldestParticipantByUserUuid(input.user_uuid)
-
-        if (linked) {
-          participant = linked
-          found_by = "user_uuid"
-        }
-      }
-    }
-  }
-
-  if (!participant || !found_by) {
-    return null
-  }
-
-  const room = await findRoomByUuid(participant.room_uuid)
+  const room_key = resolve_room_key(input)
+  const room = await findRoomByKey(room_key)
 
   if (!room) {
     return null
   }
 
-  return { room, participant, found_by }
+  let participant = await findOwnerParticipantInRoom({
+    room_uuid: room.room_uuid,
+    user_uuid: input.user_uuid,
+    visitor_uuid: input.visitor_uuid,
+    role: input.user_uuid ? "user" : "guest",
+  })
+
+  if (!participant) {
+    return null
+  }
+
+  if (
+    input.user_uuid &&
+    participant.visitor_uuid === input.visitor_uuid &&
+    (!participant.user_uuid || participant.role === "guest")
+  ) {
+    try {
+      participant = await linkParticipantToUser({
+        participant_uuid: participant.participant_uuid,
+        user_uuid: input.user_uuid,
+      })
+    } catch {
+      participant =
+        (await findOwnerParticipantInRoom({
+          room_uuid: room.room_uuid,
+          user_uuid: input.user_uuid,
+          visitor_uuid: input.visitor_uuid,
+          role: "user",
+        })) ?? participant
+    }
+  }
+
+  return {
+    room,
+    participant,
+    found_by: input.user_uuid ? "user_uuid" : "visitor_uuid",
+  }
 }
 
 export async function upsertRoomParticipant(input: {

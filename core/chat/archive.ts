@@ -193,7 +193,7 @@ export async function findOwnerParticipantInRoom(input: {
 export type ResolvedOwnerParticipant = {
   room: ChatRoomRecord
   participant: ChatParticipantRecord
-  found_by: "user_uuid" | "visitor_uuid"
+  found_by: "user_uuid" | "visitor_uuid" | "room_key"
 }
 
 /** @deprecated Import from @/core/chat/participant */

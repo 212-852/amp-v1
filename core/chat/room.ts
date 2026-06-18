@@ -19,7 +19,7 @@ import {
 } from "@/core/chat/context"
 import { bootstrapRoomWelcome } from "@/core/chat/message"
 import { loadOnlinePresenceViews } from "@/core/chat/presence"
-import { resolveInitialRoomMode } from "@/core/chat/rules"
+import { resolveInitialRoomMode, resolve_room_key } from "@/core/chat/rules"
 import type {
   ChatContext,
   ChatLocale,
@@ -37,6 +37,8 @@ export type RoomIdentity = {
   user_uuid: string | null
   order_uuid?: string | null
 }
+
+export { resolve_room_key } from "@/core/chat/rules"
 
 export type ResolvedOwnedRoom = {
   room: ChatRoomRecord
@@ -107,22 +109,6 @@ function resolveRoomIdentity(context: ChatContext, session: Session): RoomIdenti
   }
 
   return { visitor_uuid, user_uuid }
-}
-
-export function resolve_room_key(identity: RoomIdentity) {
-  if (identity.order_uuid) {
-    return `order:${identity.order_uuid}`
-  }
-
-  if (identity.user_uuid) {
-    return `user:${identity.user_uuid}`
-  }
-
-  if (identity.visitor_uuid) {
-    return `visitor:${identity.visitor_uuid}`
-  }
-
-  throw new Error("Chat requires order_uuid, user_uuid, or visitor_uuid")
 }
 
 function resolveOwnerParticipantRole(
@@ -196,7 +182,7 @@ async function resolveExistingOwnedRoom(input: {
   await sendAuthDebug("room_resolve_started", {
     user_uuid: input.identity.user_uuid,
     visitor_uuid: input.identity.visitor_uuid,
-    source_channel: input.channel,
+    room_key: input.room_key,
     pass: input.pass ?? "primary",
   })
 
@@ -230,7 +216,6 @@ async function resolveExistingOwnedRoom(input: {
     by: "room_key",
     room_key: input.room_key,
     participant_uuid: participant.participant_uuid,
-    source_channel: input.channel,
     pass: input.pass ?? "primary",
   })
 
@@ -276,7 +261,6 @@ export async function resolveOwnedRoom(input: {
   const room_key = resolve_room_key(input.identity)
   console.info("[chat_core] room_resolve_entered", {
     room_key,
-    source_channel: input.channel,
     user_uuid: input.identity.user_uuid,
     visitor_uuid: input.identity.visitor_uuid,
     order_uuid: input.identity.order_uuid ?? null,
@@ -349,7 +333,6 @@ export async function resolveOwnedRoom(input: {
     room_uuid: room.room_uuid,
     reason: "no_existing_room_key",
     room_key,
-    source_channel: input.channel,
     user_uuid: input.identity.user_uuid,
     visitor_uuid: input.identity.visitor_uuid,
   })
