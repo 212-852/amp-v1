@@ -6,6 +6,7 @@ import {
   findRoomByUuid,
   insertParticipant,
   linkParticipantToUser,
+  upsertParticipant,
 } from "@/core/chat/archive"
 import type {
   ChatParticipantRecord,
@@ -103,11 +104,27 @@ export async function upsertRoomParticipant(input: {
         user_uuid: input.user_uuid,
       })
 
+      await sendAuthDebug("participant_upserted", {
+        room_uuid: linked.room_uuid,
+        user_uuid: linked.user_uuid,
+        visitor_uuid: linked.visitor_uuid,
+        role: linked.role,
+        created: false,
+      })
+
       return {
         participant: linked,
         created: false,
       }
     }
+
+    await sendAuthDebug("participant_upserted", {
+      room_uuid: existing.room_uuid,
+      user_uuid: existing.user_uuid,
+      visitor_uuid: existing.visitor_uuid,
+      role: existing.role,
+      created: false,
+    })
 
     return {
       participant: existing,
@@ -115,7 +132,7 @@ export async function upsertRoomParticipant(input: {
     }
   }
 
-  const participant = await insertParticipant({
+  const participant = await upsertParticipant({
     room_uuid: input.room_uuid,
     role: input.role,
     visitor_uuid: input.visitor_uuid,
@@ -123,12 +140,12 @@ export async function upsertRoomParticipant(input: {
       input.role === "guest" && !input.user_uuid ? null : input.user_uuid,
   })
 
-  await sendAuthDebug("participant_created", {
+  await sendAuthDebug("participant_upserted", {
     room_uuid: participant.room_uuid,
-    participant_uuid: participant.participant_uuid,
-    role: participant.role,
-    visitor_uuid: participant.visitor_uuid,
     user_uuid: participant.user_uuid,
+    visitor_uuid: participant.visitor_uuid,
+    role: participant.role,
+    created: true,
   })
 
   return {

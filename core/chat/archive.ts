@@ -129,11 +129,7 @@ export async function findOldestParticipantByUserUuid(user_uuid: string) {
 
 export async function findOldestParticipantByVisitorUuid(visitor_uuid: string) {
   return findParticipantRow(
-    [
-      `visitor_uuid=eq.${encodeURIComponent(visitor_uuid)}`,
-      "user_uuid=is.null",
-      "role=eq.guest",
-    ].join("&"),
+    `visitor_uuid=eq.${encodeURIComponent(visitor_uuid)}&role=in.(guest,user)`,
   )
 }
 
@@ -534,6 +530,74 @@ export async function insertParticipant(input: {
   return rows[0]
 }
 
+export async function upsertParticipant(input: {
+  room_uuid: string
+  role: ChatParticipantRole
+  visitor_uuid: string | null
+  user_uuid: string | null
+}) {
+  const existing = await findOwnerParticipantInRoom({
+    room_uuid: input.room_uuid,
+    user_uuid: input.user_uuid,
+    visitor_uuid: input.visitor_uuid,
+  })
+
+  if (existing) {
+    return existing
+  }
+
+  try {
+    return await insertParticipant(input)
+  } catch {
+    const recovered = await findOwnerParticipantInRoom({
+      room_uuid: input.room_uuid,
+      user_uuid: input.user_uuid,
+      visitor_uuid: input.visitor_uuid,
+    })
+
+    if (recovered) {
+      return recovered
+    }
+
+    throw new Error("Failed to upsert participant")
+  }
+}
+
+export async function findMessageByExternalId(input: {
+  source_channel: string
+  external_id: string
+}) {
+  const config = getRestConfig()
+
+  if (!config) {
+    return null
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "messages",
+      [
+        `source_channel=eq.${encodeURIComponent(input.source_channel)}`,
+        `external_id=eq.${encodeURIComponent(input.external_id)}`,
+        "select=*",
+        "limit=1",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return null
+  }
+
+  const rows = (await response.json()) as ChatMessageRecord[]
+  return rows[0] ?? null
+}
+
 export async function insertMessage(input: {
   message_uuid?: string
   room_uuid: string
@@ -542,6 +606,8 @@ export async function insertMessage(input: {
   status?: ChatMessageStatus
   body: string
   payload: Record<string, unknown> | null
+  source_channel?: string | null
+  external_id?: string | null
 }) {
   const config = requireConfig()
 
@@ -560,6 +626,22 @@ export async function insertMessage(input: {
 
   if (!response.ok) {
     const error = await readRestError(response)
+
+    if (
+      error.code === "23505" &&
+      input.source_channel &&
+      input.external_id
+    ) {
+      const existing = await findMessageByExternalId({
+        source_channel: input.source_channel,
+        external_id: input.external_id,
+      })
+
+      if (existing) {
+        return existing
+      }
+    }
+
     throw new Error(
       `Failed to archive message: ${error.code ?? "unknown"} ${
         error.message ?? "unknown"

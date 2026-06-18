@@ -1,10 +1,8 @@
-import { normalizeContactContext } from "@/core/contacts/context"
-import { upsertContact } from "@/core/contacts/action"
-import { resolveUserUuidByIdentityValue } from "@/core/auth/identity"
 import {
   handleIncomingChatMessageArchive,
   handleQuickMenuRequested,
 } from "@/core/chat/action"
+import { findMessageByExternalId } from "@/core/chat/archive"
 import { sendAuthDebug } from "@/core/debug"
 import {
   resolveLineWebhookContext,
@@ -35,6 +33,10 @@ export async function upsertLineContactFromEvent(event: LineEvent) {
     return null
   }
 
+  const { resolveUserUuidByIdentityValue } = await import("@/core/auth/identity")
+  const { upsertContact } = await import("@/core/contacts/action")
+  const { normalizeContactContext } = await import("@/core/contacts/context")
+
   const user_uuid = await resolveUserUuidByIdentityValue(lineUserId)
 
   if (!user_uuid) {
@@ -54,23 +56,6 @@ export async function upsertLineContactsFromEvents(events: LineEvent[]) {
   return Promise.all(events.map((event) => upsertLineContactFromEvent(event)))
 }
 
-async function upsertWebhookLineContact(input: {
-  user_uuid: string | null
-  visitor_uuid: string | null
-  provider_user_id: string
-}) {
-  return upsertContact(
-    normalizeContactContext({
-      user_uuid: input.user_uuid,
-      visitor_uuid: input.visitor_uuid,
-      type: "line",
-      value: input.provider_user_id,
-      channel: "line",
-      receive: true,
-    }),
-  )
-}
-
 export async function handleLineWebhook(request: LineWebhookRequest) {
   beginLineReplyTokenScope()
 
@@ -79,33 +64,50 @@ export async function handleLineWebhook(request: LineWebhookRequest) {
     archived: boolean
     processed: boolean
     replied: boolean
+    duplicate?: boolean
   }> = []
-  const blocked_event = request.events.find(
-    (event) => !can_process_line_user(event.provider_user_id),
-  )
-
-  if (blocked_event) {
-    await sendAuthDebug("line_webhook_test_blocked", {
-      provider_user_id: blocked_event.provider_user_id,
-      reason: "line_test_mode_not_allowed",
-    })
-
-    return {
-      ok: true,
-      ignored: true,
-      reason: "line_test_mode_not_allowed",
-      results: [
-        {
-          provider_user_id: blocked_event.provider_user_id,
-          archived: false,
-          processed: false,
-          replied: false,
-        },
-      ],
-    }
-  }
 
   for (const event of request.events) {
+    if (!can_process_line_user(event.provider_user_id)) {
+      await sendAuthDebug("line_webhook_test_blocked", {
+        provider_user_id: event.provider_user_id,
+        reason: "line_test_mode_not_allowed",
+      })
+
+      results.push({
+        provider_user_id: event.provider_user_id,
+        archived: false,
+        processed: false,
+        replied: false,
+      })
+      continue
+    }
+
+    if (event.external_id) {
+      const duplicate = await findMessageByExternalId({
+        source_channel: event.source_channel,
+        external_id: event.external_id,
+      })
+
+      if (duplicate) {
+        await sendAuthDebug("line_message_duplicate_skipped", {
+          provider_user_id: event.provider_user_id,
+          external_id: event.external_id,
+          message_uuid: duplicate.message_uuid,
+          room_uuid: duplicate.room_uuid,
+        })
+
+        results.push({
+          provider_user_id: event.provider_user_id,
+          archived: true,
+          processed: false,
+          replied: false,
+          duplicate: true,
+        })
+        continue
+      }
+    }
+
     const context = await resolveLineWebhookContext(event.provider_user_id)
     const reply_allowed = can_reply_to_line_user(event.provider_user_id)
     const can_reply = reply_allowed && Boolean(event.reply_token)
@@ -118,20 +120,6 @@ export async function handleLineWebhook(request: LineWebhookRequest) {
       test_mode: get_line_webhook_test_mode(),
     })
 
-    await upsertWebhookLineContact({
-      user_uuid: context.user_uuid,
-      visitor_uuid: context.visitor_uuid,
-      provider_user_id: event.provider_user_id,
-    }).catch((error) => {
-      return sendAuthDebug("line_webhook_contact_upsert_failed", {
-        provider: "line",
-        user_uuid: context.user_uuid,
-        visitor_uuid: context.visitor_uuid,
-        provider_user_id: event.provider_user_id,
-        error_message: error instanceof Error ? error.message : String(error),
-      })
-    })
-
     if (!can_reply) {
       await handleIncomingChatMessageArchive(
         {
@@ -139,6 +127,7 @@ export async function handleLineWebhook(request: LineWebhookRequest) {
           source_channel: event.source_channel,
           locale: context.locale,
           session: context.session,
+          external_id: event.external_id,
           line_provider_user_id: event.provider_user_id,
           line_reply_allowed: false,
         },
@@ -146,6 +135,7 @@ export async function handleLineWebhook(request: LineWebhookRequest) {
           deliver: false,
           bootstrap_welcome: false,
           apply_mode_command: false,
+          provider_user_id: event.provider_user_id,
         },
       )
 
@@ -177,6 +167,7 @@ export async function handleLineWebhook(request: LineWebhookRequest) {
         source_channel: event.source_channel,
         locale: context.locale,
         session: context.session,
+        external_id: event.external_id,
         line_reply_token: event.reply_token,
         line_provider_user_id: event.provider_user_id,
         line_reply_allowed: reply_allowed,
@@ -186,6 +177,7 @@ export async function handleLineWebhook(request: LineWebhookRequest) {
         deliver_mode_reply: true,
         bootstrap_welcome: false,
         apply_mode_command: true,
+        provider_user_id: event.provider_user_id,
       },
     )
 

@@ -98,6 +98,8 @@ export type ChatMessageRecord = {
   status: ChatMessageStatus
   body: string
   payload: ChatMessagePayload | null
+  source_channel?: SourceChannel | null
+  external_id?: string | null
   created_at: string
 }
 
@@ -153,6 +155,7 @@ export type ChatIncomingInput = {
   session: Session
   participant_uuid?: string | null
   room_uuid?: string | null
+  external_id?: string | null
   line_reply_token?: string | null
   line_provider_user_id?: string | null
   line_reply_allowed?: boolean

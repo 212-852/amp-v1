@@ -46,6 +46,7 @@ export type PreparedMessageInput = {
   session: Session
   translations?: ChatTranslations
   payload?: Record<string, unknown> | null
+  external_id?: string | null
 }
 
 async function resolveArchiveParticipant(input: {
@@ -190,6 +191,8 @@ export async function archivePreparedMessage(input: PreparedMessageInput) {
       type: message_type,
       body: input.body,
       payload,
+      source_channel: input.source_channel,
+      external_id: input.external_id ?? null,
     })
   } catch (error) {
     await sendAuthDebug("chat_archive_failed", {
