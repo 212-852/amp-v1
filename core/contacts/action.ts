@@ -128,6 +128,36 @@ async function patchContactRecord(
   return rows[0] ?? null
 }
 
+async function insertContactWithoutConflict(
+  config: NonNullable<ReturnType<typeof getRestConfig>>,
+  body: ContactUpsertBody,
+) {
+  const response = await fetch(
+    restUrl(config, "contacts", `select=${CONTACT_SELECT}`),
+    {
+      method: "POST",
+      headers: {
+        ...restHeaders(config),
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+    throw new Error(
+      `Failed to insert contact: ${error.code ?? "unknown"} ${
+        error.message ?? "No PostgREST error returned"
+      }`,
+    )
+  }
+
+  const rows = (await response.json()) as ContactRecord[]
+  return rows[0] ?? null
+}
+
 export async function upsertContact(context: ContactContext): Promise<ContactRecord | null> {
   assertContactContext(context)
 
@@ -184,6 +214,8 @@ export async function upsertContact(context: ContactContext): Promise<ContactRec
       if (existing?.contact_uuid) {
         return patchContactRecord(config, existing.contact_uuid, body)
       }
+
+      return insertContactWithoutConflict(config, body)
     }
 
     throw new Error(

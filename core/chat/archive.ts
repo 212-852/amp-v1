@@ -598,6 +598,49 @@ export async function findMessageByExternalId(input: {
   return rows[0] ?? null
 }
 
+function isMissingMessageKindColumn(error: {
+  code?: string | null
+  message?: string | null
+}) {
+  return (
+    error.code === "PGRST204" &&
+    error.message?.includes("'message_kind' column") === true
+  )
+}
+
+async function findLegacyWelcomeMessage(room_uuid: string) {
+  const config = getRestConfig()
+
+  if (!config) {
+    return null
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "messages",
+      [
+        `room_uuid=eq.${encodeURIComponent(room_uuid)}`,
+        "body=eq.welcome",
+        "type=eq.flex",
+        "select=*",
+        "limit=1",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return null
+  }
+
+  const rows = (await response.json()) as ChatMessageRecord[]
+  return rows[0] ?? null
+}
+
 export async function findWelcomeMessage(room_uuid: string) {
   const config = getRestConfig()
 
@@ -623,6 +666,12 @@ export async function findWelcomeMessage(room_uuid: string) {
   )
 
   if (!response.ok) {
+    const error = await readRestError(response)
+
+    if (isMissingMessageKindColumn(error)) {
+      return findLegacyWelcomeMessage(room_uuid)
+    }
+
     return null
   }
 
@@ -643,6 +692,15 @@ export async function insertMessage(input: {
   external_id?: string | null
 }) {
   const config = requireConfig()
+  const body: Record<string, unknown> = {
+    ...input,
+    status: input.status ?? "sent",
+  }
+  delete body.message_kind
+
+  if (input.message_kind) {
+    body.message_kind = input.message_kind
+  }
 
   const response = await fetch(restUrl(config, "messages", "select=*"), {
     method: "POST",
@@ -650,15 +708,19 @@ export async function insertMessage(input: {
       ...restHeaders(config),
       Prefer: "return=representation",
     },
-    body: JSON.stringify({
-      ...input,
-      status: input.status ?? "sent",
-    }),
+    body: JSON.stringify(body),
     cache: "no-store",
   })
 
   if (!response.ok) {
     const error = await readRestError(response)
+
+    if (input.message_kind && isMissingMessageKindColumn(error)) {
+      return insertMessage({
+        ...input,
+        message_kind: null,
+      })
+    }
 
     if (
       error.code === "23505" &&
@@ -782,6 +844,12 @@ export async function roomHasWelcomeMessage(room_uuid: string) {
   )
 
   if (!response.ok) {
+    const error = await readRestError(response)
+
+    if (isMissingMessageKindColumn(error)) {
+      return Boolean(await findLegacyWelcomeMessage(room_uuid))
+    }
+
     return false
   }
 

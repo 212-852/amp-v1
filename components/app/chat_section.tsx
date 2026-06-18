@@ -11,6 +11,11 @@ const content = {
     en: "Loading chat",
     es: "Cargando chat",
   },
+  empty: {
+    ja: "チャットを開始できます",
+    en: "Chat is ready",
+    es: "El chat esta listo",
+  },
 }
 
 function ChatLoadingState() {
@@ -25,6 +30,18 @@ function ChatLoadingState() {
   )
 }
 
+function ChatEmptyShell() {
+  const { locale } = useLocale()
+
+  return (
+    <section className="px-2 pt-2">
+      <div className="inline-flex rounded-full bg-white/60 px-4 py-2 text-[13px] font-medium text-[#8c7358]">
+        {content.empty[locale]}
+      </div>
+    </section>
+  )
+}
+
 export default function AppChatSection({
   chat_state: initial_chat_state,
   viewer_display_name = null,
@@ -32,9 +49,13 @@ export default function AppChatSection({
   chat_state: ChatRoomState | null
   viewer_display_name?: string | null
 }>) {
-  const chat_state = useChatRoomBootstrap(initial_chat_state)
+  const { chat_state, timed_out } = useChatRoomBootstrap(initial_chat_state)
 
   if (!chat_state) {
+    if (timed_out) {
+      return <ChatEmptyShell />
+    }
+
     return <ChatLoadingState />
   }
 

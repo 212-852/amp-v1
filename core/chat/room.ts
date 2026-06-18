@@ -451,17 +451,22 @@ export async function bootstrapChatRoom(
 
   const room = await syncRoomLocale(resolved.room, output_locale)
 
-  const welcome =
-    options.welcome === false
-      ? null
-      : await bootstrapRoomWelcome({
-          room,
-          participant: resolved.participant,
-          session,
-          source_channel: context.source_channel,
-          locale: output_locale,
-          defer_archive: options.defer_welcome_archive,
-        })
+  let welcome = null
+
+  if (options.welcome !== false) {
+    try {
+      welcome = await bootstrapRoomWelcome({
+        room,
+        participant: resolved.participant,
+        session,
+        source_channel: context.source_channel,
+        locale: output_locale,
+        defer_archive: options.defer_welcome_archive,
+      })
+    } catch (error) {
+      void error
+    }
+  }
 
   return {
     room,

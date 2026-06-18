@@ -112,11 +112,20 @@ export async function handleChatRoomBootstrap(input: {
     source_channel: input.source_channel,
     locale: input.locale ?? null,
   })
-  const result = await bootstrapChatRoom(context, input.session, {
-    defer_welcome_archive: true,
-  })
+  let result: Awaited<ReturnType<typeof bootstrapChatRoom>> | null = null
 
-  if (result.welcome_message) {
+  try {
+    result = await bootstrapChatRoom(context, input.session, {
+      defer_welcome_archive: true,
+    })
+  } catch (error) {
+    logChatBootstrap("chat_bootstrap_requested", {
+      ...debug,
+      error_message: error instanceof Error ? error.message : String(error),
+    })
+  }
+
+  if (result?.welcome_message) {
     return {
       room: result.room,
       participant: result.participant,
@@ -137,13 +146,13 @@ export async function handleChatRoomBootstrap(input: {
     room_uuid: state.room.room_uuid,
   }
 
-  if (result.created) {
+  if (result?.created) {
     logChatBootstrap("chat_bootstrap_room_created", debug_with_room)
   } else {
     logChatBootstrap("chat_bootstrap_room_reused", debug_with_room)
   }
 
-  if (result.welcome_created) {
+  if (result?.welcome_created) {
     logChatBootstrap("chat_bootstrap_welcome_created", debug_with_room)
   }
 
