@@ -31,10 +31,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null)
-  console.log("concierge body", body)
 
   const enabled = (body as { enabled?: unknown } | null)?.enabled
-  console.log("concierge enabled", enabled, typeof enabled)
 
   if (typeof enabled !== "boolean") {
     return NextResponse.json(
@@ -62,7 +60,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
-      enabled,
+      enabled: result.enabled,
     })
   } catch (error) {
     if (error instanceof ConciergeToggleDeniedError) {

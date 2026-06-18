@@ -46,12 +46,13 @@ type HeaderMenuItem = {
 export default function OpsHeader({
   session,
   page_label,
-  concierge_available = true,
+  concierge_available,
 }: {
   session?: HeaderSessionLike | null
   page_label: string
   concierge_available?: boolean
 }) {
+  const enabled = concierge_available === true
   const safe_session = normalizeOpsHeaderDisplay(session)
   const { locale } = useLocale()
   const { toast } = useToast()
@@ -65,17 +66,13 @@ export default function OpsHeader({
   const [menu_open, set_menu_open] = useState(false)
   const [is_logging_out, set_is_logging_out] = useState(false)
   const [concierge_available_state, set_concierge_available_state] = useState(
-    concierge_available,
+    enabled,
   )
   const [is_saving_concierge, set_is_saving_concierge] = useState(false)
   const can_toggle_concierge = canToggleConciergeAvailability({
     role: safe_session.role,
     tier: safe_session.tier,
   })
-
-  useEffect(() => {
-    set_concierge_available_state(concierge_available)
-  }, [concierge_available])
 
   useEffect(() => {
     if (!menu_open) {
@@ -118,10 +115,10 @@ export default function OpsHeader({
       return
     }
 
-    const next_enabled = !concierge_available_state
+    const previous_enabled = concierge_available_state
+    const next_enabled = !previous_enabled
     set_is_saving_concierge(true)
-
-    console.log("concierge toggle request", { enabled: next_enabled })
+    set_concierge_available_state(next_enabled)
 
     try {
       const response = await fetch("/api/chat/concierge", {
@@ -171,6 +168,7 @@ export default function OpsHeader({
       })
     } catch (error) {
       console.error("concierge toggle error", error)
+      set_concierge_available_state(previous_enabled)
       toast({
         tone: "error",
         placement: "anchor",
