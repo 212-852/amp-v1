@@ -22,7 +22,10 @@ export function can_process_line_user(provider_user_id: string) {
     return true
   }
 
-  return get_allowed_line_users().includes(provider_user_id.trim())
+  return (
+    is_line_webhook_reply_enabled() &&
+    get_allowed_line_users().includes(provider_user_id.trim())
+  )
 }
 
 export function can_reply_to_line_user(provider_user_id: string) {

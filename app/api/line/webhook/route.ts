@@ -30,51 +30,21 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  await sendAuthDebug("line_webhook_route_entered", {
-    method: request.method,
-    has_signature: Boolean(request.headers.get("x-line-signature")),
-    content_type: request.headers.get("content-type"),
-    user_agent: request.headers.get("user-agent"),
-  })
-
   const signature = request.headers.get("x-line-signature")
   const body = await request.text()
-  const has_signature = Boolean(signature)
   let payload: unknown
 
   try {
     payload = JSON.parse(body) as unknown
   } catch {
-    await sendAuthDebug("line_webhook_received", {
-      event_count: 0,
-      has_signature,
-      source_channel: "line",
-    })
     return Response.json({ ok: false, error: "invalid_json" }, { status: 400 })
   }
 
-  const event_count =
-    payload &&
-    typeof payload === "object" &&
-    Array.isArray((payload as { events?: unknown }).events)
-      ? (payload as { events: unknown[] }).events.length
-      : 0
-
-  await sendAuthDebug("line_webhook_received", {
-    event_count,
-    has_signature,
-    source_channel: "line",
-  })
-
   const signature_ok = verifyLineSignature(body, signature)
-
-  await sendAuthDebug("line_signature_verified", {
-    ok: signature_ok,
-  })
 
   if (!signature_ok) {
     await sendAuthDebug("line_signature_verification_failed", {
-      has_signature,
+      has_signature: Boolean(signature),
       source_channel: "line",
     })
     return Response.json({ ok: false, error: "invalid_signature" }, { status: 401 })

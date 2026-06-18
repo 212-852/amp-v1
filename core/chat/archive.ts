@@ -209,6 +209,15 @@ export async function findVisitorUuidByUser(user_uuid: string) {
   )
 
   if (!response.ok) {
+    const error = await readRestError(response)
+
+    if (
+      isMissingExternalIdColumn(error) ||
+      isMissingSourceChannelColumn(error)
+    ) {
+      return null
+    }
+
     return null
   }
 
@@ -624,6 +633,16 @@ function isMissingExternalIdColumn(error: {
   )
 }
 
+function isMissingSourceChannelColumn(error: {
+  code?: string | null
+  message?: string | null
+}) {
+  return (
+    error.code === "PGRST204" &&
+    error.message?.includes("'source_channel' column") === true
+  )
+}
+
 async function findLegacyWelcomeMessage(room_uuid: string) {
   const config = getRestConfig()
 
@@ -714,9 +733,14 @@ export async function insertMessage(input: {
   }
   delete body.message_kind
   delete body.external_id
+  delete body.source_channel
 
   if (input.message_kind) {
     body.message_kind = input.message_kind
+  }
+
+  if (input.source_channel) {
+    body.source_channel = input.source_channel
   }
 
   if (input.external_id) {
@@ -746,6 +770,14 @@ export async function insertMessage(input: {
     if (input.external_id && isMissingExternalIdColumn(error)) {
       return insertMessage({
         ...input,
+        external_id: null,
+      })
+    }
+
+    if (input.source_channel && isMissingSourceChannelColumn(error)) {
+      return insertMessage({
+        ...input,
+        source_channel: null,
         external_id: null,
       })
     }

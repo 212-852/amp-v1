@@ -69,9 +69,11 @@ export async function handleLineWebhook(request: LineWebhookRequest) {
 
   for (const event of request.events) {
     if (!can_process_line_user(event.provider_user_id)) {
-      console.info("[line_webhook] line_webhook_test_blocked", {
+      console.info("[line_webhook] line_test_blocked_before_db", {
         provider_user_id: event.provider_user_id,
         reason: "line_test_mode_not_allowed",
+        reply_enabled: is_line_webhook_reply_enabled(),
+        test_mode: get_line_webhook_test_mode(),
       })
 
       results.push({
@@ -82,6 +84,10 @@ export async function handleLineWebhook(request: LineWebhookRequest) {
       })
       continue
     }
+
+    await sendAuthDebug("line_test_allowed_entered", {
+      provider_user_id: event.provider_user_id,
+    })
 
     await sendAuthDebug("line_event_normalized", {
       provider_user_id: event.provider_user_id,

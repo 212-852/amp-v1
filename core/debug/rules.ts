@@ -20,6 +20,7 @@ const lineWebhookInfoEvents = new Set([
   "line_reply_send_attempt",
   "line_reply_send_success",
   "line_signature_verified",
+  "line_test_allowed_entered",
   "line_webhook_health_check",
   "line_webhook_received",
   "line_webhook_reply_allowed",
