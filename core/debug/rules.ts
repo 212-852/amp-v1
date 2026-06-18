@@ -12,6 +12,10 @@ const alwaysReportEvents = new Set([
   "output_failed",
 ])
 
+const deniedDiscordEvents = new Set([
+  "pwa_launch_entered",
+])
+
 const lineWebhookInfoEvents = new Set([
   "line_event_normalized",
   "line_identity_resolved",
@@ -122,7 +126,6 @@ const identityEvents = new Set([
   "otp_verify_success",
   "pwa_reload_after_bridge",
   "pwa_bridge_start_request",
-  "pwa_launch_entered",
   "pwa_bridge_fetch_failed",
   "pwa_bridge_fetch_response",
   "pwa_bridge_fetch_started",
@@ -204,6 +207,10 @@ function isUnexpectedEvent(event: string) {
 }
 
 export function shouldSendAuthSessionDebug(event: string) {
+  if (deniedDiscordEvents.has(event)) {
+    return false
+  }
+
   if (alwaysReportEvents.has(event)) {
     return true
   }
@@ -231,6 +238,10 @@ export function shouldSendAuthSessionDebug(event: string) {
 }
 
 export function resolveDebugTitle(event: string) {
+  if (deniedDiscordEvents.has(event)) {
+    return "DEBUG"
+  }
+
   if (
     lineWebhookInfoEvents.has(event) ||
     (alwaysReportEvents.has(event) &&
