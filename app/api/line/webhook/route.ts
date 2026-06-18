@@ -73,6 +73,10 @@ export async function POST(request: Request) {
   })
 
   if (!signature_ok) {
+    await sendAuthDebug("line_signature_verification_failed", {
+      has_signature,
+      source_channel: "line",
+    })
     return Response.json({ ok: false, error: "invalid_signature" }, { status: 401 })
   }
 

@@ -185,6 +185,7 @@ export async function handleIncomingChatMessageArchive(
   input: ChatIncomingInput,
   options: {
     deliver?: boolean
+    deliver_mode_reply?: boolean
     bootstrap_welcome?: boolean
     apply_mode_command?: boolean
   } = {},
@@ -231,7 +232,7 @@ export async function handleIncomingChatMessageArchive(
       line_reply_token: input.line_reply_token,
       line_provider_user_id: input.line_provider_user_id,
       line_reply_allowed: input.line_reply_allowed,
-      deliver: options.deliver !== false,
+      deliver: options.deliver_mode_reply ?? options.deliver !== false,
       room,
       participant,
     })
@@ -259,15 +260,21 @@ export async function handleIncomingChatMessageArchive(
   })
 
   if (options.deliver !== false) {
-    await deliverMessageBundle({
-      message,
-      room,
-      session: input.session,
-      source_channel: input.source_channel,
-      line_reply_token: input.line_reply_token,
-      line_provider_user_id: input.line_provider_user_id,
-      line_reply_allowed: input.line_reply_allowed,
-    })
+    const should_deliver_incoming = !(
+      input.source_channel === "line" && Boolean(input.line_reply_token)
+    )
+
+    if (should_deliver_incoming) {
+      await deliverMessageBundle({
+        message,
+        room,
+        session: input.session,
+        source_channel: input.source_channel,
+        line_reply_token: input.line_reply_token,
+        line_provider_user_id: input.line_provider_user_id,
+        line_reply_allowed: input.line_reply_allowed,
+      })
+    }
   }
 
   return {

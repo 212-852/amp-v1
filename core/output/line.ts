@@ -2,6 +2,7 @@ import type { ContactRecord } from "@/core/contacts/rules"
 import type { DeliveryResult } from "@/core/output"
 import type { OutputMessage } from "@/core/output/rules"
 import { sendAuthDebug } from "@/core/debug"
+import { consumeLineReplyToken } from "@/core/line/reply_token"
 
 export async function deliverLine(
   contact: ContactRecord,
@@ -13,8 +14,13 @@ export async function deliverLine(
 ): Promise<DeliveryResult> {
   const token = process.env.LINE_MESSAGING_CHANNEL_ACCESS_TOKEN
   const provider_user_id = options.provider_user_id ?? contact.value
+  const reply_token = consumeLineReplyToken(options.reply_token)
 
-  if (!token || (!contact.value && !options.reply_token)) {
+  if (options.reply_token && !reply_token) {
+    return { transport: "line", delivered: false }
+  }
+
+  if (!token || (!contact.value && !reply_token)) {
     await sendAuthDebug("line_reply_send_failed", {
       provider_user_id,
       status: 0,
@@ -35,12 +41,12 @@ export async function deliverLine(
 
   await sendAuthDebug("line_reply_send_attempt", {
     provider_user_id,
-    reply_token_exists: Boolean(options.reply_token),
+    reply_token_exists: Boolean(reply_token),
     message_count: line_payloads.length,
   })
 
   const response = await fetch(
-    options.reply_token
+    reply_token
       ? "https://api.line.me/v2/bot/message/reply"
       : "https://api.line.me/v2/bot/message/push",
     {
@@ -50,9 +56,9 @@ export async function deliverLine(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(
-        options.reply_token
+        reply_token
           ? {
-              replyToken: options.reply_token,
+              replyToken: reply_token,
               messages: line_payloads,
             }
           : {

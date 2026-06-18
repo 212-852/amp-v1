@@ -1,4 +1,40 @@
-import { AUTH_SESSION_DEBUG } from "@/core/control"
+import {
+  AUTH_SESSION_DEBUG,
+  DEBUG_CHAT_FLOW,
+  DEBUG_LINE_WEBHOOK,
+} from "@/core/control"
+
+const alwaysReportEvents = new Set([
+  "line_reply_send_failed",
+  "line_webhook_contact_upsert_failed",
+  "line_signature_verification_failed",
+  "chat_archive_failed",
+  "output_failed",
+])
+
+const lineWebhookInfoEvents = new Set([
+  "line_event_normalized",
+  "line_identity_resolved",
+  "line_reply_allowlist_checked",
+  "line_reply_blocked",
+  "line_reply_send_attempt",
+  "line_reply_send_success",
+  "line_signature_verified",
+  "line_webhook_health_check",
+  "line_webhook_received",
+  "line_webhook_reply_allowed",
+  "line_webhook_reply_blocked",
+  "line_webhook_route_entered",
+])
+
+const chatFlowInfoEvents = new Set([
+  "chat_archive_incoming_saved",
+  "chat_output_bundle_built",
+  "chat_room_mode_trigger_checked",
+  "chat_room_mode_updated",
+  "chat_room_resolved",
+  "output_route_resolved",
+])
 
 const identityEvents = new Set([
   "auth_callback_received",
@@ -46,27 +82,7 @@ const identityEvents = new Set([
   "line_login_button_clicked",
   "identity_unlinked",
   "line_identity_link_success",
-  "chat_archive_incoming_saved",
-  "chat_output_bundle_built",
-  "chat_room_mode_trigger_checked",
-  "chat_room_mode_updated",
-  "chat_room_resolved",
-  "line_event_normalized",
-  "line_identity_resolved",
-  "line_reply_allowlist_checked",
-  "line_reply_blocked",
-  "line_reply_send_attempt",
-  "line_reply_send_failed",
-  "line_reply_send_success",
-  "line_signature_verified",
-  "line_webhook_contact_upsert_failed",
-  "line_webhook_health_check",
   "line_webhook_identity_unresolved",
-  "line_webhook_received",
-  "line_webhook_route_entered",
-  "line_webhook_reply_allowed",
-  "line_webhook_reply_blocked",
-  "output_route_resolved",
   "line_oauth_authorize_url",
   "line_oauth_callback_received",
   "line_oauth_redirect_complete",
@@ -167,6 +183,18 @@ function isUnexpectedEvent(event: string) {
 }
 
 export function shouldSendAuthSessionDebug(event: string) {
+  if (alwaysReportEvents.has(event)) {
+    return true
+  }
+
+  if (lineWebhookInfoEvents.has(event)) {
+    return DEBUG_LINE_WEBHOOK
+  }
+
+  if (chatFlowInfoEvents.has(event)) {
+    return DEBUG_CHAT_FLOW
+  }
+
   if (identityEvents.has(event)) {
     if (!AUTH_SESSION_DEBUG) {
       console.warn("[IDENTITY_DEBUG_AUTH_SESSION_DEBUG_FALSE]", {
@@ -182,6 +210,19 @@ export function shouldSendAuthSessionDebug(event: string) {
 }
 
 export function resolveDebugTitle(event: string) {
+  if (
+    lineWebhookInfoEvents.has(event) ||
+    (alwaysReportEvents.has(event) &&
+      (event.startsWith("line_") ||
+        event === "line_signature_verification_failed"))
+  ) {
+    return "LINE_WEBHOOK"
+  }
+
+  if (chatFlowInfoEvents.has(event)) {
+    return "CHAT_FLOW"
+  }
+
   if (identityEvents.has(event)) {
     return "IDENTITY"
   }

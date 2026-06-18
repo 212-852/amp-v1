@@ -16,6 +16,7 @@ import {
   is_line_webhook_reply_enabled,
   resolve_line_reply_reason,
 } from "@/core/line/rules"
+import { beginLineReplyTokenScope } from "@/core/line/reply_token"
 
 type LineEventSource = {
   userId?: string
@@ -69,6 +70,8 @@ async function upsertWebhookLineContact(input: {
 }
 
 export async function handleLineWebhook(request: LineWebhookRequest) {
+  beginLineReplyTokenScope()
+
   const results: Array<{
     provider_user_id: string
     archived: boolean
@@ -78,6 +81,7 @@ export async function handleLineWebhook(request: LineWebhookRequest) {
   for (const event of request.events) {
     const context = await resolveLineWebhookContext(event.provider_user_id)
     const reply_allowed = can_reply_to_line_user(event.provider_user_id)
+    const can_reply = reply_allowed && Boolean(event.reply_token)
 
     await sendAuthDebug("line_reply_allowlist_checked", {
       provider_user_id: event.provider_user_id,
@@ -100,32 +104,24 @@ export async function handleLineWebhook(request: LineWebhookRequest) {
       })
     })
 
-    const archive_result = await handleIncomingChatMessageArchive(
-      {
-        body: event.body,
-        source_channel: event.source_channel,
-        locale: context.locale,
-        session: context.session,
-        line_reply_token: reply_allowed ? event.reply_token : null,
-        line_provider_user_id: event.provider_user_id,
-        line_reply_allowed: reply_allowed,
-      },
-      {
-        deliver: reply_allowed,
-        bootstrap_welcome: false,
-        apply_mode_command: reply_allowed,
-      },
-    )
+    if (!can_reply) {
+      await handleIncomingChatMessageArchive(
+        {
+          body: event.body,
+          source_channel: event.source_channel,
+          locale: context.locale,
+          session: context.session,
+          line_provider_user_id: event.provider_user_id,
+          line_reply_allowed: false,
+        },
+        {
+          deliver: false,
+          bootstrap_welcome: false,
+          apply_mode_command: false,
+        },
+      )
 
-    if (!reply_allowed || !event.reply_token) {
       await sendAuthDebug("line_webhook_reply_blocked", {
-        provider_user_id: event.provider_user_id,
-        reason: event.reply_token
-          ? resolve_line_reply_reason(event.provider_user_id)
-          : "missing_reply_token",
-        source_channel: event.source_channel,
-      })
-      await sendAuthDebug("line_reply_blocked", {
         provider_user_id: event.provider_user_id,
         reason: event.reply_token
           ? resolve_line_reply_reason(event.provider_user_id)
@@ -146,17 +142,42 @@ export async function handleLineWebhook(request: LineWebhookRequest) {
       source_channel: event.source_channel,
     })
 
-    if (!archive_result.mode_command_handled) {
-      await handleQuickMenuRequested({
+    const archive_result = await handleIncomingChatMessageArchive(
+      {
+        body: event.body,
         source_channel: event.source_channel,
         locale: context.locale,
         session: context.session,
         line_reply_token: event.reply_token,
         line_provider_user_id: event.provider_user_id,
         line_reply_allowed: reply_allowed,
+      },
+      {
+        deliver: false,
+        deliver_mode_reply: true,
         bootstrap_welcome: false,
+        apply_mode_command: true,
+      },
+    )
+
+    if (archive_result.mode_command_handled) {
+      results.push({
+        provider_user_id: event.provider_user_id,
+        archived: true,
+        replied: true,
       })
+      continue
     }
+
+    await handleQuickMenuRequested({
+      source_channel: event.source_channel,
+      locale: context.locale,
+      session: context.session,
+      line_reply_token: event.reply_token,
+      line_provider_user_id: event.provider_user_id,
+      line_reply_allowed: reply_allowed,
+      bootstrap_welcome: false,
+    })
 
     results.push({
       provider_user_id: event.provider_user_id,
