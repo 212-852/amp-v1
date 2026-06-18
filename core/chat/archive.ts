@@ -458,6 +458,42 @@ export async function loadRoomParticipants(room_uuid: string) {
   return (await response.json()) as ChatParticipantRecord[]
 }
 
+export async function findParticipantByRole(input: {
+  room_uuid: string
+  role: ChatParticipantRole
+}) {
+  const config = getRestConfig()
+
+  if (!config) {
+    return null
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "participants",
+      [
+        `room_uuid=eq.${encodeURIComponent(input.room_uuid)}`,
+        `role=eq.${encodeURIComponent(input.role)}`,
+        "select=*",
+        "order=joined_at.asc",
+        "limit=1",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return null
+  }
+
+  const rows = (await response.json()) as ChatParticipantRecord[]
+  return rows[0] ?? null
+}
+
 export async function insertParticipant(input: {
   room_uuid: string
   role: ChatParticipantRole
@@ -487,54 +523,11 @@ export async function insertParticipant(input: {
 
   if (!response.ok) {
     const error = await readRestError(response)
-    throw new Error(`Failed to create participant: ${error.message ?? "unknown"}`)
-  }
-
-  const rows = (await response.json()) as ChatParticipantRecord[]
-  return rows[0]
-}
-
-export async function upsertParticipant(input: {
-  room_uuid: string
-  role: ChatParticipantRole
-  visitor_uuid: string | null
-  user_uuid: string | null
-}) {
-  const config = requireConfig()
-  const body = {
-    room_uuid: input.room_uuid,
-    role: input.role,
-    visitor_uuid: input.visitor_uuid,
-    user_uuid: input.user_uuid,
-    joined_at: new Date().toISOString(),
-  }
-
-  const on_conflict = input.user_uuid
-    ? "room_uuid,user_uuid"
-    : input.visitor_uuid
-      ? "room_uuid,visitor_uuid"
-      : null
-
-  if (!on_conflict) {
-    return insertParticipant(input)
-  }
-
-  const response = await fetch(
-    restUrl(config, "participants", `on_conflict=${on_conflict}`),
-    {
-      method: "POST",
-      headers: {
-        ...restHeaders(config),
-        Prefer: "resolution=merge-duplicates,return=representation",
-      },
-      body: JSON.stringify(body),
-      cache: "no-store",
-    },
-  )
-
-  if (!response.ok) {
-    const error = await readRestError(response)
-    throw new Error(`Failed to upsert participant: ${error.message ?? "unknown"}`)
+    throw new Error(
+      `Failed to create participant: ${error.code ?? "unknown"} ${
+        error.message ?? "unknown"
+      } ${error.details ?? ""} ${error.hint ?? ""}`.trim(),
+    )
   }
 
   const rows = (await response.json()) as ChatParticipantRecord[]
@@ -544,7 +537,7 @@ export async function upsertParticipant(input: {
 export async function insertMessage(input: {
   message_uuid?: string
   room_uuid: string
-  participant_uuid: string | null
+  participant_uuid: string
   type: ChatMessageType
   status?: ChatMessageStatus
   body: string
@@ -567,7 +560,11 @@ export async function insertMessage(input: {
 
   if (!response.ok) {
     const error = await readRestError(response)
-    throw new Error(`Failed to archive message: ${error.message ?? "unknown"}`)
+    throw new Error(
+      `Failed to archive message: ${error.code ?? "unknown"} ${
+        error.message ?? "unknown"
+      } ${error.details ?? ""} ${error.hint ?? ""}`.trim(),
+    )
   }
 
   const rows = (await response.json()) as ChatMessageRecord[]

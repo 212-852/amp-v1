@@ -1,4 +1,5 @@
 import { insertMessage } from "@/core/chat/archive"
+import { ensureRoleParticipant } from "@/core/chat/participant"
 import {
   carouselPayloadToLineFlex,
   isLineFlexCarouselPayload,
@@ -46,6 +47,32 @@ export type PreparedMessageInput = {
   payload?: Record<string, unknown> | null
 }
 
+async function resolveArchiveParticipant(input: {
+  room: ChatRoomRecord
+  participant: ChatParticipantRecord | null
+  source_kind: ChatMessageKind
+}) {
+  if (input.source_kind === "bot" || input.source_kind === "system") {
+    return ensureRoleParticipant({
+      room_uuid: input.room.room_uuid,
+      role: "bot",
+    })
+  }
+
+  if (input.source_kind === "concierge") {
+    return ensureRoleParticipant({
+      room_uuid: input.room.room_uuid,
+      role: "concierge",
+    })
+  }
+
+  if (!input.participant?.participant_uuid) {
+    throw new Error("Chat message archive requires participant_uuid")
+  }
+
+  return input.participant
+}
+
 function resolveFlexAltText(body: string, locale: ChatLocale) {
   if (body === "quick_menu") {
     return resolveBotAltText("quick_menu_requested", locale)
@@ -85,6 +112,11 @@ export function toMessageBundle(
 }
 
 export async function archivePreparedMessage(input: PreparedMessageInput) {
+  const participant = await resolveArchiveParticipant({
+    room: input.room,
+    participant: input.participant,
+    source_kind: input.source_kind,
+  })
   const translation = await ensureRoomLocaleTranslation({
     body_original: input.body,
     original_locale: input.original_locale,
@@ -122,14 +154,37 @@ export async function archivePreparedMessage(input: PreparedMessageInput) {
     existing_payload: input.payload,
   })
 
-  return insertMessage({
-    message_uuid,
-    room_uuid: input.room.room_uuid,
-    participant_uuid: input.participant?.participant_uuid ?? null,
-    type: message_type,
-    body: input.body,
-    payload,
+  let message: ChatMessageRecord
+
+  try {
+    message = await insertMessage({
+      message_uuid,
+      room_uuid: input.room.room_uuid,
+      participant_uuid: participant.participant_uuid,
+      type: message_type,
+      body: input.body,
+      payload,
+    })
+  } catch (error) {
+    await sendAuthDebug("chat_archive_failed", {
+      room_uuid: input.room.room_uuid,
+      participant_uuid: participant.participant_uuid,
+      source_kind: input.source_kind,
+      type: message_type,
+      error_message: error instanceof Error ? error.message : String(error),
+    })
+    throw error
+  }
+
+  await sendAuthDebug("message_archived", {
+    room_uuid: message.room_uuid,
+    message_uuid: message.message_uuid,
+    participant_uuid: message.participant_uuid,
+    source_kind: input.source_kind,
+    type: message.type,
   })
+
+  return message
 }
 
 export async function archiveBotMessageBundle(input: {
@@ -137,15 +192,42 @@ export async function archiveBotMessageBundle(input: {
   room: ChatRoomRecord
   participant: ChatParticipantRecord | null
 }) {
-  return insertMessage({
-    message_uuid: randomUUID(),
+  const participant = await ensureRoleParticipant({
     room_uuid: input.room.room_uuid,
-    participant_uuid: input.participant?.participant_uuid ?? null,
-    type: input.bundle.type,
-    status: "sent",
-    body: input.bundle.body,
-    payload: input.bundle.payload,
+    role: "bot",
   })
+  let message: ChatMessageRecord
+
+  try {
+    message = await insertMessage({
+      message_uuid: randomUUID(),
+      room_uuid: input.room.room_uuid,
+      participant_uuid: participant.participant_uuid,
+      type: input.bundle.type,
+      status: "sent",
+      body: input.bundle.body,
+      payload: input.bundle.payload,
+    })
+  } catch (error) {
+    await sendAuthDebug("chat_archive_failed", {
+      room_uuid: input.room.room_uuid,
+      participant_uuid: participant.participant_uuid,
+      source_kind: "bot",
+      type: input.bundle.type,
+      error_message: error instanceof Error ? error.message : String(error),
+    })
+    throw error
+  }
+
+  await sendAuthDebug("message_archived", {
+    room_uuid: message.room_uuid,
+    message_uuid: message.message_uuid,
+    participant_uuid: message.participant_uuid,
+    source_kind: "bot",
+    type: message.type,
+  })
+
+  return message
 }
 
 export async function deliverMessageBundle(input: {
@@ -212,6 +294,13 @@ export async function bootstrapRoomWelcome(input: {
     bundle,
     room: input.room,
     participant: input.participant,
+  })
+
+  await sendAuthDebug("welcome_message_created", {
+    room_uuid: input.room.room_uuid,
+    message_uuid: message.message_uuid,
+    participant_uuid: message.participant_uuid,
+    source_channel: input.source_channel,
   })
 
   await deliverMessageBundle({

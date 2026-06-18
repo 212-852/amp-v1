@@ -33,7 +33,10 @@ const chatFlowInfoEvents = new Set([
   "chat_room_mode_trigger_checked",
   "chat_room_mode_updated",
   "chat_room_resolved",
+  "message_archived",
   "output_route_resolved",
+  "participant_created",
+  "welcome_message_created",
 ])
 
 const identityEvents = new Set([

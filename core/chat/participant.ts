@@ -1,16 +1,18 @@
 import {
+  findParticipantByRole,
   findOwnerParticipantInRoom,
   findOldestParticipantByUserUuid,
   findOldestParticipantByVisitorUuid,
   findRoomByUuid,
+  insertParticipant,
   linkParticipantToUser,
-  upsertParticipant,
 } from "@/core/chat/archive"
 import type {
   ChatParticipantRecord,
   ChatParticipantRole,
   ChatRoomRecord,
 } from "@/core/chat/types"
+import { sendAuthDebug } from "@/core/debug"
 
 export type ParticipantIdentity = {
   visitor_uuid: string | null
@@ -113,12 +115,20 @@ export async function upsertRoomParticipant(input: {
     }
   }
 
-  const participant = await upsertParticipant({
+  const participant = await insertParticipant({
     room_uuid: input.room_uuid,
     role: input.role,
     visitor_uuid: input.visitor_uuid,
     user_uuid:
       input.role === "guest" && !input.user_uuid ? null : input.user_uuid,
+  })
+
+  await sendAuthDebug("participant_created", {
+    room_uuid: participant.room_uuid,
+    participant_uuid: participant.participant_uuid,
+    role: participant.role,
+    visitor_uuid: participant.visitor_uuid,
+    user_uuid: participant.user_uuid,
   })
 
   return {
@@ -135,4 +145,35 @@ export async function ensureOwnerParticipant(input: {
 }): Promise<ChatParticipantRecord> {
   const result = await upsertRoomParticipant(input)
   return result.participant
+}
+
+export async function ensureRoleParticipant(input: {
+  room_uuid: string
+  role: Extract<ChatParticipantRole, "bot" | "concierge">
+}): Promise<ChatParticipantRecord> {
+  const existing = await findParticipantByRole({
+    room_uuid: input.room_uuid,
+    role: input.role,
+  })
+
+  if (existing) {
+    return existing
+  }
+
+  const participant = await insertParticipant({
+    room_uuid: input.room_uuid,
+    role: input.role,
+    visitor_uuid: null,
+    user_uuid: null,
+  })
+
+  await sendAuthDebug("participant_created", {
+    room_uuid: participant.room_uuid,
+    participant_uuid: participant.participant_uuid,
+    role: participant.role,
+    visitor_uuid: participant.visitor_uuid,
+    user_uuid: participant.user_uuid,
+  })
+
+  return participant
 }
