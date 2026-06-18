@@ -459,7 +459,7 @@ export default function AppFooter({
   can_start_line_oauth: boolean
   initial_mode?: ChatSupportMode
 }>) {
-  const [footerMode, setFooterMode] = useState<FooterMode>("normal")
+  const [footerMode, setFooterMode] = useState<FooterMode>("input")
   const [assistantMode, setAssistantMode] = useState<ChatSupportMode>(
     initial_mode === "concierge" ? "concierge" : "bot",
   )
@@ -624,31 +624,19 @@ export default function AppFooter({
           onClick={toggleFooterMode}
         />
 
-        <div
-          className={[
-            "relative z-10 flex h-full flex-col pt-[20px] pb-1",
-          ].join(" ")}
-        >
-          <div className="relative z-20 ml-[86px] mr-4 shrink-0">
-            <AssistantToggle
-              assistantMode={assistantMode}
-              locale={locale}
-              onAttemptChange={handleAssistantModeAttempt}
-            />
-          </div>
-
+        <div className="relative z-10 flex h-full flex-col pt-[20px] pb-1">
           <div
             className={[
-              "mt-2 shrink-0 [perspective:1000px]",
+              "shrink-0 [perspective:1000px]",
               isInputMode
-                ? "h-[110px]"
-                : "h-[96px]",
+                ? "h-[162px]"
+                : "h-[144px]",
             ].join(" ")}
           >
             <div className="relative h-full w-full [transform-style:preserve-3d]">
               <div
                 className={[
-                  "absolute inset-0 flex items-end justify-center",
+                  "absolute inset-0 flex items-end justify-center pt-[54px]",
                   "transition-[transform,opacity] duration-[280ms] ease-out",
                   "[backface-visibility:hidden] [transform-style:preserve-3d]",
                   isInputMode
@@ -669,6 +657,13 @@ export default function AppFooter({
                     : "pointer-events-none opacity-0 [transform:translateX(38px)_rotateY(58deg)]",
                 ].join(" ")}
               >
+                <div className="ml-[86px] mr-4 shrink-0">
+                  <AssistantToggle
+                    assistantMode={assistantMode}
+                    locale={locale}
+                    onAttemptChange={handleAssistantModeAttempt}
+                  />
+                </div>
                 <MessageInputRow
                   assistantMode={assistantMode}
                   locale={locale}
