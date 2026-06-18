@@ -14,6 +14,7 @@ import {
   findRoomByUuid,
   insertParticipant,
   loadConciergeAvailability,
+  loadRoomMessages,
   setConciergeAvailability,
   updateRoomMode,
 } from "@/core/chat/archive"
@@ -21,6 +22,7 @@ import {
   archivePreparedMessage,
   archiveBotTriggerMessage,
   deliverMessageBundle,
+  ensureWelcomeMessageArchived,
   toMessageBundle,
 } from "@/core/chat/message"
 import {
@@ -112,12 +114,11 @@ export async function handleChatRoomBootstrap(input: {
     source_channel: input.source_channel,
     locale: input.locale ?? null,
   })
-  let result: Awaited<ReturnType<typeof bootstrapChatRoom>> | null = null
+
+  let result: Awaited<ReturnType<typeof bootstrapChatRoom>>
 
   try {
-    result = await bootstrapChatRoom(context, input.session, {
-      defer_welcome_archive: true,
-    })
+    result = await bootstrapChatRoom(context, input.session)
   } catch (error) {
     await sendAuthDebug("chat_bootstrap_failed", {
       ...debug,
@@ -126,38 +127,35 @@ export async function handleChatRoomBootstrap(input: {
     throw error
   }
 
-  if (result?.welcome_message) {
-    return {
-      room: result.room,
-      participant: result.participant,
-      messages: [result.welcome_message],
-      presence: [],
-      concierge_available: await loadConciergeAvailability(),
-    }
-  }
+  await ensureWelcomeMessageArchived({
+    room: result.room,
+    source_channel: input.source_channel,
+    locale: resolveChatLocale(input.locale, result.room.locale),
+  })
 
-  const state = await findChatRoomState(context, input.session)
-
-  if (!state) {
-    throw new Error("Failed to bootstrap chat room")
-  }
-
+  const messages = await loadRoomMessages(result.room.room_uuid)
   const debug_with_room = {
     ...debug,
-    room_uuid: state.room.room_uuid,
+    room_uuid: result.room.room_uuid,
   }
 
-  if (result?.created) {
+  if (result.created) {
     logChatBootstrap("chat_bootstrap_room_created", debug_with_room)
   } else {
     logChatBootstrap("chat_bootstrap_room_reused", debug_with_room)
   }
 
-  if (result?.welcome_created) {
+  if (messages.some((message) => message.body === "welcome" && message.type === "flex")) {
     logChatBootstrap("chat_bootstrap_welcome_created", debug_with_room)
   }
 
-  return state
+  return {
+    room: result.room,
+    participant: result.participant,
+    messages,
+    presence: [],
+    concierge_available: await loadConciergeAvailability(),
+  }
 }
 
 export async function resolveChatRoom(
@@ -227,9 +225,15 @@ export async function handleIncomingChatMessageArchive(
     options.apply_mode_command !== false
       ? resolve_room_mode_trigger(body)
       : null
-  const { room, participant } = await bootstrapChatRoom(context, input.session, {
-    welcome: options.bootstrap_welcome ?? true,
-  })
+  const { room, participant } = await bootstrapChatRoom(context, input.session)
+
+  if (options.bootstrap_welcome !== false) {
+    await ensureWelcomeMessageArchived({
+      room,
+      source_channel: input.source_channel,
+      locale: resolveChatLocale(input.locale, room.locale),
+    })
+  }
 
   await sendAuthDebug("chat_room_resolved", {
     user_uuid: input.session.user_uuid,
@@ -468,9 +472,7 @@ export async function handleQuickMenuRequested(input: {
     source_channel: input.source_channel,
     locale: input.locale ?? null,
   })
-  const { room, participant } = await bootstrapChatRoom(context, input.session, {
-    welcome: input.bootstrap_welcome ?? true,
-  })
+  const { room, participant } = await bootstrapChatRoom(context, input.session)
   const message = await archiveBotTriggerMessage({
     trigger: "quick_menu_requested",
     room,

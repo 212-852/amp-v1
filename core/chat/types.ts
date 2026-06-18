@@ -80,10 +80,8 @@ export type ChatRoomRecord = {
 export type ChatRoomBootstrapResult = {
   room: ChatRoomRecord
   participant: ChatParticipantRecord
-  welcome_message: ChatMessageRecord | null
   created: boolean
   participant_created: boolean
-  welcome_created: boolean
 }
 
 export type ChatParticipantRecord = {

@@ -1,4 +1,5 @@
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
+import { sendAuthDebug } from "@/core/debug"
 import type {
   AvailabilityRecord,
   ChatLocale,
@@ -905,6 +906,12 @@ async function findLegacyWelcomeMessage(room_uuid: string) {
   return rows[0] ?? null
 }
 
+async function findFlexWelcomeMessage(room_uuid: string) {
+  return findLegacyWelcomeMessage(room_uuid)
+}
+
+export { findFlexWelcomeMessage }
+
 export async function findWelcomeMessage(room_uuid: string) {
   const config = getRestConfig()
 
@@ -941,6 +948,47 @@ export async function findWelcomeMessage(room_uuid: string) {
 
   const rows = (await response.json()) as ChatMessageRecord[]
   return rows[0] ?? null
+}
+
+export async function archiveWelcomeMessage(input: {
+  room_uuid: string
+  type: ChatMessageType
+  body: string
+  payload: Record<string, unknown> | null
+  source_channel?: string | null
+}) {
+  const existing = await findFlexWelcomeMessage(input.room_uuid)
+
+  if (existing) {
+    return existing
+  }
+
+  const { ensureRoleParticipant } = await import("@/core/chat/participant")
+  const bot = await ensureRoleParticipant({
+    room_uuid: input.room_uuid,
+    role: "bot",
+  })
+
+  try {
+    return await insertMessage({
+      room_uuid: input.room_uuid,
+      participant_uuid: bot.participant_uuid,
+      message_kind: "welcome",
+      type: input.type,
+      status: "sent",
+      body: input.body,
+      payload: input.payload,
+      source_channel: input.source_channel ?? null,
+    })
+  } catch (error) {
+    const duplicate = await findFlexWelcomeMessage(input.room_uuid)
+
+    if (duplicate) {
+      return duplicate
+    }
+
+    throw error
+  }
 }
 
 export async function insertMessage(input: {
@@ -1027,12 +1075,24 @@ export async function insertMessage(input: {
     }
 
     if (error.code === "23505" && input.message_kind === "welcome") {
-      const existing = await findWelcomeMessage(input.room_uuid)
+      const existing = await findFlexWelcomeMessage(input.room_uuid)
 
       if (existing) {
         return existing
       }
     }
+
+    await sendAuthDebug("chat_archive_failed", {
+      room_uuid: input.room_uuid,
+      participant_uuid: input.participant_uuid,
+      type: input.type,
+      body: input.body,
+      message_kind: input.message_kind ?? null,
+      source_channel: input.source_channel ?? null,
+      external_id: input.external_id ?? null,
+      error_code: error.code ?? null,
+      error_message: error.message ?? "unknown",
+    })
 
     throw new Error(
       `Failed to archive message: ${error.code ?? "unknown"} ${

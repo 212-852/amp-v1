@@ -15,7 +15,7 @@ export {
 } from "@/core/chat/action"
 export { normalizeIncomingChatInput, resolveOutputLocale, resolveParticipantRole } from "@/core/chat/context"
 export { resolveChatContent, chat_content } from "@/core/chat/content"
-export { toMessageBundle, bootstrapRoomWelcome } from "@/core/chat/message"
+export { toMessageBundle, buildWelcomeMessageBundle, ensureWelcomeMessageArchived } from "@/core/chat/message"
 export { bootstrapChatRoom, findChatRoomState, resolveOrCreateRoom } from "@/core/chat/room"
 export {
   ensureOwnerParticipant,

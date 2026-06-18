@@ -1,4 +1,4 @@
-import { insertMessage } from "@/core/chat/archive"
+import { archiveWelcomeMessage, insertMessage } from "@/core/chat/archive"
 import { ensureRoleParticipant } from "@/core/chat/participant"
 import {
   resolveOutputLocaleDecision,
@@ -20,7 +20,6 @@ import {
   resolveMessageDisplayLocale,
   resolveMessageOriginalLocale,
   resolveMessageTranslations,
-  shouldBootstrapWelcome,
 } from "@/core/chat/rules"
 import { ensureRoomLocaleTranslation } from "@/core/chat/translate"
 import { getChatContentKeyCount } from "@/core/chat/content"
@@ -38,32 +37,6 @@ import type { Session, SourceChannel } from "@/core/auth/types"
 import { deliverOutput } from "@/core/output"
 import { sendAuthDebug } from "@/core/debug"
 import { randomUUID } from "crypto"
-
-const archive_failure_debug_timestamps = new Map<string, number>()
-const ARCHIVE_FAILURE_DEBUG_INTERVAL_MS = 60_000
-
-function shouldSendArchiveFailureDebug(input: {
-  room_uuid: string
-  source_kind: ChatMessageKind
-  type: ChatMessageType
-  message_kind?: string | null
-}) {
-  const key = [
-    input.room_uuid,
-    input.source_kind,
-    input.type,
-    input.message_kind ?? "none",
-  ].join(":")
-  const now = Date.now()
-  const last_sent_at = archive_failure_debug_timestamps.get(key) ?? 0
-
-  if (now - last_sent_at < ARCHIVE_FAILURE_DEBUG_INTERVAL_MS) {
-    return false
-  }
-
-  archive_failure_debug_timestamps.set(key, now)
-  return true
-}
 
 export type PreparedMessageInput = {
   room: ChatRoomRecord
@@ -168,29 +141,6 @@ export function toMessageBundle(
   }
 }
 
-function buildPreparedMessagePreview(input: {
-  room: ChatRoomRecord
-  participant_uuid?: string | null
-  type: ChatMessageType
-  body: string
-  payload: Record<string, unknown> | null
-  source_channel: SourceChannel
-  external_id?: string | null
-}) {
-  return {
-    message_uuid: randomUUID(),
-    room_uuid: input.room.room_uuid,
-    participant_uuid: input.participant_uuid ?? null,
-    type: input.type,
-    status: "failed",
-    body: input.body,
-    payload: input.payload,
-    source_channel: input.source_channel,
-    external_id: input.external_id ?? null,
-    created_at: new Date().toISOString(),
-  } satisfies ChatMessageRecord
-}
-
 export async function archivePreparedMessage(input: PreparedMessageInput) {
   const message_type = resolveArchivedMessageType({
     source_kind: input.source_kind,
@@ -283,30 +233,16 @@ export async function archivePreparedMessage(input: PreparedMessageInput) {
       error_message: error instanceof Error ? error.message : String(error),
     })
 
-    if (
-      shouldSendArchiveFailureDebug({
-        room_uuid: input.room.room_uuid,
-        source_kind: input.source_kind,
-        type: message_type,
-      })
-    ) {
-      await sendAuthDebug("chat_archive_failed", {
-        room_uuid: input.room.room_uuid,
-        participant_uuid: input.participant?.participant_uuid ?? null,
-        source_kind: input.source_kind,
-        type: message_type,
-        error_message: error instanceof Error ? error.message : String(error),
-      })
-    }
-    return buildPreparedMessagePreview({
-      room: input.room,
+    await sendAuthDebug("chat_archive_failed", {
+      room_uuid: input.room.room_uuid,
       participant_uuid: input.participant?.participant_uuid ?? null,
+      source_kind: input.source_kind,
       type: message_type,
-      body: input.body,
-      payload: input.payload ?? null,
       source_channel: input.source_channel,
-      external_id: input.external_id,
+      error_message: error instanceof Error ? error.message : String(error),
     })
+
+    throw error
   }
 }
 
@@ -316,7 +252,28 @@ export async function archiveBotMessageBundle(input: {
   participant: ChatParticipantRecord | null
   source_channel: SourceChannel
 }) {
-  const message_kind = input.bundle.body === "welcome" ? "welcome" : null
+  if (input.bundle.body === "welcome") {
+    const message = await archiveWelcomeMessage({
+      room_uuid: input.room.room_uuid,
+      type: input.bundle.type,
+      body: input.bundle.body,
+      payload: input.bundle.payload as Record<string, unknown> | null,
+      source_channel: input.source_channel,
+    })
+
+    await sendAuthDebug("message_archived", {
+      room_uuid: message.room_uuid,
+      message_uuid: message.message_uuid,
+      participant_uuid: message.participant_uuid,
+      source_kind: "bot",
+      type: message.type,
+      message_kind: "welcome",
+    })
+
+    return message
+  }
+
+  const message_kind = null
   let participant: ChatParticipantRecord | null = input.participant
 
   try {
@@ -327,7 +284,7 @@ export async function archiveBotMessageBundle(input: {
     console.info("[chat_core] message_archive_entered", {
       room_uuid: input.room.room_uuid,
       participant_uuid: participant.participant_uuid,
-      source_channel: null,
+      source_channel: input.source_channel,
       source_kind: "bot",
       type: input.bundle.type,
       message_kind,
@@ -336,11 +293,11 @@ export async function archiveBotMessageBundle(input: {
       message_uuid: randomUUID(),
       room_uuid: input.room.room_uuid,
       participant_uuid: participant.participant_uuid,
-      message_kind,
       type: input.bundle.type,
       status: "sent",
       body: input.bundle.body,
       payload: input.bundle.payload,
+      source_channel: input.source_channel,
     })
 
     console.info("[chat_core] message_archive_success", {
@@ -366,59 +323,24 @@ export async function archiveBotMessageBundle(input: {
     console.info("[chat_core] message_archive_failed", {
       room_uuid: input.room.room_uuid,
       participant_uuid: participant?.participant_uuid ?? null,
-      source_channel: null,
+      source_channel: input.source_channel,
       source_kind: "bot",
       type: input.bundle.type,
       message_kind,
       error_message: error instanceof Error ? error.message : String(error),
     })
 
-    if (
-      shouldSendArchiveFailureDebug({
-        room_uuid: input.room.room_uuid,
-        source_kind: "bot",
-        type: input.bundle.type,
-        message_kind,
-      })
-    ) {
-      await sendAuthDebug("chat_archive_failed", {
-        room_uuid: input.room.room_uuid,
-        participant_uuid: participant?.participant_uuid ?? null,
-        source_kind: "bot",
-        type: input.bundle.type,
-        message_kind,
-        error_message: error instanceof Error ? error.message : String(error),
-      })
-    }
-    return buildBotBundlePreview({
-      bundle: input.bundle,
-      room: input.room,
-      participant_uuid: input.participant?.participant_uuid ?? null,
+    await sendAuthDebug("chat_archive_failed", {
+      room_uuid: input.room.room_uuid,
+      participant_uuid: participant?.participant_uuid ?? null,
+      source_kind: "bot",
+      type: input.bundle.type,
       message_kind,
       source_channel: input.source_channel,
+      error_message: error instanceof Error ? error.message : String(error),
     })
-  }
-}
 
-function buildBotBundlePreview(input: {
-  bundle: BotMessageBundle
-  room: ChatRoomRecord
-  participant_uuid?: string | null
-  message_kind?: string | null
-  source_channel: SourceChannel
-}): ChatMessageRecord {
-  return {
-    message_uuid: randomUUID(),
-    room_uuid: input.room.room_uuid,
-    participant_uuid: input.participant_uuid ?? null,
-    message_kind: input.message_kind ?? null,
-    type: input.bundle.type,
-    status: "sent",
-    body: input.bundle.body,
-    payload: input.bundle.payload,
-    source_channel: input.source_channel,
-    external_id: null,
-    created_at: new Date().toISOString(),
+    throw error
   }
 }
 
@@ -467,18 +389,20 @@ export async function deliverMessageBundle(input: {
   )
 }
 
-export async function bootstrapRoomWelcome(input: {
+export function buildWelcomeMessageBundle(locale: ChatLocale) {
+  return createBotMessageBundle({
+    trigger: "chat_opened",
+    locale,
+  })
+}
+
+export async function ensureWelcomeMessageArchived(input: {
   room: ChatRoomRecord
-  participant: ChatParticipantRecord
-  session: Session
   source_channel: SourceChannel
   locale?: ChatLocale | null
-  defer_archive?: boolean
+  deliver?: boolean
+  session?: Session
 }) {
-  if (!(await shouldBootstrapWelcome(input.room.room_uuid))) {
-    return null
-  }
-
   const locale_decision = resolveOutputLocaleDecision({
     preferred: input.locale,
     room_locale: input.room.locale,
@@ -492,10 +416,7 @@ export async function bootstrapRoomWelcome(input: {
     content_key_count: getChatContentKeyCount(),
   })
 
-  const bundle = createBotMessageBundle({
-    trigger: "chat_opened",
-    locale,
-  })
+  const bundle = buildWelcomeMessageBundle(locale)
 
   await sendAuthDebug("chat_welcome_bundle_built", {
     room_uuid: input.room.room_uuid,
@@ -503,55 +424,11 @@ export async function bootstrapRoomWelcome(input: {
     source: locale_decision.source,
   })
 
-  if (input.defer_archive) {
-    const preview = buildBotBundlePreview({
-      bundle,
-      room: input.room,
-      participant_uuid: input.participant.participant_uuid,
-      message_kind: "welcome",
-      source_channel: input.source_channel,
-    })
-
-    void archiveBotMessageBundle({
-      bundle,
-      room: input.room,
-      participant: input.participant,
-      source_channel: input.source_channel,
-    })
-      .then((message) =>
-        sendAuthDebug("welcome_message_created", {
-          room_uuid: input.room.room_uuid,
-          message_uuid: message.message_uuid,
-          participant_uuid: message.participant_uuid,
-          source_channel: input.source_channel,
-          archived_async: true,
-        }),
-      )
-      .catch((error) =>
-        shouldSendArchiveFailureDebug({
-          room_uuid: input.room.room_uuid,
-          source_kind: "bot",
-          type: bundle.type,
-          message_kind: "welcome",
-        })
-          ? sendAuthDebug("chat_archive_failed", {
-              room_uuid: input.room.room_uuid,
-              source_kind: "bot",
-              type: bundle.type,
-              message_kind: "welcome",
-              error_message:
-                error instanceof Error ? error.message : String(error),
-            })
-          : undefined,
-      )
-
-    return preview
-  }
-
-  const message = await archiveBotMessageBundle({
-    bundle,
-    room: input.room,
-    participant: input.participant,
+  const message = await archiveWelcomeMessage({
+    room_uuid: input.room.room_uuid,
+    type: bundle.type,
+    body: bundle.body,
+    payload: bundle.payload as Record<string, unknown> | null,
     source_channel: input.source_channel,
   })
 
@@ -562,14 +439,36 @@ export async function bootstrapRoomWelcome(input: {
     source_channel: input.source_channel,
   })
 
-  await deliverMessageBundle({
-    message,
-    room: input.room,
-    session: input.session,
-    source_channel: input.source_channel,
-  })
+  if (input.deliver && input.session) {
+    await deliverMessageBundle({
+      message,
+      room: input.room,
+      session: input.session,
+      source_channel: input.source_channel,
+    })
+  }
 
   return message
+}
+
+/** @deprecated Use ensureWelcomeMessageArchived */
+export async function bootstrapRoomWelcome(input: {
+  room: ChatRoomRecord
+  participant: ChatParticipantRecord
+  session: Session
+  source_channel: SourceChannel
+  locale?: ChatLocale | null
+  defer_archive?: boolean
+}) {
+  void input.participant
+  void input.defer_archive
+  return ensureWelcomeMessageArchived({
+    room: input.room,
+    source_channel: input.source_channel,
+    locale: input.locale,
+    deliver: true,
+    session: input.session,
+  })
 }
 
 export async function archiveBotTriggerMessage(input: {

@@ -18,7 +18,6 @@ import {
   resolveOutputLocale,
   resolveParticipantRole,
 } from "@/core/chat/context"
-import { bootstrapRoomWelcome } from "@/core/chat/message"
 import { loadOnlinePresenceViews } from "@/core/chat/presence"
 import { resolveInitialRoomMode, resolve_room_key } from "@/core/chat/rules"
 import type {
@@ -474,10 +473,6 @@ export async function findChatRoomState(
 export async function bootstrapChatRoom(
   context: ChatContext,
   session: Session,
-  options: {
-    welcome?: boolean
-    defer_welcome_archive?: boolean
-  } = {},
 ): Promise<ChatRoomBootstrapResult> {
   const identity = resolveRoomIdentity(context, session)
   const output_locale = resolveOutputLocale({
@@ -497,26 +492,11 @@ export async function bootstrapChatRoom(
 
   const room = await syncRoomLocale(resolved.room, output_locale)
 
-  let welcome = null
-
-  if (options.welcome !== false) {
-    welcome = await bootstrapRoomWelcome({
-      room,
-      participant: resolved.participant,
-      session,
-      source_channel: context.source_channel,
-      locale: output_locale,
-      defer_archive: options.defer_welcome_archive,
-    })
-  }
-
   return {
     room,
     participant: resolved.participant,
-    welcome_message: welcome,
     created: resolved.created,
     participant_created: resolved.participant_created,
-    welcome_created: Boolean(welcome),
   }
 }
 
