@@ -5,12 +5,16 @@ export function get_allowed_line_users() {
     .filter(Boolean)
 }
 
+function is_env_true(value: string | undefined) {
+  return value?.trim().toLowerCase() === "true"
+}
+
 export function get_line_webhook_test_mode() {
-  return process.env.LINE_WEBHOOK_TEST_MODE === "true"
+  return is_env_true(process.env.LINE_WEBHOOK_TEST_MODE)
 }
 
 export function is_line_webhook_reply_enabled() {
-  return process.env.LINE_WEBHOOK_REPLY_ENABLED === "true"
+  return is_env_true(process.env.LINE_WEBHOOK_REPLY_ENABLED)
 }
 
 export function can_process_line_user(provider_user_id: string) {

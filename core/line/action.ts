@@ -80,23 +80,32 @@ export async function handleLineWebhook(request: LineWebhookRequest) {
     processed: boolean
     replied: boolean
   }> = []
+  const blocked_event = request.events.find(
+    (event) => !can_process_line_user(event.provider_user_id),
+  )
+
+  if (blocked_event) {
+    await sendAuthDebug("line_webhook_test_blocked", {
+      provider_user_id: blocked_event.provider_user_id,
+      reason: "line_test_mode_not_allowed",
+    })
+
+    return {
+      ok: true,
+      ignored: true,
+      reason: "line_test_mode_not_allowed",
+      results: [
+        {
+          provider_user_id: blocked_event.provider_user_id,
+          archived: false,
+          processed: false,
+          replied: false,
+        },
+      ],
+    }
+  }
 
   for (const event of request.events) {
-    if (!can_process_line_user(event.provider_user_id)) {
-      await sendAuthDebug("line_webhook_test_blocked", {
-        provider_user_id: event.provider_user_id,
-        reason: "test_mode_not_allowed",
-      })
-
-      results.push({
-        provider_user_id: event.provider_user_id,
-        archived: false,
-        processed: false,
-        replied: false,
-      })
-      continue
-    }
-
     const context = await resolveLineWebhookContext(event.provider_user_id)
     const reply_allowed = can_reply_to_line_user(event.provider_user_id)
     const can_reply = reply_allowed && Boolean(event.reply_token)
