@@ -17,14 +17,22 @@ export function is_line_webhook_reply_enabled() {
   return is_env_true(process.env.LINE_WEBHOOK_REPLY_ENABLED)
 }
 
-export function can_process_line_user(provider_user_id: string) {
+export function can_process_line_webhook_user(input: {
+  provider_user_id: string
+  source_channel: string
+  entry: "webhook" | "other"
+}) {
+  if (input.source_channel !== "line" || input.entry !== "webhook") {
+    return true
+  }
+
   if (!get_line_webhook_test_mode()) {
     return true
   }
 
   return (
     is_line_webhook_reply_enabled() &&
-    get_allowed_line_users().includes(provider_user_id.trim())
+    get_allowed_line_users().includes(input.provider_user_id.trim())
   )
 }
 

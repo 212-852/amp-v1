@@ -21,6 +21,18 @@ function requireConfig() {
   return config
 }
 
+function isMissingRoomIdentityColumn(error: {
+  code?: string | null
+  message?: string | null
+}) {
+  return (
+    error.code === "PGRST204" &&
+    (error.message?.includes("'user_uuid' column") === true ||
+      error.message?.includes("'visitor_uuid' column") === true ||
+      error.message?.includes("'order_uuid' column") === true)
+  )
+}
+
 export async function loadConciergeAvailability(user_uuid?: string | null) {
   const config = getRestConfig()
 
@@ -332,13 +344,22 @@ export async function insertRoom(input: {
 }) {
   const config = requireConfig()
 
-  const body = {
+  const body: Record<string, unknown> = {
     mode: input.mode,
     locale: input.locale,
     channel: input.channel,
-    user_uuid: input.user_uuid ?? null,
-    visitor_uuid: input.visitor_uuid ?? null,
-    order_uuid: input.order_uuid ?? null,
+  }
+
+  if (input.user_uuid) {
+    body.user_uuid = input.user_uuid
+  }
+
+  if (input.visitor_uuid) {
+    body.visitor_uuid = input.visitor_uuid
+  }
+
+  if (input.order_uuid) {
+    body.order_uuid = input.order_uuid
   }
 
   const response = await fetch(restUrl(config, "rooms", "select=*"), {
@@ -353,6 +374,15 @@ export async function insertRoom(input: {
 
   if (!response.ok) {
     const error = await readRestError(response)
+
+    if (isMissingRoomIdentityColumn(error)) {
+      return insertRoom({
+        mode: input.mode,
+        locale: input.locale,
+        channel: input.channel,
+      })
+    }
+
     throw new Error(`Failed to create room: ${error.message ?? "unknown"}`)
   }
 

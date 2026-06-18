@@ -35,6 +35,7 @@ const chatFlowInfoEvents = new Set([
   "chat_bootstrap_completed",
   "chat_bootstrap_started",
   "chat_context_locale_resolved",
+  "chat_gate_passed",
   "chat_message_locale_used",
   "chat_messages_fetch_completed",
   "chat_messages_fetch_started",
