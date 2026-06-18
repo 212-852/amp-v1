@@ -1,10 +1,15 @@
 import type { OutputMessage, OutputTarget } from "@/core/output/rules"
-import { loadOutputContacts, resolveOutputDestinations } from "@/core/output/rules"
+import {
+  isLineWebhookReplyEnabled,
+  loadOutputContacts,
+  resolveOutputDestinations,
+} from "@/core/output/rules"
 import { deliverDiscord } from "@/core/output/discord"
 import { deliverLine } from "@/core/output/line"
 import { deliverPush } from "@/core/output/push"
 import { deliverWeb } from "@/core/output/web"
 import { sendAuthDebug } from "@/core/debug"
+import type { ContactRecord } from "@/core/contacts/rules"
 
 export type DeliveryResult = {
   transport: "line" | "web" | "push" | "discord" | "none"
@@ -24,6 +29,11 @@ export async function deliverOutput(
       destination: "web",
       channel: target.channel,
       should_send: true,
+      reason: "web_channel",
+      reply_token_exists: Boolean(target.line_reply_token),
+      line_reply_allowed: target.line_reply_allowed === true,
+      reply_enabled: isLineWebhookReplyEnabled(),
+      provider_user_id: target.line_provider_user_id ?? null,
     })
     return [await deliverWeb(null, message)]
   }
@@ -36,16 +46,39 @@ export async function deliverOutput(
       await sendAuthDebug("output_route_resolved", {
         destination: destination.transport,
         channel: target.channel ?? null,
-        should_send: destination.transport !== "none" && Boolean(destination.contact),
+        should_send: destination.should_send,
+        reason: destination.reason,
+        reply_token_exists: Boolean(target.line_reply_token),
+        line_reply_allowed: target.line_reply_allowed === true,
+        reply_enabled: isLineWebhookReplyEnabled(),
+        provider_user_id: target.line_provider_user_id ?? null,
       })
 
+      if (!destination.should_send) {
+        return {
+          transport: destination.transport,
+          delivered: false,
+        }
+      }
+
       if (destination.transport === "line") {
-        return destination.contact
-          ? deliverLine(destination.contact, message, {
-              reply_token: target.line_reply_token,
-              provider_user_id: target.line_provider_user_id,
-            })
-          : { transport: "line", delivered: false }
+        const contact =
+          destination.contact ??
+          ({
+            user_uuid: target.user_uuid ?? null,
+            visitor_uuid: target.visitor_uuid ?? null,
+            type: "line",
+            value: target.line_provider_user_id ?? "",
+            channel: "line",
+            state: "active",
+            receive: true,
+            last_seen_at: null,
+          } satisfies ContactRecord)
+
+        return deliverLine(contact, message, {
+          reply_token: target.line_reply_token,
+          provider_user_id: target.line_provider_user_id,
+        })
       }
 
       if (destination.transport === "web") {

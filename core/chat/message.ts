@@ -155,6 +155,7 @@ export async function deliverMessageBundle(input: {
   source_channel: SourceChannel
   line_reply_token?: string | null
   line_provider_user_id?: string | null
+  line_reply_allowed?: boolean
 }) {
   const payload = input.message.payload
   const alt_text = resolveFlexAltText(input.message.body, input.room.locale)
@@ -182,6 +183,7 @@ export async function deliverMessageBundle(input: {
       channel: input.room.channel,
       line_reply_token: input.line_reply_token,
       line_provider_user_id: input.line_provider_user_id,
+      line_reply_allowed: input.line_reply_allowed,
     },
     {
       text: alt_text,
@@ -230,6 +232,7 @@ export async function archiveBotTriggerMessage(input: {
   source_channel: SourceChannel
   line_reply_token?: string | null
   line_provider_user_id?: string | null
+  line_reply_allowed?: boolean
 }) {
   const bundle = createBotMessageBundle({
     trigger: input.trigger,
@@ -249,6 +252,7 @@ export async function archiveBotTriggerMessage(input: {
     source_channel: input.source_channel,
     line_reply_token: input.line_reply_token,
     line_provider_user_id: input.line_provider_user_id,
+    line_reply_allowed: input.line_reply_allowed,
   })
 
   return message

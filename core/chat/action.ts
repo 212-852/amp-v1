@@ -230,6 +230,7 @@ export async function handleIncomingChatMessageArchive(
       room_uuid: input.room_uuid,
       line_reply_token: input.line_reply_token,
       line_provider_user_id: input.line_provider_user_id,
+      line_reply_allowed: input.line_reply_allowed,
       deliver: options.deliver !== false,
       room,
       participant,
@@ -265,6 +266,7 @@ export async function handleIncomingChatMessageArchive(
       source_channel: input.source_channel,
       line_reply_token: input.line_reply_token,
       line_provider_user_id: input.line_provider_user_id,
+      line_reply_allowed: input.line_reply_allowed,
     })
   }
 
@@ -284,6 +286,7 @@ async function handleRoomModeCommand(input: {
   room_uuid?: string | null
   line_reply_token?: string | null
   line_provider_user_id?: string | null
+  line_reply_allowed?: boolean
   deliver: boolean
   room: Awaited<ReturnType<typeof bootstrapChatRoom>>["room"]
   participant: Awaited<ReturnType<typeof bootstrapChatRoom>>["participant"]
@@ -349,6 +352,7 @@ async function handleRoomModeCommand(input: {
       source_channel: input.source_channel,
       line_reply_token: input.line_reply_token,
       line_provider_user_id: input.line_provider_user_id,
+      line_reply_allowed: input.line_reply_allowed,
     })
   }
 
@@ -408,6 +412,7 @@ export async function handleQuickMenuRequested(input: {
   session: Session
   line_reply_token?: string | null
   line_provider_user_id?: string | null
+  line_reply_allowed?: boolean
   bootstrap_welcome?: boolean
 }) {
   const context = buildChatContext(input.session, {
@@ -425,6 +430,7 @@ export async function handleQuickMenuRequested(input: {
     source_channel: input.source_channel,
     line_reply_token: input.line_reply_token,
     line_provider_user_id: input.line_provider_user_id,
+    line_reply_allowed: input.line_reply_allowed,
   })
 
   return toMessageBundle(message, room.locale)

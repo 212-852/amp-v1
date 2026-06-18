@@ -108,6 +108,7 @@ export async function handleLineWebhook(request: LineWebhookRequest) {
         session: context.session,
         line_reply_token: reply_allowed ? event.reply_token : null,
         line_provider_user_id: event.provider_user_id,
+        line_reply_allowed: reply_allowed,
       },
       {
         deliver: reply_allowed,
@@ -152,6 +153,7 @@ export async function handleLineWebhook(request: LineWebhookRequest) {
         session: context.session,
         line_reply_token: event.reply_token,
         line_provider_user_id: event.provider_user_id,
+        line_reply_allowed: reply_allowed,
         bootstrap_welcome: false,
       })
     }

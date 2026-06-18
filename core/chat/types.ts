@@ -155,6 +155,7 @@ export type ChatIncomingInput = {
   room_uuid?: string | null
   line_reply_token?: string | null
   line_provider_user_id?: string | null
+  line_reply_allowed?: boolean
 }
 
 export type ChatModeSwitchInput = {
@@ -166,6 +167,7 @@ export type ChatModeSwitchInput = {
   room_uuid?: string | null
   line_reply_token?: string | null
   line_provider_user_id?: string | null
+  line_reply_allowed?: boolean
 }
 
 export type ChatTypingInput = {

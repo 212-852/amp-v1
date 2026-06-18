@@ -14,15 +14,22 @@ export type OutputTarget = {
   channel?: SourceChannel | null
   line_reply_token?: string | null
   line_provider_user_id?: string | null
+  line_reply_allowed?: boolean
 }
 
 export type OutputDestination = {
   contact: ContactRecord | null
   transport: "line" | "web" | "push" | "discord" | "none"
+  should_send: boolean
+  reason: string
 }
 
 const CONTACT_SELECT =
   "user_uuid,visitor_uuid,type,value,channel,state,receive,last_seen_at"
+
+export function isLineWebhookReplyEnabled() {
+  return process.env.LINE_WEBHOOK_REPLY_ENABLED === "true"
+}
 
 function contactTargetQuery(target: OutputTarget) {
   const filters: string[] = []
@@ -84,15 +91,44 @@ export function resolveOutputDestinations(
     target.channel === "pwa" ||
     target.channel === "liff"
   ) {
-    return [{ contact: null, transport: "web" }]
+    return [{
+      contact: null,
+      transport: "web",
+      should_send: true,
+      reason: "web_channel",
+    }]
   }
 
   if (target.channel === "line") {
+    const reply_token_exists = Boolean(target.line_reply_token)
+    const reply_enabled = isLineWebhookReplyEnabled()
+    const line_reply_allowed = target.line_reply_allowed === true
     const line_contact = contacts.find((contact) => {
       return contact.receive && contact.type === "line"
     })
 
-    return [{ contact: line_contact ?? null, transport: "line" }]
+    if (reply_token_exists) {
+      const should_send = line_reply_allowed && reply_enabled
+      const reason = should_send
+        ? "line_reply_allowed"
+        : !line_reply_allowed
+          ? "line_reply_not_allowed"
+          : "line_reply_disabled"
+
+      return [{
+        contact: line_contact ?? null,
+        transport: "line",
+        should_send,
+        reason,
+      }]
+    }
+
+    return [{
+      contact: line_contact ?? null,
+      transport: "line",
+      should_send: Boolean(line_contact),
+      reason: line_contact ? "line_contact_found" : "line_contact_missing",
+    }]
   }
 
   const destinations: OutputDestination[] = []
@@ -107,7 +143,12 @@ export function resolveOutputDestinations(
   })
 
   if (onlineContact) {
-    return [{ contact: onlineContact, transport: "web" }]
+    return [{
+      contact: onlineContact,
+      transport: "web",
+      should_send: true,
+      reason: "online_web_contact",
+    }]
   }
 
   contacts.forEach((contact) => {
@@ -116,21 +157,41 @@ export function resolveOutputDestinations(
     }
 
     if (contact.type === "line") {
-      destinations.push({ contact, transport: "line" })
+      destinations.push({
+        contact,
+        transport: "line",
+        should_send: true,
+        reason: "line_contact_found",
+      })
       return
     }
 
     if (contact.type === "discord") {
-      destinations.push({ contact, transport: "discord" })
+      destinations.push({
+        contact,
+        transport: "discord",
+        should_send: true,
+        reason: "discord_contact_found",
+      })
       return
     }
 
     if (contact.type === "push") {
-      destinations.push({ contact, transport: "push" })
+      destinations.push({
+        contact,
+        transport: "push",
+        should_send: true,
+        reason: "push_contact_found",
+      })
     }
   })
 
   return destinations.length > 0
     ? destinations
-    : [{ contact: null, transport: "none" }]
+    : [{
+      contact: null,
+      transport: "none",
+      should_send: false,
+      reason: "destination_missing",
+    }]
 }
