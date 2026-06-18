@@ -33,6 +33,16 @@ function isMissingRoomIdentityColumn(error: {
   )
 }
 
+function isMissingRoomKeyColumn(error: {
+  code?: string | null
+  message?: string | null
+}) {
+  return (
+    error.code === "PGRST204" &&
+    error.message?.includes("'room_key' column") === true
+  )
+}
+
 export async function loadConciergeAvailability(user_uuid?: string | null) {
   const config = getRestConfig()
 
@@ -155,10 +165,15 @@ export async function findOwnerParticipantInRoom(input: {
   room_uuid: string
   user_uuid: string | null
   visitor_uuid: string | null
+  role?: ChatParticipantRole | null
 }) {
+  const role_filter = input.role
+    ? `&role=eq.${encodeURIComponent(input.role)}`
+    : ""
+
   if (input.user_uuid) {
     const by_user = await findParticipantRow(
-      `room_uuid=eq.${encodeURIComponent(input.room_uuid)}&user_uuid=eq.${encodeURIComponent(input.user_uuid)}`,
+      `room_uuid=eq.${encodeURIComponent(input.room_uuid)}&user_uuid=eq.${encodeURIComponent(input.user_uuid)}${role_filter}`,
     )
 
     if (by_user) {
@@ -168,7 +183,7 @@ export async function findOwnerParticipantInRoom(input: {
 
   if (input.visitor_uuid) {
     return findParticipantRow(
-      `room_uuid=eq.${encodeURIComponent(input.room_uuid)}&visitor_uuid=eq.${encodeURIComponent(input.visitor_uuid)}`,
+      `room_uuid=eq.${encodeURIComponent(input.room_uuid)}&visitor_uuid=eq.${encodeURIComponent(input.visitor_uuid)}${role_filter}`,
     )
   }
 
@@ -338,6 +353,7 @@ export async function insertRoom(input: {
   mode: ChatRoomMode
   locale: ChatLocale
   channel: ChatRoomRecord["channel"]
+  room_key?: string | null
   user_uuid?: string | null
   visitor_uuid?: string | null
   order_uuid?: string | null
@@ -348,6 +364,10 @@ export async function insertRoom(input: {
     mode: input.mode,
     locale: input.locale,
     channel: input.channel,
+  }
+
+  if (input.room_key) {
+    body.room_key = input.room_key
   }
 
   if (input.user_uuid) {
@@ -380,10 +400,107 @@ export async function insertRoom(input: {
         mode: input.mode,
         locale: input.locale,
         channel: input.channel,
+        room_key: input.room_key,
+      })
+    }
+
+    if (isMissingRoomKeyColumn(error)) {
+      return insertRoom({
+        mode: input.mode,
+        locale: input.locale,
+        channel: input.channel,
+        user_uuid: input.user_uuid,
+        visitor_uuid: input.visitor_uuid,
+        order_uuid: input.order_uuid,
       })
     }
 
     throw new Error(`Failed to create room: ${error.message ?? "unknown"}`)
+  }
+
+  const rows = (await response.json()) as ChatRoomRecord[]
+  return rows[0]
+}
+
+export async function findRoomByKey(room_key: string) {
+  const config = getRestConfig()
+
+  if (!config) {
+    return null
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "rooms",
+      `room_key=eq.${encodeURIComponent(room_key)}&select=*&limit=1`,
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+
+    if (isMissingRoomKeyColumn(error)) {
+      return null
+    }
+
+    return null
+  }
+
+  const rows = (await response.json()) as ChatRoomRecord[]
+  return rows[0] ?? null
+}
+
+export async function upsertRoomByKey(input: {
+  room_key: string
+  mode: ChatRoomMode
+  locale: ChatLocale
+  channel: ChatRoomRecord["channel"]
+  user_uuid?: string | null
+  visitor_uuid?: string | null
+  order_uuid?: string | null
+}) {
+  const config = requireConfig()
+  const body: Record<string, unknown> = {
+    room_key: input.room_key,
+    mode: input.mode,
+    locale: input.locale,
+    channel: input.channel,
+  }
+
+  if (input.user_uuid) {
+    body.user_uuid = input.user_uuid
+  }
+
+  if (input.visitor_uuid) {
+    body.visitor_uuid = input.visitor_uuid
+  }
+
+  if (input.order_uuid) {
+    body.order_uuid = input.order_uuid
+  }
+
+  const response = await fetch(
+    restUrl(config, "rooms", "on_conflict=room_key&select=*"),
+    {
+      method: "POST",
+      headers: {
+        ...restHeaders(config),
+        Prefer: "resolution=merge-duplicates,return=representation",
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+
+    throw new Error(`Failed to upsert room: ${error.message ?? "unknown"}`)
   }
 
   const rows = (await response.json()) as ChatRoomRecord[]
@@ -689,6 +806,7 @@ export async function upsertParticipant(input: {
     room_uuid: input.room_uuid,
     user_uuid: input.user_uuid,
     visitor_uuid: input.visitor_uuid,
+    role: input.role,
   })
 
   if (existing) {
@@ -702,6 +820,7 @@ export async function upsertParticipant(input: {
       room_uuid: input.room_uuid,
       user_uuid: input.user_uuid,
       visitor_uuid: input.visitor_uuid,
+      role: input.role,
     })
 
     if (recovered) {

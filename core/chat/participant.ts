@@ -91,6 +91,7 @@ export async function upsertRoomParticipant(input: {
     room_uuid: input.room_uuid,
     user_uuid: input.user_uuid,
     visitor_uuid: input.visitor_uuid,
+    role: input.role,
   })
 
   if (existing) {
@@ -177,12 +178,27 @@ export async function ensureRoleParticipant(input: {
     return existing
   }
 
-  const participant = await insertParticipant({
-    room_uuid: input.room_uuid,
-    role: input.role,
-    visitor_uuid: null,
-    user_uuid: null,
-  })
+  let participant: ChatParticipantRecord
+
+  try {
+    participant = await insertParticipant({
+      room_uuid: input.room_uuid,
+      role: input.role,
+      visitor_uuid: null,
+      user_uuid: null,
+    })
+  } catch {
+    const recovered = await findParticipantByRole({
+      room_uuid: input.room_uuid,
+      role: input.role,
+    })
+
+    if (!recovered) {
+      throw new Error(`Failed to ensure ${input.role} participant`)
+    }
+
+    return recovered
+  }
 
   await sendAuthDebug("participant_created", {
     room_uuid: participant.room_uuid,

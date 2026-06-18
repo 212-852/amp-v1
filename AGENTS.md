@@ -268,7 +268,7 @@ LINE, LIFF, PWA, and Web must reuse the same room.
 ROOM CHANNEL RULE
 #########################
 
-rooms.channel stores the latest incoming channel.
+rooms.channel stores the first source channel for the room.
 
 Allowed:
 - web
@@ -278,7 +278,7 @@ Allowed:
 
 Do not store source_channel or delivery_channel on messages.
 
-Output destination is decided by rooms.channel.
+Output destination is decided by the output bundle destination, not room identity.
 
 #########################
 QUICK MENU RULE
@@ -307,6 +307,11 @@ CHAT ROOM ABSOLUTE RULE
 - Do not create rooms per channel.
 - Do not include channel in the lookup key for personal rooms.
 - channel is only metadata of the incoming message, not room identity.
+- Use rooms.room_key as the stable room identity.
+- Normal user room_key is user:<user_uuid>.
+- Guest room_key is visitor:<visitor_uuid>.
+- Order room_key is order:<order_uuid>.
+- room_key must be unique.
 - For logged-in users, resolve room by user_uuid only.
 - For anonymous visitors, resolve room by visitor_uuid only.
 - If order_uuid exists, resolve or create one room per order_uuid.

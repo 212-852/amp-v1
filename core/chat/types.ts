@@ -66,6 +66,7 @@ export type ChatMessagePayload = {
 
 export type ChatRoomRecord = {
   room_uuid: string
+  room_key?: string | null
   mode: ChatRoomMode
   locale: ChatLocale
   channel: SourceChannel
