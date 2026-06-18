@@ -718,6 +718,41 @@ export async function resolveUserUuidByIdentityValue(value: string) {
   return rows[0]?.user_uuid ?? null
 }
 
+export async function resolveIdentityByProviderUserId(input: {
+  provider: IdentityProvider
+  provider_user_id: string
+}) {
+  const config = getRestConfig()
+
+  if (!config) {
+    return null
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "identities",
+      [
+        `provider=eq.${encodeURIComponent(input.provider)}`,
+        `provider_user_id=eq.${encodeURIComponent(input.provider_user_id)}`,
+        "select=identity_uuid,user_uuid",
+        "limit=1",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return null
+  }
+
+  const rows = (await response.json()) as IdentityRow[]
+  return rows[0] ?? null
+}
+
 export async function resolveAuthUserProfile(user_uuid: string | null): Promise<AuthUserProfile> {
   const empty: AuthUserProfile = {
     user_uuid,

@@ -1,5 +1,6 @@
 import type { AppSession } from "@/core/auth/session"
 import type { SourceChannel } from "@/core/auth/types"
+import { resolveIdentityByProviderUserId } from "@/core/auth/identity"
 import { findVisitorUuidByUser } from "@/core/chat/archive"
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
 import { sendAuthDebug } from "@/core/debug"
@@ -30,13 +31,9 @@ type UserRow = {
   locale?: string | null
 }
 
-type IdentityRow = {
-  identity_uuid?: string | null
-  user_uuid?: string | null
-}
-
-type ContactVisitorRow = {
+type LineContactIdentityRow = {
   visitor_uuid?: string | null
+  user_uuid?: string | null
 }
 
 type VisitorRow = {
@@ -117,39 +114,7 @@ export async function normalizeLineWebhookRequest(
   return { events }
 }
 
-async function resolveLineIdentity(provider_user_id: string) {
-  const config = getRestConfig()
-
-  if (!config) {
-    return null
-  }
-
-  const response = await fetch(
-    restUrl(
-      config,
-      "identities",
-      [
-        "provider=eq.line",
-        `provider_user_id=eq.${encodeURIComponent(provider_user_id)}`,
-        "select=identity_uuid,user_uuid",
-        "limit=1",
-      ].join("&"),
-    ),
-    {
-      headers: restHeaders(config),
-      cache: "no-store",
-    },
-  )
-
-  if (!response.ok) {
-    return null
-  }
-
-  const rows = (await response.json()) as IdentityRow[]
-  return rows[0] ?? null
-}
-
-async function findVisitorUuidByLineContact(provider_user_id: string) {
+async function findLineContactIdentity(provider_user_id: string) {
   const config = getRestConfig()
 
   if (!config) {
@@ -163,8 +128,7 @@ async function findVisitorUuidByLineContact(provider_user_id: string) {
       [
         "type=eq.line",
         `value=eq.${encodeURIComponent(provider_user_id)}`,
-        "visitor_uuid=not.is.null",
-        "select=visitor_uuid",
+        "select=visitor_uuid,user_uuid",
         "order=last_seen_at.desc.nullslast",
         "limit=1",
       ].join("&"),
@@ -179,8 +143,8 @@ async function findVisitorUuidByLineContact(provider_user_id: string) {
     return null
   }
 
-  const rows = (await response.json()) as ContactVisitorRow[]
-  return rows[0]?.visitor_uuid ?? null
+  const rows = (await response.json()) as LineContactIdentityRow[]
+  return rows[0] ?? null
 }
 
 async function createLineVisitor() {
@@ -218,8 +182,11 @@ async function createLineVisitor() {
   return rows[0]?.visitor_uuid ?? visitor_uuid
 }
 
-async function resolveLineVisitorUuid(provider_user_id: string) {
-  const existing = await findVisitorUuidByLineContact(provider_user_id)
+async function resolveLineVisitorUuid(
+  provider_user_id: string,
+  contact: LineContactIdentityRow | null,
+) {
+  const existing = contact?.visitor_uuid ?? null
 
   if (existing) {
     return existing
@@ -266,18 +233,24 @@ function resolveLineRole(role: string | undefined): AppSession["role"] {
 export async function resolveLineWebhookContext(
   provider_user_id: string,
 ): Promise<LineWebhookContext> {
-  const identity = await resolveLineIdentity(provider_user_id)
-  const user_uuid = identity?.user_uuid ?? null
+  const [identity, line_contact] = await Promise.all([
+    resolveIdentityByProviderUserId({
+      provider: "line",
+      provider_user_id,
+    }),
+    findLineContactIdentity(provider_user_id),
+  ])
+  const user_uuid = identity?.user_uuid ?? line_contact?.user_uuid ?? null
 
   await sendAuthDebug("line_identity_resolved", {
     provider_user_id,
     user_uuid,
     identity_uuid: identity?.identity_uuid ?? null,
-    found: Boolean(identity?.user_uuid),
+    found: Boolean(user_uuid),
   })
 
   if (!user_uuid) {
-    const visitor_uuid = await resolveLineVisitorUuid(provider_user_id)
+    const visitor_uuid = await resolveLineVisitorUuid(provider_user_id, line_contact)
 
     return {
       user_uuid: null,
@@ -300,10 +273,11 @@ export async function resolveLineWebhookContext(
     }
   }
 
-  const [visitor_uuid, user] = await Promise.all([
+  const [resolved_visitor_uuid, user] = await Promise.all([
     findVisitorUuidByUser(user_uuid),
     loadLineUser(user_uuid),
   ])
+  const visitor_uuid = resolved_visitor_uuid ?? line_contact?.visitor_uuid ?? null
 
   return {
     user_uuid,

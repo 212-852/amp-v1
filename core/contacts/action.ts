@@ -36,6 +36,10 @@ const CONTACT_SELECT =
 const CONTACT_LINK_SELECT = "contact_uuid,visitor_uuid,type,value"
 
 function contactConflictTarget(context: ContactContext) {
+  if (context.type === "line") {
+    return "type,value"
+  }
+
   if (context.user_uuid) {
     return "user_uuid,type,value"
   }

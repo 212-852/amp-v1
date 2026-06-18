@@ -636,7 +636,7 @@ export default function AppFooter({
             <div className="relative h-full w-full [transform-style:preserve-3d]">
               <div
                 className={[
-                  "absolute inset-0 flex items-end justify-center pt-[54px]",
+                  "absolute inset-0 flex flex-col justify-end gap-2 pt-[54px]",
                   "transition-[transform,opacity] duration-[280ms] ease-out",
                   "[backface-visibility:hidden] [transform-style:preserve-3d]",
                   isInputMode
@@ -644,6 +644,13 @@ export default function AppFooter({
                     : "opacity-100 [transform:translateX(0)_rotateY(0deg)]",
                 ].join(" ")}
               >
+                <div className="ml-[86px] mr-4 shrink-0">
+                  <AssistantToggle
+                    assistantMode={assistantMode}
+                    locale={locale}
+                    onAttemptChange={handleAssistantModeAttempt}
+                  />
+                </div>
                 <BottomMenuRow onQuickMenu={() => void handleQuickMenu()} />
               </div>
 
@@ -657,13 +664,6 @@ export default function AppFooter({
                     : "pointer-events-none opacity-0 [transform:translateX(38px)_rotateY(58deg)]",
                 ].join(" ")}
               >
-                <div className="ml-[86px] mr-4 shrink-0">
-                  <AssistantToggle
-                    assistantMode={assistantMode}
-                    locale={locale}
-                    onAttemptChange={handleAssistantModeAttempt}
-                  />
-                </div>
                 <MessageInputRow
                   assistantMode={assistantMode}
                   locale={locale}
