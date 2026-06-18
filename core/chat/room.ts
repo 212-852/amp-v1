@@ -4,6 +4,7 @@ import {
   findRoomByUuid,
   loadConciergeAvailability,
   loadRoomMessages,
+  updateRoomChannel,
   updateRoomLocale,
   upsertRoomByKey,
 } from "@/core/chat/archive"
@@ -141,13 +142,32 @@ async function syncRoomLocale(room: ChatRoomRecord, locale: ChatLocale) {
   })
 }
 
+async function syncRoomEntranceChannel(input: {
+  room: ChatRoomRecord
+  source_channel: SourceChannel
+}) {
+  if (input.room.channel === input.source_channel) {
+    return input.room
+  }
+
+  return updateRoomChannel({
+    room_uuid: input.room.room_uuid,
+    channel: input.source_channel,
+  })
+}
+
 async function touchOwnedRoom(input: {
   room: ChatRoomRecord
+  source_channel: SourceChannel
   owner_role: "guest" | "user"
   identity: RoomIdentity
   output_locale: ChatLocale
 }) {
-  const synced_room = await syncRoomLocale(input.room, input.output_locale)
+  const room = await syncRoomEntranceChannel({
+    room: input.room,
+    source_channel: input.source_channel,
+  })
+  const synced_room = await syncRoomLocale(room, input.output_locale)
 
   const participant = await ensureOwnerParticipant({
     room_uuid: synced_room.room_uuid,
@@ -171,7 +191,7 @@ async function touchOwnedRoom(input: {
 async function resolveExistingOwnedRoom(input: {
   identity: RoomIdentity
   room_key: string
-  channel: SourceChannel
+  source_channel: SourceChannel
   mode: ChatRoomMode
   owner_role: "guest" | "user"
   output_locale: ChatLocale
@@ -229,6 +249,7 @@ async function resolveExistingOwnedRoom(input: {
 
   const reused = await touchOwnedRoom({
     room,
+    source_channel: input.source_channel,
     owner_role: input.owner_role,
     identity: input.identity,
     output_locale: input.output_locale,
@@ -247,7 +268,7 @@ async function resolveExistingOwnedRoom(input: {
 export async function resolveOwnedRoom(input: {
   identity: RoomIdentity
   locale: ChatLocale
-  channel: SourceChannel
+  source_channel: SourceChannel
   owner_role: "guest" | "user"
   mode: ChatRoomMode
   session_locale?: string | null
@@ -269,7 +290,7 @@ export async function resolveOwnedRoom(input: {
   const existing = await resolveExistingOwnedRoom({
     identity: input.identity,
     room_key,
-    channel: input.channel,
+    source_channel: input.source_channel,
     mode: input.mode,
     owner_role: input.owner_role,
     output_locale,
@@ -282,7 +303,7 @@ export async function resolveOwnedRoom(input: {
   const recheck = await resolveExistingOwnedRoom({
     identity: input.identity,
     room_key,
-    channel: input.channel,
+    source_channel: input.source_channel,
     mode: input.mode,
     owner_role: input.owner_role,
     output_locale,
@@ -306,14 +327,16 @@ export async function resolveOwnedRoom(input: {
   }
 
   const room = await syncRoomLocale(
-    await upsertRoomByKey({
-      room_key,
-      mode: input.mode,
-      locale: output_locale,
-      channel: input.channel,
-      user_uuid: input.identity.user_uuid,
-      visitor_uuid: input.identity.user_uuid ? null : input.identity.visitor_uuid,
-      order_uuid: input.identity.order_uuid ?? null,
+    await syncRoomEntranceChannel({
+      room: await upsertRoomByKey({
+        room_key,
+        mode: input.mode,
+        locale: output_locale,
+        user_uuid: input.identity.user_uuid,
+        visitor_uuid: input.identity.user_uuid ? null : input.identity.visitor_uuid,
+        order_uuid: input.identity.order_uuid ?? null,
+      }),
+      source_channel: input.source_channel,
     }),
     output_locale,
   )
@@ -363,7 +386,7 @@ export async function resolveOwnedRoom(input: {
     const recovered = await resolveExistingOwnedRoom({
       identity: input.identity,
       room_key,
-      channel: input.channel,
+      source_channel: input.source_channel,
       mode: input.mode,
       owner_role: input.owner_role,
       output_locale,
@@ -417,7 +440,7 @@ export async function findChatRoomState(
   const resolved = await resolveExistingOwnedRoom({
     identity,
     room_key,
-    channel: context.source_channel,
+    source_channel: context.source_channel,
     mode,
     owner_role,
     output_locale,
@@ -467,7 +490,7 @@ export async function bootstrapChatRoom(
   const resolved = await resolveOwnedRoom({
     identity,
     locale: output_locale,
-    channel: context.source_channel,
+    source_channel: context.source_channel,
     owner_role,
     mode,
   })

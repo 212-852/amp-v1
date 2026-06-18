@@ -459,7 +459,6 @@ export async function upsertRoomByKey(input: {
   room_key: string
   mode: ChatRoomMode
   locale: ChatLocale
-  channel: ChatRoomRecord["channel"]
   user_uuid?: string | null
   visitor_uuid?: string | null
   order_uuid?: string | null
@@ -469,7 +468,6 @@ export async function upsertRoomByKey(input: {
     room_key: input.room_key,
     mode: input.mode,
     locale: input.locale,
-    channel: input.channel,
   }
 
   if (input.user_uuid) {
@@ -508,30 +506,8 @@ export async function upsertRoomByKey(input: {
 }
 
 export async function findOrderRoomByUuid(order_uuid: string) {
-  const config = getRestConfig()
-
-  if (!config) {
-    return null
-  }
-
-  const response = await fetch(
-    restUrl(
-      config,
-      "rooms",
-      `order_uuid=eq.${encodeURIComponent(order_uuid)}&select=*&limit=1`,
-    ),
-    {
-      headers: restHeaders(config),
-      cache: "no-store",
-    },
-  )
-
-  if (!response.ok) {
-    return null
-  }
-
-  const rows = (await response.json()) as ChatRoomRecord[]
-  return rows[0] ?? null
+  const { resolve_room_key } = await import("@/core/chat/rules")
+  return findRoomByKey(resolve_room_key({ order_uuid }))
 }
 
 export async function findPersonalRoomByUserUuid(user_uuid: string) {

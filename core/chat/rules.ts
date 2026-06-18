@@ -429,6 +429,8 @@ export function assert_valid_room_key(room_key: string) {
 }
 
 export function resolve_room_key(identity: RoomKeyIdentity) {
+  // Personal rooms are never keyed by source_channel.
+  // web, line, liff, and pwa share user:<uuid> or visitor:<uuid>.
   if (identity.order_uuid) {
     const room_key = `order:${identity.order_uuid}`
     assert_valid_room_key(room_key)

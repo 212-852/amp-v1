@@ -314,6 +314,7 @@ export async function archiveBotMessageBundle(input: {
   bundle: BotMessageBundle
   room: ChatRoomRecord
   participant: ChatParticipantRecord | null
+  source_channel: SourceChannel
 }) {
   const message_kind = input.bundle.body === "welcome" ? "welcome" : null
   let participant: ChatParticipantRecord | null = input.participant
@@ -394,6 +395,7 @@ export async function archiveBotMessageBundle(input: {
       room: input.room,
       participant_uuid: input.participant?.participant_uuid ?? null,
       message_kind,
+      source_channel: input.source_channel,
     })
   }
 }
@@ -403,6 +405,7 @@ function buildBotBundlePreview(input: {
   room: ChatRoomRecord
   participant_uuid?: string | null
   message_kind?: string | null
+  source_channel: SourceChannel
 }): ChatMessageRecord {
   return {
     message_uuid: randomUUID(),
@@ -413,7 +416,7 @@ function buildBotBundlePreview(input: {
     status: "sent",
     body: input.bundle.body,
     payload: input.bundle.payload,
-    source_channel: input.room.channel,
+    source_channel: input.source_channel,
     external_id: null,
     created_at: new Date().toISOString(),
   }
@@ -444,14 +447,14 @@ export async function deliverMessageBundle(input: {
   await sendAuthDebug("chat_output_bundle_built", {
     room_uuid: input.room.room_uuid,
     message_count,
-    destination: input.room.channel,
+    destination: input.source_channel,
   })
 
   return deliverOutput(
     {
       user_uuid: input.session.user_uuid,
       visitor_uuid: input.session.visitor_uuid,
-      channel: input.room.channel,
+      channel: input.source_channel,
       line_reply_token: input.line_reply_token,
       line_provider_user_id: input.line_provider_user_id,
       line_reply_allowed: input.line_reply_allowed,
@@ -506,12 +509,14 @@ export async function bootstrapRoomWelcome(input: {
       room: input.room,
       participant_uuid: input.participant.participant_uuid,
       message_kind: "welcome",
+      source_channel: input.source_channel,
     })
 
     void archiveBotMessageBundle({
       bundle,
       room: input.room,
       participant: input.participant,
+      source_channel: input.source_channel,
     })
       .then((message) =>
         sendAuthDebug("welcome_message_created", {
@@ -547,6 +552,7 @@ export async function bootstrapRoomWelcome(input: {
     bundle,
     room: input.room,
     participant: input.participant,
+    source_channel: input.source_channel,
   })
 
   await sendAuthDebug("welcome_message_created", {
@@ -614,6 +620,7 @@ export async function archiveBotTriggerMessage(input: {
     bundle,
     room: input.room,
     participant: input.participant,
+    source_channel: input.source_channel,
   })
 
   await deliverMessageBundle({
