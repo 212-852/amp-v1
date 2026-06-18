@@ -1,6 +1,6 @@
 "use client"
 
-import { Menu, MessageCircle, PawPrint, User } from "lucide-react"
+import { Bell, Bot, Menu, MessageCircle, PawPrint, RefreshCw, User } from "lucide-react"
 import Image from "next/image"
 import { useEffect, useRef, useState } from "react"
 
@@ -27,15 +27,30 @@ const content = {
     en: "Close message input",
     es: "Cerrar mensaje",
   },
+  switch_input_menu: {
+    ja: "チャット入力とクイックメニューを切り替える",
+    en: "Switch between chat input and quick menu",
+    es: "Cambiar entre chat y menu rapido",
+  },
   bot: {
     ja: "Bot",
     en: "Bot",
     es: "Bot",
   },
+  bot_mode: {
+    ja: "Bot mode",
+    en: "Bot mode",
+    es: "Modo Bot",
+  },
   concierge: {
     ja: "Concierge",
     en: "Concierge",
     es: "Conserje",
+  },
+  concierge_mode: {
+    ja: "Concierge mode",
+    en: "Concierge mode",
+    es: "Modo conserje",
   },
   send: {
     ja: "送信",
@@ -130,11 +145,7 @@ function PinkPawButton({
   return (
     <button
       type="button"
-      aria-label={
-        isInputMode
-          ? content.close_message_input[locale]
-          : content.open_message_input[locale]
-      }
+      aria-label={content.switch_input_menu[locale]}
       aria-pressed={isInputMode}
       onClick={onClick}
       className={[
@@ -143,6 +154,12 @@ function PinkPawButton({
       ].join(" ")}
     >
       <PinkPawIcon />
+      <span
+        aria-hidden="true"
+        className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border border-[#dcc7aa] bg-[#fff8ef] text-[#8f5d28] shadow-[0_3px_8px_rgba(122,78,34,0.18)]"
+      >
+        <RefreshCw className="h-3 w-3" strokeWidth={2.4} />
+      </span>
     </button>
   )
 }
@@ -271,6 +288,30 @@ function AssistantToggle({
   )
 }
 
+function ModeIndicator({
+  assistantMode,
+  locale,
+}: Readonly<{
+  assistantMode: ChatSupportMode
+  locale: Locale
+}>) {
+  const isConcierge = assistantMode === "concierge"
+  const Icon = isConcierge ? Bell : Bot
+
+  return (
+    <div className="mb-1 flex items-center justify-center">
+      <div className="inline-flex h-7 items-center gap-1.5 rounded-full border border-[#dcc7aa] bg-[#fff8ef] px-3 text-[12px] font-bold leading-none text-[#6f4521] shadow-[0_4px_10px_rgba(122,78,34,0.08)]">
+        <Icon className="h-3.5 w-3.5" strokeWidth={2.2} />
+        <span>
+          {isConcierge
+            ? content.concierge_mode[locale]
+            : content.bot_mode[locale]}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 function SendPawButton({ locale }: Readonly<{ locale: Locale }>) {
   return (
     <button
@@ -288,10 +329,12 @@ function SendPawButton({ locale }: Readonly<{ locale: Locale }>) {
 
 function MessageInputRow({
   locale,
+  assistantMode,
   onSend,
   onTyping,
 }: Readonly<{
   locale: Locale
+  assistantMode: ChatSupportMode
   onSend: (message: string) => Promise<void>
   onTyping: (is_typing: boolean) => void
 }>) {
@@ -317,32 +360,35 @@ function MessageInputRow({
   }
 
   return (
-    <div className="flex w-full translate-y-[4px] items-center gap-4 px-4">
-      <div className="min-w-0 flex-1">
-        <label className="sr-only" htmlFor="app-message-input">
-          {content.message[locale]}
-        </label>
-        <input
-          id="app-message-input"
-          type="text"
-          value={draft}
-          onChange={(event) => {
-            set_draft(event.target.value)
-            onTyping(event.target.value.trim().length > 0)
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault()
-              void handleSend()
-            }
-          }}
-          placeholder={content.message_placeholder[locale]}
-          className="h-[68px] w-full min-w-0 rounded-full bg-[#fdfaf6] px-5 text-[16px] font-semibold text-[#3d2a19] placeholder:text-[#8c7358]"
-        />
+    <div className="w-full px-4">
+      <ModeIndicator assistantMode={assistantMode} locale={locale} />
+      <div className="flex w-full items-center gap-4">
+        <div className="min-w-0 flex-1">
+          <label className="sr-only" htmlFor="app-message-input">
+            {content.message[locale]}
+          </label>
+          <input
+            id="app-message-input"
+            type="text"
+            value={draft}
+            onChange={(event) => {
+              set_draft(event.target.value)
+              onTyping(event.target.value.trim().length > 0)
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault()
+                void handleSend()
+              }
+            }}
+            placeholder={content.message_placeholder[locale]}
+            className="h-[58px] w-full min-w-0 rounded-full border border-transparent bg-[#fdfaf6] px-5 text-[16px] font-semibold text-[#3d2a19] outline-none placeholder:text-[#8c7358] transition-[border-color,box-shadow] duration-150 focus:border-[#c49a6c] focus:shadow-[0_0_0_4px_rgba(164,106,42,0.16)]"
+          />
+        </div>
+        <button type="button" onClick={() => void handleSend()} disabled={is_sending}>
+          <SendPawButton locale={locale} />
+        </button>
       </div>
-      <button type="button" onClick={() => void handleSend()} disabled={is_sending}>
-        <SendPawButton locale={locale} />
-      </button>
     </div>
   )
 }
@@ -427,6 +473,30 @@ export default function AppFooter({
     setFooterMode((current) => (current === "normal" ? "input" : "normal"))
   }
 
+  async function refreshCurrentMode() {
+    const response = await fetch("/api/chat/room", { cache: "no-store" }).catch(
+      () => null,
+    )
+
+    if (!response?.ok) {
+      return
+    }
+
+    const payload = (await response.json().catch(() => null)) as {
+      room?: { mode?: ChatSupportMode } | null
+    } | null
+    const mode = payload?.room?.mode
+
+    if (mode === "bot" || mode === "concierge") {
+      setAssistantMode(mode)
+      window.dispatchEvent(
+        new CustomEvent("amp-chat-mode-changed", {
+          detail: { mode },
+        }),
+      )
+    }
+  }
+
   async function persistModeSwitch(mode: ChatSupportMode) {
     await fetch("/api/chat/mode", {
       method: "POST",
@@ -476,6 +546,7 @@ export default function AppFooter({
       body: JSON.stringify({ message }),
     })
 
+    await refreshCurrentMode()
     window.dispatchEvent(new CustomEvent("amp-chat-message-created"))
   }
 
@@ -527,6 +598,22 @@ export default function AppFooter({
     })
   }
 
+  useEffect(() => {
+    function handle_mode_change(event: Event) {
+      const detail = (event as CustomEvent<{ mode?: ChatSupportMode }>).detail
+
+      if (detail?.mode === "bot" || detail?.mode === "concierge") {
+        setAssistantMode(detail.mode)
+      }
+    }
+
+    window.addEventListener("amp-chat-mode-changed", handle_mode_change)
+
+    return () => {
+      window.removeEventListener("amp-chat-mode-changed", handle_mode_change)
+    }
+  }, [])
+
   return (
     <footer className="fixed inset-x-0 bottom-[-2px] z-50 pb-[env(safe-area-inset-bottom)]">
       <div className={footer_shell_class}>
@@ -539,22 +626,29 @@ export default function AppFooter({
 
         <div
           className={[
-            "relative z-10 flex h-full flex-col",
-            isInputMode ? "" : "pt-[50px] pb-1",
+            "relative z-10 flex h-full flex-col pt-[20px] pb-1",
           ].join(" ")}
         >
+          <div className="relative z-20 ml-[86px] mr-4 shrink-0">
+            <AssistantToggle
+              assistantMode={assistantMode}
+              locale={locale}
+              onAttemptChange={handleAssistantModeAttempt}
+            />
+          </div>
+
           <div
             className={[
-              "shrink-0 [perspective:1000px]",
+              "mt-2 shrink-0 [perspective:1000px]",
               isInputMode
-                ? "absolute inset-x-0 bottom-[14px] z-10 h-[92px]"
-                : "h-[76px]",
+                ? "h-[110px]"
+                : "h-[96px]",
             ].join(" ")}
           >
             <div className="relative h-full w-full [transform-style:preserve-3d]">
               <div
                 className={[
-                  "absolute inset-0 flex items-start justify-center pt-[23px]",
+                  "absolute inset-0 flex items-end justify-center",
                   "transition-[transform,opacity] duration-[280ms] ease-out",
                   "[backface-visibility:hidden] [transform-style:preserve-3d]",
                   isInputMode
@@ -562,16 +656,12 @@ export default function AppFooter({
                     : "opacity-100 [transform:translateX(0)_rotateY(0deg)]",
                 ].join(" ")}
               >
-                <AssistantToggle
-                  assistantMode={assistantMode}
-                  locale={locale}
-                  onAttemptChange={handleAssistantModeAttempt}
-                />
+                <BottomMenuRow onQuickMenu={() => void handleQuickMenu()} />
               </div>
 
               <div
                 className={[
-                  "absolute inset-0 flex flex-col justify-end",
+                  "absolute inset-0 flex flex-col justify-end pb-1",
                   "transition-[transform,opacity] duration-[280ms] ease-out",
                   "[backface-visibility:hidden] [transform-style:preserve-3d]",
                   isInputMode
@@ -580,6 +670,7 @@ export default function AppFooter({
                 ].join(" ")}
               >
                 <MessageInputRow
+                  assistantMode={assistantMode}
                   locale={locale}
                   onSend={handleSendMessage}
                   onTyping={handleTyping}
@@ -588,12 +679,6 @@ export default function AppFooter({
               </div>
             </div>
           </div>
-
-          {!isInputMode ? (
-            <div className="mt-auto h-[102px] shrink-0">
-              <BottomMenuRow onQuickMenu={() => void handleQuickMenu()} />
-            </div>
-          ) : null}
         </div>
       </div>
 
