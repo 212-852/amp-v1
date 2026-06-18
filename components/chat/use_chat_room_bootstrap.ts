@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react"
 
 import type { ChatRoomState } from "@/core/chat/types"
+import { useLocale } from "@/src/components/locale/provider"
+import type { Locale } from "@/src/lib/locale"
 
 type ChatRoomApiPayload = {
   room: ChatRoomState["room"] | null
@@ -13,6 +15,7 @@ type ChatRoomApiPayload = {
 }
 
 let bootstrap_promise: Promise<ChatRoomState | null> | null = null
+let bootstrap_promise_locale: Locale | null = null
 
 function logClientBootstrap(
   event: string,
@@ -21,8 +24,11 @@ function logClientBootstrap(
   console.info(`[chat_bootstrap] ${event}`, data)
 }
 
-async function getChatRoom(): Promise<ChatRoomApiPayload | null> {
-  const response = await fetch("/api/chat/room", { cache: "no-store" })
+async function getChatRoom(locale: Locale): Promise<ChatRoomApiPayload | null> {
+  const response = await fetch(
+    `/api/chat/room?locale=${encodeURIComponent(locale)}`,
+    { cache: "no-store" },
+  )
 
   if (!response.ok) {
     return null
@@ -31,13 +37,13 @@ async function getChatRoom(): Promise<ChatRoomApiPayload | null> {
   return (await response.json()) as ChatRoomApiPayload
 }
 
-async function bootstrapChatRoomRequest(): Promise<ChatRoomState | null> {
+async function bootstrapChatRoomRequest(locale: Locale): Promise<ChatRoomState | null> {
   const response = await fetch("/api/chat/room", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ trigger: "chat_opened" }),
+    body: JSON.stringify({ trigger: "chat_opened", locale }),
   })
 
   if (!response.ok) {
@@ -73,20 +79,21 @@ function toChatRoomState(payload: ChatRoomApiPayload): ChatRoomState | null {
   }
 }
 
-async function loadOrBootstrapChatRoom(): Promise<ChatRoomState | null> {
-  const existing = await getChatRoom()
+async function loadOrBootstrapChatRoom(locale: Locale): Promise<ChatRoomState | null> {
+  const existing = await getChatRoom(locale)
   const existing_state = existing ? toChatRoomState(existing) : null
 
   if (existing_state) {
     return existing_state
   }
 
-  return bootstrapChatRoomRequest()
+  return bootstrapChatRoomRequest(locale)
 }
 
 export function useChatRoomBootstrap(
   initial_state: ChatRoomState | null,
 ): ChatRoomState | null {
+  const { locale } = useLocale()
   const [chat_state, set_chat_state] = useState<ChatRoomState | null>(
     initial_state,
   )
@@ -101,10 +108,11 @@ export function useChatRoomBootstrap(
         return
       }
 
-      if (bootstrap_promise) {
+      if (bootstrap_promise && bootstrap_promise_locale === locale) {
         logClientBootstrap("chat_bootstrap_skipped_already_running")
       } else {
-        bootstrap_promise = loadOrBootstrapChatRoom()
+        bootstrap_promise_locale = locale
+        bootstrap_promise = loadOrBootstrapChatRoom(locale)
       }
 
       bootstrapping_ref.current = true
@@ -125,7 +133,7 @@ export function useChatRoomBootstrap(
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [locale])
 
   return chat_state
 }

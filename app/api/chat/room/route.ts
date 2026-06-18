@@ -6,6 +6,7 @@ import {
   resolveAdminChatRoom,
 } from "@/core/chat/action"
 import { resolveChatApiSession } from "@/core/chat/api"
+import { sendAuthDebug } from "@/core/debug"
 
 function logChatRoomGetNoRoom(data: Record<string, unknown>) {
   console.info("[chat_bootstrap] chat_room_get_no_room", data)
@@ -44,16 +45,27 @@ async function readChatRoomDebugContext(input: {
 export async function GET(request: Request) {
   try {
     const { context, session } = await resolveChatApiSession()
-    const room_uuid = new URL(request.url).searchParams.get("room_uuid")
+    const url = new URL(request.url)
+    const room_uuid = url.searchParams.get("room_uuid")
+    const request_locale = url.searchParams.get("locale") ?? context.locale
+
+    await sendAuthDebug("app_locale_resolved", {
+      locale: request_locale ?? null,
+      source: url.searchParams.get("locale")
+        ? "request_query"
+        : context.locale
+          ? "request_context"
+          : "none",
+    })
 
     const state = room_uuid
       ? await resolveAdminChatRoom(room_uuid, session, {
           source_channel: context.source_channel,
-          locale: context.locale,
+          locale: request_locale,
         })
       : await loadChatRoom(session, {
           source_channel: context.source_channel,
-          locale: context.locale,
+          locale: request_locale,
         })
 
     if (!state) {
@@ -96,12 +108,22 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => ({}))) as {
       message?: string
       trigger?: "quick_menu_requested" | "chat_opened"
+      locale?: string
     }
+    const request_locale =
+      typeof body.locale === "string" && body.locale.trim()
+        ? body.locale.trim()
+        : context.locale
+
+    await sendAuthDebug("app_locale_resolved", {
+      locale: request_locale ?? null,
+      source: body.locale ? "request_body" : context.locale ? "request_context" : "none",
+    })
 
     if (body.trigger === "chat_opened") {
       const state = await handleChatRoomBootstrap({
         source_channel: context.source_channel,
-        locale: context.locale,
+        locale: request_locale,
         session,
       })
 
@@ -117,7 +139,7 @@ export async function POST(request: Request) {
     if (body.trigger === "quick_menu_requested") {
       const message = await handleQuickMenuRequested({
         source_channel: context.source_channel,
-        locale: context.locale,
+        locale: request_locale,
         session,
       })
 
@@ -131,7 +153,7 @@ export async function POST(request: Request) {
     const message = await handleIncomingChatMessage({
       body: body.message,
       source_channel: context.source_channel,
-      locale: context.locale,
+      locale: request_locale,
       session,
     })
 

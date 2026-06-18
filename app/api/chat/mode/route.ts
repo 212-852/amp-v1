@@ -7,7 +7,12 @@ export async function POST(request: Request) {
     const { context, session } = await resolveChatApiSession()
     const body = (await request.json().catch(() => ({}))) as {
       mode?: ChatRoomMode
+      locale?: string
     }
+    const request_locale =
+      typeof body.locale === "string" && body.locale.trim()
+        ? body.locale.trim()
+        : context.locale
 
     if (!body.mode) {
       return Response.json({ error: "mode is required" }, { status: 400 })
@@ -16,7 +21,7 @@ export async function POST(request: Request) {
     const result = await handleChatModeSwitch({
       mode: body.mode,
       source_channel: context.source_channel,
-      locale: context.locale,
+      locale: request_locale,
       session,
     })
 

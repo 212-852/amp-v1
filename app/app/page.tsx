@@ -5,10 +5,16 @@ import { resolveAuthContext } from "@/core/auth/context"
 import { resolveSession } from "@/core/auth/session"
 import { resolveChatSupportAccess } from "@/core/chat/support"
 import { resolveChatRoom } from "@/core/chat/action"
+import { sendAuthDebug } from "@/core/debug"
 
 export default async function AppPage() {
   const context = await resolveAuthContext()
   const session = await resolveSession(context)
+
+  await sendAuthDebug("app_locale_resolved", {
+    locale: context.locale ?? null,
+    source: context.locale ? "request_context" : "none",
+  })
 
   const support_access = resolveChatSupportAccess({
     user_uuid: session.user_uuid,

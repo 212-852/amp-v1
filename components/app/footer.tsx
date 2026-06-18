@@ -459,9 +459,10 @@ export default function AppFooter({
   }
 
   async function refreshCurrentMode() {
-    const response = await fetch("/api/chat/room", { cache: "no-store" }).catch(
-      () => null,
-    )
+    const response = await fetch(
+      `/api/chat/room?locale=${encodeURIComponent(locale)}`,
+      { cache: "no-store" },
+    ).catch(() => null)
 
     if (!response?.ok) {
       return
@@ -488,7 +489,7 @@ export default function AppFooter({
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ mode }),
+      body: JSON.stringify({ mode, locale }),
     })
 
     if (!response.ok) {
@@ -568,7 +569,7 @@ export default function AppFooter({
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ message, locale }),
     })
 
     await refreshCurrentMode()
@@ -581,7 +582,7 @@ export default function AppFooter({
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ trigger: "quick_menu_requested" }),
+      body: JSON.stringify({ trigger: "quick_menu_requested", locale }),
     }).catch(() => null)
 
     window.dispatchEvent(new CustomEvent("amp-chat-message-created"))

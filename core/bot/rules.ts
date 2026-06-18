@@ -26,18 +26,6 @@ const TERMS_OF_USE = resolveChatContentRecord("terms")
 const MEETUP_SUPPORT_TITLE = resolveChatContentRecord("meeting_support_title")
 const MEETUP_SUPPORT_BODY = resolveChatContentRecord("meeting_support_body")
 
-const SHARE_MEETUP_LINK: LocaleText = {
-  ja: "待ち合わせ場所を共有する",
-  en: "Share meetup location",
-  es: "Compartir punto de encuentro",
-}
-
-const CANCEL_RESERVATION_LINK: LocaleText = {
-  ja: "予約をキャンセルする",
-  en: "Cancel reservation",
-  es: "Cancelar reserva",
-}
-
 export type { LocaleText } from "@/core/chat/content"
 
 const WELCOME_QUICK_MENU_BUTTONS: Array<{ label: LocaleText; action: string }> = [
@@ -535,11 +523,11 @@ function buildWelcomeQuickMenuBubble(locale: ChatLocale) {
               paddingTop: "12px",
               contents: [
                 buildWelcomeFlexLink(
-                  resolveLocaleText(SHARE_MEETUP_LINK, locale),
+                  resolveChatContent("share_meeting_place", locale),
                   "share_meeting_place",
                 ),
                 buildWelcomeFlexLink(
-                  resolveLocaleText(CANCEL_RESERVATION_LINK, locale),
+                  resolveChatContent("cancel_booking", locale),
                   "cancel_reservation",
                 ),
               ],

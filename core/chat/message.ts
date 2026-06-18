@@ -1,5 +1,6 @@
 import { insertMessage } from "@/core/chat/archive"
 import { ensureRoleParticipant } from "@/core/chat/participant"
+import { resolveOutputLocale } from "@/core/chat/context"
 import {
   carouselPayloadToLineFlex,
   isLineFlexCarouselPayload,
@@ -71,6 +72,31 @@ async function resolveArchiveParticipant(input: {
   }
 
   return input.participant
+}
+
+function resolveLocaleDebugSource(input: {
+  app_locale?: string | null
+  session_locale?: string | null
+  user_locale?: string | null
+  room_locale?: ChatLocale | null
+}) {
+  if (input.app_locale) {
+    return "app_locale"
+  }
+
+  if (input.session_locale) {
+    return "session_locale"
+  }
+
+  if (input.user_locale) {
+    return "user_locale"
+  }
+
+  if (input.room_locale) {
+    return "room_locale"
+  }
+
+  return "fallback"
 }
 
 function resolveFlexAltText(body: string, locale: ChatLocale) {
@@ -326,7 +352,24 @@ export async function archiveBotTriggerMessage(input: {
   line_provider_user_id?: string | null
   line_reply_allowed?: boolean
 }) {
-  const locale = input.locale ?? input.room.locale
+  const locale = resolveOutputLocale({
+    preferred: input.locale,
+    room_locale: input.room.locale,
+  })
+  if (input.trigger === "quick_menu_requested") {
+    await sendAuthDebug("chat_quick_menu_locale_resolved", {
+      app_locale: input.locale ?? null,
+      session_locale: null,
+      user_locale: null,
+      room_locale: input.room.locale,
+      bundle_locale: locale,
+      final_locale: locale,
+      source: resolveLocaleDebugSource({
+        app_locale: input.locale ?? null,
+        room_locale: input.room.locale,
+      }),
+    })
+  }
   const bundle = createBotMessageBundle({
     trigger: input.trigger,
     locale,

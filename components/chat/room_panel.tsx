@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import ChatMessageBubble from "@/components/chat/message_bubble"
 import { useRoomTyping } from "@/components/chat/use_room_typing"
 import { resolveTypingLabel } from "@/core/chat/rules"
+import { useLocale } from "@/src/components/locale/provider"
 import type {
   ChatMessageRecord,
   ChatRoomMode,
@@ -33,6 +34,7 @@ export default function ChatRoomPanel({
   const [room, set_room] = useState(initial_room)
   const [messages, set_messages] = useState(initial_messages)
   const [presence, set_presence] = useState(initial_presence)
+  const { locale } = useLocale()
   const typing = useRoomTyping({
     room_uuid: room.room_uuid,
     participant_uuid,
@@ -40,9 +42,15 @@ export default function ChatRoomPanel({
   const bottom_ref = useRef<HTMLDivElement>(null)
 
   const refresh = useCallback(async () => {
-    const query = show_presence
-      ? `?room_uuid=${encodeURIComponent(room.room_uuid)}`
-      : ""
+    const params = new URLSearchParams()
+
+    params.set("locale", locale)
+
+    if (show_presence) {
+      params.set("room_uuid", room.room_uuid)
+    }
+
+    const query = `?${params.toString()}`
     const response = await fetch(`/api/chat/room${query}`, { cache: "no-store" })
 
     if (!response.ok) {
@@ -65,7 +73,7 @@ export default function ChatRoomPanel({
     if (payload.presence) {
       set_presence(payload.presence)
     }
-  }, [room.room_uuid, show_presence])
+  }, [locale, room.room_uuid, show_presence])
 
   useEffect(() => {
     const timer = window.setInterval(() => {

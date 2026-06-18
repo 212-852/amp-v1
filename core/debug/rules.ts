@@ -28,8 +28,10 @@ const lineWebhookInfoEvents = new Set([
 ])
 
 const chatFlowInfoEvents = new Set([
+  "app_locale_resolved",
   "chat_archive_incoming_saved",
   "chat_output_bundle_built",
+  "chat_quick_menu_locale_resolved",
   "chat_room_mode_trigger_checked",
   "chat_room_mode_updated",
   "chat_room_resolved",
