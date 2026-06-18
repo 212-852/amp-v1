@@ -217,6 +217,12 @@ export async function handleIncomingChatMessageArchive(
 ): Promise<IncomingChatArchiveResult> {
   const context = normalizeIncomingChatInput(input)
   const body = assertMessageBody(input.body)
+  console.info("[chat_core] chat_core_entered", {
+    source_channel: input.source_channel,
+    user_uuid: input.session.user_uuid,
+    visitor_uuid: input.session.visitor_uuid,
+    has_line_reply_token: Boolean(input.line_reply_token),
+  })
   const mode_command =
     options.apply_mode_command !== false
       ? resolve_room_mode_trigger(body)

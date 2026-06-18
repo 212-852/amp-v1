@@ -87,6 +87,13 @@ export async function upsertRoomParticipant(input: {
   participant: ChatParticipantRecord
   created: boolean
 }> {
+  console.info("[chat_core] participant_upsert_entered", {
+    room_uuid: input.room_uuid,
+    role: input.role,
+    user_uuid: input.user_uuid,
+    visitor_uuid: input.visitor_uuid,
+  })
+
   const existing = await findOwnerParticipantInRoom({
     room_uuid: input.room_uuid,
     user_uuid: input.user_uuid,
