@@ -38,6 +38,7 @@ import {
 import type {
   ChatIncomingInput,
   ChatModeSwitchInput,
+  ChatRoomMode,
   ChatRoomPresenceInput,
   ChatRoomState,
   ChatTypingInput,
@@ -46,7 +47,8 @@ import type {
 import {
   assertMessageBody,
   assertRoomMode,
-  resolveModeChangeSystemMessage,
+  resolve_room_mode_command,
+  resolveRoomModeCommandReply,
 } from "@/core/chat/rules"
 import { recordSecurityAccessEvent } from "@/core/access"
 import type { Session } from "@/core/auth/types"
@@ -165,10 +167,17 @@ export async function loadChatRoom(
 export async function handleIncomingChatMessage(
   input: ChatIncomingInput,
 ): Promise<MessageBundle> {
-  return handleIncomingChatMessageArchive(input, {
+  const result = await handleIncomingChatMessageArchive(input, {
     deliver: true,
     bootstrap_welcome: true,
   })
+
+  return result.bundle
+}
+
+export type IncomingChatArchiveResult = {
+  bundle: MessageBundle
+  mode_command_handled: boolean
 }
 
 export async function handleIncomingChatMessageArchive(
@@ -176,10 +185,15 @@ export async function handleIncomingChatMessageArchive(
   options: {
     deliver?: boolean
     bootstrap_welcome?: boolean
+    apply_mode_command?: boolean
   } = {},
-): Promise<MessageBundle> {
+): Promise<IncomingChatArchiveResult> {
   const context = normalizeIncomingChatInput(input)
   const body = assertMessageBody(input.body)
+  const mode_command =
+    options.apply_mode_command !== false
+      ? resolve_room_mode_command(body)
+      : null
   const { room, participant } = await bootstrapChatRoom(context, input.session, {
     welcome: options.bootstrap_welcome ?? true,
   })
@@ -191,6 +205,27 @@ export async function handleIncomingChatMessageArchive(
     locale: room.locale,
     event: "typing_stop",
   })
+
+  if (mode_command) {
+    const bundle = await handleRoomModeCommand({
+      body,
+      mode: mode_command,
+      source_channel: input.source_channel,
+      locale: input.locale,
+      session: input.session,
+      participant_uuid: input.participant_uuid,
+      room_uuid: input.room_uuid,
+      line_reply_token: input.line_reply_token,
+      deliver: options.deliver !== false,
+      room,
+      participant,
+    })
+
+    return {
+      bundle,
+      mode_command_handled: true,
+    }
+  }
 
   const message = await archivePreparedMessage({
     room,
@@ -212,7 +247,76 @@ export async function handleIncomingChatMessageArchive(
     })
   }
 
-  return toMessageBundle(message, room.locale)
+  return {
+    bundle: toMessageBundle(message, room.locale),
+    mode_command_handled: false,
+  }
+}
+
+async function handleRoomModeCommand(input: {
+  body: string
+  mode: ChatRoomMode
+  source_channel: ChatIncomingInput["source_channel"]
+  locale?: string | null
+  session: Session
+  participant_uuid?: string | null
+  room_uuid?: string | null
+  line_reply_token?: string | null
+  deliver: boolean
+  room: Awaited<ReturnType<typeof bootstrapChatRoom>>["room"]
+  participant: Awaited<ReturnType<typeof bootstrapChatRoom>>["participant"]
+}): Promise<MessageBundle> {
+  const mode = assertRoomMode(input.mode)
+
+  if (mode === "concierge") {
+    const access = resolveChatSupportAccess({
+      user_uuid: input.session.user_uuid,
+      role: input.session.role,
+      tier: input.session.tier,
+    })
+
+    if (!access.concierge.enabled) {
+      throw new Error("Concierge mode is not available")
+    }
+  }
+
+  await archivePreparedMessage({
+    room: input.room,
+    participant: input.participant,
+    source_channel: input.source_channel,
+    source_kind: "user",
+    body: input.body,
+    original_locale: resolveChatLocale(input.locale, input.room.locale),
+    session: input.session,
+  })
+
+  const updated_room = await updateRoomMode({
+    room_uuid: input.room.room_uuid,
+    mode,
+  })
+
+  const message = await archivePreparedMessage({
+    room: updated_room,
+    participant: input.participant,
+    source_channel: input.source_channel,
+    source_kind: "system",
+    type: "system",
+    body: resolveRoomModeCommandReply(mode),
+    original_locale: updated_room.locale,
+    session: input.session,
+  })
+
+  if (input.deliver) {
+    await deliverMessageBundle({
+      message,
+      room: updated_room,
+      session: input.session,
+      source_channel: input.source_channel,
+      line_reply_token: input.line_reply_token,
+    })
+  }
+
+  return toMessageBundle(message, updated_room.locale)
 }
 
 export async function handleChatModeSwitch(input: ChatModeSwitchInput) {
@@ -243,7 +347,7 @@ export async function handleChatModeSwitch(input: ChatModeSwitchInput) {
           source_channel: input.source_channel,
           source_kind: "system",
           type: "system",
-          body: resolveModeChangeSystemMessage(mode),
+          body: resolveRoomModeCommandReply(mode),
           original_locale: updated_room.locale,
           session: input.session,
         })
@@ -253,6 +357,7 @@ export async function handleChatModeSwitch(input: ChatModeSwitchInput) {
     room: updated_room,
     session: input.session,
     source_channel: input.source_channel,
+    line_reply_token: input.line_reply_token,
   })
 
   return {

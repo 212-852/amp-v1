@@ -221,9 +221,57 @@ export function assertRoomMode(mode: string): ChatRoomMode {
   throw new Error(`Invalid room mode: ${mode}`)
 }
 
+export function resolve_room_mode_command(text: string): "bot" | "concierge" | null {
+  const trimmed = text.trim()
+
+  if (!trimmed) {
+    return null
+  }
+
+  const normalized = trimmed.toLowerCase()
+
+  if (normalized === "bot") {
+    return "bot"
+  }
+
+  if (normalized === "concierge") {
+    return "concierge"
+  }
+
+  if (trimmed === "ボット") {
+    return "bot"
+  }
+
+  if (trimmed === "コンシェルジュ") {
+    return "concierge"
+  }
+
+  return null
+}
+
+export function resolveRoomModeCommandReply(mode: ChatRoomMode) {
+  if (mode === "bot") {
+    return "Bot mode enabled."
+  }
+
+  if (mode === "concierge") {
+    return "Concierge mode enabled."
+  }
+
+  return resolveModeChangeSystemMessage(mode)
+}
+
 export function resolveModeChangeSystemMessage(mode: ChatRoomMode) {
   if (mode === "group") {
     return "Group support started"
+  }
+
+  if (mode === "bot") {
+    return "Bot mode enabled."
+  }
+
+  if (mode === "concierge") {
+    return "Concierge mode enabled."
   }
 
   return `Room mode changed to ${mode}`
