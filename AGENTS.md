@@ -297,3 +297,20 @@ Use the same message payload for:
 - LINE Flex Message
 
 Do not create separate Quick Menu logic per channel.
+
+#########################
+CHAT ROOM ABSOLUTE RULE
+#########################
+
+- One user has one personal chat room.
+- Web, LINE, LIFF, and PWA must share the same room for the same user_uuid.
+- Do not create rooms per channel.
+- Do not include channel in the lookup key for personal rooms.
+- channel is only metadata of the incoming message, not room identity.
+- For logged-in users, resolve room by user_uuid only.
+- For anonymous visitors, resolve room by visitor_uuid only.
+- If order_uuid exists, resolve or create one room per order_uuid.
+- Order room and personal room are different scopes.
+- All messages from web, LINE, LIFF, and PWA must be archived into the same resolved room.
+- participants must contain the user participant and bot participant for the resolved room.
+- Never create a new room if a matching user_uuid personal room already exists.

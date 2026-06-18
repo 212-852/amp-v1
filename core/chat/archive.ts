@@ -326,8 +326,20 @@ export async function insertRoom(input: {
   mode: ChatRoomMode
   locale: ChatLocale
   channel: ChatRoomRecord["channel"]
+  user_uuid?: string | null
+  visitor_uuid?: string | null
+  order_uuid?: string | null
 }) {
   const config = requireConfig()
+
+  const body = {
+    mode: input.mode,
+    locale: input.locale,
+    channel: input.channel,
+    user_uuid: input.user_uuid ?? null,
+    visitor_uuid: input.visitor_uuid ?? null,
+    order_uuid: input.order_uuid ?? null,
+  }
 
   const response = await fetch(restUrl(config, "rooms", "select=*"), {
     method: "POST",
@@ -335,7 +347,7 @@ export async function insertRoom(input: {
       ...restHeaders(config),
       Prefer: "return=representation",
     },
-    body: JSON.stringify(input),
+    body: JSON.stringify(body),
     cache: "no-store",
   })
 
@@ -346,6 +358,98 @@ export async function insertRoom(input: {
 
   const rows = (await response.json()) as ChatRoomRecord[]
   return rows[0]
+}
+
+export async function findOrderRoomByUuid(order_uuid: string) {
+  const config = getRestConfig()
+
+  if (!config) {
+    return null
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "rooms",
+      `order_uuid=eq.${encodeURIComponent(order_uuid)}&select=*&limit=1`,
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return null
+  }
+
+  const rows = (await response.json()) as ChatRoomRecord[]
+  return rows[0] ?? null
+}
+
+export async function findPersonalRoomByUserUuid(user_uuid: string) {
+  const config = getRestConfig()
+
+  if (!config) {
+    return null
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "rooms",
+      [
+        `user_uuid=eq.${encodeURIComponent(user_uuid)}`,
+        "order_uuid=is.null",
+        "select=*",
+        "limit=1",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return null
+  }
+
+  const rows = (await response.json()) as ChatRoomRecord[]
+  return rows[0] ?? null
+}
+
+export async function findPersonalRoomByVisitorUuid(visitor_uuid: string) {
+  const config = getRestConfig()
+
+  if (!config) {
+    return null
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "rooms",
+      [
+        `visitor_uuid=eq.${encodeURIComponent(visitor_uuid)}`,
+        "user_uuid=is.null",
+        "order_uuid=is.null",
+        "select=*",
+        "limit=1",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return null
+  }
+
+  const rows = (await response.json()) as ChatRoomRecord[]
+  return rows[0] ?? null
 }
 
 export async function updateRoomMode(input: {

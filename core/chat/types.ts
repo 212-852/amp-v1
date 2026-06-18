@@ -69,6 +69,9 @@ export type ChatRoomRecord = {
   mode: ChatRoomMode
   locale: ChatLocale
   channel: SourceChannel
+  user_uuid?: string | null
+  visitor_uuid?: string | null
+  order_uuid?: string | null
   created_at: string
   updated_at: string
 }
