@@ -1,5 +1,13 @@
 import type { Locale } from "@/src/lib/locale"
 
+import {
+  buildModeChangeToast,
+  resolveToastMessage,
+  toast_messages,
+  type ToastMessageKey,
+  type ToastOutput,
+} from "@/core/output/toast"
+
 export const chat_mode_toast_content = {
   mode_bot_label: {
     ja: "Bot",
@@ -11,19 +19,15 @@ export const chat_mode_toast_content = {
     en: "Concierge",
     es: "Conserje",
   },
-  mode_bot_enabled: {
-    ja: "Botモードに切り替えました",
-    en: "Bot mode enabled.",
-    es: "Modo Bot activado",
-  },
-  mode_concierge_enabled: {
-    ja: "コンシェルジュモードに切り替えました",
-    en: "Concierge mode enabled.",
-    es: "Modo Concierge activado",
-  },
-  mode_change_failed: {
-    ja: "モード変更に失敗しました",
-    en: "Mode change failed.",
-    es: "No se pudo cambiar el modo",
-  },
+  mode_bot_enabled: toast_messages.bot_enabled,
+  mode_concierge_enabled: toast_messages.concierge_enabled,
+  mode_change_failed: toast_messages.mode_change_failed,
 } satisfies Record<string, Record<Locale, string>>
+
+export {
+  buildModeChangeToast,
+  resolveToastMessage,
+  toast_messages,
+  type ToastMessageKey,
+  type ToastOutput,
+}

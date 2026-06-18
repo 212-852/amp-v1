@@ -16,6 +16,11 @@ export {
 export { normalizeIncomingChatInput, resolveParticipantRole } from "@/core/chat/context"
 export { toMessageBundle, bootstrapRoomWelcome } from "@/core/chat/message"
 export { bootstrapChatRoom, findChatRoomState, resolveOrCreateRoom } from "@/core/chat/room"
+export {
+  ensureOwnerParticipant,
+  resolveOwnedParticipant,
+  upsertRoomParticipant,
+} from "@/core/chat/participant"
 export { resolveChatSupportAccess } from "@/core/chat/support"
 export {
   readFlexCarouselBubbles,

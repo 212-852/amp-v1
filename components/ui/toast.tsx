@@ -54,7 +54,7 @@ export function ToastView({
         role="status"
         aria-live="polite"
         className={[
-          "rounded-xl px-3 py-2 text-[12px] font-medium leading-snug shadow-[0_10px_26px_rgba(0,0,0,0.20)] backdrop-blur-sm",
+          "rounded-xl px-3 py-2 text-[12px] font-medium leading-snug shadow-[0_10px_26px_rgba(0,0,0,0.20)] backdrop-blur-[8px]",
           styles.container,
         ].join(" ")}
       >
@@ -68,7 +68,7 @@ export function ToastView({
       role="status"
       aria-live="polite"
       className={[
-        "flex items-start gap-2.5 rounded-2xl px-4 py-3 shadow-[0_12px_32px_rgba(0,0,0,0.18)] backdrop-blur-sm",
+        "flex items-start gap-2.5 rounded-xl px-4 py-3 shadow-[0_12px_32px_rgba(0,0,0,0.18)] backdrop-blur-[8px]",
         styles.container,
       ].join(" ")}
     >

@@ -1,13 +1,16 @@
 import {
   findParticipant,
   findRoomByUuid,
-  insertParticipant,
   insertRoom,
   loadConciergeAvailability,
   loadRoomMessages,
-  resolveRoomFromParticipants,
   updateRoomChannel,
 } from "@/core/chat/archive"
+import {
+  ensureOwnerParticipant,
+  resolveOwnedParticipant,
+  upsertRoomParticipant,
+} from "@/core/chat/participant"
 import {
   resolveChatLocale,
   resolveParticipantRole,
@@ -124,15 +127,24 @@ async function touchOwnedRoom(input: {
   room: ChatRoomRecord
   participant: ChatParticipantRecord
   channel: SourceChannel
+  owner_role: "guest" | "user"
+  identity: RoomIdentity
 }) {
   const room = await updateRoomChannel({
     room_uuid: input.room.room_uuid,
     channel: input.channel,
   })
 
+  const participant = await ensureOwnerParticipant({
+    room_uuid: room.room_uuid,
+    role: input.owner_role,
+    visitor_uuid: input.identity.visitor_uuid,
+    user_uuid: input.identity.user_uuid,
+  })
+
   return {
     room,
-    participant: input.participant,
+    participant,
     created: false,
     participant_created: false,
   } satisfies ResolvedOwnedRoom
@@ -142,6 +154,7 @@ async function resolveExistingOwnedRoom(input: {
   identity: RoomIdentity
   channel: SourceChannel
   mode: ChatRoomMode
+  owner_role: "guest" | "user"
   pass?: string
 }): Promise<ResolvedOwnedRoom | null> {
   const debug = await readRoomDebugContext(input.identity)
@@ -152,10 +165,9 @@ async function resolveExistingOwnedRoom(input: {
     pass: input.pass ?? "primary",
   })
 
-  const resolved = await resolveRoomFromParticipants({
+  const resolved = await resolveOwnedParticipant({
     visitor_uuid: input.identity.visitor_uuid,
     user_uuid: input.identity.user_uuid,
-    mode: input.mode,
   })
 
   if (!resolved) {
@@ -187,6 +199,8 @@ async function resolveExistingOwnedRoom(input: {
     room: resolved.room,
     participant: resolved.participant,
     channel: input.channel,
+    owner_role: input.owner_role,
+    identity: input.identity,
   })
 
   logRoomDebug("room_reused", {
@@ -210,6 +224,7 @@ export async function resolveOwnedRoom(input: {
     identity: input.identity,
     channel: input.channel,
     mode: input.mode,
+    owner_role: input.owner_role,
   })
 
   if (existing) {
@@ -220,6 +235,7 @@ export async function resolveOwnedRoom(input: {
     identity: input.identity,
     channel: input.channel,
     mode: input.mode,
+    owner_role: input.owner_role,
     pass: "pre_insert_recheck",
   })
 
@@ -255,16 +271,17 @@ export async function resolveOwnedRoom(input: {
   })
 
   let participant: ChatParticipantRecord
-  const participant_created = true
+  let participant_created = false
 
   try {
-    participant = await insertParticipant({
+    const upserted = await upsertRoomParticipant({
       room_uuid: room.room_uuid,
       role: input.owner_role,
       visitor_uuid: input.identity.visitor_uuid,
-      user_uuid:
-        input.owner_role === "guest" ? null : input.identity.user_uuid,
+      user_uuid: input.identity.user_uuid,
     })
+    participant = upserted.participant
+    participant_created = upserted.created
 
     logRoomDebug("participant_created", {
       ...created_debug,
@@ -276,6 +293,7 @@ export async function resolveOwnedRoom(input: {
       identity: input.identity,
       channel: input.channel,
       mode: input.mode,
+      owner_role: input.owner_role,
       pass: "participant_conflict_recovery",
     })
 
@@ -320,6 +338,7 @@ export async function findChatRoomState(
     identity,
     channel: context.source_channel,
     mode,
+    owner_role: resolveOwnerParticipantRole(session, identity.user_uuid),
     pass: "find_only",
   })
 
@@ -421,7 +440,7 @@ export async function loadChatRoomStateByUuid(
 
   if (!participant) {
     const participant_role = resolveParticipantRole(session.role)
-    participant = await insertParticipant({
+    participant = await ensureOwnerParticipant({
       room_uuid: room.room_uuid,
       role: participant_role,
       visitor_uuid: identity.visitor_uuid,

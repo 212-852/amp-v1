@@ -12,6 +12,7 @@ import {
   type ChatSupportAccess,
   type ChatSupportMode,
 } from "@/core/chat/support"
+import { buildModeChangeToast } from "@/core/output/toast"
 import { chat_mode_toast_content } from "@/core/chat/mode_toast_content"
 import { useLocale } from "@/src/components/locale/provider"
 import type { Locale } from "@/src/lib/locale"
@@ -75,10 +76,15 @@ const footer_shell_class =
   "relative mx-auto h-[186px] w-full max-w-[430px]"
 
 const fixed_paw_button_class = [
-  "absolute left-3 z-30 flex h-[60px] w-[60px]",
+  "flex h-[60px] w-[60px]",
   "items-center justify-center rounded-full border border-[#dcc7aa]",
   "bg-[#fdfaf6] shadow-[0_8px_18px_rgba(122,78,34,0.18)]",
   "ring-[5px] ring-[#ead7c3]",
+].join(" ")
+
+const fixed_paw_cluster_class = [
+  "absolute left-3 z-30 flex items-center gap-2",
+  fixed_paw_button_position_class,
 ].join(" ")
 
 const fixed_paw_button_position_class = "top-[20px]"
@@ -115,34 +121,53 @@ function PinkPawIcon() {
   )
 }
 
-function PinkPawButton({
-  isInputMode,
-  onClick,
-  locale,
-}: {
-  isInputMode: boolean
-  onClick: () => void
-  locale: Locale
-}) {
+function PawModeIndicator({
+  assistantMode,
+}: Readonly<{
+  assistantMode: ChatSupportMode
+}>) {
+  const Icon = assistantMode === "concierge" ? Headphones : Bot
+
   return (
-    <button
-      type="button"
-      aria-label={content.switch_input_menu[locale]}
-      aria-pressed={isInputMode}
-      onClick={onClick}
-      className={[
-        fixed_paw_button_class,
-        fixed_paw_button_position_class,
-      ].join(" ")}
+    <span
+      aria-hidden="true"
+      className="flex h-[60px] w-5 shrink-0 items-center justify-center text-[#8f5d28]"
     >
-      <PinkPawIcon />
-      <span
-        aria-hidden="true"
-        className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border border-[#dcc7aa] bg-[#fff8ef] text-[#8f5d28] shadow-[0_3px_8px_rgba(122,78,34,0.18)]"
+      <Icon className="h-5 w-5" strokeWidth={2} />
+    </span>
+  )
+}
+
+function PawButtonCluster({
+  isInputMode,
+  assistantMode,
+  locale,
+  onClick,
+}: Readonly<{
+  isInputMode: boolean
+  assistantMode: ChatSupportMode
+  locale: Locale
+  onClick: () => void
+}>) {
+  return (
+    <div className={fixed_paw_cluster_class}>
+      <button
+        type="button"
+        aria-label={content.switch_input_menu[locale]}
+        aria-pressed={isInputMode}
+        onClick={onClick}
+        className={[fixed_paw_button_class, "relative"].join(" ")}
       >
-        <RefreshCw className="h-3 w-3" strokeWidth={2.4} />
-      </span>
-    </button>
+        <PinkPawIcon />
+        <span
+          aria-hidden="true"
+          className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border border-[#dcc7aa] bg-[#fff8ef] text-[#8f5d28] shadow-[0_3px_8px_rgba(122,78,34,0.18)]"
+        >
+          <RefreshCw className="h-3 w-3" strokeWidth={2.4} />
+        </span>
+      </button>
+      <PawModeIndicator assistantMode={assistantMode} />
+    </div>
   )
 }
 
@@ -270,30 +295,6 @@ function AssistantToggle({
   )
 }
 
-function ModeIndicator({
-  assistantMode,
-  locale,
-}: Readonly<{
-  assistantMode: ChatSupportMode
-  locale: Locale
-}>) {
-  const isConcierge = assistantMode === "concierge"
-  const Icon = isConcierge ? Headphones : Bot
-
-  return (
-    <div className="mb-1 flex items-center justify-end pr-[76px]">
-      <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold leading-none text-[#8a6847]">
-        <Icon className="h-3.5 w-3.5" strokeWidth={2} />
-        <span>
-          {isConcierge
-            ? chat_mode_toast_content.mode_concierge_label[locale]
-            : chat_mode_toast_content.mode_bot_label[locale]}
-        </span>
-      </div>
-    </div>
-  )
-}
-
 function SendPawButton({ locale }: Readonly<{ locale: Locale }>) {
   return (
     <button
@@ -311,12 +312,10 @@ function SendPawButton({ locale }: Readonly<{ locale: Locale }>) {
 
 function MessageInputRow({
   locale,
-  assistantMode,
   onSend,
   onTyping,
 }: Readonly<{
   locale: Locale
-  assistantMode: ChatSupportMode
   onSend: (message: string) => Promise<void>
   onTyping: (is_typing: boolean) => void
 }>) {
@@ -343,7 +342,6 @@ function MessageInputRow({
 
   return (
     <div className="w-full px-4">
-      <ModeIndicator assistantMode={assistantMode} locale={locale} />
       <div className="flex w-full items-center gap-4">
         <div className="min-w-0 flex-1">
           <label className="sr-only" htmlFor="app-message-input">
@@ -513,16 +511,17 @@ export default function AppFooter({
       setAssistantMode(result.mode)
       void persistModeSwitch(result.mode)
         .then(() => {
+          const toast_output = buildModeChangeToast({
+            mode: result.mode,
+            locale,
+          })
           toast({
-            tone: "success",
+            tone: toast_output.tone,
             placement: "anchor",
             anchor_ref: footer_ref,
             compact: true,
             duration_ms: 2750,
-            message:
-              result.mode === "concierge"
-                ? chat_mode_toast_content.mode_concierge_enabled[locale]
-                : chat_mode_toast_content.mode_bot_enabled[locale],
+            message: toast_output.message,
           })
         })
         .catch(() => {
@@ -532,13 +531,18 @@ export default function AppFooter({
               detail: { mode: previous_mode },
             }),
           )
+          const toast_output = buildModeChangeToast({
+            mode: result.mode,
+            locale,
+            failed: true,
+          })
           toast({
-            tone: "error",
+            tone: toast_output.tone,
             placement: "anchor",
             anchor_ref: footer_ref,
             compact: true,
             duration_ms: 2750,
-            message: chat_mode_toast_content.mode_change_failed[locale],
+            message: toast_output.message,
           })
         })
       return true
@@ -639,8 +643,9 @@ export default function AppFooter({
     >
       <div className={footer_shell_class}>
         <FooterCurve />
-        <PinkPawButton
+        <PawButtonCluster
           isInputMode={isInputMode}
+          assistantMode={assistantMode}
           locale={locale}
           onClick={toggleFooterMode}
         />
@@ -686,7 +691,6 @@ export default function AppFooter({
                 ].join(" ")}
               >
                 <MessageInputRow
-                  assistantMode={assistantMode}
                   locale={locale}
                   onSend={handleSendMessage}
                   onTyping={handleTyping}

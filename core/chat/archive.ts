@@ -167,60 +167,15 @@ export type ResolvedOwnerParticipant = {
   found_by: "user_uuid" | "visitor_uuid"
 }
 
+/** @deprecated Import from @/core/chat/participant */
 export async function resolveRoomFromParticipants(input: {
   visitor_uuid: string | null
   user_uuid: string | null
   mode?: ChatRoomMode
 }): Promise<ResolvedOwnerParticipant | null> {
+  const { resolveOwnedParticipant } = await import("@/core/chat/participant")
   void input.mode
-
-  let participant: ChatParticipantRecord | null = null
-  let found_by: ResolvedOwnerParticipant["found_by"] | null = null
-
-  if (input.user_uuid) {
-    participant = await findOldestParticipantByUserUuid(input.user_uuid)
-
-    if (participant) {
-      found_by = "user_uuid"
-    }
-  }
-
-  if (!participant && input.visitor_uuid) {
-    participant = await findOldestParticipantByVisitorUuid(input.visitor_uuid)
-
-    if (participant) {
-      found_by = "visitor_uuid"
-    }
-
-    if (participant && input.user_uuid) {
-      try {
-        participant = await linkParticipantToUser({
-          participant_uuid: participant.participant_uuid,
-          user_uuid: input.user_uuid,
-        })
-        found_by = "user_uuid"
-      } catch {
-        const linked = await findOldestParticipantByUserUuid(input.user_uuid)
-
-        if (linked) {
-          participant = linked
-          found_by = "user_uuid"
-        }
-      }
-    }
-  }
-
-  if (!participant || !found_by) {
-    return null
-  }
-
-  const room = await findRoomByUuid(participant.room_uuid)
-
-  if (!room) {
-    return null
-  }
-
-  return { room, participant, found_by }
+  return resolveOwnedParticipant(input)
 }
 
 /** @deprecated Use resolveRoomFromParticipants */
@@ -533,6 +488,53 @@ export async function insertParticipant(input: {
   if (!response.ok) {
     const error = await readRestError(response)
     throw new Error(`Failed to create participant: ${error.message ?? "unknown"}`)
+  }
+
+  const rows = (await response.json()) as ChatParticipantRecord[]
+  return rows[0]
+}
+
+export async function upsertParticipant(input: {
+  room_uuid: string
+  role: ChatParticipantRole
+  visitor_uuid: string | null
+  user_uuid: string | null
+}) {
+  const config = requireConfig()
+  const body = {
+    room_uuid: input.room_uuid,
+    role: input.role,
+    visitor_uuid: input.visitor_uuid,
+    user_uuid: input.user_uuid,
+    joined_at: new Date().toISOString(),
+  }
+
+  const on_conflict = input.user_uuid
+    ? "room_uuid,user_uuid"
+    : input.visitor_uuid
+      ? "room_uuid,visitor_uuid"
+      : null
+
+  if (!on_conflict) {
+    return insertParticipant(input)
+  }
+
+  const response = await fetch(
+    restUrl(config, "participants", `on_conflict=${on_conflict}`),
+    {
+      method: "POST",
+      headers: {
+        ...restHeaders(config),
+        Prefer: "resolution=merge-duplicates,return=representation",
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+    throw new Error(`Failed to upsert participant: ${error.message ?? "unknown"}`)
   }
 
   const rows = (await response.json()) as ChatParticipantRecord[]

@@ -1,7 +1,7 @@
 import type { AppSession } from "@/core/auth/session"
 import type { SourceChannel } from "@/core/auth/types"
 import { resolveIdentityByProviderUserId } from "@/core/auth/identity"
-import { findVisitorUuidByUser } from "@/core/chat/archive"
+import { findVisitorUuidByUser, findOldestParticipantByUserUuid } from "@/core/chat/archive"
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
 import { sendAuthDebug } from "@/core/debug"
 import { randomUUID } from "crypto"
@@ -185,13 +185,27 @@ async function createLineVisitor() {
 async function resolveLineVisitorUuid(
   provider_user_id: string,
   contact: LineContactIdentityRow | null,
+  user_uuid: string | null,
 ) {
-  const existing = contact?.visitor_uuid ?? null
-
-  if (existing) {
-    return existing
+  if (contact?.visitor_uuid) {
+    return contact.visitor_uuid
   }
 
+  if (user_uuid) {
+    const visitor_from_user = await findVisitorUuidByUser(user_uuid)
+
+    if (visitor_from_user) {
+      return visitor_from_user
+    }
+
+    const participant = await findOldestParticipantByUserUuid(user_uuid)
+
+    if (participant?.visitor_uuid) {
+      return participant.visitor_uuid
+    }
+  }
+
+  void provider_user_id
   return createLineVisitor()
 }
 
@@ -250,7 +264,11 @@ export async function resolveLineWebhookContext(
   })
 
   if (!user_uuid) {
-    const visitor_uuid = await resolveLineVisitorUuid(provider_user_id, line_contact)
+    const visitor_uuid = await resolveLineVisitorUuid(
+      provider_user_id,
+      line_contact,
+      null,
+    )
 
     return {
       user_uuid: null,
@@ -273,11 +291,16 @@ export async function resolveLineWebhookContext(
     }
   }
 
-  const [resolved_visitor_uuid, user] = await Promise.all([
+  const [resolved_visitor_uuid, user, linked_participant] = await Promise.all([
     findVisitorUuidByUser(user_uuid),
     loadLineUser(user_uuid),
+    findOldestParticipantByUserUuid(user_uuid),
   ])
-  const visitor_uuid = resolved_visitor_uuid ?? line_contact?.visitor_uuid ?? null
+  const visitor_uuid =
+    resolved_visitor_uuid ??
+    line_contact?.visitor_uuid ??
+    linked_participant?.visitor_uuid ??
+    null
 
   return {
     user_uuid,
