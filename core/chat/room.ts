@@ -426,7 +426,11 @@ export async function findChatRoomState(
 export async function bootstrapChatRoom(
   context: ChatContext,
   session: Session,
-  options: { welcome?: boolean; provider_user_id?: string | null } = {},
+  options: {
+    welcome?: boolean
+    provider_user_id?: string | null
+    defer_welcome_archive?: boolean
+  } = {},
 ): Promise<ChatRoomBootstrapResult> {
   const identity = resolveRoomIdentity(context, session)
   const output_locale = resolveOutputLocale({
@@ -456,11 +460,13 @@ export async function bootstrapChatRoom(
           session,
           source_channel: context.source_channel,
           locale: output_locale,
+          defer_archive: options.defer_welcome_archive,
         })
 
   return {
     room,
     participant: resolved.participant,
+    welcome_message: welcome,
     created: resolved.created,
     participant_created: resolved.participant_created,
     welcome_created: Boolean(welcome),

@@ -2,7 +2,7 @@
 
 import { Bot, Headphones, Menu, MessageCircle, PawPrint, RefreshCw, User } from "lucide-react"
 import Image from "next/image"
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 import ConciergeMemberModal from "@/components/app/concierge_member_modal"
 import { useOverlay, type OverlayType } from "@/components/overlay"
@@ -169,7 +169,7 @@ function PawButtonCluster({
           <RefreshCw className="h-3 w-3" strokeWidth={2.4} />
         </span>
       </button>
-      <PawModeIndicator assistantMode={assistantMode} />
+      {isInputMode ? <PawModeIndicator assistantMode={assistantMode} /> : null}
     </div>
   )
 }
@@ -458,7 +458,7 @@ export default function AppFooter({
     setFooterMode((current) => (current === "normal" ? "input" : "normal"))
   }
 
-  async function refreshCurrentMode() {
+  const refreshCurrentMode = useCallback(async () => {
     const response = await fetch(
       `/api/chat/room?locale=${encodeURIComponent(locale)}`,
       { cache: "no-store" },
@@ -481,7 +481,7 @@ export default function AppFooter({
         }),
       )
     }
-  }
+  }, [locale])
 
   async function persistModeSwitch(mode: ChatSupportMode) {
     const response = await fetch("/api/chat/mode", {
@@ -634,11 +634,15 @@ export default function AppFooter({
     }
 
     window.addEventListener("amp-chat-mode-changed", handle_mode_change)
+    const timer = window.setTimeout(() => {
+      void refreshCurrentMode()
+    }, 0)
 
     return () => {
+      window.clearTimeout(timer)
       window.removeEventListener("amp-chat-mode-changed", handle_mode_change)
     }
-  }, [])
+  }, [refreshCurrentMode])
 
   return (
     <footer

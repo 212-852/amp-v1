@@ -598,10 +598,43 @@ export async function findMessageByExternalId(input: {
   return rows[0] ?? null
 }
 
+export async function findWelcomeMessage(room_uuid: string) {
+  const config = getRestConfig()
+
+  if (!config) {
+    return null
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "messages",
+      [
+        `room_uuid=eq.${encodeURIComponent(room_uuid)}`,
+        "message_kind=eq.welcome",
+        "select=*",
+        "limit=1",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return null
+  }
+
+  const rows = (await response.json()) as ChatMessageRecord[]
+  return rows[0] ?? null
+}
+
 export async function insertMessage(input: {
   message_uuid?: string
   room_uuid: string
   participant_uuid: string
+  message_kind?: string | null
   type: ChatMessageType
   status?: ChatMessageStatus
   body: string
@@ -636,6 +669,14 @@ export async function insertMessage(input: {
         source_channel: input.source_channel,
         external_id: input.external_id,
       })
+
+      if (existing) {
+        return existing
+      }
+    }
+
+    if (error.code === "23505" && input.message_kind === "welcome") {
+      const existing = await findWelcomeMessage(input.room_uuid)
 
       if (existing) {
         return existing
@@ -729,8 +770,7 @@ export async function roomHasWelcomeMessage(room_uuid: string) {
       "messages",
       [
         `room_uuid=eq.${encodeURIComponent(room_uuid)}`,
-        "body=eq.welcome",
-        "type=eq.flex",
+        "or=(message_kind.eq.welcome,and(body.eq.welcome,type.eq.flex))",
         "select=message_uuid",
         "limit=1",
       ].join("&"),

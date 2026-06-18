@@ -1,7 +1,7 @@
 import { resolveChatContent } from "@/core/chat/content"
 import type { Session } from "@/core/auth/types"
 import { isCarouselPayload } from "@/core/bot/rules"
-import { countRoomMessages } from "@/core/chat/archive"
+import { roomHasWelcomeMessage } from "@/core/chat/archive"
 import {
   type ChatLocale,
   type ChatMessageKind,
@@ -399,5 +399,5 @@ export function buildMessagePayload(input: {
 }
 
 export async function shouldBootstrapWelcome(room_uuid: string) {
-  return (await countRoomMessages(room_uuid)) === 0
+  return !(await roomHasWelcomeMessage(room_uuid))
 }

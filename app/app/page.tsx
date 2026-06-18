@@ -4,7 +4,6 @@ import AppHome from "@/components/app/home"
 import { resolveAuthContext } from "@/core/auth/context"
 import { resolveSession } from "@/core/auth/session"
 import { resolveChatSupportAccess } from "@/core/chat/support"
-import { resolveChatRoom } from "@/core/chat/action"
 import { resolveOutputLocaleDecision } from "@/core/chat/context"
 import { sendAuthDebug } from "@/core/debug"
 
@@ -18,20 +17,8 @@ export default async function AppPage() {
     tier: session.tier,
   })
 
-  let chat_state = null
-
-  try {
-    chat_state = await resolveChatRoom(session, {
-      source_channel: context.source_channel,
-      locale: context.locale,
-    })
-  } catch {
-    chat_state = null
-  }
-
   const locale_decision = resolveOutputLocaleDecision({
     preferred: context.locale,
-    room_locale: chat_state?.room.locale ?? null,
   })
 
   await sendAuthDebug("app_locale_resolved", {
@@ -40,7 +27,7 @@ export default async function AppPage() {
     user_locale: null,
     session_locale: context.locale ?? null,
     cookie_locale: null,
-    room_locale: chat_state?.room.locale ?? null,
+    room_locale: null,
     browser_locale: null,
   })
 
@@ -51,15 +38,13 @@ export default async function AppPage() {
     >
       <AppHeader auth={session} />
       <AppHome
-        chat_state={chat_state}
+        chat_state={null}
         viewer_display_name={session.display_name}
       />
       <AppFooter
         support_access={support_access}
         can_start_line_oauth={session.can_start_line_oauth}
-        initial_mode={
-          chat_state?.room.mode === "concierge" ? "concierge" : "bot"
-        }
+        initial_mode="bot"
       />
     </div>
   )

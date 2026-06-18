@@ -236,6 +236,7 @@ export async function archiveBotMessageBundle(input: {
       message_uuid: randomUUID(),
       room_uuid: input.room.room_uuid,
       participant_uuid: participant.participant_uuid,
+      message_kind: input.bundle.body === "welcome" ? "welcome" : null,
       type: input.bundle.type,
       status: "sent",
       body: input.bundle.body,
@@ -261,6 +262,27 @@ export async function archiveBotMessageBundle(input: {
   })
 
   return message
+}
+
+function buildBotBundlePreview(input: {
+  bundle: BotMessageBundle
+  room: ChatRoomRecord
+  participant_uuid?: string | null
+  message_kind?: string | null
+}): ChatMessageRecord {
+  return {
+    message_uuid: randomUUID(),
+    room_uuid: input.room.room_uuid,
+    participant_uuid: input.participant_uuid ?? null,
+    message_kind: input.message_kind ?? null,
+    type: input.bundle.type,
+    status: "sent",
+    body: input.bundle.body,
+    payload: input.bundle.payload,
+    source_channel: input.room.channel,
+    external_id: null,
+    created_at: new Date().toISOString(),
+  }
 }
 
 export async function deliverMessageBundle(input: {
@@ -314,6 +336,7 @@ export async function bootstrapRoomWelcome(input: {
   session: Session
   source_channel: SourceChannel
   locale?: ChatLocale | null
+  defer_archive?: boolean
 }) {
   if (!(await shouldBootstrapWelcome(input.room.room_uuid))) {
     return null
@@ -336,6 +359,41 @@ export async function bootstrapRoomWelcome(input: {
     trigger: "chat_opened",
     locale,
   })
+
+  if (input.defer_archive) {
+    const preview = buildBotBundlePreview({
+      bundle,
+      room: input.room,
+      participant_uuid: input.participant.participant_uuid,
+      message_kind: "welcome",
+    })
+
+    void archiveBotMessageBundle({
+      bundle,
+      room: input.room,
+      participant: input.participant,
+    })
+      .then((message) =>
+        sendAuthDebug("welcome_message_created", {
+          room_uuid: input.room.room_uuid,
+          message_uuid: message.message_uuid,
+          participant_uuid: message.participant_uuid,
+          source_channel: input.source_channel,
+          archived_async: true,
+        }),
+      )
+      .catch((error) =>
+        sendAuthDebug("chat_archive_failed", {
+          room_uuid: input.room.room_uuid,
+          source_kind: "bot",
+          type: bundle.type,
+          message_kind: "welcome",
+          error_message: error instanceof Error ? error.message : String(error),
+        }),
+      )
+
+    return preview
+  }
 
   const message = await archiveBotMessageBundle({
     bundle,

@@ -80,14 +80,16 @@ function toChatRoomState(payload: ChatRoomApiPayload): ChatRoomState | null {
 }
 
 async function loadOrBootstrapChatRoom(locale: Locale): Promise<ChatRoomState | null> {
-  const existing = await getChatRoom(locale)
+  const existing_request = getChatRoom(locale).catch(() => null)
+  const bootstrap_request = bootstrapChatRoomRequest(locale).catch(() => null)
+  const existing = await existing_request
   const existing_state = existing ? toChatRoomState(existing) : null
 
-  if (existing_state) {
+  if (existing_state && existing_state.messages.length > 0) {
     return existing_state
   }
 
-  return bootstrapChatRoomRequest(locale)
+  return (await bootstrap_request) ?? existing_state
 }
 
 export function useChatRoomBootstrap(

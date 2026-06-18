@@ -13,6 +13,7 @@ import {
   findParticipant,
   findRoomByUuid,
   insertParticipant,
+  loadConciergeAvailability,
   setConciergeAvailability,
   updateRoomMode,
 } from "@/core/chat/archive"
@@ -111,7 +112,20 @@ export async function handleChatRoomBootstrap(input: {
     source_channel: input.source_channel,
     locale: input.locale ?? null,
   })
-  const result = await bootstrapChatRoom(context, input.session)
+  const result = await bootstrapChatRoom(context, input.session, {
+    defer_welcome_archive: true,
+  })
+
+  if (result.welcome_message) {
+    return {
+      room: result.room,
+      participant: result.participant,
+      messages: [result.welcome_message],
+      presence: [],
+      concierge_available: await loadConciergeAvailability(),
+    }
+  }
+
   const state = await findChatRoomState(context, input.session)
 
   if (!state) {

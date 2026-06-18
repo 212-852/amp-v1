@@ -76,6 +76,7 @@ export type ChatRoomRecord = {
 export type ChatRoomBootstrapResult = {
   room: ChatRoomRecord
   participant: ChatParticipantRecord
+  welcome_message: ChatMessageRecord | null
   created: boolean
   participant_created: boolean
   welcome_created: boolean
@@ -94,6 +95,7 @@ export type ChatMessageRecord = {
   message_uuid: string
   room_uuid: string
   participant_uuid: string | null
+  message_kind?: string | null
   type: ChatMessageType
   status: ChatMessageStatus
   body: string
