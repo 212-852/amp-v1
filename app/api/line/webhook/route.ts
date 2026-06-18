@@ -30,15 +30,14 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const signature = request.headers.get("x-line-signature")
-
   await sendAuthDebug("line_webhook_route_entered", {
     method: request.method,
-    has_signature: Boolean(signature),
+    has_signature: Boolean(request.headers.get("x-line-signature")),
     content_type: request.headers.get("content-type"),
     user_agent: request.headers.get("user-agent"),
   })
 
+  const signature = request.headers.get("x-line-signature")
   const body = await request.text()
   const has_signature = Boolean(signature)
   let payload: unknown
