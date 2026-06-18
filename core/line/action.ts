@@ -11,8 +11,10 @@ import {
   type LineWebhookRequest,
 } from "@/core/line/context"
 import {
+  can_process_line_user,
   can_reply_to_line_user,
   get_allowed_line_users,
+  get_line_webhook_test_mode,
   is_line_webhook_reply_enabled,
   resolve_line_reply_reason,
 } from "@/core/line/rules"
@@ -75,10 +77,26 @@ export async function handleLineWebhook(request: LineWebhookRequest) {
   const results: Array<{
     provider_user_id: string
     archived: boolean
+    processed: boolean
     replied: boolean
   }> = []
 
   for (const event of request.events) {
+    if (!can_process_line_user(event.provider_user_id)) {
+      await sendAuthDebug("line_webhook_test_blocked", {
+        provider_user_id: event.provider_user_id,
+        reason: "test_mode_not_allowed",
+      })
+
+      results.push({
+        provider_user_id: event.provider_user_id,
+        archived: false,
+        processed: false,
+        replied: false,
+      })
+      continue
+    }
+
     const context = await resolveLineWebhookContext(event.provider_user_id)
     const reply_allowed = can_reply_to_line_user(event.provider_user_id)
     const can_reply = reply_allowed && Boolean(event.reply_token)
@@ -88,6 +106,7 @@ export async function handleLineWebhook(request: LineWebhookRequest) {
       allowed: reply_allowed,
       allowed_count: get_allowed_line_users().length,
       reply_enabled: is_line_webhook_reply_enabled(),
+      test_mode: get_line_webhook_test_mode(),
     })
 
     await upsertWebhookLineContact({
@@ -131,6 +150,7 @@ export async function handleLineWebhook(request: LineWebhookRequest) {
       results.push({
         provider_user_id: event.provider_user_id,
         archived: true,
+        processed: true,
         replied: false,
       })
       continue
@@ -164,6 +184,7 @@ export async function handleLineWebhook(request: LineWebhookRequest) {
       results.push({
         provider_user_id: event.provider_user_id,
         archived: true,
+        processed: true,
         replied: true,
       })
       continue
@@ -182,6 +203,7 @@ export async function handleLineWebhook(request: LineWebhookRequest) {
     results.push({
       provider_user_id: event.provider_user_id,
       archived: true,
+      processed: true,
       replied: true,
     })
   }

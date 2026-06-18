@@ -5,8 +5,20 @@ export function get_allowed_line_users() {
     .filter(Boolean)
 }
 
+export function get_line_webhook_test_mode() {
+  return process.env.LINE_WEBHOOK_TEST_MODE === "true"
+}
+
 export function is_line_webhook_reply_enabled() {
   return process.env.LINE_WEBHOOK_REPLY_ENABLED === "true"
+}
+
+export function can_process_line_user(provider_user_id: string) {
+  if (!get_line_webhook_test_mode()) {
+    return true
+  }
+
+  return get_allowed_line_users().includes(provider_user_id.trim())
 }
 
 export function can_reply_to_line_user(provider_user_id: string) {

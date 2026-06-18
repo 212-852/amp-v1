@@ -25,6 +25,7 @@ const lineWebhookInfoEvents = new Set([
   "line_webhook_reply_allowed",
   "line_webhook_reply_blocked",
   "line_webhook_route_entered",
+  "line_webhook_test_blocked",
 ])
 
 const chatFlowInfoEvents = new Set([
