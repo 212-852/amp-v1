@@ -82,12 +82,12 @@ const fixed_paw_button_class = [
   "ring-[5px] ring-[#ead7c3]",
 ].join(" ")
 
+const fixed_paw_button_position_class = "top-[20px]"
+
 const fixed_paw_cluster_class = [
   "absolute left-3 z-30 flex items-center gap-2",
   fixed_paw_button_position_class,
 ].join(" ")
-
-const fixed_paw_button_position_class = "top-[20px]"
 
 function FooterCurve() {
   return (
