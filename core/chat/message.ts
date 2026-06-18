@@ -30,6 +30,7 @@ import type {
 } from "@/core/chat/types"
 import type { Session, SourceChannel } from "@/core/auth/types"
 import { deliverOutput } from "@/core/output"
+import { sendAuthDebug } from "@/core/debug"
 import { randomUUID } from "crypto"
 
 export type PreparedMessageInput = {
@@ -153,6 +154,7 @@ export async function deliverMessageBundle(input: {
   session: Session
   source_channel: SourceChannel
   line_reply_token?: string | null
+  line_provider_user_id?: string | null
 }) {
   const payload = input.message.payload
   const alt_text = resolveFlexAltText(input.message.body, input.room.locale)
@@ -165,6 +167,13 @@ export async function deliverMessageBundle(input: {
         }),
       ]
     : undefined
+  const message_count = line_messages?.length ?? 1
+
+  await sendAuthDebug("chat_output_bundle_built", {
+    room_uuid: input.room.room_uuid,
+    message_count,
+    destination: input.room.channel,
+  })
 
   return deliverOutput(
     {
@@ -172,6 +181,7 @@ export async function deliverMessageBundle(input: {
       visitor_uuid: input.session.visitor_uuid,
       channel: input.room.channel,
       line_reply_token: input.line_reply_token,
+      line_provider_user_id: input.line_provider_user_id,
     },
     {
       text: alt_text,
@@ -219,6 +229,7 @@ export async function archiveBotTriggerMessage(input: {
   session: Session
   source_channel: SourceChannel
   line_reply_token?: string | null
+  line_provider_user_id?: string | null
 }) {
   const bundle = createBotMessageBundle({
     trigger: input.trigger,
@@ -237,6 +248,7 @@ export async function archiveBotTriggerMessage(input: {
     session: input.session,
     source_channel: input.source_channel,
     line_reply_token: input.line_reply_token,
+    line_provider_user_id: input.line_provider_user_id,
   })
 
   return message

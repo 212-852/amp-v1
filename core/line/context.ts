@@ -2,6 +2,7 @@ import type { AppSession } from "@/core/auth/session"
 import type { SourceChannel } from "@/core/auth/types"
 import { findVisitorUuidByUser } from "@/core/chat/archive"
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
+import { sendAuthDebug } from "@/core/debug"
 import { randomUUID } from "crypto"
 
 type LineWebhookSource = {
@@ -30,6 +31,7 @@ type UserRow = {
 }
 
 type IdentityRow = {
+  identity_uuid?: string | null
   user_uuid?: string | null
 }
 
@@ -57,6 +59,7 @@ export type LineWebhookRequest = {
 export type LineWebhookContext = {
   user_uuid: string | null
   visitor_uuid: string | null
+  identity_uuid: string | null
   session: AppSession
   locale: string | null
 }
@@ -87,21 +90,34 @@ function normalizeLineEvent(event: LineWebhookEvent): LineIncomingEvent | null {
   }
 }
 
-export function normalizeLineWebhookRequest(input: unknown): LineWebhookRequest {
+export async function normalizeLineWebhookRequest(
+  input: unknown,
+): Promise<LineWebhookRequest> {
   const payload =
     input && typeof input === "object" && !Array.isArray(input)
       ? (input as { events?: unknown })
       : {}
   const raw_events = Array.isArray(payload.events) ? payload.events : []
 
-  return {
-    events: raw_events
-      .map((event) => normalizeLineEvent(event as LineWebhookEvent))
-      .filter((event): event is LineIncomingEvent => Boolean(event)),
-  }
+  const events = raw_events
+    .map((event) => normalizeLineEvent(event as LineWebhookEvent))
+    .filter((event): event is LineIncomingEvent => Boolean(event))
+
+  await Promise.all(
+    events.map((event) =>
+      sendAuthDebug("line_event_normalized", {
+        provider_user_id: event.provider_user_id,
+        message_type: event.message_type,
+        text: event.body,
+        reply_token_exists: Boolean(event.reply_token),
+      }),
+    ),
+  )
+
+  return { events }
 }
 
-async function resolveLineUserUuid(provider_user_id: string) {
+async function resolveLineIdentity(provider_user_id: string) {
   const config = getRestConfig()
 
   if (!config) {
@@ -115,7 +131,7 @@ async function resolveLineUserUuid(provider_user_id: string) {
       [
         "provider=eq.line",
         `provider_user_id=eq.${encodeURIComponent(provider_user_id)}`,
-        "select=user_uuid",
+        "select=identity_uuid,user_uuid",
         "limit=1",
       ].join("&"),
     ),
@@ -130,7 +146,7 @@ async function resolveLineUserUuid(provider_user_id: string) {
   }
 
   const rows = (await response.json()) as IdentityRow[]
-  return rows[0]?.user_uuid ?? null
+  return rows[0] ?? null
 }
 
 async function findVisitorUuidByLineContact(provider_user_id: string) {
@@ -250,7 +266,15 @@ function resolveLineRole(role: string | undefined): AppSession["role"] {
 export async function resolveLineWebhookContext(
   provider_user_id: string,
 ): Promise<LineWebhookContext> {
-  const user_uuid = await resolveLineUserUuid(provider_user_id)
+  const identity = await resolveLineIdentity(provider_user_id)
+  const user_uuid = identity?.user_uuid ?? null
+
+  await sendAuthDebug("line_identity_resolved", {
+    provider_user_id,
+    user_uuid,
+    identity_uuid: identity?.identity_uuid ?? null,
+    found: Boolean(identity?.user_uuid),
+  })
 
   if (!user_uuid) {
     const visitor_uuid = await resolveLineVisitorUuid(provider_user_id)
@@ -258,6 +282,7 @@ export async function resolveLineWebhookContext(
     return {
       user_uuid: null,
       visitor_uuid,
+      identity_uuid: identity?.identity_uuid ?? null,
       session: {
         visitor_uuid,
         user_uuid: null,
@@ -283,6 +308,7 @@ export async function resolveLineWebhookContext(
   return {
     user_uuid,
     visitor_uuid,
+    identity_uuid: identity?.identity_uuid ?? null,
     session: {
       visitor_uuid,
       user_uuid,

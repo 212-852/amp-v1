@@ -221,14 +221,14 @@ export function assertRoomMode(mode: string): ChatRoomMode {
   throw new Error(`Invalid room mode: ${mode}`)
 }
 
-export function resolve_room_mode_command(text: string): "bot" | "concierge" | null {
+export function resolve_room_mode_trigger(text: string): "bot" | "concierge" | null {
   const trimmed = text.trim()
 
   if (!trimmed) {
     return null
   }
 
-  const normalized = trimmed.toLowerCase()
+  const normalized = trimmed.toLowerCase().replace(/\s+/g, "")
 
   if (normalized === "bot") {
     return "bot"
@@ -248,6 +248,8 @@ export function resolve_room_mode_command(text: string): "bot" | "concierge" | n
 
   return null
 }
+
+export const resolve_room_mode_command = resolve_room_mode_trigger
 
 export function resolveRoomModeCommandReply(mode: ChatRoomMode) {
   if (mode === "bot") {

@@ -12,6 +12,8 @@ import {
 } from "@/core/line/context"
 import {
   can_reply_to_line_user,
+  get_allowed_line_users,
+  is_line_webhook_reply_enabled,
   resolve_line_reply_reason,
 } from "@/core/line/rules"
 
@@ -77,6 +79,13 @@ export async function handleLineWebhook(request: LineWebhookRequest) {
     const context = await resolveLineWebhookContext(event.provider_user_id)
     const reply_allowed = can_reply_to_line_user(event.provider_user_id)
 
+    await sendAuthDebug("line_reply_allowlist_checked", {
+      provider_user_id: event.provider_user_id,
+      allowed: reply_allowed,
+      allowed_count: get_allowed_line_users().length,
+      reply_enabled: is_line_webhook_reply_enabled(),
+    })
+
     await upsertWebhookLineContact({
       user_uuid: context.user_uuid,
       visitor_uuid: context.visitor_uuid,
@@ -98,6 +107,7 @@ export async function handleLineWebhook(request: LineWebhookRequest) {
         locale: context.locale,
         session: context.session,
         line_reply_token: reply_allowed ? event.reply_token : null,
+        line_provider_user_id: event.provider_user_id,
       },
       {
         deliver: reply_allowed,
@@ -108,6 +118,13 @@ export async function handleLineWebhook(request: LineWebhookRequest) {
 
     if (!reply_allowed || !event.reply_token) {
       await sendAuthDebug("line_webhook_reply_blocked", {
+        provider_user_id: event.provider_user_id,
+        reason: event.reply_token
+          ? resolve_line_reply_reason(event.provider_user_id)
+          : "missing_reply_token",
+        source_channel: event.source_channel,
+      })
+      await sendAuthDebug("line_reply_blocked", {
         provider_user_id: event.provider_user_id,
         reason: event.reply_token
           ? resolve_line_reply_reason(event.provider_user_id)
@@ -134,6 +151,7 @@ export async function handleLineWebhook(request: LineWebhookRequest) {
         locale: context.locale,
         session: context.session,
         line_reply_token: event.reply_token,
+        line_provider_user_id: event.provider_user_id,
         bootstrap_welcome: false,
       })
     }

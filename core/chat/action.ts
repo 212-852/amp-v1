@@ -47,11 +47,12 @@ import type {
 import {
   assertMessageBody,
   assertRoomMode,
-  resolve_room_mode_command,
+  resolve_room_mode_trigger,
   resolveRoomModeCommandReply,
 } from "@/core/chat/rules"
 import { recordSecurityAccessEvent } from "@/core/access"
 import type { Session } from "@/core/auth/types"
+import { sendAuthDebug } from "@/core/debug"
 import {
   canToggleConciergeAvailability,
   ConciergeToggleDeniedError,
@@ -192,10 +193,22 @@ export async function handleIncomingChatMessageArchive(
   const body = assertMessageBody(input.body)
   const mode_command =
     options.apply_mode_command !== false
-      ? resolve_room_mode_command(body)
+      ? resolve_room_mode_trigger(body)
       : null
   const { room, participant } = await bootstrapChatRoom(context, input.session, {
     welcome: options.bootstrap_welcome ?? true,
+  })
+
+  await sendAuthDebug("chat_room_resolved", {
+    user_uuid: input.session.user_uuid,
+    visitor_uuid: input.session.visitor_uuid,
+    room_uuid: room.room_uuid,
+    room_mode: room.mode,
+    source_channel: input.source_channel,
+  })
+  await sendAuthDebug("chat_room_mode_trigger_checked", {
+    text: body,
+    matched_mode: mode_command,
   })
 
   await broadcastTypingEvent({
@@ -216,6 +229,7 @@ export async function handleIncomingChatMessageArchive(
       participant_uuid: input.participant_uuid,
       room_uuid: input.room_uuid,
       line_reply_token: input.line_reply_token,
+      line_provider_user_id: input.line_provider_user_id,
       deliver: options.deliver !== false,
       room,
       participant,
@@ -237,6 +251,12 @@ export async function handleIncomingChatMessageArchive(
     session: input.session,
   })
 
+  await sendAuthDebug("chat_archive_incoming_saved", {
+    room_uuid: room.room_uuid,
+    message_uuid: message.message_uuid,
+    source_channel: input.source_channel,
+  })
+
   if (options.deliver !== false) {
     await deliverMessageBundle({
       message,
@@ -244,6 +264,7 @@ export async function handleIncomingChatMessageArchive(
       session: input.session,
       source_channel: input.source_channel,
       line_reply_token: input.line_reply_token,
+      line_provider_user_id: input.line_provider_user_id,
     })
   }
 
@@ -262,6 +283,7 @@ async function handleRoomModeCommand(input: {
   participant_uuid?: string | null
   room_uuid?: string | null
   line_reply_token?: string | null
+  line_provider_user_id?: string | null
   deliver: boolean
   room: Awaited<ReturnType<typeof bootstrapChatRoom>>["room"]
   participant: Awaited<ReturnType<typeof bootstrapChatRoom>>["participant"]
@@ -280,7 +302,7 @@ async function handleRoomModeCommand(input: {
     }
   }
 
-  await archivePreparedMessage({
+  const incoming_message = await archivePreparedMessage({
     room: input.room,
     participant: input.participant,
     source_channel: input.source_channel,
@@ -290,9 +312,22 @@ async function handleRoomModeCommand(input: {
     session: input.session,
   })
 
+  await sendAuthDebug("chat_archive_incoming_saved", {
+    room_uuid: input.room.room_uuid,
+    message_uuid: incoming_message.message_uuid,
+    source_channel: input.source_channel,
+  })
+
   const updated_room = await updateRoomMode({
     room_uuid: input.room.room_uuid,
     mode,
+  })
+
+  await sendAuthDebug("chat_room_mode_updated", {
+    room_uuid: updated_room.room_uuid,
+    from_mode: input.room.mode,
+    to_mode: updated_room.mode,
+    source_channel: input.source_channel,
   })
 
   const message = await archivePreparedMessage({
@@ -313,6 +348,7 @@ async function handleRoomModeCommand(input: {
       session: input.session,
       source_channel: input.source_channel,
       line_reply_token: input.line_reply_token,
+      line_provider_user_id: input.line_provider_user_id,
     })
   }
 
@@ -371,6 +407,7 @@ export async function handleQuickMenuRequested(input: {
   locale?: string | null
   session: Session
   line_reply_token?: string | null
+  line_provider_user_id?: string | null
   bootstrap_welcome?: boolean
 }) {
   const context = buildChatContext(input.session, {
@@ -387,6 +424,7 @@ export async function handleQuickMenuRequested(input: {
     session: input.session,
     source_channel: input.source_channel,
     line_reply_token: input.line_reply_token,
+    line_provider_user_id: input.line_provider_user_id,
   })
 
   return toMessageBundle(message, room.locale)

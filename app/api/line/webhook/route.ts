@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "crypto"
 
+import { sendAuthDebug } from "@/core/debug"
 import { handleLineWebhook } from "@/core/line/action"
 import { normalizeLineWebhookRequest } from "@/core/line/context"
 
@@ -23,25 +24,49 @@ function verifyLineSignature(body: string, signature: string | null) {
 export async function POST(request: Request) {
   const body = await request.text()
   const signature = request.headers.get("x-line-signature")
-
-  if (!verifyLineSignature(body, signature)) {
-    return Response.json({ ok: false, error: "invalid_signature" }, { status: 401 })
-  }
-
+  const has_signature = Boolean(signature)
   let payload: unknown
 
   try {
     payload = JSON.parse(body) as unknown
   } catch {
+    await sendAuthDebug("line_webhook_received", {
+      event_count: 0,
+      has_signature,
+      source_channel: "line",
+    })
     return Response.json({ ok: false, error: "invalid_json" }, { status: 400 })
   }
 
-  const result = await handleLineWebhook(normalizeLineWebhookRequest(payload)).catch(
-    (error) => ({
+  const event_count =
+    payload &&
+    typeof payload === "object" &&
+    Array.isArray((payload as { events?: unknown }).events)
+      ? (payload as { events: unknown[] }).events.length
+      : 0
+
+  await sendAuthDebug("line_webhook_received", {
+    event_count,
+    has_signature,
+    source_channel: "line",
+  })
+
+  const signature_ok = verifyLineSignature(body, signature)
+
+  await sendAuthDebug("line_signature_verified", {
+    ok: signature_ok,
+  })
+
+  if (!signature_ok) {
+    return Response.json({ ok: false, error: "invalid_signature" }, { status: 401 })
+  }
+
+  const result = await normalizeLineWebhookRequest(payload)
+    .then((request) => handleLineWebhook(request))
+    .catch((error) => ({
       ok: false,
       error: error instanceof Error ? error.message : "line_webhook_failed",
-    }),
-  )
+    }))
 
   return Response.json(result, { status: 200 })
 }

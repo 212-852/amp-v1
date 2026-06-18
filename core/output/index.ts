@@ -4,6 +4,7 @@ import { deliverDiscord } from "@/core/output/discord"
 import { deliverLine } from "@/core/output/line"
 import { deliverPush } from "@/core/output/push"
 import { deliverWeb } from "@/core/output/web"
+import { sendAuthDebug } from "@/core/debug"
 
 export type DeliveryResult = {
   transport: "line" | "web" | "push" | "discord" | "none"
@@ -19,6 +20,11 @@ export async function deliverOutput(
     target.channel === "pwa" ||
     target.channel === "liff"
   ) {
+    await sendAuthDebug("output_route_resolved", {
+      destination: "web",
+      channel: target.channel,
+      should_send: true,
+    })
     return [await deliverWeb(null, message)]
   }
 
@@ -27,10 +33,17 @@ export async function deliverOutput(
 
   return Promise.all(
     destinations.map(async (destination) => {
+      await sendAuthDebug("output_route_resolved", {
+        destination: destination.transport,
+        channel: target.channel ?? null,
+        should_send: destination.transport !== "none" && Boolean(destination.contact),
+      })
+
       if (destination.transport === "line") {
         return destination.contact
           ? deliverLine(destination.contact, message, {
               reply_token: target.line_reply_token,
+              provider_user_id: target.line_provider_user_id,
             })
           : { transport: "line", delivered: false }
       }
