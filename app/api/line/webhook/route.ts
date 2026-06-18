@@ -21,9 +21,25 @@ function verifyLineSignature(body: string, signature: string | null) {
   )
 }
 
+export async function GET() {
+  await sendAuthDebug("line_webhook_health_check", {
+    route: "line_webhook",
+  })
+
+  return Response.json({ ok: true, route: "line_webhook" })
+}
+
 export async function POST(request: Request) {
-  const body = await request.text()
   const signature = request.headers.get("x-line-signature")
+
+  await sendAuthDebug("line_webhook_route_entered", {
+    method: request.method,
+    has_signature: Boolean(signature),
+    content_type: request.headers.get("content-type"),
+    user_agent: request.headers.get("user-agent"),
+  })
+
+  const body = await request.text()
   const has_signature = Boolean(signature)
   let payload: unknown
 
