@@ -12,6 +12,7 @@ export type OutputTarget = {
   user_uuid?: string | null
   visitor_uuid?: string | null
   channel?: SourceChannel | null
+  line_reply_token?: string | null
 }
 
 export type OutputDestination = {

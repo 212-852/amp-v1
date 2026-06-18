@@ -153,6 +153,7 @@ export type ChatIncomingInput = {
   session: Session
   participant_uuid?: string | null
   room_uuid?: string | null
+  line_reply_token?: string | null
 }
 
 export type ChatModeSwitchInput = {

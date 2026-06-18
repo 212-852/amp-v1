@@ -29,7 +29,9 @@ export async function deliverOutput(
     destinations.map(async (destination) => {
       if (destination.transport === "line") {
         return destination.contact
-          ? deliverLine(destination.contact, message)
+          ? deliverLine(destination.contact, message, {
+              reply_token: target.line_reply_token,
+            })
           : { transport: "line", delivered: false }
       }
 

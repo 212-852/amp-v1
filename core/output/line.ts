@@ -5,10 +5,11 @@ import type { OutputMessage } from "@/core/output/rules"
 export async function deliverLine(
   contact: ContactRecord,
   message: OutputMessage,
+  options: { reply_token?: string | null } = {},
 ): Promise<DeliveryResult> {
   const token = process.env.LINE_MESSAGING_CHANNEL_ACCESS_TOKEN
 
-  if (!token || !contact.value) {
+  if (!token || (!contact.value && !options.reply_token)) {
     return { transport: "line", delivered: false }
   }
 
@@ -22,18 +23,30 @@ export async function deliverLine(
           },
         ]
 
-  const response = await fetch("https://api.line.me/v2/bot/message/push", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
+  const response = await fetch(
+    options.reply_token
+      ? "https://api.line.me/v2/bot/message/reply"
+      : "https://api.line.me/v2/bot/message/push",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(
+        options.reply_token
+          ? {
+              replyToken: options.reply_token,
+              messages: line_payloads,
+            }
+          : {
+              to: contact.value,
+              messages: line_payloads,
+            },
+      ),
+      cache: "no-store",
     },
-    body: JSON.stringify({
-      to: contact.value,
-      messages: line_payloads,
-    }),
-    cache: "no-store",
-  })
+  )
 
   return { transport: "line", delivered: response.ok }
 }

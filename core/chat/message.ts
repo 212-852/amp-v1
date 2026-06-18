@@ -152,6 +152,7 @@ export async function deliverMessageBundle(input: {
   room: ChatRoomRecord
   session: Session
   source_channel: SourceChannel
+  line_reply_token?: string | null
 }) {
   const payload = input.message.payload
   const alt_text = resolveFlexAltText(input.message.body, input.room.locale)
@@ -170,6 +171,7 @@ export async function deliverMessageBundle(input: {
       user_uuid: input.session.user_uuid,
       visitor_uuid: input.session.visitor_uuid,
       channel: input.room.channel,
+      line_reply_token: input.line_reply_token,
     },
     {
       text: alt_text,
@@ -216,6 +218,7 @@ export async function archiveBotTriggerMessage(input: {
   participant: ChatParticipantRecord | null
   session: Session
   source_channel: SourceChannel
+  line_reply_token?: string | null
 }) {
   const bundle = createBotMessageBundle({
     trigger: input.trigger,
@@ -233,6 +236,7 @@ export async function archiveBotTriggerMessage(input: {
     room: input.room,
     session: input.session,
     source_channel: input.source_channel,
+    line_reply_token: input.line_reply_token,
   })
 
   return message

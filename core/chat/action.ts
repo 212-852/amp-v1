@@ -165,9 +165,24 @@ export async function loadChatRoom(
 export async function handleIncomingChatMessage(
   input: ChatIncomingInput,
 ): Promise<MessageBundle> {
+  return handleIncomingChatMessageArchive(input, {
+    deliver: true,
+    bootstrap_welcome: true,
+  })
+}
+
+export async function handleIncomingChatMessageArchive(
+  input: ChatIncomingInput,
+  options: {
+    deliver?: boolean
+    bootstrap_welcome?: boolean
+  } = {},
+): Promise<MessageBundle> {
   const context = normalizeIncomingChatInput(input)
   const body = assertMessageBody(input.body)
-  const { room, participant } = await bootstrapChatRoom(context, input.session)
+  const { room, participant } = await bootstrapChatRoom(context, input.session, {
+    welcome: options.bootstrap_welcome ?? true,
+  })
 
   await broadcastTypingEvent({
     room_uuid: room.room_uuid,
@@ -187,12 +202,15 @@ export async function handleIncomingChatMessage(
     session: input.session,
   })
 
-  await deliverMessageBundle({
-    message,
-    room,
-    session: input.session,
-    source_channel: input.source_channel,
-  })
+  if (options.deliver !== false) {
+    await deliverMessageBundle({
+      message,
+      room,
+      session: input.session,
+      source_channel: input.source_channel,
+      line_reply_token: input.line_reply_token,
+    })
+  }
 
   return toMessageBundle(message, room.locale)
 }
@@ -247,18 +265,23 @@ export async function handleQuickMenuRequested(input: {
   source_channel: Session["source_channel"]
   locale?: string | null
   session: Session
+  line_reply_token?: string | null
+  bootstrap_welcome?: boolean
 }) {
   const context = buildChatContext(input.session, {
     source_channel: input.source_channel,
     locale: input.locale ?? null,
   })
-  const { room, participant } = await bootstrapChatRoom(context, input.session)
+  const { room, participant } = await bootstrapChatRoom(context, input.session, {
+    welcome: input.bootstrap_welcome ?? true,
+  })
   const message = await archiveBotTriggerMessage({
     trigger: "quick_menu_requested",
     room,
     participant,
     session: input.session,
     source_channel: input.source_channel,
+    line_reply_token: input.line_reply_token,
   })
 
   return toMessageBundle(message, room.locale)

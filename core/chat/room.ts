@@ -255,7 +255,7 @@ export async function resolveOwnedRoom(input: {
   })
 
   let participant: ChatParticipantRecord
-  let participant_created = true
+  const participant_created = true
 
   try {
     participant = await insertParticipant({
@@ -339,6 +339,7 @@ export async function findChatRoomState(
 export async function bootstrapChatRoom(
   context: ChatContext,
   session: Session,
+  options: { welcome?: boolean } = {},
 ): Promise<ChatRoomBootstrapResult> {
   const identity = resolveRoomIdentity(context, session)
   const locale = resolveChatLocale(context.locale, null)
@@ -353,12 +354,15 @@ export async function bootstrapChatRoom(
     mode,
   })
 
-  const welcome = await bootstrapRoomWelcome({
-    room: resolved.room,
-    participant: resolved.participant,
-    session,
-    source_channel: context.source_channel,
-  })
+  const welcome =
+    options.welcome === false
+      ? null
+      : await bootstrapRoomWelcome({
+          room: resolved.room,
+          participant: resolved.participant,
+          session,
+          source_channel: context.source_channel,
+        })
 
   return {
     room: resolved.room,
