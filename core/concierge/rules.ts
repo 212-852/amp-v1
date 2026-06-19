@@ -11,3 +11,7 @@ export function should_show_concierge_list(input: {
 export function resolve_concierge_queue_room_condition(): ConciergeQueueRoomCondition {
   return { mode: "concierge" }
 }
+
+export function resolve_concierge_room_href(room_uuid: string) {
+  return `/admin/concierge/${encodeURIComponent(room_uuid)}`
+}

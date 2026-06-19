@@ -156,6 +156,11 @@ export default function OpsHeader({
       }
 
       set_concierge_available_state(payload.enabled)
+      window.dispatchEvent(
+        new CustomEvent("amp-concierge-availability-changed", {
+          detail: { enabled: payload.enabled },
+        }),
+      )
       toast({
         tone: "success",
         placement: "anchor",

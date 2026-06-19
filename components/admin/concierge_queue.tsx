@@ -98,8 +98,10 @@ function useCustomerTyping(input: {
 }
 
 function ConciergeQueueCard({
+  index,
   item,
 }: Readonly<{
+  index: number
   item: ConciergeQueueItem
 }>) {
   const { locale } = useLocale()
@@ -107,9 +109,18 @@ function ConciergeQueueCard({
     room_uuid: item.room_uuid,
     customer_participant_uuid: item.customer_participant_uuid,
   })
+  const row_background = index % 2 === 1 ? "bg-neutral-50" : "bg-white"
 
   return (
-    <article className="flex items-center gap-3 border-b border-neutral-200 py-3 last:border-b-0">
+    <Link
+      href={item.href}
+      className={[
+        "flex items-center gap-3 border-b border-neutral-200 px-2 py-3 transition",
+        "hover:bg-neutral-100 active:bg-neutral-200",
+        "last:border-b-0",
+        row_background,
+      ].join(" ")}
+    >
       <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full bg-neutral-100">
         {item.avatar_url ? (
           <img
@@ -146,7 +157,7 @@ function ConciergeQueueCard({
             : item.latest_message || "—"}
         </p>
       </div>
-    </article>
+    </Link>
   )
 }
 
@@ -162,11 +173,41 @@ export default function ConciergeQueuePanel({
   const { locale } = useLocale()
   const router = useRouter()
   const [is_pending, start_transition] = useTransition()
-  const should_show_list = queue?.should_show_list ?? true
+  const [is_concierge_available, set_is_concierge_available] = useState(
+    queue?.should_show_list ?? true,
+  )
   const rendered_items = queue?.rooms ?? queue?.items ?? items ?? []
 
   useEffect(() => {
-    if (!should_show_list) {
+    function handle_availability_change(event: Event) {
+      const detail = (event as CustomEvent<{ enabled?: boolean }>).detail
+
+      if (typeof detail?.enabled === "boolean") {
+        set_is_concierge_available(detail.enabled)
+
+        if (detail.enabled) {
+          start_transition(() => {
+            router.refresh()
+          })
+        }
+      }
+    }
+
+    window.addEventListener(
+      "amp-concierge-availability-changed",
+      handle_availability_change,
+    )
+
+    return () => {
+      window.removeEventListener(
+        "amp-concierge-availability-changed",
+        handle_availability_change,
+      )
+    }
+  }, [router, start_transition])
+
+  useEffect(() => {
+    if (!is_concierge_available) {
       return
     }
 
@@ -201,14 +242,27 @@ export default function ConciergeQueuePanel({
         { event: "*", schema: "public", table: "presence" },
         refresh_queue,
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "availability" },
+        (payload) => {
+          const next_enabled = (payload.new as { enabled?: unknown })?.enabled
+
+          if (typeof next_enabled === "boolean") {
+            set_is_concierge_available(next_enabled)
+          }
+
+          refresh_queue()
+        },
+      )
       .subscribe()
 
     return () => {
       void supabase.removeChannel(channel)
     }
-  }, [router, should_show_list])
+  }, [router, is_concierge_available, start_transition])
 
-  if (!should_show_list) {
+  if (!is_concierge_available) {
     return null
   }
 
@@ -226,8 +280,12 @@ export default function ConciergeQueuePanel({
             {concierge_queue_content.empty[locale]}
           </p>
         ) : (
-          rendered_items.map((item) => (
-            <ConciergeQueueCard key={item.room_uuid} item={item} />
+          rendered_items.map((item, index) => (
+            <ConciergeQueueCard
+              key={item.room_uuid}
+              index={index}
+              item={item}
+            />
           ))
         )}
       </div>

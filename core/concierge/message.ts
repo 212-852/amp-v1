@@ -1,4 +1,5 @@
 import { resolveMessageBodyDisplay } from "@/core/chat/rules"
+import { resolve_concierge_room_href } from "@/core/concierge/rules"
 import type {
   ChatMessageRecord,
   ChatParticipantRecord,
@@ -7,6 +8,7 @@ import type {
 
 export type ConciergeQueueRoom = {
   room_uuid: string
+  href: string
   display_name: string
   avatar_url: string | null
   latest_message: string
@@ -97,6 +99,7 @@ export function build_concierge_queue_room(input: {
 
   return {
     room_uuid: input.room.room_uuid,
+    href: resolve_concierge_room_href(input.room.room_uuid),
     display_name,
     avatar_url,
     latest_message,

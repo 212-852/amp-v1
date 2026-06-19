@@ -2,6 +2,10 @@
 
 import { createClient } from "@supabase/supabase-js"
 
+type BrowserSupabaseClient = ReturnType<typeof createClient>
+
+let browser_supabase_client: BrowserSupabaseClient | null = null
+
 function get_cookie(name: string) {
   const cookie = document.cookie
     .split("; ")
@@ -35,6 +39,10 @@ function remove_cookie(name: string) {
 }
 
 export function create_browser_supabase_client() {
+  if (browser_supabase_client) {
+    return browser_supabase_client
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
@@ -42,7 +50,7 @@ export function create_browser_supabase_client() {
     throw new Error("Supabase browser config is missing")
   }
 
-  return createClient(url, key, {
+  browser_supabase_client = createClient(url, key, {
     auth: {
       detectSessionInUrl: false,
       flowType: "pkce",
@@ -54,4 +62,6 @@ export function create_browser_supabase_client() {
       },
     },
   })
+
+  return browser_supabase_client
 }
