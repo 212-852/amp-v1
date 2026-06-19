@@ -215,29 +215,59 @@ async function syncConciergeOdinModeChange(input: {
       input.previous_room.mode === "concierge" &&
       input.updated_room.mode === "bot"
     ) {
-      const thread_id =
-        input.previous_room.thread_id ?? input.updated_room.thread_id ?? null
+      const current_room =
+        (await findRoomByUuid(input.updated_room.room_uuid)) ?? input.updated_room
+      const thread_id = current_room.thread_id?.trim() || null
 
-      const result = await notifyEvent({
-        event: "concierge_closed",
-        request_id: `${input.updated_room.room_uuid}:concierge_closed:${Date.now()}`,
-        payload: {
-          customer_name,
-          room_uuid: input.updated_room.room_uuid,
-          thread_id,
-          thread_status:
-            input.previous_room.thread_status ??
-            input.updated_room.thread_status ??
-            "open",
-        },
-      })
+      if (thread_id) {
+        const result = await notifyEvent({
+          event: "concierge_closed",
+          request_id: `${current_room.room_uuid}:concierge_closed:${Date.now()}`,
+          payload: {
+            customer_name,
+            room_uuid: current_room.room_uuid,
+            thread_id,
+            thread_status: current_room.thread_status ?? "open",
+          },
+        })
 
-      if ((result?.thread_id ?? thread_id) && result?.thread_status === "closed") {
-        await updateRoomThreadState({
-          room_uuid: input.updated_room.room_uuid,
-          thread_id: result.thread_id ?? thread_id,
+        if (!result?.delivered || result.thread_status !== "closed") {
+          console.warn({
+            event: "room_thread_close_failed",
+            room_uuid: current_room.room_uuid,
+            thread_id,
+            thread_status: "closed",
+            http_status: result?.http_status ?? null,
+            error_message: result?.reason ?? "odin_thread_close_failed",
+          })
+          return
+        }
+      }
+
+      try {
+        const closed_room = await updateRoomThreadState({
+          room_uuid: current_room.room_uuid,
           thread_status: "closed",
         })
+
+        console.log({
+          event: "room_thread_closed",
+          room_uuid: current_room.room_uuid,
+          thread_id: closed_room?.thread_id ?? thread_id,
+          thread_status: closed_room?.thread_status ?? "closed",
+          http_status: null,
+          error_message: null,
+        })
+      } catch (error) {
+        console.warn({
+          event: "room_thread_close_failed",
+          room_uuid: current_room.room_uuid,
+          thread_id,
+          thread_status: "closed",
+          http_status: null,
+          error_message: error instanceof Error ? error.message : String(error),
+        })
+        throw error
       }
     }
   } catch (error) {

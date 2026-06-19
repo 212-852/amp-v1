@@ -304,15 +304,82 @@ async function updateThreadArchived(
   config: OdinConfig,
   thread_id: string,
   archived: boolean,
+  log_context?: {
+    room_uuid?: string | null
+    thread_status?: string | null
+  },
 ) {
   await discordRequest<unknown>(
     config,
     `/channels/${encodeURIComponent(thread_id)}`,
     {
       method: "PATCH",
-      body: JSON.stringify({ archived }),
+      body: JSON.stringify({ archived, locked: false }),
     },
+    log_context,
   )
+}
+
+async function closeThread(
+  config: OdinConfig,
+  input: {
+    room_uuid: string | null
+    thread_id: string
+  },
+) {
+  const entered_payload = {
+    event: "odin_thread_close_entered",
+    room_uuid: input.room_uuid,
+    thread_id: input.thread_id,
+    thread_status: "closed",
+    http_status: null,
+    error_message: null,
+  }
+  console.log(entered_payload)
+  await logOdinServerDebug("odin_thread_close_entered", entered_payload)
+
+  try {
+    const response = await discordRequest<unknown>(
+      config,
+      `/channels/${encodeURIComponent(input.thread_id)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          archived: true,
+          locked: false,
+        }),
+      },
+      {
+        room_uuid: input.room_uuid,
+        thread_status: "closed",
+      },
+    )
+
+    const response_payload = {
+      event: "odin_thread_close_response",
+      room_uuid: input.room_uuid,
+      thread_id: input.thread_id,
+      thread_status: "closed",
+      http_status: response.http_status,
+      error_message: null,
+    }
+    console.log(response_payload)
+    await logOdinServerDebug("odin_thread_close_response", response_payload)
+
+    return response
+  } catch (error) {
+    const failed_payload = {
+      event: "odin_thread_close_failed",
+      room_uuid: input.room_uuid,
+      thread_id: input.thread_id,
+      thread_status: "closed",
+      http_status: null,
+      error_message: error instanceof Error ? error.message : String(error),
+    }
+    console.warn(failed_payload)
+    await logOdinServerDebug("odin_thread_close_failed", failed_payload)
+    throw error
+  }
 }
 
 async function sendThreadMessage(
@@ -346,22 +413,6 @@ function buildConciergeRequestMessage(payload: Record<string, unknown>) {
     room_uuid,
     "",
     "Customer requested concierge support.",
-  ].join("\n")
-}
-
-function buildConciergeClosedMessage(payload: Record<string, unknown>) {
-  const customer_name = readPayloadString(payload, "customer_name", "Customer")
-  const room_uuid = readPayloadString(payload, "room_uuid")
-
-  return [
-    "[CONCIERGE CLOSED]",
-    "",
-    "customer:",
-    customer_name,
-    "room:",
-    room_uuid,
-    "",
-    "Customer returned to bot mode.",
   ].join("\n")
 }
 
@@ -549,14 +600,18 @@ export async function deliverOdinNotification(
         return { delivered: false, reason: "thread_id_missing" }
       }
 
-      await sendThreadMessage(
-        config,
+      const close_response = await closeThread(config, {
+        room_uuid,
         thread_id,
-        buildConciergeClosedMessage(delivery.payload),
-      )
-      await updateThreadArchived(config, thread_id, true)
+      })
+      await sendThreadMessage(config, thread_id, "Customer returned to bot mode.")
 
-      return { delivered: true, thread_id, thread_status: "closed" }
+      return {
+        delivered: true,
+        thread_id,
+        thread_status: "closed",
+        http_status: close_response.http_status,
+      }
     }
 
     if (
