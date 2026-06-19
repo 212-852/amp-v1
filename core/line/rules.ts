@@ -1,18 +1,5 @@
 import type { LineIncomingEvent } from "@/core/line/context"
 
-export type LineWebhookGateReason =
-  | "allowed"
-  | "line_test_mode_not_allowed"
-  | "missing_provider_user_id"
-
-export type LineWebhookGateResult = {
-  allowed: boolean
-  reason: LineWebhookGateReason
-  archive: boolean
-  reply: boolean
-  output: boolean
-}
-
 function is_env_true(value: string | undefined) {
   return value?.trim().toLowerCase() === "true"
 }
@@ -36,42 +23,22 @@ export function is_line_webhook_reply_enabled() {
   return is_env_true(process.env.LINE_WEBHOOK_REPLY_ENABLED)
 }
 
-export function resolve_line_webhook_gate(
-  event: Pick<LineIncomingEvent, "provider_user_id" | "reply_token">,
-): LineWebhookGateResult {
-  const provider_user_id = event.provider_user_id?.trim()
+export function is_allowed_line_user(provider_user_id: string | null): boolean {
+  const normalized = provider_user_id?.trim()
 
-  if (!provider_user_id) {
-    return {
-      allowed: false,
-      reason: "missing_provider_user_id",
-      archive: false,
-      reply: false,
-      output: false,
-    }
+  if (!normalized) {
+    return false
   }
 
-  if (
-    is_line_webhook_test_mode() &&
-    !get_allowed_line_users().includes(provider_user_id)
-  ) {
-    return {
-      allowed: false,
-      reason: "line_test_mode_not_allowed",
-      archive: false,
-      reply: false,
-      output: false,
-    }
+  if (!is_line_webhook_reply_enabled()) {
+    return false
   }
 
-  const reply_ready =
-    is_line_webhook_reply_enabled() && Boolean(event.reply_token)
+  return get_allowed_line_users().includes(normalized)
+}
 
-  return {
-    allowed: true,
-    reason: "allowed",
-    archive: true,
-    reply: reply_ready,
-    output: reply_ready,
-  }
+export function can_reply_to_allowed_line_event(
+  event: Pick<LineIncomingEvent, "reply_token">,
+) {
+  return is_line_webhook_reply_enabled() && Boolean(event.reply_token)
 }

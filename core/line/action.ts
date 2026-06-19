@@ -5,12 +5,14 @@ import {
 import { findMessageByExternalId } from "@/core/chat/archive"
 import { sendAuthDebug } from "@/core/debug"
 import {
-  normalizeLineWebhookRequest,
   resolveLineWebhookContext,
   type LineIncomingEvent,
   type LineWebhookRequest,
 } from "@/core/line/context"
-import { resolve_line_webhook_gate } from "@/core/line/rules"
+import {
+  can_reply_to_allowed_line_event,
+  is_line_webhook_reply_enabled,
+} from "@/core/line/rules"
 import { beginLineReplyTokenScope } from "@/core/line/reply_token"
 
 type LineEventSource = {
@@ -68,33 +70,11 @@ export async function upsertLineContactsFromEvents(events: LineEvent[]) {
   return Promise.all(events.map((event) => upsertLineContactFromEvent(event)))
 }
 
-async function emitLineWebhookGateDebug(
-  event: LineIncomingEvent,
-  gate: ReturnType<typeof resolve_line_webhook_gate>,
-) {
-  if (!gate.allowed) {
-    await sendAuthDebug("line_webhook_ignored_not_allowed", {
-      provider_user_id: event.provider_user_id,
-      reason: gate.reason,
-      source_channel: event.source_channel,
-    })
-    return
-  }
-
-  await sendAuthDebug("line_webhook_gate_resolved", {
-    provider_user_id: event.provider_user_id,
-    reason: gate.reason,
-    archive: gate.archive,
-    reply: gate.reply,
-    output: gate.output,
-    source_channel: event.source_channel,
-  })
-}
-
 async function processAllowedLineEvent(
   event: LineIncomingEvent,
-  gate: ReturnType<typeof resolve_line_webhook_gate>,
 ): Promise<LineWebhookEventResult> {
+  const can_reply = can_reply_to_allowed_line_event(event)
+
   await sendAuthDebug("line_event_normalized", {
     provider_user_id: event.provider_user_id,
     message_type: event.message_type,
@@ -124,25 +104,14 @@ async function processAllowedLineEvent(
         processed: false,
         replied: false,
         duplicate: true,
-        gate_reason: gate.reason,
+        gate_reason: "allowed",
       }
     }
   }
 
   const context = await resolveLineWebhookContext(event.provider_user_id)
 
-  if (!gate.archive) {
-    return {
-      provider_user_id: event.provider_user_id,
-      ignored: false,
-      archived: false,
-      processed: false,
-      replied: false,
-      gate_reason: gate.reason,
-    }
-  }
-
-  if (!gate.reply) {
+  if (!can_reply) {
     await handleIncomingChatMessageArchive(
       {
         body: event.body,
@@ -162,7 +131,7 @@ async function processAllowedLineEvent(
 
     await sendAuthDebug("line_webhook_reply_blocked", {
       provider_user_id: event.provider_user_id,
-      reason: gate.output ? "missing_reply_token" : "line_reply_disabled",
+      reason: event.reply_token ? "line_reply_disabled" : "missing_reply_token",
       source_channel: event.source_channel,
     })
 
@@ -172,7 +141,9 @@ async function processAllowedLineEvent(
       archived: true,
       processed: true,
       replied: false,
-      gate_reason: gate.reason,
+      gate_reason: is_line_webhook_reply_enabled()
+        ? "missing_reply_token"
+        : "line_reply_disabled",
     }
   }
 
@@ -185,11 +156,11 @@ async function processAllowedLineEvent(
       external_id: event.external_id,
       line_reply_token: event.reply_token,
       line_provider_user_id: event.provider_user_id,
-      line_reply_allowed: gate.output,
+      line_reply_allowed: true,
     },
     {
       deliver: false,
-      deliver_mode_reply: gate.output,
+      deliver_mode_reply: true,
       bootstrap_welcome: false,
       apply_mode_command: true,
     },
@@ -201,30 +172,28 @@ async function processAllowedLineEvent(
       ignored: false,
       archived: true,
       processed: true,
-      replied: gate.output,
-      gate_reason: gate.reason,
+      replied: true,
+      gate_reason: "allowed",
     }
   }
 
-  if (gate.output) {
-    await handleQuickMenuRequested({
-      source_channel: event.source_channel,
-      locale: context.locale,
-      session: context.session,
-      line_reply_token: event.reply_token,
-      line_provider_user_id: event.provider_user_id,
-      line_reply_allowed: true,
-      bootstrap_welcome: false,
-    })
-  }
+  await handleQuickMenuRequested({
+    source_channel: event.source_channel,
+    locale: context.locale,
+    session: context.session,
+    line_reply_token: event.reply_token,
+    line_provider_user_id: event.provider_user_id,
+    line_reply_allowed: true,
+    bootstrap_welcome: false,
+  })
 
   return {
     provider_user_id: event.provider_user_id,
     ignored: false,
     archived: true,
     processed: true,
-    replied: gate.output,
-    gate_reason: gate.reason,
+    replied: true,
+    gate_reason: "allowed",
   }
 }
 
@@ -234,29 +203,10 @@ export async function handleLineWebhook(
   beginLineReplyTokenScope()
 
   const results: LineWebhookEventResult[] = []
-  let allowed_count = 0
 
   for (const event of request.events) {
-    const gate = resolve_line_webhook_gate(event)
-
-    await emitLineWebhookGateDebug(event, gate)
-
-    if (!gate.allowed) {
-      results.push({
-        provider_user_id: event.provider_user_id,
-        ignored: true,
-        archived: false,
-        processed: false,
-        replied: false,
-        gate_reason: gate.reason,
-      })
-      continue
-    }
-
-    allowed_count += 1
-
     try {
-      results.push(await processAllowedLineEvent(event, gate))
+      results.push(await processAllowedLineEvent(event))
     } catch (error) {
       await sendAuthDebug("line_webhook_event_failed", {
         provider_user_id: event.provider_user_id,
@@ -268,14 +218,7 @@ export async function handleLineWebhook(
 
   return {
     ok: true,
-    ignored_all: request.events.length > 0 && allowed_count === 0,
+    ignored_all: false,
     results,
   }
-}
-
-export async function handleLineWebhookPayload(
-  payload: unknown,
-): Promise<LineWebhookHandleResult> {
-  const request = await normalizeLineWebhookRequest(payload)
-  return handleLineWebhook(request)
 }
