@@ -139,13 +139,21 @@ async function discordRequest<T>(
   config: OdinConfig,
   path: string,
   init: RequestInit,
+  log_context?: {
+    room_uuid?: string | null
+    thread_status?: string | null
+  },
 ) {
   const thread_id = extractThreadIdFromPath(path, config.channel_id)
 
   console.log({
     event: "odin_request",
+    room_uuid: log_context?.room_uuid ?? null,
     channel_id: config.channel_id,
     thread_id,
+    thread_status: log_context?.thread_status ?? null,
+    http_status: null,
+    error_message: null,
   })
 
   const response = await fetch(`${DISCORD_API_BASE}${path}`, {
@@ -159,8 +167,12 @@ async function discordRequest<T>(
 
   console.log({
     event: "odin_response",
-    status: response.status,
+    room_uuid: log_context?.room_uuid ?? null,
+    thread_id,
+    thread_status: log_context?.thread_status ?? null,
+    http_status: response.status,
     ok: response.ok,
+    error_message: null,
   })
 
   if (!response.ok) {
@@ -177,27 +189,74 @@ async function discordRequest<T>(
   }
 
   if (response.status === 204) {
-    return null as T
+    return {
+      data: null as T,
+      http_status: response.status,
+    }
   }
 
-  return (await response.json()) as T
+  return {
+    data: (await response.json()) as T,
+    http_status: response.status,
+  }
 }
 
-async function createThread(config: OdinConfig, name: string) {
-  const thread = await discordRequest<{ id: string }>(
-    config,
-    `/channels/${encodeURIComponent(config.channel_id)}/threads`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        name,
-        type: PUBLIC_THREAD_TYPE,
-        auto_archive_duration: 1440,
-      }),
-    },
-  )
+async function createThread(
+  config: OdinConfig,
+  input: {
+    name: string
+    room_uuid: string | null
+    thread_status: "open" | "closed"
+  },
+) {
+  console.log({
+    event: "odin_thread_create_entered",
+    room_uuid: input.room_uuid,
+    thread_id: null,
+    thread_status: input.thread_status,
+    http_status: null,
+    error_message: null,
+  })
 
-  return thread.id
+  try {
+    const thread = await discordRequest<{ id: string }>(
+      config,
+      `/channels/${encodeURIComponent(config.channel_id)}/threads`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: input.name,
+          type: PUBLIC_THREAD_TYPE,
+          auto_archive_duration: 1440,
+        }),
+      },
+      {
+        room_uuid: input.room_uuid,
+        thread_status: input.thread_status,
+      },
+    )
+
+    console.log({
+      event: "odin_thread_create_response",
+      room_uuid: input.room_uuid,
+      thread_id: thread.data.id,
+      thread_status: "open",
+      http_status: thread.http_status,
+      error_message: null,
+    })
+
+    return thread.data.id
+  } catch (error) {
+    console.warn({
+      event: "odin_thread_create_failed",
+      room_uuid: input.room_uuid,
+      thread_id: null,
+      thread_status: input.thread_status,
+      http_status: null,
+      error_message: error instanceof Error ? error.message : String(error),
+    })
+    throw error
+  }
 }
 
 async function updateThreadArchived(
@@ -298,6 +357,7 @@ async function resolveOpenThreadForRequest(
   payload: Record<string, unknown>,
 ) {
   const customer_name = readPayloadString(payload, "customer_name", "Customer")
+  const room_uuid = readRoomUuid(payload)
   const existing_thread_id = readPayloadString(payload, "thread_id", "")
   const thread_status = readPayloadString(payload, "thread_status", "closed")
 
@@ -309,7 +369,11 @@ async function resolveOpenThreadForRequest(
     return existing_thread_id
   }
 
-  return createThread(config, customer_name)
+  return createThread(config, {
+    name: customer_name,
+    room_uuid,
+    thread_status: "closed",
+  })
 }
 
 async function resolveThreadForDelivery(
@@ -341,6 +405,16 @@ export async function deliverOdinNotification(
     notify_event: delivery.event,
     room_uuid,
     has_thread_id: typeof delivery.payload.thread_id === "string",
+    thread_id:
+      typeof delivery.payload.thread_id === "string"
+        ? delivery.payload.thread_id
+        : null,
+    thread_status:
+      typeof delivery.payload.thread_status === "string"
+        ? delivery.payload.thread_status
+        : null,
+    http_status: null,
+    error_message: null,
   })
 
   const skip_reason = resolveOdinSkipReason()
@@ -350,7 +424,11 @@ export async function deliverOdinNotification(
       event: "odin_notify_failed",
       notify_event: delivery.event,
       room_uuid,
+      thread_id: null,
+      thread_status: null,
+      http_status: null,
       reason: skip_reason,
+      error_message: skip_reason,
     })
     return { delivered: false, reason: skip_reason }
   }
@@ -362,7 +440,11 @@ export async function deliverOdinNotification(
       event: "odin_notify_failed",
       notify_event: delivery.event,
       room_uuid,
+      thread_id: null,
+      thread_status: null,
+      http_status: null,
       reason: "odin_config_missing",
+      error_message: "odin_config_missing",
     })
     return { delivered: false, reason: "odin_config_missing" }
   }
@@ -388,7 +470,11 @@ export async function deliverOdinNotification(
           event: "odin_notify_failed",
           notify_event: delivery.event,
           room_uuid,
+          thread_id: null,
+          thread_status: "closed",
+          http_status: null,
           reason: "thread_id_missing",
+          error_message: "thread_id_missing",
         })
         return { delivered: false, reason: "thread_id_missing" }
       }
@@ -427,7 +513,11 @@ export async function deliverOdinNotification(
       event: "odin_notify_failed",
       notify_event: delivery.event,
       room_uuid,
+      thread_id: null,
+      thread_status: null,
+      http_status: null,
       reason: "unsupported_event",
+      error_message: "unsupported_event",
     })
     return { delivered: false, reason: "unsupported_event" }
   } catch (error) {
@@ -437,6 +527,15 @@ export async function deliverOdinNotification(
       event: "odin_notify_failed",
       notify_event: delivery.event,
       room_uuid,
+      thread_id:
+        typeof delivery.payload.thread_id === "string"
+          ? delivery.payload.thread_id
+          : null,
+      thread_status:
+        typeof delivery.payload.thread_status === "string"
+          ? delivery.payload.thread_status
+          : null,
+      http_status: null,
       error_message,
     })
 

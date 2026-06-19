@@ -163,11 +163,20 @@ async function syncConciergeOdinModeChange(input: {
         },
       })
 
-      if (result?.thread_id && result.thread_status === "open") {
+      if (result?.thread_id) {
         await updateRoomThreadState({
           room_uuid: input.updated_room.room_uuid,
           thread_id: result.thread_id,
           thread_status: "open",
+        })
+      } else {
+        console.warn({
+          event: "odin_room_update_failed",
+          room_uuid: input.updated_room.room_uuid,
+          thread_id: null,
+          thread_status: "open",
+          http_status: null,
+          error_message: result?.reason ?? "thread_id_missing",
         })
       }
     }
