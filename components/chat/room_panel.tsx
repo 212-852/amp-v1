@@ -16,6 +16,14 @@ import type {
 } from "@/core/chat/types"
 import type { Locale } from "@/src/lib/locale"
 
+const content = {
+  bot_mode: {
+    ja: "Botモード",
+    en: "Bot mode",
+    es: "Modo Bot",
+  },
+}
+
 type ChatRoomPanelProps = {
   initial_room: ChatRoomRecord
   initial_messages: ChatMessageRecord[]
@@ -95,6 +103,18 @@ export default function ChatRoomPanel({
 
     const channel = supabase
       .channel(`chat_room_panel:${room.room_uuid}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "rooms",
+          filter: `room_uuid=eq.${room.room_uuid}`,
+        },
+        () => {
+          void refresh()
+        },
+      )
       .on(
         "postgres_changes",
         {
@@ -190,6 +210,11 @@ export default function ChatRoomPanel({
       ].join(" ")}
     >
       <ChatScrollButton container_ref={scroll_ref} bottom_ref={bottom_ref} />
+      {show_presence && room.mode !== "concierge" ? (
+        <div className="mb-3 shrink-0 rounded-md border border-neutral-200 bg-white px-3 py-2 text-[12px] font-medium text-neutral-600">
+          {room.mode === "bot" ? content.bot_mode[locale] : room.mode}
+        </div>
+      ) : null}
       {show_presence && presence.length > 0 ? (
         <div className="mb-3 flex shrink-0 flex-wrap gap-2">
           {presence.map((entry) => (

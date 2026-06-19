@@ -22,6 +22,7 @@ export default async function AdminShell({
   })
   const page_label = resolvePageLabel(pathname)
   const concierge_available = (await getConciergeAvailabilityState(session)).enabled
+  const show_assistant = pathname !== "/admin/concierge/room"
 
   return (
     <div className="min-h-dvh bg-neutral-50 text-neutral-900">
@@ -33,7 +34,7 @@ export default async function AdminShell({
       <main className="mx-auto flex h-dvh w-full max-w-[430px] flex-col gap-3 overflow-hidden px-5 pb-[calc(118px+env(safe-area-inset-bottom,0px))] pt-[calc(96px+env(safe-area-inset-top,0px))]">
         {children}
       </main>
-      <OpsAssistant />
+      {show_assistant ? <OpsAssistant /> : null}
     </div>
   )
 }

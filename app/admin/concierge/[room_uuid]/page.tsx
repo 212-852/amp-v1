@@ -24,7 +24,7 @@ export default async function AdminConciergeRoomPage({
   }
 
   return (
-    <AdminShell session={session} pathname="/admin/concierge">
+    <AdminShell session={session} pathname="/admin/concierge/room">
       <AdminConciergeRoom
         state={state}
         viewer_display_name={session.display_name}

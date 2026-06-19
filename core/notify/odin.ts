@@ -282,6 +282,16 @@ async function resolveThreadForDelivery(
 export async function deliverOdinNotification(
   delivery: NotifyDelivery,
 ): Promise<OdinDeliveryResult> {
+  console.log({
+    event: "odin_notify_entered",
+    notify_event: delivery.event,
+    room_uuid:
+      typeof delivery.payload.room_uuid === "string"
+        ? delivery.payload.room_uuid
+        : null,
+    has_thread_id: typeof delivery.payload.thread_id === "string",
+  })
+
   const skip_reason = resolveOdinSkipReason()
 
   if (skip_reason) {
