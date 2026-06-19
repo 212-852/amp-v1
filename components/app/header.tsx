@@ -1,6 +1,6 @@
 "use client"
 
-import { Bell, Globe2, Mail, Settings, User } from "lucide-react"
+import { Bell, Globe2, Mail, User } from "lucide-react"
 import { SiGoogle, SiLine } from "react-icons/si"
 import { useState } from "react"
 
@@ -72,11 +72,6 @@ const content = {
     ja: "ユーザープロフィール",
     en: "User profile",
     es: "Perfil de usuario",
-  },
-  settings_label: {
-    ja: "設定",
-    en: "Settings",
-    es: "Configuracion",
   },
 }
 
@@ -307,14 +302,6 @@ export default function AppHeader({ auth }: { auth: AppHeaderAuth }) {
               className="flex h-9 w-9 items-center justify-center rounded-full bg-[#8f5d28] text-[#fdfaf6]"
             >
               <UserAvatar auth={display_auth} />
-            </button>
-            <button
-              type="button"
-              aria-label={content.settings_label[locale]}
-              onClick={() => set_settings_open(true)}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-[#fdfaf6] text-[#8f5d28] ring-1 ring-[#dcc7aa]"
-            >
-              <Settings className="h-[20px] w-[20px]" strokeWidth={2} />
             </button>
           </div>
         </div>

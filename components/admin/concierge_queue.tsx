@@ -477,7 +477,13 @@ export default function AdminConciergeQueue({
   }
 
   return (
-    <section className={variant === "preview" ? "" : "relative pb-9"}>
+    <section
+      className={
+        variant === "preview"
+          ? "pt-[calc(86px+env(safe-area-inset-top,0px))]"
+          : "relative pb-9"
+      }
+    >
       {variant === "preview" ? (
         <div className="mb-2 px-2">
           <div className="flex items-center justify-between gap-3">
