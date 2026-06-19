@@ -5,6 +5,11 @@ import {
 } from "@/core/control"
 
 const alwaysReportEvents = new Set([
+  "odin_env_ready",
+  "odin_smoke_entered",
+  "odin_thread_create_entered",
+  "odin_thread_create_response",
+  "odin_thread_create_failed",
   "line_reply_send_failed",
   "line_webhook_contact_upsert_failed",
   "line_signature_verification_failed",

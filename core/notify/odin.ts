@@ -8,6 +8,7 @@ export type OdinDeliveryResult = {
   reason?: string
   thread_id?: string | null
   thread_status?: "open" | "closed" | null
+  http_status?: number | null
 }
 
 type OdinConfig = {
@@ -70,13 +71,15 @@ function resolveOdinConfig(): OdinConfig | null {
 
   if (!odin_env_ready_logged) {
     odin_env_ready_logged = true
-    console.log({
+    const payload = {
       event: "odin_env_ready",
       has_bot_token: true,
       has_channel_id: true,
       has_guild_id: true,
       has_webhook_url: true,
-    })
+    }
+    console.log(payload)
+    void logOdinServerDebug("odin_env_ready", payload)
   }
 
   return {
@@ -177,7 +180,8 @@ async function discordRequest<T>(
 
   if (!response.ok) {
     const body = await response.text().catch(() => "")
-    await logOdinServerDebug("odin_notify_failed", {
+    console.warn({
+      event: "odin_notify_failed",
       channel: "odin",
       status: response.status,
       response_body: body,
@@ -209,14 +213,16 @@ async function createThread(
     thread_status: "open" | "closed"
   },
 ) {
-  console.log({
+  const entered_payload = {
     event: "odin_thread_create_entered",
     room_uuid: input.room_uuid,
     thread_id: null,
     thread_status: input.thread_status,
     http_status: null,
     error_message: null,
-  })
+  }
+  console.log(entered_payload)
+  await logOdinServerDebug("odin_thread_create_entered", entered_payload)
 
   try {
     const thread = await discordRequest<{ id: string }>(
@@ -236,14 +242,16 @@ async function createThread(
       },
     )
 
-    console.log({
+    const response_payload = {
       event: "odin_thread_create_response",
       room_uuid: input.room_uuid,
       thread_id: thread.data.id,
       thread_status: "open",
       http_status: thread.http_status,
       error_message: null,
-    })
+    }
+    console.log(response_payload)
+    await logOdinServerDebug("odin_thread_create_response", response_payload)
     console.log({
       event: "odin_thread_created",
       room_uuid: input.room_uuid,
@@ -253,16 +261,21 @@ async function createThread(
       error_message: null,
     })
 
-    return thread.data.id
+    return {
+      thread_id: thread.data.id,
+      http_status: thread.http_status,
+    }
   } catch (error) {
-    console.warn({
+    const failed_payload = {
       event: "odin_thread_create_failed",
       room_uuid: input.room_uuid,
       thread_id: null,
       thread_status: input.thread_status,
       http_status: null,
       error_message: error instanceof Error ? error.message : String(error),
-    })
+    }
+    console.warn(failed_payload)
+    await logOdinServerDebug("odin_thread_create_failed", failed_payload)
     throw error
   }
 }
@@ -377,11 +390,13 @@ async function resolveOpenThreadForRequest(
     return existing_thread_id
   }
 
-  return createThread(config, {
+  const thread = await createThread(config, {
     name: customer_name,
     room_uuid,
     thread_status: "closed",
   })
+
+  return thread.thread_id
 }
 
 async function resolveThreadForDelivery(
@@ -458,6 +473,21 @@ export async function deliverOdinNotification(
   }
 
   try {
+    if (delivery.event === "odin_smoke_test") {
+      const thread = await createThread(config, {
+        name: `odin-smoke-${new Date().toISOString()}`,
+        room_uuid,
+        thread_status: "open",
+      })
+
+      return {
+        delivered: true,
+        thread_id: thread.thread_id,
+        thread_status: "open",
+        http_status: thread.http_status,
+      }
+    }
+
     if (delivery.event === "concierge_requested") {
       const thread_id = await resolveOpenThreadForRequest(config, delivery.payload)
 

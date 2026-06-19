@@ -24,6 +24,7 @@ export type NotifyEventResult = {
   reason?: string
   thread_id?: string | null
   thread_status?: "open" | "closed" | null
+  http_status?: number | null
 }
 
 async function logNotifyDebug(

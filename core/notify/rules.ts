@@ -7,6 +7,7 @@ export type NotifyEventName =
   | "concierge_closed"
   | "concierge_requested"
   | "driver_page_unauthorized_access"
+  | "odin_smoke_test"
 
 export type NotifyPriority = "normal" | "high" | "warning"
 
@@ -56,7 +57,8 @@ export function resolveNotifyDelivery(input: NotifyEventInput): NotifyDelivery {
     input.event === "concierge_closed" ||
     input.event === "concierge_admin_entered" ||
     input.event === "concierge_admin_left" ||
-    input.event === "concierge_admin_message"
+    input.event === "concierge_admin_message" ||
+    input.event === "odin_smoke_test"
   ) {
     return {
       channel: "odin",
