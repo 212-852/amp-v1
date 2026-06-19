@@ -10,7 +10,7 @@ const nav_items = [
   { label: "Dashboard", icon: Gauge, active: true },
   { label: "Orders", icon: ClipboardList, active: false },
   { label: "Drivers", icon: CarFront, active: false },
-  { label: "Concierge", icon: MessageCircle, active: false },
+  { label: "Chat", icon: MessageCircle, active: false },
   { label: "Menu", icon: Menu, active: false },
 ]
 

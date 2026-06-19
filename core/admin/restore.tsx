@@ -167,6 +167,7 @@ function renderAdminUiShell(
   pathname: string,
   concierge_available: boolean,
   queue_items: Awaited<ReturnType<typeof resolveConciergeQueue>>,
+  data: Awaited<ReturnType<typeof loadAdminDashboardData>>,
 ) {
   const header_session = normalizeOpsHeaderDisplay(session)
   const page_label = resolvePageLabel(pathname)
@@ -181,6 +182,7 @@ function renderAdminUiShell(
       />
       <AdminBreadcrumb items={breadcrumbs.items} />
       <main className="mx-auto flex w-full max-w-[430px] flex-col gap-3 px-5 pb-[calc(118px+env(safe-area-inset-bottom,0px))] pt-2">
+        <AdminDataSections data={data} />
         <AdminConciergeQueue queue={queue_items} variant="preview" />
       </main>
       <AdminFooter />
@@ -205,6 +207,7 @@ export async function renderAdminRestorePage() {
         context.requested_route ?? ADMIN_PATH,
         await resolveConciergeAvailability(session),
         await resolveConciergeQueue(session),
+        await loadAdminDashboardData(),
       )
     }
 
