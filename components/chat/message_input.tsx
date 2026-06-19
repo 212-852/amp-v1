@@ -96,7 +96,7 @@ export default function ChatMessageInput({
         void send_message()
       }}
     >
-      <div className="mx-auto flex max-w-3xl items-end gap-2">
+      <div className="mx-auto flex w-full max-w-[430px] items-end gap-2">
         <textarea
           value={value}
           rows={1}

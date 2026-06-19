@@ -45,14 +45,21 @@ type HeaderMenuItem = {
   onClick?: () => void
 }
 
+type HeaderBreadcrumbItem = {
+  label: string
+  href?: string
+}
+
 export default function OpsHeader({
   session,
   page_label,
   concierge_available,
+  breadcrumb_items = [],
 }: {
   session?: HeaderSessionLike | null
   page_label: string
   concierge_available?: boolean
+  breadcrumb_items?: HeaderBreadcrumbItem[]
 }) {
   const enabled = concierge_available === true
   const safe_session = normalizeOpsHeaderDisplay(session)
@@ -383,6 +390,40 @@ export default function OpsHeader({
           </div>
         </div>
       </div>
+
+      {breadcrumb_items.length > 0 ? (
+        <nav
+          aria-label="Breadcrumb"
+          className="mx-auto mt-2 w-full max-w-[430px] text-[11px] font-medium text-neutral-400"
+        >
+          <ol className="flex min-w-0 items-center gap-1.5">
+            {breadcrumb_items.map((item, index) => {
+              const is_last = index === breadcrumb_items.length - 1
+
+              return (
+                <li
+                  key={`${item.label}-${index}`}
+                  className="flex min-w-0 items-center gap-1.5"
+                >
+                  {index > 0 ? <span aria-hidden="true">&gt;</span> : null}
+                  {item.href && !is_last ? (
+                    <Link
+                      href={item.href}
+                      className="shrink-0 transition hover:text-neutral-600"
+                    >
+                      {item.label}
+                    </Link>
+                  ) : (
+                    <span className="truncate text-neutral-500">
+                      {item.label}
+                    </span>
+                  )}
+                </li>
+              )
+            })}
+          </ol>
+        </nav>
+      ) : null}
 
       {profile_settings_open ? (
         <ProfileSettings

@@ -1,5 +1,4 @@
 import OpsHeader from "@/components/ops/header"
-import AdminBreadcrumb from "@/components/admin/breadcrumb"
 import { build_breadcrumb_output } from "@/core/breadcrumb/output"
 import { getConciergeAvailabilityState } from "@/core/chat/action"
 import { resolvePageLabel } from "@/core/ops/page_label"
@@ -36,9 +35,9 @@ export default async function AdminShell({
         session={header_session}
         page_label={page_label}
         concierge_available={concierge_available}
+        breadcrumb_items={breadcrumbs.items}
       />
-      <AdminBreadcrumb items={breadcrumbs.items} />
-      <main className="mx-auto flex h-dvh w-full max-w-[430px] flex-col gap-3 overflow-hidden px-5 pb-[calc(118px+env(safe-area-inset-bottom,0px))] pt-2">
+      <main className="mx-auto flex h-dvh w-full max-w-[430px] flex-col gap-3 overflow-hidden px-5 pb-[calc(118px+env(safe-area-inset-bottom,0px))] pt-[calc(112px+env(safe-area-inset-top,0px))]">
         {children}
       </main>
     </div>

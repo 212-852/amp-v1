@@ -480,16 +480,21 @@ export default function AdminConciergeQueue({
     <section
       className={
         variant === "preview"
-          ? "pt-[calc(86px+env(safe-area-inset-top,0px))]"
+          ? ""
           : "relative pb-9"
       }
     >
       {variant === "preview" ? (
         <div className="mb-2 px-2">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-[13px] font-semibold text-neutral-600">
-              {concierge_queue_content.pending_title[locale]}
-            </h2>
+            <div className="flex min-w-0 items-baseline gap-2">
+              <h2 className="shrink-0 text-[13px] font-semibold text-neutral-600">
+                {concierge_queue_content.pending_title[locale]}
+              </h2>
+              <p className="truncate text-[12px] font-medium text-neutral-400">
+                {concierge_queue_content.waiting[locale]} {items.length}
+              </p>
+            </div>
             <Link
               href="/admin/list"
               className="text-[12px] font-semibold text-neutral-500 transition hover:text-neutral-800 active:text-neutral-700"
@@ -497,9 +502,6 @@ export default function AdminConciergeQueue({
               {concierge_queue_content.view_all[locale]}
             </Link>
           </div>
-          <p className="mt-0.5 text-[12px] font-medium text-neutral-400">
-            {concierge_queue_content.waiting[locale]} {items.length}
-          </p>
         </div>
       ) : (
         <div className="mb-2 grid grid-cols-2 border-b border-neutral-200 text-[13px] font-semibold">

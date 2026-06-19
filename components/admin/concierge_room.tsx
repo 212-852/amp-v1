@@ -67,8 +67,8 @@ export default function AdminConciergeRoom({
   }, [state.room.room_uuid])
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col [--chat-message-bottom-padding:88px]">
-      <div className="flex shrink-0 items-center justify-between py-1">
+    <section className="flex min-h-0 flex-1 flex-col [--chat-message-bottom-padding:112px]">
+      <div className="sticky top-0 z-20 flex shrink-0 items-center justify-between bg-neutral-50 py-1">
         <button
           type="button"
           aria-label={content.back[locale]}
@@ -96,6 +96,7 @@ export default function AdminConciergeRoom({
           room_uuid={state.room.room_uuid}
           show_presence
           fill_height
+          scroll_button_placement="above_input"
         />
       </div>
 

@@ -10,11 +10,13 @@ import {
 type ChatScrollButtonProps = {
   container_ref: RefObject<HTMLElement | null>
   bottom_ref: RefObject<HTMLElement | null>
+  placement?: "panel" | "above_input"
 }
 
 export default function ChatScrollButton({
   container_ref,
   bottom_ref,
+  placement = "panel",
 }: Readonly<ChatScrollButtonProps>) {
   const [is_visible, set_is_visible] = useState(false)
 
@@ -54,16 +56,31 @@ export default function ChatScrollButton({
     return null
   }
 
-  return (
+  const button = (
     <button
       type="button"
       aria-label="Scroll to latest message"
       onClick={() => {
         bottom_ref.current?.scrollIntoView({ behavior: "smooth", block: "end" })
       }}
-      className="absolute right-3 top-3 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-white shadow-sm transition hover:bg-black/80 active:scale-95"
+      className={[
+        "inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-white shadow-sm transition hover:bg-black/80 active:scale-95",
+        placement === "panel" ? "absolute right-3 top-3 z-20" : "",
+      ].join(" ")}
     >
       <ArrowDown aria-hidden="true" className="h-4 w-4" />
     </button>
   )
+
+  if (placement === "above_input") {
+    return (
+      <div className="pointer-events-none fixed inset-x-0 bottom-[76px] z-30 px-4">
+        <div className="mx-auto flex w-full max-w-[430px] justify-end">
+          <div className="pointer-events-auto">{button}</div>
+        </div>
+      </div>
+    )
+  }
+
+  return button
 }

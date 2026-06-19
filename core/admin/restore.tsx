@@ -4,7 +4,6 @@ import AdminConciergeQueue from "@/components/admin/concierge_queue"
 import AdminDataSections from "@/components/admin/data_sections"
 import AdminFooter from "@/components/admin/footer"
 import AdminHeader from "@/components/admin/header"
-import AdminBreadcrumb from "@/components/admin/breadcrumb"
 import {
   getConciergeAvailabilityState,
 } from "@/core/chat/action"
@@ -179,11 +178,15 @@ function renderAdminUiShell(
         session={header_session}
         page_label={page_label}
         concierge_available={concierge_available}
+        breadcrumb_items={breadcrumbs.items}
       />
-      <AdminBreadcrumb items={breadcrumbs.items} />
-      <main className="mx-auto flex w-full max-w-[430px] flex-col gap-3 px-5 pb-[calc(118px+env(safe-area-inset-bottom,0px))] pt-2">
+      <main className="mx-auto flex w-full max-w-[430px] flex-col gap-3 px-5 pb-[calc(118px+env(safe-area-inset-bottom,0px))] pt-[calc(112px+env(safe-area-inset-top,0px))]">
         <AdminDataSections data={data} />
-        <AdminConciergeQueue queue={queue_items} variant="preview" />
+        <AdminConciergeQueue
+          queue={queue_items}
+          variant="preview"
+          seeded_from_server
+        />
       </main>
       <AdminFooter />
     </div>

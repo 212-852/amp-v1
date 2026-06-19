@@ -33,6 +33,7 @@ type ChatRoomPanelProps = {
   room_uuid?: string | null
   show_presence?: boolean
   fill_height?: boolean
+  scroll_button_placement?: "panel" | "above_input"
 }
 
 export default function ChatRoomPanel({
@@ -44,6 +45,7 @@ export default function ChatRoomPanel({
   room_uuid = null,
   show_presence = false,
   fill_height = false,
+  scroll_button_placement = "panel",
 }: Readonly<ChatRoomPanelProps>) {
   const [room, set_room] = useState(initial_room)
   const [messages, set_messages] = useState(initial_messages)
@@ -229,7 +231,11 @@ export default function ChatRoomPanel({
         fill_height ? "flex h-full min-h-0 flex-col" : "",
       ].join(" ")}
     >
-      <ChatScrollButton container_ref={scroll_ref} bottom_ref={bottom_ref} />
+      <ChatScrollButton
+        container_ref={scroll_ref}
+        bottom_ref={bottom_ref}
+        placement={scroll_button_placement}
+      />
       {show_presence && room.mode !== "concierge" ? (
         <div className="mb-3 shrink-0 rounded-md border border-neutral-200 bg-white px-3 py-2 text-[12px] font-medium text-neutral-600">
           {room.mode === "bot" ? content.bot_mode[locale] : room.mode}
