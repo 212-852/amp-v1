@@ -241,11 +241,18 @@ export async function proxy(request: NextRequest) {
   try {
     return await runProxy(request)
   } catch (error) {
+    console.error("proxy_route_resolution_failed", {
+      pathname: request.nextUrl.pathname,
+      search: request.nextUrl.search,
+      error_message: formatProxyError(error),
+      error_stack: formatProxyErrorStack(error),
+    })
+
     await sendAuthDebug("proxy_request_failed", {
       pathname: request.nextUrl.pathname,
       error_message: formatProxyError(error),
       error_stack: formatProxyErrorStack(error),
-    })
+    }).catch(() => null)
 
     const requestHeaders = new Headers(request.headers)
     requestHeaders.set("x-amp-pathname", request.nextUrl.pathname)
