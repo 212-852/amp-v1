@@ -1,7 +1,6 @@
 import type { NotifyDelivery, NotifyEventName } from "@/core/notify/rules"
 
 const DISCORD_API_BASE = "https://discord.com/api/v10"
-const PUBLIC_THREAD_TYPE = 11
 
 export type OdinDeliveryResult = {
   delivered: boolean
@@ -209,10 +208,15 @@ async function createThread(
   config: OdinConfig,
   input: {
     name: string
+    customer_name?: string | null
     room_uuid: string | null
     thread_status: "open" | "closed"
   },
 ) {
+  const thread_name = input.name.trim() || "Concierge"
+  const customer_name = input.customer_name?.trim() || thread_name
+  const room_uuid = input.room_uuid ?? "unknown"
+  const initial_message = `Concierge requested.\nroom: ${room_uuid}\ncustomer: ${customer_name}`
   const entered_payload = {
     event: "odin_thread_create_entered",
     room_uuid: input.room_uuid,
@@ -225,16 +229,32 @@ async function createThread(
   await logOdinServerDebug("odin_thread_create_entered", entered_payload)
 
   try {
+    const payload = {
+      name: thread_name,
+      auto_archive_duration: 1440,
+      message: {
+        content: initial_message,
+      },
+    }
+
+    const payload_ready = {
+      event: "odin_thread_create_payload_ready",
+      room_uuid: input.room_uuid,
+      thread_id: null,
+      thread_status: input.thread_status,
+      http_status: null,
+      error_message: null,
+      has_message: Boolean(payload.message.content.trim()),
+    }
+    console.log(payload_ready)
+    await logOdinServerDebug("odin_thread_create_payload_ready", payload_ready)
+
     const thread = await discordRequest<{ id: string }>(
       config,
       `/channels/${encodeURIComponent(config.channel_id)}/threads`,
       {
         method: "POST",
-        body: JSON.stringify({
-          name: input.name,
-          type: PUBLIC_THREAD_TYPE,
-          auto_archive_duration: 1440,
-        }),
+        body: JSON.stringify(payload),
       },
       {
         room_uuid: input.room_uuid,
@@ -387,16 +407,23 @@ async function resolveOpenThreadForRequest(
       await updateThreadArchived(config, existing_thread_id, false)
     }
 
-    return existing_thread_id
+    return {
+      thread_id: existing_thread_id,
+      created: false,
+    }
   }
 
   const thread = await createThread(config, {
     name: customer_name,
+    customer_name,
     room_uuid,
     thread_status: "closed",
   })
 
-  return thread.thread_id
+  return {
+    thread_id: thread.thread_id,
+    created: true,
+  }
 }
 
 async function resolveThreadForDelivery(
@@ -415,7 +442,8 @@ async function resolveThreadForDelivery(
     return existing_thread_id
   }
 
-  return resolveOpenThreadForRequest(config, payload)
+  const thread = await resolveOpenThreadForRequest(config, payload)
+  return thread.thread_id
 }
 
 export async function deliverOdinNotification(
@@ -476,6 +504,7 @@ export async function deliverOdinNotification(
     if (delivery.event === "odin_smoke_test") {
       const thread = await createThread(config, {
         name: `odin-smoke-${new Date().toISOString()}`,
+        customer_name: "Odin smoke test",
         room_uuid,
         thread_status: "open",
       })
@@ -489,13 +518,16 @@ export async function deliverOdinNotification(
     }
 
     if (delivery.event === "concierge_requested") {
-      const thread_id = await resolveOpenThreadForRequest(config, delivery.payload)
+      const thread = await resolveOpenThreadForRequest(config, delivery.payload)
+      const thread_id = thread.thread_id
 
-      await sendThreadMessage(
-        config,
-        thread_id,
-        buildConciergeRequestMessage(delivery.payload),
-      )
+      if (!thread.created) {
+        await sendThreadMessage(
+          config,
+          thread_id,
+          buildConciergeRequestMessage(delivery.payload),
+        )
+      }
 
       return { delivered: true, thread_id, thread_status: "open" }
     }
