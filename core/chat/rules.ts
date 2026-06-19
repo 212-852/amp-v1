@@ -8,6 +8,7 @@ import {
   type ChatMessagePayload,
   type ChatMessageRecord,
   type ChatMessageType,
+  type ChatParticipantRole,
   type ChatRoomMode,
   type ChatTranslations,
   type TranslationStatus,
@@ -46,6 +47,33 @@ export function readMessageMeta(
   }
 
   return meta
+}
+
+const ADMIN_PRESENCE_ROLES = new Set<ChatParticipantRole>(["admin", "concierge"])
+
+export function isAdminPresenceSystemMessage(message: ChatMessageRecord) {
+  if (message.type !== "system") {
+    return false
+  }
+
+  const meta = readMessageMeta(message.payload)
+
+  if (meta.presence_action) {
+    return ADMIN_PRESENCE_ROLES.has(meta.actor_role ?? "admin")
+  }
+
+  return (
+    message.body.endsWith(" joined the room") ||
+    message.body.endsWith(" left the room")
+  )
+}
+
+export function filterUserVisibleChatMessages(messages: ChatMessageRecord[]) {
+  return messages.filter((message) => !isAdminPresenceSystemMessage(message))
+}
+
+export function shouldSkipUserOutputDelivery(message: ChatMessageRecord) {
+  return isAdminPresenceSystemMessage(message)
 }
 
 export function readMessageSourceKind(

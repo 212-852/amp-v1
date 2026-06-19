@@ -15,6 +15,60 @@ type OdinConfig = {
   channel_id: string
 }
 
+let startup_validation_logged = false
+
+export function logOdinStartupValidation() {
+  if (startup_validation_logged) {
+    return
+  }
+
+  startup_validation_logged = true
+
+  const bot_token = process.env.ACTION_ODIN_BOT_TOKEN?.trim()
+  const channel_id = process.env.ACTION_ODIN_CHANNEL_ID?.trim()
+  const webhook_url = process.env.ACTION_ODIN_WEBHOOK_URL?.trim()
+  const guild_id = process.env.ACTION_ODIN_GUILD_ID?.trim()
+
+  if (!bot_token) {
+    console.warn("[notify] notify_skipped", {
+      reason: "ACTION_ODIN_BOT_TOKEN missing",
+    })
+  }
+
+  if (!channel_id) {
+    console.warn("[notify] notify_skipped", {
+      reason: "ACTION_ODIN_CHANNEL_ID missing",
+    })
+  }
+
+  if (!webhook_url) {
+    console.warn("[notify] odin_env_missing", {
+      env: "ACTION_ODIN_WEBHOOK_URL",
+    })
+  }
+
+  if (!guild_id) {
+    console.warn("[notify] odin_env_missing", {
+      env: "ACTION_ODIN_GUILD_ID",
+    })
+  }
+}
+
+export function resolveOdinSkipReason(): string | null {
+  const bot_token = process.env.ACTION_ODIN_BOT_TOKEN?.trim()
+  const channel_id = process.env.ACTION_ODIN_CHANNEL_ID?.trim()
+
+  if (!bot_token) {
+    return "ACTION_ODIN_BOT_TOKEN missing"
+  }
+
+  if (!channel_id) {
+    return "ACTION_ODIN_CHANNEL_ID missing"
+  }
+
+  return null
+}
+
 function resolveOdinConfig(): OdinConfig | null {
   const bot_token = process.env.ACTION_ODIN_BOT_TOKEN?.trim()
   const channel_id = process.env.ACTION_ODIN_CHANNEL_ID?.trim()
@@ -56,6 +110,11 @@ async function discordRequest<T>(
 
   if (!response.ok) {
     const body = await response.text().catch(() => "")
+    console.warn("[notify] odin_discord_api_error", {
+      status: response.status,
+      response_body: body,
+      path,
+    })
     throw new Error(
       `Odin Discord request failed: ${response.status} ${body || response.statusText}`,
     )
@@ -161,6 +220,23 @@ function buildAdminPresenceMessage(
   return ["[CONCIERGE]", "", `${admin_name} ${action}`].join("\n")
 }
 
+function buildAdminMessage(payload: Record<string, unknown>) {
+  const admin_name = readPayloadString(payload, "admin_name", "Admin")
+  const message_body = readPayloadString(payload, "message_body", "")
+  const room_uuid = readPayloadString(payload, "room_uuid")
+
+  return [
+    "[CONCIERGE MESSAGE]",
+    "",
+    "admin:",
+    admin_name,
+    "room:",
+    room_uuid,
+    "",
+    message_body,
+  ].join("\n")
+}
+
 async function resolveOpenThreadForRequest(
   config: OdinConfig,
   payload: Record<string, unknown>,
@@ -180,9 +256,34 @@ async function resolveOpenThreadForRequest(
   return createThread(config, customer_name)
 }
 
+async function resolveThreadForDelivery(
+  config: OdinConfig,
+  payload: Record<string, unknown>,
+) {
+  const existing_thread_id = readPayloadString(payload, "thread_id", "")
+
+  if (existing_thread_id) {
+    const thread_status = readPayloadString(payload, "thread_status", "open")
+
+    if (thread_status === "closed") {
+      await updateThreadArchived(config, existing_thread_id, false)
+    }
+
+    return existing_thread_id
+  }
+
+  return resolveOpenThreadForRequest(config, payload)
+}
+
 export async function deliverOdinNotification(
   delivery: NotifyDelivery,
 ): Promise<OdinDeliveryResult> {
+  const skip_reason = resolveOdinSkipReason()
+
+  if (skip_reason) {
+    return { delivered: false, reason: skip_reason }
+  }
+
   const config = resolveOdinConfig()
 
   if (!config) {
@@ -220,21 +321,22 @@ export async function deliverOdinNotification(
 
   if (
     delivery.event === "concierge_admin_entered" ||
-    delivery.event === "concierge_admin_left"
+    delivery.event === "concierge_admin_left" ||
+    delivery.event === "concierge_admin_message"
   ) {
-    const thread_id = readPayloadString(delivery.payload, "thread_id", "")
+    const thread_id = await resolveThreadForDelivery(config, delivery.payload)
+    const content =
+      delivery.event === "concierge_admin_message"
+        ? buildAdminMessage(delivery.payload)
+        : buildAdminPresenceMessage(delivery.event, delivery.payload)
 
-    if (!thread_id) {
-      return { delivered: false, reason: "thread_id_missing" }
-    }
+    await sendThreadMessage(config, thread_id, content)
 
-    await sendThreadMessage(
-      config,
+    return {
+      delivered: true,
       thread_id,
-      buildAdminPresenceMessage(delivery.event, delivery.payload),
-    )
-
-    return { delivered: true, thread_id }
+      thread_status: "open",
+    }
   }
 
   return { delivered: false, reason: "unsupported_event" }

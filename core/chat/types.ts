@@ -54,6 +54,8 @@ export type ChatMessageMeta = {
   translation_status?: TranslationStatus
   source_kind?: ChatMessageKind
   bot_key?: BotMessageKey
+  presence_action?: "enter" | "leave"
+  actor_role?: ChatParticipantRole
 }
 
 export type ChatMessagePayload = {

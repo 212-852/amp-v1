@@ -6,7 +6,7 @@ import {
   deliverDiscordNotification,
   notifyDiscord,
 } from "@/core/notify/discord"
-import { deliverOdinNotification } from "@/core/notify/odin"
+import { deliverOdinNotification, logOdinStartupValidation } from "@/core/notify/odin"
 import {
   resolveNotifyDelivery,
   type NotifyEventInput,
@@ -26,6 +26,8 @@ export type NotifyEventResult = {
   thread_id?: string | null
   thread_status?: "open" | "closed" | null
 }
+
+logOdinStartupValidation()
 
 async function logNotifyDebug(
   event: string,
@@ -62,6 +64,22 @@ export async function notifyEvent(input: NotifyEventInput) {
       payload: input.payload,
     })
     return { delivered: false, reason: "webhook_missing" } satisfies NotifyEventResult
+  }
+
+  if (delivery.channel === "odin") {
+    const { resolveOdinSkipReason } = await import("@/core/notify/odin")
+    const skip_reason = resolveOdinSkipReason()
+
+    if (skip_reason) {
+      await logNotifyDebug("notify_delivery_skipped", {
+        reason: skip_reason,
+        event: input.event,
+        request_id: input.request_id ?? null,
+        channel: "odin",
+        payload: input.payload,
+      })
+      return { delivered: false, reason: skip_reason } satisfies NotifyEventResult
+    }
   }
 
   if (input.request_id) {

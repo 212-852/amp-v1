@@ -20,6 +20,7 @@ import {
   resolveMessageDisplayLocale,
   resolveMessageOriginalLocale,
   resolveMessageTranslations,
+  shouldSkipUserOutputDelivery,
 } from "@/core/chat/rules"
 import { ensureRoomLocaleTranslation } from "@/core/chat/translate"
 import { getChatContentKeyCount } from "@/core/chat/content"
@@ -353,6 +354,15 @@ export async function deliverMessageBundle(input: {
   line_provider_user_id?: string | null
   line_reply_allowed?: boolean
 }) {
+  if (shouldSkipUserOutputDelivery(input.message)) {
+    await sendAuthDebug("chat_output_delivery_skipped", {
+      room_uuid: input.room.room_uuid,
+      message_uuid: input.message.message_uuid,
+      reason: "admin_presence_system",
+    })
+    return []
+  }
+
   const payload = input.message.payload
   const alt_text = resolveFlexAltText(input.message.body, input.room.locale)
 

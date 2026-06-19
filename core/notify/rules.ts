@@ -3,6 +3,7 @@ export type NotifyEventName =
   | "admin_page_unauthorized_access"
   | "concierge_admin_entered"
   | "concierge_admin_left"
+  | "concierge_admin_message"
   | "concierge_closed"
   | "concierge_requested"
   | "driver_page_unauthorized_access"
@@ -54,7 +55,8 @@ export function resolveNotifyDelivery(input: NotifyEventInput): NotifyDelivery {
     input.event === "concierge_requested" ||
     input.event === "concierge_closed" ||
     input.event === "concierge_admin_entered" ||
-    input.event === "concierge_admin_left"
+    input.event === "concierge_admin_left" ||
+    input.event === "concierge_admin_message"
   ) {
     return {
       channel: "odin",

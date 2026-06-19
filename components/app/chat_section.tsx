@@ -19,6 +19,8 @@ const content = {
   },
 }
 
+const FALLBACK_CREATED_AT = "1970-01-01T00:00:00.000Z"
+
 function ChatLoadingState() {
   const { locale } = useLocale()
 
@@ -53,7 +55,7 @@ function buildFallbackWelcome(locale: "ja" | "en" | "es"): ChatMessageRecord {
     payload: bundle.payload,
     source_channel: "web",
     external_id: null,
-    created_at: new Date().toISOString(),
+    created_at: FALLBACK_CREATED_AT,
   }
 }
 
@@ -100,7 +102,7 @@ export default function AppChatSection({
     return <ChatLoadingState />
   }
 
-  if (render_state === "ready_with_welcome" && chat_state.messages.length === 0) {
+  if (chat_state.messages.length === 0) {
     return <ChatWelcomeFallback viewer_display_name={viewer_display_name} />
   }
 

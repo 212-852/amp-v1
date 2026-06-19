@@ -6,6 +6,7 @@ export async function POST(request: Request) {
     const { context, session } = await resolveChatApiSession()
     const body = (await request.json().catch(() => ({}))) as {
       is_typing?: boolean
+      room_uuid?: string
     }
 
     const result = await handleChatTyping({
@@ -13,6 +14,10 @@ export async function POST(request: Request) {
       source_channel: context.source_channel,
       locale: context.locale,
       session,
+      room_uuid:
+        typeof body.room_uuid === "string" && body.room_uuid.trim()
+          ? body.room_uuid.trim()
+          : null,
     })
 
     return Response.json(result)

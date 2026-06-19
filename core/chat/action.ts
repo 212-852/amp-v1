@@ -214,14 +214,15 @@ async function syncConciergeOdinAdminPresence(input: {
   action: "enter" | "leave"
   admin_name: string
 }) {
-  if (input.room.mode !== "concierge" || !input.room.thread_id) {
+  if (input.room.mode !== "concierge") {
     return
   }
 
   try {
     const { notifyEvent } = await import("@/core/notify")
+    const customer_name = await resolveConciergeCustomerName(input.room.room_uuid)
 
-    await notifyEvent({
+    const result = await notifyEvent({
       event:
         input.action === "enter"
           ? "concierge_admin_entered"
@@ -229,15 +230,66 @@ async function syncConciergeOdinAdminPresence(input: {
       request_id: `${input.room.room_uuid}:concierge_admin_${input.action}:${Date.now()}`,
       payload: {
         admin_name: input.admin_name,
+        customer_name,
         room_uuid: input.room.room_uuid,
-        thread_id: input.room.thread_id,
-        thread_status: input.room.thread_status ?? "open",
+        thread_id: input.room.thread_id ?? null,
+        thread_status: input.room.thread_status ?? "closed",
       },
     })
+
+    if (result?.thread_id && result.thread_status === "open" && !input.room.thread_id) {
+      await updateRoomThreadState({
+        room_uuid: input.room.room_uuid,
+        thread_id: result.thread_id,
+        thread_status: "open",
+      })
+    }
   } catch (error) {
     console.warn("[concierge_odin] admin_presence_sync_failed", {
       room_uuid: input.room.room_uuid,
       action: input.action,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+async function syncConciergeOdinAdminMessage(input: {
+  room: Awaited<ReturnType<typeof bootstrapChatRoom>>["room"]
+  admin_name: string
+  message_body: string
+  message_uuid: string
+}) {
+  if (input.room.mode !== "concierge") {
+    return
+  }
+
+  try {
+    const { notifyEvent } = await import("@/core/notify")
+    const customer_name = await resolveConciergeCustomerName(input.room.room_uuid)
+
+    const result = await notifyEvent({
+      event: "concierge_admin_message",
+      request_id: `${input.room.room_uuid}:concierge_admin_message:${input.message_uuid}`,
+      payload: {
+        admin_name: input.admin_name,
+        customer_name,
+        message_body: input.message_body,
+        room_uuid: input.room.room_uuid,
+        thread_id: input.room.thread_id ?? null,
+        thread_status: input.room.thread_status ?? "closed",
+      },
+    })
+
+    if (result?.thread_id && result.thread_status === "open" && !input.room.thread_id) {
+      await updateRoomThreadState({
+        room_uuid: input.room.room_uuid,
+        thread_id: result.thread_id,
+        thread_status: "open",
+      })
+    }
+  } catch (error) {
+    console.warn("[concierge_odin] admin_message_sync_failed", {
+      room_uuid: input.room.room_uuid,
       error: error instanceof Error ? error.message : String(error),
     })
   }
@@ -367,9 +419,32 @@ export async function handleIncomingChatMessageArchive(
     options.apply_mode_command !== false
       ? resolve_room_mode_trigger(body)
       : null
-  const { room, participant } = await bootstrapChatRoom(context, input.session)
+  const can_use_explicit_room =
+    input.session.role === "admin" ||
+    input.session.role === "concierge" ||
+    input.session.role === "owner"
 
-  if (options.bootstrap_welcome !== false) {
+  if (input.room_uuid && !can_use_explicit_room) {
+    throw new Error("Room scoped chat requires admin access")
+  }
+
+  const explicit_room_state = input.room_uuid
+    ? await loadChatRoomStateByUuid(
+        input.room_uuid,
+        input.session,
+        input.source_channel,
+        input.locale ?? null,
+      )
+    : null
+
+  if (input.room_uuid && !explicit_room_state) {
+    throw new Error("Room was not found")
+  }
+
+  const { room, participant } =
+    explicit_room_state ?? (await bootstrapChatRoom(context, input.session))
+
+  if (options.bootstrap_welcome !== false && !explicit_room_state) {
     await ensureWelcomeMessageArchived({
       room,
       source_channel: input.source_channel,
@@ -424,7 +499,10 @@ export async function handleIncomingChatMessageArchive(
     room,
     participant,
     source_channel: input.source_channel,
-    source_kind: "user",
+    source_kind:
+      participant.role === "admin" || participant.role === "concierge"
+        ? "concierge"
+        : "user",
     body,
     original_locale: resolveChatLocale(input.locale, room.locale),
     session: input.session,
@@ -436,6 +514,18 @@ export async function handleIncomingChatMessageArchive(
     message_uuid: message.message_uuid,
     source_channel: input.source_channel,
   })
+
+  if (
+    (participant.role === "admin" || participant.role === "concierge") &&
+    room.mode === "concierge"
+  ) {
+    await syncConciergeOdinAdminMessage({
+      room,
+      admin_name: resolveParticipantDisplayName(input.session, participant.role),
+      message_body: body,
+      message_uuid: message.message_uuid,
+    })
+  }
 
   if (options.deliver !== false) {
     const should_deliver_incoming = !(
@@ -642,7 +732,23 @@ export async function handleQuickMenuRequested(input: {
 
 export async function handleChatTyping(input: ChatTypingInput) {
   const context = normalizeTypingInput(input)
-  const state = await findChatRoomState(context, input.session)
+  const can_use_explicit_room =
+    input.session.role === "admin" ||
+    input.session.role === "concierge" ||
+    input.session.role === "owner"
+
+  if (input.room_uuid && !can_use_explicit_room) {
+    throw new Error("Room scoped typing requires admin access")
+  }
+
+  const state = input.room_uuid
+    ? await loadChatRoomStateByUuid(
+        input.room_uuid,
+        input.session,
+        input.source_channel,
+        input.locale ?? null,
+      )
+    : await findChatRoomState(context, input.session)
 
   if (!state) {
     return {
@@ -733,13 +839,12 @@ export async function handleChatRoomPresence(input: ChatRoomPresenceInput) {
       body: resolvePresenceSystemMessage("enter", display_name, room.locale),
       original_locale: room.locale,
       session: input.session,
-    })
-
-    await deliverMessageBundle({
-      message,
-      room,
-      session: input.session,
-      source_channel: input.source_channel,
+      payload: {
+        meta: {
+          presence_action: "enter",
+          actor_role: participant.role,
+        },
+      },
     })
 
     return {
@@ -770,13 +875,12 @@ export async function handleChatRoomPresence(input: ChatRoomPresenceInput) {
     body: resolvePresenceSystemMessage("leave", display_name, room.locale),
     original_locale: room.locale,
     session: input.session,
-  })
-
-  await deliverMessageBundle({
-    message,
-    room,
-    session: input.session,
-    source_channel: input.source_channel,
+    payload: {
+      meta: {
+        presence_action: "leave",
+        actor_role: participant.role,
+      },
+    },
   })
 
   return {

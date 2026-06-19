@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import ChatMessageBubble from "@/components/chat/message_bubble"
+import ChatScrollButton from "@/components/chat/scroll"
 import { useRoomTyping } from "@/components/chat/use_room_typing"
-import { resolveTypingLabel } from "@/core/chat/rules"
+import { filterUserVisibleChatMessages, resolveTypingLabel } from "@/core/chat/rules"
+import { create_browser_supabase_client } from "@/src/lib/supabase/client"
 import { useLocale } from "@/src/components/locale/provider"
 import type {
   ChatMessageRecord,
@@ -20,6 +22,7 @@ type ChatRoomPanelProps = {
   initial_presence?: PresenceView[]
   participant_uuid: string
   viewer_display_name?: string | null
+  room_uuid?: string | null
   show_presence?: boolean
 }
 
@@ -29,6 +32,7 @@ export default function ChatRoomPanel({
   initial_presence = [],
   participant_uuid,
   viewer_display_name = null,
+  room_uuid = null,
   show_presence = false,
 }: Readonly<ChatRoomPanelProps>) {
   const [room, set_room] = useState(initial_room)
@@ -40,14 +44,17 @@ export default function ChatRoomPanel({
     participant_uuid,
   })
   const bottom_ref = useRef<HTMLDivElement>(null)
+  const scroll_ref = useRef<HTMLDivElement>(null)
 
   const refresh = useCallback(async () => {
     const params = new URLSearchParams()
 
     params.set("locale", locale)
 
-    if (show_presence) {
-      params.set("room_uuid", room.room_uuid)
+    const scoped_room_uuid = room_uuid ?? (show_presence ? room.room_uuid : null)
+
+    if (scoped_room_uuid) {
+      params.set("room_uuid", scoped_room_uuid)
     }
 
     const query = `?${params.toString()}`
@@ -73,17 +80,53 @@ export default function ChatRoomPanel({
     if (payload.presence) {
       set_presence(payload.presence)
     }
-  }, [locale, room.room_uuid, show_presence])
+  }, [locale, room.room_uuid, room_uuid, show_presence])
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      void refresh()
-    }, 4000)
+    let supabase: ReturnType<typeof create_browser_supabase_client>
+
+    try {
+      supabase = create_browser_supabase_client()
+    } catch {
+      return
+    }
+
+    const channel = supabase
+      .channel(`chat_room_panel:${room.room_uuid}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "messages",
+          filter: `room_uuid=eq.${room.room_uuid}`,
+        },
+        () => {
+          void refresh()
+        },
+      )
+
+    if (show_presence) {
+      channel.on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "presence",
+          filter: `room_uuid=eq.${room.room_uuid}`,
+        },
+        () => {
+          void refresh()
+        },
+      )
+    }
+
+    channel.subscribe()
 
     return () => {
-      window.clearInterval(timer)
+      void supabase.removeChannel(channel)
     }
-  }, [refresh])
+  }, [refresh, room.room_uuid, show_presence])
 
   useEffect(() => {
     bottom_ref.current?.scrollIntoView({ behavior: "smooth" })
@@ -129,8 +172,13 @@ export default function ChatRoomPanel({
         )
       : null
 
+  const visible_messages = show_presence
+    ? messages
+    : filterUserVisibleChatMessages(messages)
+
   return (
-    <section className="rounded-none bg-transparent p-0 shadow-none">
+    <section className="relative rounded-none bg-transparent p-0 shadow-none">
+      <ChatScrollButton container_ref={scroll_ref} bottom_ref={bottom_ref} />
       {show_presence && presence.length > 0 ? (
         <div className="mb-3 flex flex-wrap gap-2">
           {presence.map((entry) => (
@@ -143,8 +191,11 @@ export default function ChatRoomPanel({
           ))}
         </div>
       ) : null}
-      <div className="space-y-4 overflow-visible pt-0">
-        {messages.map((message) => (
+      <div
+        ref={scroll_ref}
+        className="max-h-[calc(100dvh-220px)] space-y-4 overflow-y-auto pt-0"
+      >
+        {visible_messages.map((message) => (
           <ChatMessageBubble
             key={message.message_uuid}
             message={message}

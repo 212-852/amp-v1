@@ -7,6 +7,7 @@ import {
 } from "@/core/chat/action"
 import { resolveChatApiSession } from "@/core/chat/api"
 import { resolveOutputLocaleDecision } from "@/core/chat/context"
+import { filterUserVisibleChatMessages } from "@/core/chat/rules"
 import { sendAuthDebug } from "@/core/debug"
 
 function logChatRoomGetNoRoom(data: Record<string, unknown>) {
@@ -92,11 +93,16 @@ export async function GET(request: Request) {
       })
     }
 
+    const is_admin_room_view =
+      session.role === "admin" && Boolean(room_uuid)
+
     return Response.json({
       room: state.room,
       participant: state.participant,
-      messages: state.messages,
-      presence: state.presence,
+      messages: is_admin_room_view
+        ? state.messages
+        : filterUserVisibleChatMessages(state.messages),
+      presence: is_admin_room_view ? state.presence : [],
       concierge_available: state.concierge_available,
     })
   } catch (error) {
@@ -116,6 +122,7 @@ export async function POST(request: Request) {
       message?: string
       trigger?: "quick_menu_requested" | "chat_opened"
       locale?: string
+      room_uuid?: string
     }
     const request_locale =
       typeof body.locale === "string" && body.locale.trim()
@@ -170,6 +177,10 @@ export async function POST(request: Request) {
       source_channel: context.source_channel,
       locale: request_locale,
       session,
+      room_uuid:
+        typeof body.room_uuid === "string" && body.room_uuid.trim()
+          ? body.room_uuid.trim()
+          : null,
     })
 
     return Response.json({ message })
