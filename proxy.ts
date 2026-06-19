@@ -150,6 +150,44 @@ async function runProxy(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
 
+  if (pathname === "/admin/concierge") {
+    const redirectUrl = request.nextUrl.clone()
+    redirectUrl.pathname = "/admin"
+    redirectUrl.search = ""
+    const response = NextResponse.redirect(redirectUrl, 308)
+    const cookieToSet = pendingCookie as PendingCookie | null
+
+    if (cookieToSet) {
+      response.cookies.set(
+        cookieToSet.name,
+        cookieToSet.value,
+        cookieToSet.options,
+      )
+    }
+
+    return response
+  }
+
+  const legacy_concierge_room = pathname.match(/^\/admin\/concierge\/([^/]+)$/)
+
+  if (legacy_concierge_room) {
+    const redirectUrl = request.nextUrl.clone()
+    redirectUrl.pathname = `/admin/list/${legacy_concierge_room[1]}`
+    redirectUrl.search = ""
+    const response = NextResponse.redirect(redirectUrl, 308)
+    const cookieToSet = pendingCookie as PendingCookie | null
+
+    if (cookieToSet) {
+      response.cookies.set(
+        cookieToSet.name,
+        cookieToSet.value,
+        cookieToSet.options,
+      )
+    }
+
+    return response
+  }
+
   if (pathname.startsWith("/admin") || pathname.startsWith("/driver")) {
     await emitGuardedAccessSecurityEvents(context, session, {
       request_id: requestId,
