@@ -183,7 +183,7 @@ function renderAdminUiShell(
       <AdminBreadcrumb items={breadcrumbs.items} />
       <main className="mx-auto flex w-full max-w-[430px] flex-col gap-3 px-5 pb-[calc(118px+env(safe-area-inset-bottom,0px))] pt-2">
         <AdminDataSections data={data} />
-        <AdminConciergeQueue queue={queue_items} variant="preview" />
+        <AdminConciergeQueue queue={queue_items} />
       </main>
       <AdminFooter />
     </div>

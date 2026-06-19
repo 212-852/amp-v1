@@ -9,7 +9,6 @@ import {
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 
-import ProfileSettings from "@/components/profile/settings"
 import { useToast } from "@/components/ui/use_toast"
 import { canToggleConciergeAvailability } from "@/core/chat/concierge_access"
 import {
@@ -17,7 +16,6 @@ import {
   type HeaderSessionLike,
 } from "@/core/ops/header_session"
 import { concierge_toggle_content } from "@/core/ops/concierge_toggle_content"
-import type { ProfileDisplayPayload } from "@/core/profile/output"
 import { useLocale } from "@/src/components/locale/provider"
 
 export type { HeaderSessionLike, OpsHeaderSession } from "@/core/ops/header_session"
@@ -59,16 +57,13 @@ export default function OpsHeader({
   const { locale } = useLocale()
   const { toast } = useToast()
   const is_logged_in = Boolean(safe_session.user_uuid)
-  const [saved_profile, set_saved_profile] =
-    useState<ProfileDisplayPayload | null>(null)
-  const displayName = saved_profile?.display_name ?? safe_session.display_name
+  const displayName = safe_session.display_name
   const roleLabel = is_logged_in ? safe_session.role : "Guest"
   const tierLabel = is_logged_in ? safe_session.tier : null
-  const avatar_image_url = saved_profile?.image_url ?? safe_session.image_url
+  const avatar_image_url = safe_session.image_url
   const menu_ref = useRef<HTMLDivElement>(null)
   const concierge_toggle_ref = useRef<HTMLButtonElement>(null)
   const [menu_open, set_menu_open] = useState(false)
-  const [profile_settings_open, set_profile_settings_open] = useState(false)
   const [is_logging_out, set_is_logging_out] = useState(false)
   const [concierge_available_state, set_concierge_available_state] = useState(
     enabled,
@@ -113,16 +108,6 @@ export default function OpsHeader({
 
   function toggle_menu() {
     set_menu_open((current) => !current)
-  }
-
-  function open_profile_settings() {
-    set_profile_settings_open(true)
-    close_menu()
-  }
-
-  function handle_profile_saved(profile: ProfileDisplayPayload) {
-    set_saved_profile(profile)
-
   }
 
   async function toggle_concierge_availability() {
@@ -221,8 +206,8 @@ export default function OpsHeader({
 
   const menu_items: HeaderMenuItem[] = [
     { key: "admin-home", label: "Admin Home", href: "/admin" },
-    { key: "chat", label: "Chat", href: "/admin/list" },
-    { key: "settings", label: "Settings", onClick: open_profile_settings },
+    { key: "chat", label: "Chat" },
+    { key: "settings", label: "Settings", href: "/admin/settings" },
   ]
 
   if (safe_session.can_logout) {
@@ -304,14 +289,13 @@ export default function OpsHeader({
             </span>
           </button>
 
-          <button
-            type="button"
+          <Link
+            href="/admin/settings"
             aria-label="Settings"
-            onClick={open_profile_settings}
             className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-900"
           >
             <Settings className="h-4 w-4" strokeWidth={1.8} />
-          </button>
+          </Link>
 
           <div ref={menu_ref} className="relative">
             <button
@@ -383,32 +367,6 @@ export default function OpsHeader({
           </div>
         </div>
       </div>
-
-      {profile_settings_open ? (
-        <ProfileSettings
-          open={profile_settings_open}
-        initial_profile={{
-          user_uuid: safe_session.user_uuid,
-          visitor_uuid: safe_session.visitor_uuid,
-          nickname: saved_profile?.nickname ?? null,
-          first_name: saved_profile?.first_name ?? null,
-          last_name: saved_profile?.last_name ?? null,
-          birth_date: saved_profile?.birth_date ?? null,
-          phone: saved_profile?.phone ?? null,
-          prefecture_code: saved_profile?.prefecture_code ?? null,
-          city_code: saved_profile?.city_code ?? null,
-          address: saved_profile?.address ?? null,
-          memo: saved_profile?.memo ?? null,
-          display_name: displayName,
-          image_url: avatar_image_url,
-          role: safe_session.role,
-          tier: safe_session.tier,
-          locale,
-        }}
-          onClose={() => set_profile_settings_open(false)}
-          onSaved={handle_profile_saved}
-        />
-      ) : null}
     </header>
   )
 }

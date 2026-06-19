@@ -9,7 +9,7 @@ export default async function AdminListPage() {
 
   return (
     <AdminOpsFrame pathname="/admin/list" session={session}>
-      <AdminConciergeQueue queue={queue} variant="tabs" seeded_from_server />
+      <AdminConciergeQueue queue={queue} />
     </AdminOpsFrame>
   )
 }
