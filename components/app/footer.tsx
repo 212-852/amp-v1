@@ -3,6 +3,7 @@
 import { Bot, Headphones, Menu, MessageCircle, PawPrint, RefreshCw, User } from "lucide-react"
 import Image from "next/image"
 import { useCallback, useEffect, useRef, useState } from "react"
+import type { RefObject } from "react"
 
 import ConciergeMemberModal from "@/components/app/concierge_member_modal"
 import { useOverlay, type OverlayType } from "@/components/overlay"
@@ -317,10 +318,12 @@ function MessageInputRow({
   locale,
   onSend,
   onTyping,
+  input_ref,
 }: Readonly<{
   locale: Locale
   onSend: (message: string) => Promise<void>
   onTyping: (is_typing: boolean) => void
+  input_ref?: RefObject<HTMLInputElement | null>
 }>) {
   const [draft, set_draft] = useState("")
   const [is_sending, set_is_sending] = useState(false)
@@ -351,6 +354,7 @@ function MessageInputRow({
             {content.message[locale]}
           </label>
           <input
+            ref={input_ref}
             id="app-message-input"
             type="text"
             value={draft}
@@ -442,19 +446,39 @@ export default function AppFooter({
   can_start_line_oauth: boolean
   initial_mode?: ChatSupportMode
 }>) {
-  const [footerMode, setFooterMode] = useState<FooterMode>("input")
+  const [footerMode, setFooterMode] = useState<FooterMode>(
+    initial_mode === "concierge" ? "input" : "normal",
+  )
   const [assistantMode, setAssistantMode] = useState<ChatSupportMode>(
     initial_mode === "concierge" ? "concierge" : "bot",
   )
   const [member_modal_open, set_member_modal_open] = useState(false)
   const typing_timer_ref = useRef<number | null>(null)
   const footer_ref = useRef<HTMLElement | null>(null)
+  const message_input_ref = useRef<HTMLInputElement | null>(null)
+  const pending_input_focus_ref = useRef(false)
   const { locale } = useLocale()
   const { openOverlay } = useOverlay()
   const { toast } = useToast()
   const isInputMode = footerMode === "input"
 
+  const settleChatInput = useCallback(() => {
+    pending_input_focus_ref.current = true
+    setFooterMode("input")
+    window.dispatchEvent(new CustomEvent("amp-chat-scroll-bottom"))
+  }, [])
+
+  const settleChatToggle = useCallback(() => {
+    pending_input_focus_ref.current = false
+    setFooterMode("normal")
+  }, [])
+
   function toggleFooterMode() {
+    if (assistantMode === "concierge") {
+      settleChatInput()
+      return
+    }
+
     setFooterMode((current) => (current === "normal" ? "input" : "normal"))
   }
 
@@ -475,13 +499,18 @@ export default function AppFooter({
 
     if (mode === "bot" || mode === "concierge") {
       setAssistantMode(mode)
+      if (mode === "concierge") {
+        settleChatInput()
+      } else {
+        settleChatToggle()
+      }
       window.dispatchEvent(
         new CustomEvent("amp-chat-mode-changed", {
           detail: { mode },
         }),
       )
     }
-  }, [locale])
+  }, [locale, settleChatInput, settleChatToggle])
 
   async function persistModeSwitch(mode: ChatSupportMode) {
     const response = await fetch("/api/chat/mode", {
@@ -496,9 +525,18 @@ export default function AppFooter({
       throw new Error("mode_change_failed")
     }
 
+    const payload = (await response.json().catch(() => null)) as {
+      room?: { mode?: ChatSupportMode } | null
+    } | null
+    const persisted_mode = payload?.room?.mode
+    const resolved_mode =
+      persisted_mode === "bot" || persisted_mode === "concierge"
+        ? persisted_mode
+        : mode
+
     window.dispatchEvent(
       new CustomEvent("amp-chat-mode-changed", {
-        detail: { mode },
+        detail: { mode: resolved_mode },
       }),
     )
   }
@@ -513,6 +551,11 @@ export default function AppFooter({
     if (result.outcome === "switch") {
       const previous_mode = assistantMode
       setAssistantMode(result.mode)
+      if (result.mode === "concierge") {
+        settleChatInput()
+      } else {
+        settleChatToggle()
+      }
       void persistModeSwitch(result.mode)
         .then(() => {
           const toast_output = buildModeChangeToast({
@@ -530,6 +573,11 @@ export default function AppFooter({
         })
         .catch(() => {
           setAssistantMode(previous_mode)
+          if (previous_mode === "concierge") {
+            settleChatInput()
+          } else {
+            settleChatToggle()
+          }
           window.dispatchEvent(
             new CustomEvent("amp-chat-mode-changed", {
               detail: { mode: previous_mode },
@@ -630,6 +678,11 @@ export default function AppFooter({
 
       if (detail?.mode === "bot" || detail?.mode === "concierge") {
         setAssistantMode(detail.mode)
+        if (detail.mode === "concierge") {
+          settleChatInput()
+        } else {
+          settleChatToggle()
+        }
       }
     }
 
@@ -642,7 +695,23 @@ export default function AppFooter({
       window.clearTimeout(timer)
       window.removeEventListener("amp-chat-mode-changed", handle_mode_change)
     }
-  }, [refreshCurrentMode])
+  }, [refreshCurrentMode, settleChatInput, settleChatToggle])
+
+  useEffect(() => {
+    if (!isInputMode || !pending_input_focus_ref.current) {
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      message_input_ref.current?.focus({ preventScroll: true })
+      window.dispatchEvent(new CustomEvent("amp-chat-scroll-bottom"))
+      pending_input_focus_ref.current = false
+    }, 320)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [isInputMode, assistantMode])
 
   return (
     <footer
@@ -702,6 +771,7 @@ export default function AppFooter({
                   locale={locale}
                   onSend={handleSendMessage}
                   onTyping={handleTyping}
+                  input_ref={message_input_ref}
                 />
                 <CopyrightText />
               </div>

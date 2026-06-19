@@ -84,13 +84,21 @@ export default function ChatRoomPanel({
       return
     }
 
+    if (payload.room.mode !== room.mode) {
+      window.dispatchEvent(
+        new CustomEvent("amp-chat-mode-changed", {
+          detail: { mode: payload.room.mode },
+        }),
+      )
+    }
+
     set_room(payload.room)
     set_messages(payload.messages)
 
     if (payload.presence) {
       set_presence(payload.presence)
     }
-  }, [locale, room.room_uuid, room_uuid, show_presence])
+  }, [locale, room.mode, room.room_uuid, room_uuid, show_presence])
 
   useEffect(() => {
     let supabase: ReturnType<typeof create_browser_supabase_client>
@@ -153,6 +161,18 @@ export default function ChatRoomPanel({
   useEffect(() => {
     bottom_ref.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages.length, typing.length])
+
+  useEffect(() => {
+    function handle_scroll_bottom() {
+      bottom_ref.current?.scrollIntoView({ behavior: "smooth" })
+    }
+
+    window.addEventListener("amp-chat-scroll-bottom", handle_scroll_bottom)
+
+    return () => {
+      window.removeEventListener("amp-chat-scroll-bottom", handle_scroll_bottom)
+    }
+  }, [])
 
   useEffect(() => {
     function handle_mode_change(event: Event) {
