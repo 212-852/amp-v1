@@ -96,7 +96,7 @@ function FooterCurve() {
   return (
     <svg
       aria-hidden="true"
-      className="pointer-events-none absolute inset-0 z-0 h-full w-full text-[#ead7c3]"
+      className="footer_wave pointer-events-none absolute inset-x-0 bottom-0 z-0 h-full w-full text-[#ead7c3]"
       preserveAspectRatio="none"
       viewBox="0 0 430 186"
     >
@@ -647,7 +647,7 @@ export default function AppFooter({
   return (
     <footer
       ref={footer_ref}
-      className="fixed inset-x-0 bottom-[-48px] z-50 pb-[env(safe-area-inset-bottom)]"
+      className="chat_input_footer fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom,0px)+18px)] z-50"
     >
       <div className={footer_shell_class}>
         <FooterCurve />

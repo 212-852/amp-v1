@@ -12,7 +12,7 @@ export default function AppHome({
 }>) {
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden px-4">
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain pt-4 pb-[calc(var(--chat-input-height,186px)+env(safe-area-inset-bottom,0px))]">
+      <div className="chat_messages min-h-0 flex-1 overflow-y-auto overscroll-y-contain pt-4 pb-[calc(var(--chat-input-height,120px)+env(safe-area-inset-bottom,0px))]">
         <AppChatSection
           chat_state={chat_state}
           viewer_display_name={viewer_display_name}
