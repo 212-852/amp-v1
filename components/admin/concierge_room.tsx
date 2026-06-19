@@ -67,8 +67,8 @@ export default function AdminConciergeRoom({
   }, [state.room.room_uuid])
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col [--chat-message-bottom-padding:112px]">
-      <div className="sticky top-0 z-20 flex shrink-0 items-center justify-between bg-neutral-50 py-1">
+    <div className="flex min-h-0 flex-1 flex-col [--chat-message-bottom-padding:calc(80px+env(safe-area-inset-bottom,0px))]">
+      <div className="flex shrink-0 items-center justify-between border-b border-neutral-200 bg-neutral-50 py-2">
         <button
           type="button"
           aria-label={content.back[locale]}
@@ -101,6 +101,6 @@ export default function AdminConciergeRoom({
       </div>
 
       <ChatMessageInput locale={locale} room_uuid={state.room.room_uuid} />
-    </section>
+    </div>
   )
 }

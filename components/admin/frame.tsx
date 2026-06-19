@@ -1,4 +1,3 @@
-import AdminBreadcrumb from "@/components/admin/breadcrumb"
 import OpsShell from "@/components/ops/shell"
 import { build_breadcrumb_output } from "@/core/breadcrumb/output"
 import {
@@ -25,12 +24,18 @@ export default function AdminOpsFrame({
     pathname,
     room_name: breadcrumb_room_name,
   })
+  const is_room_page = /^\/admin\/list\/[^/]+$/.test(pathname)
   const show_breadcrumb =
     pathname !== "/admin" && breadcrumbs.items.length > 0
 
   return (
-    <OpsShell pathname={pathname} session={header_session}>
-      {show_breadcrumb ? <AdminBreadcrumb items={breadcrumbs.items} /> : null}
+    <OpsShell
+      pathname={pathname}
+      session={header_session}
+      show_assistant={pathname === "/admin"}
+      breadcrumb_items={show_breadcrumb ? breadcrumbs.items : []}
+      layout={is_room_page ? "full_height" : "default"}
+    >
       {children}
     </OpsShell>
   )
