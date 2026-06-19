@@ -5,10 +5,7 @@ import { useEffect, useState } from "react"
 
 import { useToast } from "@/components/ui/use_toast"
 import type { ProfileDisplayPayload } from "@/core/profile/output"
-import {
-  get_city_options,
-  prefecture_options,
-} from "@/src/address/options"
+import type { AddressOptions } from "@/src/address/rules"
 import { useLocale } from "@/src/components/locale/provider"
 import type { Locale } from "@/src/lib/locale"
 
@@ -63,40 +60,10 @@ const content = {
     en: "Memo",
     es: "Memo",
   },
-  role: {
-    ja: "ロール",
-    en: "Role",
-    es: "Rol",
-  },
   language: {
     ja: "言語",
     en: "Language",
     es: "Idioma",
-  },
-  notifications: {
-    ja: "通知",
-    en: "Notifications",
-    es: "Notificaciones",
-  },
-  notification_all: {
-    ja: "すべて",
-    en: "All",
-    es: "Todas",
-  },
-  notification_mentions: {
-    ja: "メンションのみ",
-    en: "Mentions only",
-    es: "Solo menciones",
-  },
-  notification_none: {
-    ja: "なし",
-    en: "None",
-    es: "Ninguna",
-  },
-  concierge_availability: {
-    ja: "コンシェルジュ受付",
-    en: "Concierge availability",
-    es: "Disponibilidad de concierge",
   },
   save: {
     ja: "保存",
@@ -138,15 +105,11 @@ const content = {
 export default function ProfileSettings({
   open,
   initial_profile,
-  can_edit_concierge,
-  concierge_available,
   onClose,
   onSaved,
 }: Readonly<{
   open: boolean
   initial_profile: ProfileDisplayPayload
-  can_edit_concierge: boolean
-  concierge_available?: boolean
   onClose: () => void
   onSaved: (profile: ProfileDisplayPayload) => void
 }>) {
@@ -157,20 +120,24 @@ export default function ProfileSettings({
   const [last_name, set_last_name] = useState(initial_profile.last_name ?? "")
   const [birth_date, set_birth_date] = useState(initial_profile.birth_date ?? "")
   const [phone, set_phone] = useState(initial_profile.phone ?? "")
-  const [prefecture, set_prefecture] = useState(initial_profile.prefecture ?? "")
-  const [city, set_city] = useState(initial_profile.city ?? "")
+  const [prefecture_code, set_prefecture_code] = useState(
+    initial_profile.prefecture_code ?? "",
+  )
+  const [city_code, set_city_code] = useState(initial_profile.city_code ?? "")
   const [address, set_address] = useState(initial_profile.address ?? "")
   const [memo, set_memo] = useState(initial_profile.memo ?? "")
   const [selected_locale, set_selected_locale] = useState<Locale>(
     initial_profile.locale,
   )
-  const [availability, set_availability] = useState(
-    concierge_available === true,
-  )
   const [is_saving, set_is_saving] = useState(false)
-  const city_options = get_city_options(prefecture)
-  const selected_city = city_options.some((option) => option.code === city)
-    ? city
+  const [address_options, set_address_options] = useState<AddressOptions>({
+    prefectures: [],
+    cities_by_prefecture: {},
+  })
+  const city_options =
+    address_options.cities_by_prefecture[prefecture_code] ?? []
+  const selected_city_code = city_options.some((option) => option.code === city_code)
+    ? city_code
     : ""
 
   useEffect(() => {
@@ -187,15 +154,26 @@ export default function ProfileSettings({
     let cancelled = false
 
     async function load_profile() {
-      const response = await fetch("/api/profile", { cache: "no-store" }).catch(
-        () => null,
-      )
+      const [profile_response, address_response] = await Promise.all([
+        fetch("/api/profile", { cache: "no-store" }).catch(() => null),
+        fetch("/api/address", { cache: "no-store" }).catch(() => null),
+      ])
 
-      if (!response?.ok || cancelled) {
+      if (address_response?.ok && !cancelled) {
+        const address_payload = (await address_response.json().catch(() => null)) as
+          | AddressOptions
+          | null
+
+        if (address_payload?.prefectures && address_payload.cities_by_prefecture) {
+          set_address_options(address_payload)
+        }
+      }
+
+      if (!profile_response?.ok || cancelled) {
         return
       }
 
-      const payload = (await response.json().catch(() => null)) as {
+      const payload = (await profile_response.json().catch(() => null)) as {
         ok?: boolean
         profile?: ProfileDisplayPayload
       } | null
@@ -209,8 +187,8 @@ export default function ProfileSettings({
       set_last_name(payload.profile.last_name ?? "")
       set_birth_date(payload.profile.birth_date ?? "")
       set_phone(payload.profile.phone ?? "")
-      set_prefecture(payload.profile.prefecture ?? "")
-      set_city(payload.profile.city ?? "")
+      set_prefecture_code(payload.profile.prefecture_code ?? "")
+      set_city_code(payload.profile.city_code ?? "")
       set_address(payload.profile.address ?? "")
       set_memo(payload.profile.memo ?? "")
       set_selected_locale(payload.profile.locale)
@@ -251,14 +229,11 @@ export default function ProfileSettings({
           last_name,
           birth_date,
           phone,
-          prefecture,
-          city: selected_city,
+          prefecture_code,
+          city_code: selected_city_code,
           address,
           memo,
           locale: selected_locale,
-          ...(can_edit_concierge
-            ? { concierge_available: availability }
-            : {}),
         }),
       })
       const payload = (await response.json().catch(() => null)) as {
@@ -278,14 +253,6 @@ export default function ProfileSettings({
           detail: payload.profile,
         }),
       )
-
-      if (typeof payload.profile.concierge_available === "boolean") {
-        window.dispatchEvent(
-          new CustomEvent("amp-concierge-availability-changed", {
-            detail: { enabled: payload.profile.concierge_available },
-          }),
-        )
-      }
 
       toast({
         tone: "success",
@@ -387,15 +354,15 @@ export default function ProfileSettings({
                 {content.prefecture[locale]}
               </span>
               <select
-                value={prefecture}
+                value={prefecture_code}
                 onChange={(event) => {
-                  set_prefecture(event.target.value)
-                  set_city("")
+                  set_prefecture_code(event.target.value)
+                  set_city_code("")
                 }}
                 className="h-10 w-full rounded-md border border-neutral-200 px-3 text-[14px] text-neutral-950 outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100"
               >
                 <option value="">{content.select_prefecture[locale]}</option>
-                {prefecture_options.map((option) => (
+                {address_options.prefectures.map((option) => (
                   <option key={option.code} value={option.code}>
                     {option.label}
                   </option>
@@ -407,9 +374,9 @@ export default function ProfileSettings({
                 {content.city[locale]}
               </span>
               <select
-                value={selected_city}
-                disabled={!prefecture}
-                onChange={(event) => set_city(event.target.value)}
+                value={selected_city_code}
+                disabled={!prefecture_code}
+                onChange={(event) => set_city_code(event.target.value)}
                 className="h-10 w-full rounded-md border border-neutral-200 px-3 text-[14px] text-neutral-950 outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100 disabled:bg-neutral-50 disabled:text-neutral-400"
               >
                 <option value="">{content.select_city[locale]}</option>
@@ -445,17 +412,6 @@ export default function ProfileSettings({
             />
           </label>
 
-          <div>
-            <span className="mb-1 block text-[12px] font-semibold text-neutral-600">
-              {content.role[locale]}
-            </span>
-            <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-[14px] text-neutral-700">
-              {initial_profile.tier
-                ? `${initial_profile.role} / ${initial_profile.tier}`
-                : initial_profile.role}
-            </div>
-          </div>
-
           <label className="block">
             <span className="mb-1 block text-[12px] font-semibold text-neutral-600">
               {content.language[locale]}
@@ -471,19 +427,6 @@ export default function ProfileSettings({
             </select>
           </label>
 
-          {can_edit_concierge ? (
-            <label className="flex items-center justify-between rounded-md border border-neutral-200 px-3 py-2">
-              <span className="text-[13px] font-semibold text-neutral-700">
-                {content.concierge_availability[locale]}
-              </span>
-              <input
-                type="checkbox"
-                checked={availability}
-                onChange={(event) => set_availability(event.target.checked)}
-                className="h-4 w-4 accent-neutral-900"
-              />
-            </label>
-          ) : null}
         </div>
 
         <div className="mt-5 flex justify-end gap-2">

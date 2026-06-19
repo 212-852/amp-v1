@@ -19,7 +19,11 @@ export async function GET(request: Request) {
         requested_mode === "bot" || requested_mode === "concierge"
           ? requested_mode
           : "concierge"
-      const queue = await get_concierge_queue(session, { limit: 50, mode })
+      const queue = await get_concierge_queue(session, {
+        limit: 50,
+        mode,
+        strict_concierge: url.searchParams.get("strict") === "1",
+      })
 
       return NextResponse.json({
         ok: true,

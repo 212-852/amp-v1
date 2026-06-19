@@ -1,5 +1,5 @@
 import type { Session } from "@/core/auth/types"
-import { is_city_code, is_prefecture_code } from "@/src/address/options"
+import { normalize_address_code } from "@/src/address/rules"
 
 export type ProfileLocale = "ja" | "en" | "es"
 
@@ -9,12 +9,11 @@ export type ProfileSettingsPatch = {
   last_name?: string | null
   birth_date?: string | null
   phone?: string | null
-  prefecture?: string | null
-  city?: string | null
+  prefecture_code?: string | null
+  city_code?: string | null
   address?: string | null
   memo?: string | null
   locale?: ProfileLocale
-  concierge_available?: boolean
 }
 
 export function normalize_profile_locale(value: unknown): ProfileLocale | null {
@@ -63,18 +62,11 @@ export function resolve_profile_display_name(input: {
   return nickname || full_name || users_name || fallback || "Guest"
 }
 
-export function can_edit_concierge_availability(session: Session) {
-  return (
-    session.role === "admin" ||
-    session.role === "concierge" ||
-    session.role === "owner"
-  )
-}
-
 export function validate_profile_patch(
   body: Record<string, unknown>,
-  session: Session,
+  _session: Session,
 ): ProfileSettingsPatch {
+  void _session
   const patch: ProfileSettingsPatch = {}
 
   for (const key of [
@@ -94,30 +86,19 @@ export function validate_profile_patch(
     }
   }
 
-  if ("prefecture" in body) {
-    const prefecture = normalize_optional_string(body.prefecture)
+  if ("prefecture_code" in body) {
+    const prefecture_code = normalize_address_code(body.prefecture_code)
 
-    if (prefecture !== undefined) {
-      if (prefecture && !is_prefecture_code(prefecture)) {
-        throw new Error("Invalid prefecture")
-      }
-
-      patch.prefecture = prefecture
+    if (prefecture_code !== undefined) {
+      patch.prefecture_code = prefecture_code
     }
   }
 
-  if ("city" in body) {
-    const city = normalize_optional_string(body.city)
+  if ("city_code" in body) {
+    const city_code = normalize_address_code(body.city_code)
 
-    if (city !== undefined) {
-      const prefecture =
-        "prefecture" in patch ? patch.prefecture : normalize_optional_string(body.prefecture)
-
-      if (city && !is_city_code(prefecture, city)) {
-        throw new Error("Invalid city")
-      }
-
-      patch.city = city
+    if (city_code !== undefined) {
+      patch.city_code = city_code
     }
   }
 
@@ -138,18 +119,5 @@ export function validate_profile_patch(
 
     patch.locale = locale
   }
-
-  if ("concierge_available" in body) {
-    if (!can_edit_concierge_availability(session)) {
-      throw new Error("Concierge availability is not editable")
-    }
-
-    if (typeof body.concierge_available !== "boolean") {
-      throw new Error("Invalid concierge availability")
-    }
-
-    patch.concierge_available = body.concierge_available
-  }
-
   return patch
 }

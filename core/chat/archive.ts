@@ -1431,7 +1431,7 @@ export async function loadUserProfiles(user_uuids: string[]) {
 
 export async function loadConciergeQueueRooms(
   limit = 10,
-  condition: { mode: "concierge" | "bot" } = { mode: "concierge" },
+  condition: { mode: "concierge" | "bot"; strict_concierge?: boolean } = { mode: "concierge" },
 ) {
   const config = getRestConfig()
 
@@ -1445,8 +1445,10 @@ export async function loadConciergeQueueRooms(
       "rooms",
       [
         condition.mode === "concierge"
-          ? "or=(mode.eq.concierge,thread_status.eq.open)"
-          : "or=(mode.eq.bot,thread_status.neq.open,thread_status.is.null)",
+          ? condition.strict_concierge
+            ? "mode=eq.concierge"
+            : "or=(mode.eq.concierge,thread_status.eq.open)"
+          : "mode=eq.bot&or=(thread_status.neq.open,thread_status.is.null)",
         "select=*",
         "order=updated_at.desc",
         `limit=${limit}`,

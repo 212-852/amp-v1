@@ -123,9 +123,6 @@ export default function OpsHeader({
   function handle_profile_saved(profile: ProfileDisplayPayload) {
     set_saved_profile(profile)
 
-    if (typeof profile.concierge_available === "boolean") {
-      set_concierge_available_state(profile.concierge_available)
-    }
   }
 
   async function toggle_concierge_availability() {
@@ -398,8 +395,8 @@ export default function OpsHeader({
           last_name: saved_profile?.last_name ?? null,
           birth_date: saved_profile?.birth_date ?? null,
           phone: saved_profile?.phone ?? null,
-          prefecture: saved_profile?.prefecture ?? null,
-          city: saved_profile?.city ?? null,
+          prefecture_code: saved_profile?.prefecture_code ?? null,
+          city_code: saved_profile?.city_code ?? null,
           address: saved_profile?.address ?? null,
           memo: saved_profile?.memo ?? null,
           display_name: displayName,
@@ -407,10 +404,7 @@ export default function OpsHeader({
           role: safe_session.role,
           tier: safe_session.tier,
           locale,
-          concierge_available: concierge_available_state,
         }}
-          can_edit_concierge={can_toggle_concierge}
-          concierge_available={concierge_available_state}
           onClose={() => set_profile_settings_open(false)}
           onSaved={handle_profile_saved}
         />

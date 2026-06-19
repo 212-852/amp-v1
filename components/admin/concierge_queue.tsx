@@ -174,11 +174,16 @@ function ConciergeQueueCard({
 
 async function fetchConciergeQueueFromApi(
   mode: QueueMode,
+  strict_concierge: boolean,
 ): Promise<ConciergeQueueResult | null> {
   const params = new URLSearchParams({
     list: "1",
     mode,
   })
+
+  if (strict_concierge) {
+    params.set("strict", "1")
+  }
   const response = await fetch(`/api/chat/concierge?${params.toString()}`, {
     cache: "no-store",
   })
@@ -243,7 +248,10 @@ export default function AdminConciergeQueue({
     }
 
     try {
-      const result = await fetchConciergeQueueFromApi(mode)
+      const result = await fetchConciergeQueueFromApi(
+        mode,
+        variant === "preview",
+      )
 
       if (refresh_request_ref.current !== request_id) {
         return
@@ -377,6 +385,7 @@ export default function AdminConciergeQueue({
             new_record &&
             room_matches_concierge_queue_condition(new_record, {
               mode: active_tab,
+              strict_concierge: variant === "preview",
             })
 
           if (!matches_active_tab && room_uuid) {
@@ -453,6 +462,7 @@ export default function AdminConciergeQueue({
     queue?.items,
     queue?.rooms,
     queue?.should_show_list,
+    variant,
   ])
 
   if (!is_available) {
@@ -522,7 +532,7 @@ export default function AdminConciergeQueue({
       {variant === "preview" ? (
         <div className="absolute bottom-0 right-2">
           <Link
-            href="/admin/concierge"
+            href="/admin/concierge/list"
             className="text-[13px] font-semibold text-neutral-900 transition hover:text-neutral-600 active:text-neutral-500"
           >
             {concierge_queue_content.view_all[locale]}

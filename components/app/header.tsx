@@ -330,8 +330,8 @@ export default function AppHeader({ auth }: { auth: AppHeaderAuth }) {
             last_name: saved_profile?.last_name ?? null,
             birth_date: saved_profile?.birth_date ?? null,
             phone: saved_profile?.phone ?? null,
-            prefecture: saved_profile?.prefecture ?? null,
-            city: saved_profile?.city ?? null,
+            prefecture_code: saved_profile?.prefecture_code ?? null,
+            city_code: saved_profile?.city_code ?? null,
             address: saved_profile?.address ?? null,
             memo: saved_profile?.memo ?? null,
             display_name: user_name,
@@ -340,7 +340,6 @@ export default function AppHeader({ auth }: { auth: AppHeaderAuth }) {
             tier: auth.tier,
             locale,
           }}
-          can_edit_concierge={false}
           onClose={() => set_settings_open(false)}
           onSaved={set_saved_profile}
         />

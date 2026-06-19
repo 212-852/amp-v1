@@ -12,8 +12,8 @@ export type ProfileDisplayPayload = {
   last_name: string | null
   birth_date: string | null
   phone: string | null
-  prefecture: string | null
-  city: string | null
+  prefecture_code: string | null
+  city_code: string | null
   address: string | null
   memo: string | null
   display_name: string
@@ -21,7 +21,6 @@ export type ProfileDisplayPayload = {
   role: string
   tier: string | null
   locale: ProfileLocale
-  concierge_available?: boolean
 }
 
 export function build_profile_output(input: {
@@ -31,14 +30,13 @@ export function build_profile_output(input: {
   last_name?: string | null
   birth_date?: string | null
   phone?: string | null
-  prefecture?: string | null
-  city?: string | null
+  prefecture_code?: string | null
+  city_code?: string | null
   address?: string | null
   memo?: string | null
   users_name?: string | null
   image_url?: string | null
   locale?: ProfileLocale | null
-  concierge_available?: boolean
 }): ProfileDisplayPayload {
   const display_name = resolve_profile_display_name({
     nickname: input.nickname,
@@ -56,8 +54,8 @@ export function build_profile_output(input: {
     last_name: input.last_name ?? null,
     birth_date: input.birth_date ?? null,
     phone: input.phone ?? null,
-    prefecture: input.prefecture ?? null,
-    city: input.city ?? null,
+    prefecture_code: input.prefecture_code ?? null,
+    city_code: input.city_code ?? null,
     address: input.address ?? null,
     memo: input.memo ?? null,
     display_name,
@@ -65,6 +63,5 @@ export function build_profile_output(input: {
     role: input.session.role,
     tier: input.session.tier ?? null,
     locale: input.locale ?? "ja",
-    concierge_available: input.concierge_available,
   }
 }

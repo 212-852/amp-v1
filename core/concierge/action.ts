@@ -21,7 +21,7 @@ export type ConciergeQueueResult = {
 
 export async function get_concierge_queue(
   session: Session,
-  options?: { limit?: number; mode?: "concierge" | "bot" },
+  options?: { limit?: number; mode?: "concierge" | "bot"; strict_concierge?: boolean },
 ): Promise<ConciergeQueueResult> {
   const context = normalize_concierge_queue_context(session, options)
 
@@ -37,6 +37,7 @@ export async function get_concierge_queue(
   })
   const room_condition = resolve_concierge_queue_room_condition(
     options?.mode ?? "concierge",
+    { strict_concierge: context.strict_concierge },
   )
 
   if (!should_show_list) {
@@ -52,6 +53,7 @@ export async function get_concierge_queue(
   const rooms = await loadConciergeQueue(context.session, {
     limit: context.limit,
     mode: room_condition.mode,
+    strict_concierge: room_condition.strict_concierge,
   })
 
   return {

@@ -1,4 +1,3 @@
-import { setConciergeAvailability } from "@/core/chat/archive"
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
 import { normalize_profile_context } from "@/core/profile/context"
 import { build_profile_output } from "@/core/profile/output"
@@ -7,6 +6,7 @@ import type {
   ProfileSettingsPatch,
 } from "@/core/profile/rules"
 import type { Session } from "@/core/auth/types"
+import { assert_valid_address_selection } from "@/src/address/action"
 
 type ProfileRow = {
   profile_uuid?: string | null
@@ -17,8 +17,8 @@ type ProfileRow = {
   last_name?: string | null
   birth_date?: string | null
   phone?: string | null
-  prefecture?: string | null
-  city?: string | null
+  prefecture_code?: string | null
+  city_code?: string | null
   address?: string | null
   memo?: string | null
   locale?: ProfileLocale | null
@@ -36,8 +36,8 @@ function patch_has_profile_fields(patch: ProfileSettingsPatch) {
     "last_name" in patch ||
     "birth_date" in patch ||
     "phone" in patch ||
-    "prefecture" in patch ||
-    "city" in patch ||
+    "prefecture_code" in patch ||
+    "city_code" in patch ||
     "address" in patch ||
     "memo" in patch ||
     "locale" in patch
@@ -53,8 +53,8 @@ function build_profile_db_patch(patch: ProfileSettingsPatch) {
     "last_name",
     "birth_date",
     "phone",
-    "prefecture",
-    "city",
+    "prefecture_code",
+    "city_code",
     "address",
     "memo",
   ] as const) {
@@ -134,7 +134,7 @@ async function load_profile_row(session: Session) {
       "profiles",
       [
         identity_filter,
-        "select=profile_uuid,user_uuid,visitor_uuid,nickname,first_name,last_name,birth_date,phone,prefecture,city,address,memo,locale",
+        "select=profile_uuid,user_uuid,visitor_uuid,nickname,first_name,last_name,birth_date,phone,prefecture_code,city_code,address,memo,locale",
         "limit=1",
       ].join("&"),
     ),
@@ -178,7 +178,7 @@ async function upsert_profile_row(input: {
     restUrl(
       config,
       "profiles",
-      `on_conflict=${conflict_target}&select=profile_uuid,user_uuid,visitor_uuid,nickname,first_name,last_name,birth_date,phone,prefecture,city,address,memo,locale`,
+      `on_conflict=${conflict_target}&select=profile_uuid,user_uuid,visitor_uuid,nickname,first_name,last_name,birth_date,phone,prefecture_code,city_code,address,memo,locale`,
     ),
     {
       method: "POST",
@@ -216,8 +216,8 @@ export async function get_profile_settings(session: Session) {
     last_name: row?.last_name ?? null,
     birth_date: row?.birth_date ?? null,
     phone: row?.phone ?? null,
-    prefecture: row?.prefecture ?? null,
-    city: row?.city ?? null,
+    prefecture_code: row?.prefecture_code ?? null,
+    city_code: row?.city_code ?? null,
     address: row?.address ?? null,
     memo: row?.memo ?? null,
     users_name,
@@ -230,6 +230,10 @@ export async function save_profile_settings(input: {
   body: unknown
 }) {
   const context = normalize_profile_context(input)
+  await assert_valid_address_selection({
+    prefecture_code: context.patch.prefecture_code,
+    city_code: context.patch.city_code,
+  })
   const [row, users_name] = await Promise.all([
     upsert_profile_row({
       user_uuid: context.user_uuid,
@@ -239,15 +243,6 @@ export async function save_profile_settings(input: {
     load_user_name(context.user_uuid),
   ])
   const fallback_row = row ?? (await load_profile_row(input.session))
-  let concierge_available: boolean | undefined
-
-  if (typeof context.patch.concierge_available === "boolean") {
-    await setConciergeAvailability({
-      available: context.patch.concierge_available,
-      updated_by: context.user_uuid,
-    })
-    concierge_available = context.patch.concierge_available
-  }
 
   return build_profile_output({
     session: input.session,
@@ -265,16 +260,17 @@ export async function save_profile_settings(input: {
       ("birth_date" in context.patch ? context.patch.birth_date : null),
     phone:
       fallback_row?.phone ?? ("phone" in context.patch ? context.patch.phone : null),
-    prefecture:
-      fallback_row?.prefecture ??
-      ("prefecture" in context.patch ? context.patch.prefecture : null),
-    city: fallback_row?.city ?? ("city" in context.patch ? context.patch.city : null),
+    prefecture_code:
+      fallback_row?.prefecture_code ??
+      ("prefecture_code" in context.patch ? context.patch.prefecture_code : null),
+    city_code:
+      fallback_row?.city_code ??
+      ("city_code" in context.patch ? context.patch.city_code : null),
     address:
       fallback_row?.address ??
       ("address" in context.patch ? context.patch.address : null),
     memo: fallback_row?.memo ?? ("memo" in context.patch ? context.patch.memo : null),
     users_name,
     locale: fallback_row?.locale ?? context.patch.locale ?? null,
-    concierge_available,
   })
 }

@@ -60,7 +60,7 @@ export function buildConciergeQueueItem(input: {
 
 export async function loadConciergeQueue(
   session: Session,
-  options?: { limit?: number; mode?: "concierge" | "bot" },
+  options?: { limit?: number; mode?: "concierge" | "bot"; strict_concierge?: boolean },
 ) {
   if (!canToggleConciergeAvailability(session)) {
     throw new Error("Concierge queue access denied")
@@ -69,6 +69,7 @@ export async function loadConciergeQueue(
   const limit = options?.limit ?? 10
   const rooms = await loadConciergeQueueRooms(limit, {
     mode: options?.mode ?? "concierge",
+    strict_concierge: options?.strict_concierge === true,
   })
 
   if (rooms.length === 0) {

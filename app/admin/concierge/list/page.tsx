@@ -5,18 +5,14 @@ import { get_concierge_queue } from "@/core/concierge/action"
 import { resolveAuthContext } from "@/core/auth/context"
 import { resolveSession } from "@/core/auth/session"
 
-export default async function AdminConciergePage() {
+export default async function AdminConciergeListPage() {
   const context = await resolveAuthContext()
   const session = await resolveSession(context)
   const availability = await getConciergeAvailabilityState(session).catch(() => ({
     enabled: false,
   }))
   const queue = availability.enabled
-    ? await get_concierge_queue(session, {
-        limit: 5,
-        mode: "concierge",
-        strict_concierge: true,
-      }).catch(() => ({
+    ? await get_concierge_queue(session, { limit: 50, mode: "concierge" }).catch(() => ({
         availability_enabled: false,
         should_show_list: false,
         room_condition: { mode: "concierge" as const },
@@ -32,8 +28,8 @@ export default async function AdminConciergePage() {
       }
 
   return (
-    <AdminShell session={session} pathname="/admin/concierge">
-      <AdminConciergeQueue queue={queue} variant="preview" />
+    <AdminShell session={session} pathname="/admin/concierge/list">
+      <AdminConciergeQueue queue={queue} variant="tabs" />
     </AdminShell>
   )
 }

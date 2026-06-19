@@ -324,9 +324,9 @@ CHAT ROOM ABSOLUTE RULE
 ADDRESS SELECTION RULE
 #########################
 
-- Prefecture and city must always be selected from the shared address source.
-- Do not hardcode prefecture/city lists in UI.
-- Do not create duplicate address option files.
-- Do not allow free text for prefecture/city.
+- Prefecture and city must always come from the centralized address core.
 - Source tables are prefectures and cities.
-- Shared file is src/address/options.ts.
+- UI must not hardcode prefecture or city lists.
+- UI must not create its own address arrays.
+- Profile forms must use prefecture_code and city_code.
+- Free text is allowed only for address line, not prefecture or city.

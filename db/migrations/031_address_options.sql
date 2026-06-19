@@ -123,11 +123,15 @@ set prefecture_code = excluded.prefecture_code,
     sort_order = excluded.sort_order;
 
 alter table public.profiles
+add column if not exists prefecture_code text null,
+add column if not exists city_code text null;
+
+alter table public.profiles
 drop constraint if exists profiles_prefecture_fkey;
 
 alter table public.profiles
 add constraint profiles_prefecture_fkey
-foreign key (prefecture)
+foreign key (prefecture_code)
 references public.prefectures(prefecture_code)
 not valid;
 
@@ -136,7 +140,7 @@ drop constraint if exists profiles_city_fkey;
 
 alter table public.profiles
 add constraint profiles_city_fkey
-foreign key (city)
+foreign key (city_code)
 references public.cities(city_code)
 not valid;
 
