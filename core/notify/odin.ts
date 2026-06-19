@@ -13,32 +13,78 @@ export type OdinDeliveryResult = {
 type OdinConfig = {
   bot_token: string
   channel_id: string
+  guild_id: string
+  webhook_url: string
 }
 
-export function resolveOdinSkipReason(): string | null {
-  const bot_token = process.env.ACTION_ODIN_BOT_TOKEN?.trim()
-  const channel_id = process.env.ACTION_ODIN_CHANNEL_ID?.trim()
+let odin_env_ready_logged = false
+
+function resolveOdinEnv() {
+  const bot_token = process.env.ACTION_ODIN_BOT_TOKEN?.trim() ?? ""
+  const channel_id = process.env.ACTION_ODIN_CHANNEL_ID?.trim() ?? ""
+  const guild_id = process.env.ACTION_ODIN_GUILD_ID?.trim() ?? ""
+  const webhook_url = process.env.ACTION_ODIN_WEBHOOK_URL?.trim() ?? ""
+  const missing: string[] = []
 
   if (!bot_token) {
-    return "ACTION_ODIN_BOT_TOKEN missing"
+    missing.push("ACTION_ODIN_BOT_TOKEN")
   }
 
   if (!channel_id) {
-    return "ACTION_ODIN_CHANNEL_ID missing"
+    missing.push("ACTION_ODIN_CHANNEL_ID")
+  }
+
+  if (!guild_id) {
+    missing.push("ACTION_ODIN_GUILD_ID")
+  }
+
+  if (!webhook_url) {
+    missing.push("ACTION_ODIN_WEBHOOK_URL")
+  }
+
+  return {
+    bot_token,
+    channel_id,
+    guild_id,
+    webhook_url,
+    missing,
+  }
+}
+
+export function resolveOdinSkipReason(): string | null {
+  const env = resolveOdinEnv()
+
+  if (env.missing.length > 0) {
+    return `${env.missing.join(", ")} missing`
   }
 
   return null
 }
 
 function resolveOdinConfig(): OdinConfig | null {
-  const bot_token = process.env.ACTION_ODIN_BOT_TOKEN?.trim()
-  const channel_id = process.env.ACTION_ODIN_CHANNEL_ID?.trim()
+  const env = resolveOdinEnv()
 
-  if (!bot_token || !channel_id) {
+  if (env.missing.length > 0) {
     return null
   }
 
-  return { bot_token, channel_id }
+  if (!odin_env_ready_logged) {
+    odin_env_ready_logged = true
+    console.log({
+      event: "odin_env_ready",
+      has_bot_token: true,
+      has_channel_id: true,
+      has_guild_id: true,
+      has_webhook_url: true,
+    })
+  }
+
+  return {
+    bot_token: env.bot_token,
+    channel_id: env.channel_id,
+    guild_id: env.guild_id,
+    webhook_url: env.webhook_url,
+  }
 }
 
 function readPayloadString(
@@ -53,6 +99,12 @@ function readPayloadString(
   }
 
   return value.trim()
+}
+
+function readRoomUuid(payload: Record<string, unknown>) {
+  return typeof payload.room_uuid === "string" && payload.room_uuid.trim()
+    ? payload.room_uuid.trim()
+    : null
 }
 
 async function logOdinServerDebug(
@@ -113,7 +165,7 @@ async function discordRequest<T>(
 
   if (!response.ok) {
     const body = await response.text().catch(() => "")
-    await logOdinServerDebug("notify_delivery_failed", {
+    await logOdinServerDebug("odin_notify_failed", {
       channel: "odin",
       status: response.status,
       response_body: body,
@@ -282,76 +334,118 @@ async function resolveThreadForDelivery(
 export async function deliverOdinNotification(
   delivery: NotifyDelivery,
 ): Promise<OdinDeliveryResult> {
+  const room_uuid = readRoomUuid(delivery.payload)
+
   console.log({
     event: "odin_notify_entered",
     notify_event: delivery.event,
-    room_uuid:
-      typeof delivery.payload.room_uuid === "string"
-        ? delivery.payload.room_uuid
-        : null,
+    room_uuid,
     has_thread_id: typeof delivery.payload.thread_id === "string",
   })
 
   const skip_reason = resolveOdinSkipReason()
 
   if (skip_reason) {
+    console.warn({
+      event: "odin_notify_failed",
+      notify_event: delivery.event,
+      room_uuid,
+      reason: skip_reason,
+    })
     return { delivered: false, reason: skip_reason }
   }
 
   const config = resolveOdinConfig()
 
   if (!config) {
+    console.warn({
+      event: "odin_notify_failed",
+      notify_event: delivery.event,
+      room_uuid,
+      reason: "odin_config_missing",
+    })
     return { delivered: false, reason: "odin_config_missing" }
   }
 
-  if (delivery.event === "concierge_requested") {
-    const thread_id = await resolveOpenThreadForRequest(config, delivery.payload)
+  try {
+    if (delivery.event === "concierge_requested") {
+      const thread_id = await resolveOpenThreadForRequest(config, delivery.payload)
 
-    await sendThreadMessage(
-      config,
-      thread_id,
-      buildConciergeRequestMessage(delivery.payload),
-    )
+      await sendThreadMessage(
+        config,
+        thread_id,
+        buildConciergeRequestMessage(delivery.payload),
+      )
 
-    return { delivered: true, thread_id, thread_status: "open" }
-  }
-
-  if (delivery.event === "concierge_closed") {
-    const thread_id = readPayloadString(delivery.payload, "thread_id", "")
-
-    if (!thread_id) {
-      return { delivered: false, reason: "thread_id_missing" }
+      return { delivered: true, thread_id, thread_status: "open" }
     }
 
-    await sendThreadMessage(
-      config,
-      thread_id,
-      buildConciergeClosedMessage(delivery.payload),
-    )
-    await updateThreadArchived(config, thread_id, true)
+    if (delivery.event === "concierge_closed") {
+      const thread_id = readPayloadString(delivery.payload, "thread_id", "")
 
-    return { delivered: true, thread_id, thread_status: "closed" }
-  }
+      if (!thread_id) {
+        console.warn({
+          event: "odin_notify_failed",
+          notify_event: delivery.event,
+          room_uuid,
+          reason: "thread_id_missing",
+        })
+        return { delivered: false, reason: "thread_id_missing" }
+      }
 
-  if (
-    delivery.event === "concierge_admin_entered" ||
-    delivery.event === "concierge_admin_left" ||
-    delivery.event === "concierge_admin_message"
-  ) {
-    const thread_id = await resolveThreadForDelivery(config, delivery.payload)
-    const content =
+      await sendThreadMessage(
+        config,
+        thread_id,
+        buildConciergeClosedMessage(delivery.payload),
+      )
+      await updateThreadArchived(config, thread_id, true)
+
+      return { delivered: true, thread_id, thread_status: "closed" }
+    }
+
+    if (
+      delivery.event === "concierge_admin_entered" ||
+      delivery.event === "concierge_admin_left" ||
       delivery.event === "concierge_admin_message"
-        ? buildAdminMessage(delivery.payload)
-        : buildAdminPresenceMessage(delivery.event, delivery.payload)
+    ) {
+      const thread_id = await resolveThreadForDelivery(config, delivery.payload)
+      const content =
+        delivery.event === "concierge_admin_message"
+          ? buildAdminMessage(delivery.payload)
+          : buildAdminPresenceMessage(delivery.event, delivery.payload)
 
-    await sendThreadMessage(config, thread_id, content)
+      await sendThreadMessage(config, thread_id, content)
 
-    return {
-      delivered: true,
-      thread_id,
-      thread_status: "open",
+      return {
+        delivered: true,
+        thread_id,
+        thread_status: "open",
+      }
     }
-  }
 
-  return { delivered: false, reason: "unsupported_event" }
+    console.warn({
+      event: "odin_notify_failed",
+      notify_event: delivery.event,
+      room_uuid,
+      reason: "unsupported_event",
+    })
+    return { delivered: false, reason: "unsupported_event" }
+  } catch (error) {
+    const error_message = error instanceof Error ? error.message : String(error)
+
+    console.warn({
+      event: "odin_notify_failed",
+      notify_event: delivery.event,
+      room_uuid,
+      error_message,
+    })
+
+    await logOdinServerDebug("odin_notify_failed", {
+      notify_event: delivery.event,
+      room_uuid,
+      error_message,
+    })
+
+    throw error
+  }
 }
