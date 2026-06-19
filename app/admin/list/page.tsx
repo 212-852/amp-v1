@@ -1,35 +1,15 @@
 import AdminConciergeQueue from "@/components/admin/concierge_queue"
 import AdminShell from "@/components/admin/shell"
 import { requireAdminAccess } from "@/core/admin/guard"
-import { getConciergeAvailabilityState } from "@/core/chat/action"
-import { get_concierge_queue } from "@/core/concierge/action"
+import { resolveAdminListQueue } from "@/core/admin/queue"
 
 export default async function AdminListPage() {
   const { session } = await requireAdminAccess()
-  const availability = await getConciergeAvailabilityState(session).catch(() => ({
-    enabled: false,
-  }))
-  const queue = availability.enabled
-    ? await get_concierge_queue(session, { limit: 50, mode: "concierge" }).catch(
-        () => ({
-          availability_enabled: false,
-          should_show_list: false,
-          room_condition: { mode: "concierge" as const },
-          rooms: [],
-          items: [],
-        }),
-      )
-    : {
-        availability_enabled: false,
-        should_show_list: false,
-        room_condition: { mode: "concierge" as const },
-        rooms: [],
-        items: [],
-      }
+  const queue = await resolveAdminListQueue(session)
 
   return (
     <AdminShell session={session} pathname="/admin/list">
-      <AdminConciergeQueue queue={queue} variant="tabs" />
+      <AdminConciergeQueue queue={queue} variant="tabs" seeded_from_server />
     </AdminShell>
   )
 }

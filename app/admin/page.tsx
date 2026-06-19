@@ -1,33 +1,8 @@
-import AdminBreadcrumb from "@/components/admin/breadcrumb"
-import AdminDashboard from "@/components/admin/dashboard"
-import AdminFooter from "@/components/admin/footer"
-import AdminHeader from "@/components/admin/header"
+import AdminHome from "@/components/admin/home"
 import { requireAdminAccess } from "@/core/admin/guard"
-import { build_breadcrumb_output } from "@/core/breadcrumb/output"
-import { getConciergeAvailabilityState } from "@/core/chat/action"
-import { normalizeOpsHeaderDisplay } from "@/core/ops/header_session"
-import { resolvePageLabel } from "@/core/ops/page_label"
 
 export default async function AdminPage() {
   const { session } = await requireAdminAccess()
-  const header_session = normalizeOpsHeaderDisplay(session)
-  const breadcrumbs = build_breadcrumb_output({ pathname: "/admin" })
-  const concierge_available = await getConciergeAvailabilityState(session)
-    .then((state) => state.enabled)
-    .catch(() => false)
 
-  return (
-    <>
-      <AdminHeader
-        session={header_session}
-        page_label={resolvePageLabel("/admin")}
-        concierge_available={concierge_available}
-      />
-      <AdminBreadcrumb items={breadcrumbs.items} />
-      <main className="mx-auto flex w-full max-w-[430px] flex-col gap-3 px-5 pb-[calc(118px+env(safe-area-inset-bottom,0px))] pt-2">
-        <AdminDashboard session={session} />
-      </main>
-      <AdminFooter />
-    </>
-  )
+  return <AdminHome session={session} />
 }

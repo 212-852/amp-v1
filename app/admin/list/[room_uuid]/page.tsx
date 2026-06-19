@@ -3,7 +3,7 @@ import { notFound } from "next/navigation"
 import AdminConciergeRoom from "@/components/admin/concierge_room"
 import AdminShell from "@/components/admin/shell"
 import { resolveAuthContext } from "@/core/auth/context"
-import { resolveSession } from "@/core/auth/session"
+import { requireAdminAccess } from "@/core/admin/guard"
 import { resolveAdminChatRoom } from "@/core/chat/action"
 import { loadRoomParticipants, loadUserProfiles } from "@/core/chat/archive"
 import { resolve_customer_participant } from "@/core/concierge/message"
@@ -32,8 +32,8 @@ export default async function AdminConciergeRoomPage({
   params: Promise<{ room_uuid: string }>
 }>) {
   const { room_uuid } = await params
+  const { session } = await requireAdminAccess()
   const context = await resolveAuthContext()
-  const session = await resolveSession(context)
   const state = await resolveAdminChatRoom(room_uuid, session, {
     source_channel: context.source_channel,
     locale: context.locale,

@@ -213,9 +213,11 @@ async function fetchConciergeQueueFromApi(
 export default function AdminConciergeQueue({
   queue,
   variant = "tabs",
+  seeded_from_server = false,
 }: Readonly<{
   queue?: ConciergeQueueResult
   variant?: "preview" | "tabs"
+  seeded_from_server?: boolean
 }>) {
   const { locale } = useLocale()
   const [is_available, set_is_available] = useState(
@@ -345,11 +347,15 @@ export default function AdminConciergeQueue({
       (queue?.should_show_list ? (queue.rooms ?? queue.items ?? []).length : 0) >
       0
 
-    initial_timer = window.setTimeout(() => {
-      if (!cancelled) {
-        void load_queue({ silent: has_initial_items })
-      }
-    }, 0)
+    const skip_initial_fetch = seeded_from_server
+
+    if (!skip_initial_fetch) {
+      initial_timer = window.setTimeout(() => {
+        if (!cancelled) {
+          void load_queue({ silent: has_initial_items })
+        }
+      }, 0)
+    }
 
     let supabase: ReturnType<typeof create_browser_supabase_client>
 
@@ -462,6 +468,7 @@ export default function AdminConciergeQueue({
     queue?.items,
     queue?.rooms,
     queue?.should_show_list,
+    seeded_from_server,
     variant,
   ])
 
