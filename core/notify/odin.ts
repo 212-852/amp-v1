@@ -244,6 +244,14 @@ async function createThread(
       http_status: thread.http_status,
       error_message: null,
     })
+    console.log({
+      event: "odin_thread_created",
+      room_uuid: input.room_uuid,
+      thread_id: thread.data.id,
+      thread_status: "open",
+      http_status: thread.http_status,
+      error_message: null,
+    })
 
     return thread.data.id
   } catch (error) {

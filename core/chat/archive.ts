@@ -658,6 +658,14 @@ export async function updateRoomThreadState(input: {
       http_status: response.status,
       error_message: error.message ?? "unknown",
     })
+    console.warn({
+      event: "room_thread_save_failed",
+      room_uuid: input.room_uuid,
+      thread_id: input.thread_id ?? null,
+      thread_status: input.thread_status,
+      http_status: response.status,
+      error_message: error.message ?? "unknown",
+    })
     throw new Error(
       `Failed to update room thread state: ${error.message ?? "unknown"}`,
     )
@@ -668,6 +676,14 @@ export async function updateRoomThreadState(input: {
 
   console.log({
     event: "odin_room_update_response",
+    room_uuid: input.room_uuid,
+    thread_id: room?.thread_id ?? input.thread_id ?? null,
+    thread_status: room?.thread_status ?? input.thread_status,
+    http_status: response.status,
+    error_message: null,
+  })
+  console.log({
+    event: "room_thread_saved",
     room_uuid: input.room_uuid,
     thread_id: room?.thread_id ?? input.thread_id ?? null,
     thread_status: room?.thread_status ?? input.thread_status,

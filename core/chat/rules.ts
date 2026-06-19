@@ -276,6 +276,46 @@ export function resolve_room_mode_trigger(text: string): "bot" | "concierge" | n
 
 export const resolve_room_mode_command = resolve_room_mode_trigger
 
+export function resolve_concierge_thread_rule(input: {
+  room_uuid: string
+  thread_id?: string | null
+  thread_status?: "open" | "closed" | string | null
+}) {
+  const thread_id = input.thread_id?.trim() || null
+  const thread_status = input.thread_status === "open" ? "open" : "closed"
+
+  if (!thread_id) {
+    return {
+      room_uuid: input.room_uuid,
+      thread_id: null,
+      thread_status,
+      requires_thread: true,
+      should_notify: true,
+      reason: "thread_id_missing",
+    } as const
+  }
+
+  if (thread_status === "closed") {
+    return {
+      room_uuid: input.room_uuid,
+      thread_id,
+      thread_status,
+      requires_thread: false,
+      should_notify: true,
+      reason: "thread_closed",
+    } as const
+  }
+
+  return {
+    room_uuid: input.room_uuid,
+    thread_id,
+    thread_status,
+    requires_thread: false,
+    should_notify: true,
+    reason: "thread_open",
+  } as const
+}
+
 export function resolveRoomModeCommandReply(
   mode: ChatRoomMode,
   locale: ChatLocale,

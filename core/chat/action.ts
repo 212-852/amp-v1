@@ -54,6 +54,7 @@ import type {
 import {
   assertMessageBody,
   assertRoomMode,
+  resolve_concierge_thread_rule,
   resolve_room_mode_trigger,
   resolveRoomModeCommandReply,
 } from "@/core/chat/rules"
@@ -131,10 +132,6 @@ async function syncConciergeOdinModeChange(input: {
   previous_room: Awaited<ReturnType<typeof bootstrapChatRoom>>["room"]
   updated_room: Awaited<ReturnType<typeof bootstrapChatRoom>>["room"]
 }) {
-  if (input.previous_room.mode === input.updated_room.mode) {
-    return
-  }
-
   if (
     input.updated_room.mode !== "concierge" &&
     !(input.previous_room.mode === "concierge" && input.updated_room.mode === "bot")
@@ -149,30 +146,63 @@ async function syncConciergeOdinModeChange(input: {
     )
 
     if (input.updated_room.mode === "concierge") {
+      const current_room =
+        (await findRoomByUuid(input.updated_room.room_uuid)) ?? input.updated_room
+      const thread_rule = resolve_concierge_thread_rule({
+        room_uuid: current_room.room_uuid,
+        thread_id: current_room.thread_id,
+        thread_status: current_room.thread_status,
+      })
+
+      console.log({
+        event: "concierge_mode_requested",
+        room_uuid: current_room.room_uuid,
+        thread_id: thread_rule.thread_id,
+        thread_status: thread_rule.thread_status,
+        reason: thread_rule.reason,
+      })
+
+      console.log({
+        event: thread_rule.requires_thread
+          ? "odin_thread_required"
+          : "odin_thread_reused",
+        room_uuid: current_room.room_uuid,
+        thread_id: thread_rule.thread_id,
+        thread_status: thread_rule.thread_status,
+        reason: thread_rule.reason,
+      })
+
       const result = await notifyEvent({
         event: "concierge_requested",
-        request_id: `${input.updated_room.room_uuid}:concierge_requested:${Date.now()}`,
+        request_id: `${current_room.room_uuid}:concierge_requested:${Date.now()}`,
         payload: {
           customer_name,
-          room_uuid: input.updated_room.room_uuid,
-          thread_id: input.previous_room.thread_id ?? input.updated_room.thread_id ?? null,
-          thread_status:
-            input.previous_room.thread_status ??
-            input.updated_room.thread_status ??
-            "closed",
+          room_uuid: current_room.room_uuid,
+          thread_id: thread_rule.thread_id,
+          thread_status: thread_rule.thread_status,
         },
       })
 
-      if (result?.thread_id) {
+      const resolved_thread_id = result?.thread_id ?? thread_rule.thread_id
+
+      if (resolved_thread_id) {
         await updateRoomThreadState({
-          room_uuid: input.updated_room.room_uuid,
-          thread_id: result.thread_id,
+          room_uuid: current_room.room_uuid,
+          thread_id: resolved_thread_id,
           thread_status: "open",
         })
       } else {
         console.warn({
           event: "odin_room_update_failed",
-          room_uuid: input.updated_room.room_uuid,
+          room_uuid: current_room.room_uuid,
+          thread_id: null,
+          thread_status: "open",
+          http_status: null,
+          error_message: result?.reason ?? "thread_id_missing",
+        })
+        console.warn({
+          event: "room_thread_save_failed",
+          room_uuid: current_room.room_uuid,
           thread_id: null,
           thread_status: "open",
           http_status: null,
