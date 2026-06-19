@@ -46,12 +46,15 @@ async function cacheRootAppShell() {
   }
 }
 
+function isUsableDocumentResponse(response) {
+  return response.ok && response.type !== "opaqueredirect"
+}
+
 function isCacheableResponse(response) {
   return (
-    response.ok &&
-    response.status < 300 &&
+    isUsableDocumentResponse(response) &&
     response.redirected !== true &&
-    response.type !== "opaqueredirect"
+    response.status < 300
   )
 }
 
@@ -118,13 +121,13 @@ self.addEventListener("fetch", (event) => {
             credentials: "include",
           })
 
-          if (isCacheableResponse(response)) {
+          if (isUsableDocumentResponse(response)) {
             const pathname = new URL(request.url).pathname
 
-            if (pathname === APP_SHELL_URL) {
+            if (isCacheableResponse(response) && pathname === APP_SHELL_URL) {
               const cache = await caches.open(CACHE_NAME)
               await cache.put(APP_SHELL_URL, response.clone())
-            } else {
+            } else if (pathname !== APP_SHELL_URL) {
               event.waitUntil(cacheRootAppShell())
             }
 
