@@ -155,8 +155,18 @@ export default function ProfileSettings({
 
     async function load_profile() {
       const [profile_response, address_response] = await Promise.all([
-        fetch("/api/profile", { cache: "no-store" }).catch(() => null),
-        fetch("/api/address", { cache: "no-store" }).catch(() => null),
+        fetch("/api/profile", { cache: "no-store" }).catch((error) => {
+          console.error("profile_load_failed", {
+            error_message: error instanceof Error ? error.message : String(error),
+          })
+          return null
+        }),
+        fetch("/api/address", { cache: "no-store" }).catch((error) => {
+          console.error("address_options_load_failed", {
+            error_message: error instanceof Error ? error.message : String(error),
+          })
+          return null
+        }),
       ])
 
       if (address_response?.ok && !cancelled) {
@@ -166,7 +176,24 @@ export default function ProfileSettings({
 
         if (address_payload?.prefectures && address_payload.cities_by_prefecture) {
           set_address_options(address_payload)
+
+          if (address_payload.prefectures.length === 0) {
+            console.error("address_options_load_failed", {
+              error_message: "No prefecture options returned",
+            })
+          }
+        } else {
+          console.error("address_options_load_failed", {
+            error_message: "Invalid address options response",
+          })
         }
+      } else if (!cancelled) {
+        console.error("address_options_load_failed", {
+          status: address_response?.status ?? null,
+          error_message: address_response
+            ? "Address options request failed"
+            : "Address options request was not sent",
+        })
       }
 
       if (!profile_response?.ok || cancelled) {
@@ -218,39 +245,57 @@ export default function ProfileSettings({
     set_is_saving(true)
 
     try {
+      const payload = {
+        nickname,
+        first_name,
+        last_name,
+        birth_date,
+        phone,
+        prefecture: prefecture_code,
+        city: selected_city_code,
+        address,
+        memo,
+        locale: selected_locale,
+      }
+
+      console.debug("profile_save_payload", {
+        fields: Object.keys(payload),
+        has_prefecture: Boolean(payload.prefecture),
+        has_city: Boolean(payload.city),
+        locale: payload.locale,
+      })
+
       const response = await fetch("/api/profile", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          nickname,
-          first_name,
-          last_name,
-          birth_date,
-          phone,
-          prefecture_code,
-          city_code: selected_city_code,
-          address,
-          memo,
-          locale: selected_locale,
-        }),
+        body: JSON.stringify(payload),
       })
-      const payload = (await response.json().catch(() => null)) as {
+      const response_payload = (await response.json().catch(() => null)) as {
         ok?: boolean
         profile?: ProfileDisplayPayload
         error?: string
       } | null
 
-      if (!response.ok || payload?.ok !== true || !payload.profile) {
-        throw new Error(payload?.error ?? "profile_save_failed")
+      if (
+        !response.ok ||
+        response_payload?.ok !== true ||
+        !response_payload.profile
+      ) {
+        throw new Error(response_payload?.error ?? "profile_save_failed")
       }
 
-      set_locale(payload.profile.locale)
-      onSaved(payload.profile)
+      console.debug("profile_save_success", {
+        display_name: response_payload.profile.display_name,
+        locale: response_payload.profile.locale,
+      })
+
+      set_locale(response_payload.profile.locale)
+      onSaved(response_payload.profile)
       window.dispatchEvent(
         new CustomEvent("amp-profile-updated", {
-          detail: payload.profile,
+          detail: response_payload.profile,
         }),
       )
 
@@ -261,10 +306,17 @@ export default function ProfileSettings({
         duration_ms: 2400,
       })
       onClose()
-    } catch {
+    } catch (error) {
+      const error_message =
+        error instanceof Error ? error.message : content.failed[locale]
+
+      console.error("profile_save_failed", {
+        error_message,
+      })
+
       toast({
         tone: "error",
-        message: content.failed[locale],
+        message: error_message,
         compact: true,
         duration_ms: 2800,
       })

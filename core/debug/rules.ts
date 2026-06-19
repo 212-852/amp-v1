@@ -195,6 +195,7 @@ const authSessionEvents = new Set([
   "admin_restore_step_header_ok",
   "admin_restore_step_shell_ok",
   "admin_restore_step_data_ok",
+  "admin_top_availability_resolved",
   "access_log_archived",
   "access_log_archive_failed",
   "access_log_archive_skipped",

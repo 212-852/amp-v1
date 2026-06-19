@@ -6,6 +6,10 @@ import {
   save_profile_settings,
 } from "@/core/profile/action"
 
+function log_profile_debug(event: string, payload: Record<string, unknown>) {
+  console.info(event, payload)
+}
+
 export async function GET() {
   try {
     const { session } = await resolveChatApiSession()
@@ -31,9 +35,20 @@ export async function POST(request: Request) {
   try {
     const { session } = await resolveChatApiSession()
     const body = await request.json().catch(() => ({}))
+    log_profile_debug("profile_save_payload", {
+      user_uuid: session.user_uuid ?? null,
+      visitor_uuid: session.visitor_uuid ?? null,
+      fields: Object.keys(body as Record<string, unknown>),
+    })
     const profile = await save_profile_settings({
       session,
       body,
+    })
+
+    log_profile_debug("profile_save_success", {
+      user_uuid: session.user_uuid ?? null,
+      visitor_uuid: session.visitor_uuid ?? null,
+      display_name: profile.display_name,
     })
 
     return NextResponse.json({
@@ -41,6 +56,11 @@ export async function POST(request: Request) {
       profile,
     })
   } catch (error) {
+    log_profile_debug("profile_save_failed", {
+      error_message:
+        error instanceof Error ? error.message : "Failed to save profile",
+    })
+
     return NextResponse.json(
       {
         ok: false,
