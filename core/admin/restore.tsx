@@ -6,8 +6,8 @@ import AdminFooter from "@/components/admin/footer"
 import AdminHeader from "@/components/admin/header"
 import {
   getConciergeAvailabilityState,
-  loadConciergeQueueForSession,
 } from "@/core/chat/action"
+import { get_concierge_queue } from "@/core/concierge/action"
 import AdminPageFallback from "@/components/admin/page_fallback"
 import AdminSessionPanel from "@/components/admin/session_panel"
 import AdminShellLayout from "@/components/admin/shell_layout"
@@ -123,9 +123,14 @@ async function resolveConciergeAvailability(
 
 async function resolveConciergeQueue(session: Session) {
   try {
-    return await loadConciergeQueueForSession(session, { limit: 10 })
+    return await get_concierge_queue(session, { limit: 10 })
   } catch {
-    return []
+    return {
+      availability_enabled: false,
+      should_show_list: false,
+      room_condition: { mode: "concierge" as const },
+      items: [],
+    }
   }
 }
 
@@ -146,7 +151,7 @@ function renderAdminUiShell(
         concierge_available={concierge_available}
       />
       <main className="mx-auto flex w-full max-w-[430px] flex-col gap-3 px-5 pb-[calc(118px+env(safe-area-inset-bottom,0px))] pt-4">
-        <AdminConciergeQueue items={queue_items} />
+        <AdminConciergeQueue queue={queue_items} />
       </main>
       <AdminFooter />
     </div>

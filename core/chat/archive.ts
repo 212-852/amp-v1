@@ -1282,7 +1282,10 @@ export async function loadUserProfiles(user_uuids: string[]) {
   )
 }
 
-export async function loadConciergeQueueRooms(limit = 10) {
+export async function loadConciergeQueueRooms(
+  limit = 10,
+  condition: { mode: "concierge" } = { mode: "concierge" },
+) {
   const config = getRestConfig()
 
   if (!config) {
@@ -1294,7 +1297,7 @@ export async function loadConciergeQueueRooms(limit = 10) {
       config,
       "rooms",
       [
-        "mode=eq.concierge",
+        `mode=eq.${encodeURIComponent(condition.mode)}`,
         "select=*",
         "order=updated_at.desc",
         `limit=${limit}`,

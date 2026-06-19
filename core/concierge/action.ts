@@ -1,0 +1,54 @@
+import type { Session } from "@/core/auth/types"
+import { loadConciergeAvailability } from "@/core/chat/archive"
+import {
+  loadConciergeQueue,
+  type ConciergeQueueItem,
+} from "@/core/chat/concierge_queue"
+import { canToggleConciergeAvailability } from "@/core/chat/concierge_access"
+import {
+  resolve_concierge_queue_room_condition,
+  should_show_concierge_list,
+} from "@/core/concierge/rules"
+
+export type ConciergeQueueResult = {
+  availability_enabled: boolean
+  should_show_list: boolean
+  room_condition: ReturnType<typeof resolve_concierge_queue_room_condition>
+  items: ConciergeQueueItem[]
+}
+
+export async function get_concierge_queue(
+  session: Session,
+  options?: { limit?: number },
+): Promise<ConciergeQueueResult> {
+  if (!canToggleConciergeAvailability(session)) {
+    throw new Error("Concierge queue access denied")
+  }
+
+  const availability_enabled = await loadConciergeAvailability(
+    session.user_uuid,
+  )
+  const should_show_list = should_show_concierge_list({
+    availability_enabled,
+  })
+  const room_condition = resolve_concierge_queue_room_condition()
+
+  if (!should_show_list) {
+    return {
+      availability_enabled,
+      should_show_list,
+      room_condition,
+      items: [],
+    }
+  }
+
+  return {
+    availability_enabled,
+    should_show_list,
+    room_condition,
+    items: await loadConciergeQueue(session, {
+      limit: options?.limit,
+      mode: room_condition.mode,
+    }),
+  }
+}

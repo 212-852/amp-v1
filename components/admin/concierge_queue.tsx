@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 
 import type { ConciergeQueueItem } from "@/core/chat/concierge_queue"
+import type { ConciergeQueueResult } from "@/core/concierge/action"
 import { concierge_queue_content } from "@/core/ops/concierge_queue_content"
 import { TYPING_TIMEOUT_MS, type ChatTypingRecord } from "@/core/chat/types"
 import { useLocale } from "@/src/components/locale/provider"
@@ -149,12 +150,16 @@ function ConciergeQueueCard({
 
 export default function ConciergeQueuePanel({
   items,
+  queue,
   show_footer = true,
 }: Readonly<{
-  items: ConciergeQueueItem[]
+  items?: ConciergeQueueItem[]
+  queue?: ConciergeQueueResult
   show_footer?: boolean
 }>) {
   const { locale } = useLocale()
+  const should_show_list = queue?.should_show_list ?? true
+  const rendered_items = queue?.items ?? items ?? []
 
   return (
     <section className="rounded-[28px] border border-neutral-200 bg-white px-5 py-4 shadow-[0_8px_24px_rgba(0,0,0,0.04)]">
@@ -162,19 +167,25 @@ export default function ConciergeQueuePanel({
         {concierge_queue_content.title[locale]}
       </h2>
 
-      <div className="mt-4 flex flex-col gap-2.5">
-        {items.length === 0 ? (
-          <p className="text-[13px] text-neutral-500">
-            {concierge_queue_content.empty[locale]}
-          </p>
-        ) : (
-          items.map((item) => (
-            <ConciergeQueueCard key={item.room_uuid} item={item} />
-          ))
-        )}
-      </div>
+      {!should_show_list ? (
+        <p className="mt-4 text-[13px] text-neutral-500">
+          {concierge_queue_content.off[locale]}
+        </p>
+      ) : (
+        <div className="mt-4 flex flex-col gap-2.5">
+          {rendered_items.length === 0 ? (
+            <p className="text-[13px] text-neutral-500">
+              {concierge_queue_content.empty[locale]}
+            </p>
+          ) : (
+            rendered_items.map((item) => (
+              <ConciergeQueueCard key={item.room_uuid} item={item} />
+            ))
+          )}
+        </div>
+      )}
 
-      {show_footer ? (
+      {show_footer && should_show_list ? (
         <div className="mt-4 flex justify-end">
           <Link
             href="/admin/concierge"

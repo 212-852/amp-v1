@@ -660,8 +660,9 @@ export async function loadConciergeQueueForSession(
   session: Session,
   options?: { limit?: number },
 ) {
-  const { loadConciergeQueue } = await import("@/core/chat/concierge_queue")
-  return loadConciergeQueue(session, options)
+  const { get_concierge_queue } = await import("@/core/concierge/action")
+  const result = await get_concierge_queue(session, options)
+  return result.items
 }
 
 type ConciergeToggleDebugEvent =
