@@ -647,7 +647,7 @@ export default function AppFooter({
   return (
     <footer
       ref={footer_ref}
-      className="fixed inset-x-0 bottom-[-28px] z-50 pb-[env(safe-area-inset-bottom)]"
+      className="fixed inset-x-0 bottom-[-48px] z-50 pb-[env(safe-area-inset-bottom)]"
     >
       <div className={footer_shell_class}>
         <FooterCurve />

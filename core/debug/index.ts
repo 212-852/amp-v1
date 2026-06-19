@@ -2,7 +2,6 @@ import {
   resolveDebugTitle,
   shouldSendAuthSessionDebug,
 } from "@/core/debug/rules"
-import { notify } from "@/core/notify"
 
 export async function sendAuthDebug(
   event: string,
@@ -14,6 +13,7 @@ export async function sendAuthDebug(
   }
 
   try {
+    const { notify } = await import("@/core/notify")
     await notify({
       channel: "discord",
       title: resolveDebugTitle(event),
@@ -21,7 +21,7 @@ export async function sendAuthDebug(
       request_id,
       payload,
     })
-  } catch (error) {
-    console.error("TEMP_AUTH_DEBUG_FAILED", error)
+  } catch {
+    // Debug delivery is best-effort and must stay server-only.
   }
 }

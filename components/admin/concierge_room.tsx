@@ -1,5 +1,6 @@
 "use client"
 
+import { ArrowLeft, List } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect } from "react"
@@ -21,6 +22,9 @@ const content = {
     es: "Lista",
   },
 }
+
+const icon_button_class =
+  "flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-900 transition hover:bg-neutral-50 active:bg-neutral-100"
 
 export default function AdminConciergeRoom({
   state,
@@ -63,32 +67,37 @@ export default function AdminConciergeRoom({
   }, [state.room.room_uuid])
 
   return (
-    <section className="flex min-h-[calc(100dvh-120px)] flex-col gap-3 pb-24 [--chat-message-bottom-padding:112px]">
-      <div className="sticky top-[calc(86px+env(safe-area-inset-top,0px))] z-30 flex items-center justify-between border-b border-neutral-200 bg-neutral-50 pb-3 pt-1">
+    <section className="flex min-h-0 flex-1 flex-col [--chat-message-bottom-padding:88px]">
+      <div className="flex shrink-0 items-center justify-between py-1">
         <button
           type="button"
+          aria-label={content.back[locale]}
           onClick={() => router.back()}
-          className="text-[13px] font-medium text-neutral-600 transition hover:text-neutral-950 active:text-neutral-800"
+          className={icon_button_class}
         >
-          {content.back[locale]}
+          <ArrowLeft aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
         </button>
         <Link
           href="/admin/concierge"
-          className="text-[13px] font-medium text-neutral-600 transition hover:text-neutral-950 active:text-neutral-800"
+          aria-label={content.list[locale]}
+          className={icon_button_class}
         >
-          {content.list[locale]}
+          <List aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
         </Link>
       </div>
 
-      <ChatRoomPanel
-        initial_room={state.room}
-        initial_messages={state.messages}
-        initial_presence={state.presence}
-        participant_uuid={state.participant.participant_uuid}
-        viewer_display_name={viewer_display_name}
-        room_uuid={state.room.room_uuid}
-        show_presence
-      />
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <ChatRoomPanel
+          initial_room={state.room}
+          initial_messages={state.messages}
+          initial_presence={state.presence}
+          participant_uuid={state.participant.participant_uuid}
+          viewer_display_name={viewer_display_name}
+          room_uuid={state.room.room_uuid}
+          show_presence
+          fill_height
+        />
+      </div>
 
       <ChatMessageInput locale={locale} room_uuid={state.room.room_uuid} />
     </section>

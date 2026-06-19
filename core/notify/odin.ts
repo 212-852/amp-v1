@@ -55,11 +55,47 @@ function readPayloadString(
   return value.trim()
 }
 
+async function logOdinServerDebug(
+  event: string,
+  payload: Record<string, unknown>,
+) {
+  try {
+    const { sendAuthDebug } = await import("@/core/debug")
+    await sendAuthDebug(event, payload, null)
+  } catch {
+    // Server debug only.
+  }
+}
+
+function extractThreadIdFromPath(path: string, channel_id: string) {
+  const segments = path.split("/").filter(Boolean)
+
+  if (segments[0] !== "channels") {
+    return null
+  }
+
+  const target_id = segments[1] ? decodeURIComponent(segments[1]) : null
+
+  if (!target_id || target_id === channel_id) {
+    return null
+  }
+
+  return target_id
+}
+
 async function discordRequest<T>(
   config: OdinConfig,
   path: string,
   init: RequestInit,
 ) {
+  const thread_id = extractThreadIdFromPath(path, config.channel_id)
+
+  console.log({
+    event: "odin_request",
+    channel_id: config.channel_id,
+    thread_id,
+  })
+
   const response = await fetch(`${DISCORD_API_BASE}${path}`, {
     ...init,
     headers: {
@@ -69,9 +105,16 @@ async function discordRequest<T>(
     },
   })
 
+  console.log({
+    event: "odin_response",
+    status: response.status,
+    ok: response.ok,
+  })
+
   if (!response.ok) {
     const body = await response.text().catch(() => "")
-    console.warn("[notify] odin_discord_api_error", {
+    await logOdinServerDebug("notify_delivery_failed", {
+      channel: "odin",
       status: response.status,
       response_body: body,
       path,

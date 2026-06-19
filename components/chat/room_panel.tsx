@@ -24,6 +24,7 @@ type ChatRoomPanelProps = {
   viewer_display_name?: string | null
   room_uuid?: string | null
   show_presence?: boolean
+  fill_height?: boolean
 }
 
 export default function ChatRoomPanel({
@@ -34,6 +35,7 @@ export default function ChatRoomPanel({
   viewer_display_name = null,
   room_uuid = null,
   show_presence = false,
+  fill_height = false,
 }: Readonly<ChatRoomPanelProps>) {
   const [room, set_room] = useState(initial_room)
   const [messages, set_messages] = useState(initial_messages)
@@ -176,25 +178,31 @@ export default function ChatRoomPanel({
     ? messages
     : filterUserVisibleChatMessages(messages)
 
+  const scroll_class = fill_height
+    ? "h-full space-y-4 overflow-y-auto pt-0 pb-[var(--chat-message-bottom-padding,24px)]"
+    : "max-h-[calc(100dvh-220px)] space-y-4 overflow-y-auto pt-0 pb-[var(--chat-message-bottom-padding,24px)]"
+
   return (
-    <section className="relative rounded-none bg-transparent p-0 shadow-none">
+    <section
+      className={[
+        "relative rounded-none bg-transparent p-0 shadow-none",
+        fill_height ? "flex h-full min-h-0 flex-col" : "",
+      ].join(" ")}
+    >
       <ChatScrollButton container_ref={scroll_ref} bottom_ref={bottom_ref} />
       {show_presence && presence.length > 0 ? (
-        <div className="mb-3 flex flex-wrap gap-2">
+        <div className="mb-3 flex shrink-0 flex-wrap gap-2">
           {presence.map((entry) => (
             <span
               key={entry.participant_uuid}
-              className="rounded-full bg-[#efe4d4] px-3 py-1 text-[11px] font-medium text-[#6f5842]"
+              className="rounded-full bg-neutral-100 px-3 py-1 text-[11px] font-medium text-neutral-600"
             >
               {entry.display_name}
             </span>
           ))}
         </div>
       ) : null}
-      <div
-        ref={scroll_ref}
-        className="max-h-[calc(100dvh-220px)] space-y-4 overflow-y-auto pt-0 pb-[var(--chat-message-bottom-padding,24px)]"
-      >
+      <div ref={scroll_ref} className={scroll_class}>
         {visible_messages.map((message) => (
           <ChatMessageBubble
             key={message.message_uuid}
