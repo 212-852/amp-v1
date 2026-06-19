@@ -12,9 +12,9 @@ export const concierge_queue_content = {
     es: "Sin asignar",
   },
   typing: {
-    ja: "入力中",
-    en: "Typing",
-    es: "Escribiendo",
+    ja: "入力中...",
+    en: "Typing...",
+    es: "Escribiendo...",
   },
   view_all: {
     ja: "一覧へ →",

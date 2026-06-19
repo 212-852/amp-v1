@@ -14,6 +14,7 @@ export type ConciergeQueueResult = {
   availability_enabled: boolean
   should_show_list: boolean
   room_condition: ReturnType<typeof resolve_concierge_queue_room_condition>
+  rooms: ConciergeQueueItem[]
   items: ConciergeQueueItem[]
 }
 
@@ -38,17 +39,21 @@ export async function get_concierge_queue(
       availability_enabled,
       should_show_list,
       room_condition,
+      rooms: [],
       items: [],
     }
   }
+
+  const rooms = await loadConciergeQueue(session, {
+    limit: options?.limit,
+    mode: room_condition.mode,
+  })
 
   return {
     availability_enabled,
     should_show_list,
     room_condition,
-    items: await loadConciergeQueue(session, {
-      limit: options?.limit,
-      mode: room_condition.mode,
-    }),
+    rooms,
+    items: rooms,
   }
 }

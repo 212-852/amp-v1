@@ -6,6 +6,7 @@ import {
   loadUserProfiles,
 } from "@/core/chat/archive"
 import { canToggleConciergeAvailability } from "@/core/chat/concierge_access"
+import { loadOnlinePresenceViews } from "@/core/chat/presence"
 import { resolveMessageBodyDisplay } from "@/core/chat/rules"
 import type {
   ChatMessageRecord,
@@ -15,12 +16,17 @@ import type {
 
 export type ConciergeQueueItem = {
   room_uuid: string
+  display_name: string
+  avatar_url: string | null
+  latest_message: string
+  is_typing: boolean
+  admin_active_count: number
+  updated_at: string
+  customer_participant_uuid: string
   customer_name: string
   customer_avatar_url: string | null
-  customer_participant_uuid: string
   latest_message_preview: string
   assigned_admin_name: string | null
-  updated_at: string
 }
 
 const PREVIEW_MAX_LENGTH = 72
@@ -74,6 +80,7 @@ export function buildConciergeQueueItem(input: {
   room: ChatRoomRecord
   participants: ChatParticipantRecord[]
   latest_message: ChatMessageRecord | null
+  admin_active_count: number
   user_profiles: Map<
     string,
     { display_name: string | null; image_url: string | null }
@@ -92,18 +99,26 @@ export function buildConciergeQueueItem(input: {
   const assigned_profile = assigned?.user_uuid
     ? input.user_profiles.get(assigned.user_uuid)
     : null
+  const display_name =
+    customer_profile?.display_name?.trim() ||
+    (customer.role === "guest" ? "Guest" : "Customer")
+  const avatar_url = customer_profile?.image_url ?? null
+  const latest_message = buildConciergeMessagePreview(
+    input.latest_message,
+    input.room.locale,
+  )
 
   return {
     room_uuid: input.room.room_uuid,
-    customer_name:
-      customer_profile?.display_name?.trim() ||
-      (customer.role === "guest" ? "Guest" : "Customer"),
-    customer_avatar_url: customer_profile?.image_url ?? null,
+    display_name,
+    avatar_url,
+    latest_message,
+    is_typing: false,
+    admin_active_count: input.admin_active_count,
     customer_participant_uuid: customer.participant_uuid,
-    latest_message_preview: buildConciergeMessagePreview(
-      input.latest_message,
-      input.room.locale,
-    ),
+    customer_name: display_name,
+    customer_avatar_url: avatar_url,
+    latest_message_preview: latest_message,
     assigned_admin_name: assigned_profile?.display_name?.trim() ?? null,
     updated_at: input.room.updated_at,
   } satisfies ConciergeQueueItem
@@ -127,7 +142,7 @@ export async function loadConciergeQueue(
   }
 
   const room_uuids = rooms.map((room) => room.room_uuid)
-  const [participants_by_room, latest_messages] = await Promise.all([
+  const [participants_by_room, latest_messages, presence_by_room] = await Promise.all([
     Promise.all(
       room_uuids.map(async (room_uuid) => ({
         room_uuid,
@@ -135,6 +150,12 @@ export async function loadConciergeQueue(
       })),
     ),
     loadLatestRoomMessages(room_uuids),
+    Promise.all(
+      room_uuids.map(async (room_uuid) => ({
+        room_uuid,
+        presence: await loadOnlinePresenceViews(room_uuid),
+      })),
+    ),
   ])
 
   const user_uuids = new Set<string>()
@@ -151,14 +172,31 @@ export async function loadConciergeQueue(
   const participants_map = new Map(
     participants_by_room.map((entry) => [entry.room_uuid, entry.participants]),
   )
+  const presence_map = new Map(
+    presence_by_room.map((entry) => [entry.room_uuid, entry.presence]),
+  )
 
   const items: ConciergeQueueItem[] = []
 
   for (const room of rooms) {
+    const participants = participants_map.get(room.room_uuid) ?? []
+    const presence = presence_map.get(room.room_uuid) ?? []
     const item = buildConciergeQueueItem({
       room,
-      participants: participants_map.get(room.room_uuid) ?? [],
+      participants,
       latest_message: latest_messages.get(room.room_uuid) ?? null,
+      admin_active_count: presence.filter((entry) => {
+        const participant = participants.find(
+          (candidate) =>
+            candidate.participant_uuid === entry.participant_uuid,
+        )
+
+        return (
+          (participant?.role === "admin" ||
+            participant?.role === "concierge") &&
+          participant.user_uuid !== session.user_uuid
+        )
+      }).length,
       user_profiles,
     })
 

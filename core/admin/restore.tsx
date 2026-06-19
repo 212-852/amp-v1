@@ -129,6 +129,7 @@ async function resolveConciergeQueue(session: Session) {
       availability_enabled: false,
       should_show_list: false,
       room_condition: { mode: "concierge" as const },
+      rooms: [],
       items: [],
     }
   }
