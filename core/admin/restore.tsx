@@ -123,6 +123,18 @@ async function resolveConciergeAvailability(
 
 async function resolveConciergeQueue(session: Session) {
   try {
+    const availability = await getConciergeAvailabilityState(session)
+
+    if (!availability.enabled) {
+      return {
+        availability_enabled: false,
+        should_show_list: false,
+        room_condition: { mode: "concierge" as const },
+        rooms: [],
+        items: [],
+      }
+    }
+
     return await get_concierge_queue(session, { limit: 10 })
   } catch {
     return {

@@ -27,9 +27,9 @@ export const concierge_queue_content = {
     es: "No hay salas que requieran concierge",
   },
   loading: {
-    ja: "チャットを読み込み中...",
-    en: "Loading chats...",
-    es: "Cargando chats...",
+    ja: "ルームを読み込み中...",
+    en: "Loading rooms...",
+    es: "Cargando salas...",
   },
   off: {
     ja: "コンシェルジュ受付はOFFです",

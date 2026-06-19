@@ -6,10 +6,23 @@ import {
 } from "@/core/chat/action"
 import { resolveChatApiSession } from "@/core/chat/api"
 import { ConciergeToggleDeniedError } from "@/core/chat/concierge_access"
+import { get_concierge_queue } from "@/core/concierge/action"
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const { session } = await resolveChatApiSession()
+    const url = new URL(request.url)
+
+    if (url.searchParams.get("list") === "1") {
+      const queue = await get_concierge_queue(session, { limit: 50 })
+
+      return NextResponse.json({
+        ok: true,
+        enabled: queue.availability_enabled,
+        ...queue,
+      })
+    }
+
     const state = await getConciergeAvailabilityState(session)
     return NextResponse.json({
       ok: true,

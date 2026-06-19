@@ -1,8 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { useEffect, useRef, useState, useTransition } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 import type { ConciergeQueueItem } from "@/core/chat/concierge_queue"
 import type { ConciergeQueueResult } from "@/core/concierge/action"
@@ -32,6 +31,7 @@ function resolveInitials(value: string) {
 }
 
 function useCustomerTyping(input: {
+  enabled: boolean
   room_uuid: string
   customer_participant_uuid: string
 }) {
@@ -39,6 +39,11 @@ function useCustomerTyping(input: {
   const timer_ref = useRef<number | null>(null)
 
   useEffect(() => {
+    if (!input.enabled) {
+      set_is_typing(false)
+      return
+    }
+
     function clear_timer() {
       if (timer_ref.current) {
         window.clearTimeout(timer_ref.current)
@@ -92,7 +97,7 @@ function useCustomerTyping(input: {
       clear_timer()
       void supabase.removeChannel(channel)
     }
-  }, [input.customer_participant_uuid, input.room_uuid])
+  }, [input.customer_participant_uuid, input.enabled, input.room_uuid])
 
   return is_typing
 }
@@ -100,16 +105,19 @@ function useCustomerTyping(input: {
 function ConciergeQueueCard({
   index,
   item,
+  list_enabled,
 }: Readonly<{
   index: number
   item: ConciergeQueueItem
+  list_enabled: boolean
 }>) {
   const { locale } = useLocale()
   const is_typing = useCustomerTyping({
+    enabled: list_enabled,
     room_uuid: item.room_uuid,
     customer_participant_uuid: item.customer_participant_uuid,
   })
-  const row_background = index % 2 === 1 ? "bg-neutral-50" : "bg-white"
+  const row_background = index % 2 === 0 ? "bg-neutral-50" : "bg-white"
 
   return (
     <Link
@@ -133,11 +141,13 @@ function ConciergeQueueCard({
             {resolveInitials(item.display_name)}
           </span>
         )}
-        {item.admin_active_count > 0 ? (
-          <span className="absolute bottom-0 right-0 flex h-4 min-w-4 items-center justify-center rounded-full border-2 border-white bg-[#16a34a] px-1 text-[9px] font-bold leading-none text-white">
-            {item.admin_active_count > 1 ? item.admin_active_count : ""}
-          </span>
-        ) : null}
+        <span
+          aria-hidden="true"
+          className={[
+            "absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white",
+            item.admin_active_count > 0 ? "bg-neutral-900" : "bg-neutral-300",
+          ].join(" ")}
+        />
       </div>
 
       <div className="min-w-0 flex-1">
@@ -145,11 +155,11 @@ function ConciergeQueueCard({
           <p className="truncate text-[14px] font-semibold text-neutral-950">
             {item.display_name}
           </p>
-          <div className="shrink-0 text-right text-[11px] font-medium text-[#16a34a]">
-            {is_typing ? (
-              <span>{concierge_queue_content.typing[locale]}</span>
-            ) : null}
-          </div>
+          {is_typing ? (
+            <span className="shrink-0 text-[11px] font-medium text-neutral-500">
+              {concierge_queue_content.typing[locale]}
+            </span>
+          ) : null}
         </div>
         <p className="mt-1 truncate text-[13px] leading-snug text-neutral-500">
           {is_typing
@@ -161,36 +171,98 @@ function ConciergeQueueCard({
   )
 }
 
-export default function ConciergeQueuePanel({
-  items,
+async function fetchConciergeQueueFromApi(): Promise<ConciergeQueueResult | null> {
+  const response = await fetch("/api/chat/concierge?list=1", {
+    cache: "no-store",
+  })
+
+  if (!response.ok) {
+    return null
+  }
+
+  const payload = (await response.json()) as ConciergeQueueResult & {
+    ok?: boolean
+    enabled?: boolean
+  }
+
+  if (payload.ok === false) {
+    return null
+  }
+
+  return {
+    availability_enabled: payload.availability_enabled ?? payload.enabled === true,
+    should_show_list: payload.should_show_list ?? false,
+    room_condition: payload.room_condition ?? { mode: "concierge" },
+    rooms: payload.rooms ?? payload.items ?? [],
+    items: payload.items ?? payload.rooms ?? [],
+  }
+}
+
+export default function AdminConciergeQueue({
   queue,
   show_footer = true,
 }: Readonly<{
-  items?: ConciergeQueueItem[]
   queue?: ConciergeQueueResult
   show_footer?: boolean
 }>) {
   const { locale } = useLocale()
-  const router = useRouter()
-  const [is_pending, start_transition] = useTransition()
-  const [is_concierge_available, set_is_concierge_available] = useState(
-    queue?.should_show_list ?? true,
+  const [is_available, set_is_available] = useState(
+    queue?.availability_enabled === true,
   )
-  const rendered_items = queue?.rooms ?? queue?.items ?? items ?? []
+  const [items, set_items] = useState<ConciergeQueueItem[]>(
+    queue?.should_show_list ? (queue.rooms ?? queue.items ?? []) : [],
+  )
+  const [is_loading, set_is_loading] = useState(false)
+  const refresh_request_ref = useRef(0)
+
+  const load_queue = useCallback(async (options?: { silent?: boolean }) => {
+    const request_id = refresh_request_ref.current + 1
+    refresh_request_ref.current = request_id
+
+    if (!options?.silent) {
+      set_is_loading(true)
+    }
+
+    try {
+      const result = await fetchConciergeQueueFromApi()
+
+      if (refresh_request_ref.current !== request_id) {
+        return
+      }
+
+      if (!result?.should_show_list) {
+        set_is_available(false)
+        set_items([])
+        return
+      }
+
+      set_is_available(true)
+      set_items(result.rooms ?? result.items ?? [])
+    } finally {
+      if (refresh_request_ref.current === request_id) {
+        set_is_loading(false)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     function handle_availability_change(event: Event) {
       const detail = (event as CustomEvent<{ enabled?: boolean }>).detail
 
-      if (typeof detail?.enabled === "boolean") {
-        set_is_concierge_available(detail.enabled)
-
-        if (detail.enabled) {
-          start_transition(() => {
-            router.refresh()
-          })
-        }
+      if (typeof detail?.enabled !== "boolean") {
+        return
       }
+
+      set_is_available(detail.enabled)
+
+      if (!detail.enabled) {
+        refresh_request_ref.current += 1
+        set_items([])
+        set_is_loading(false)
+        return
+      }
+
+      void load_queue()
     }
 
     window.addEventListener(
@@ -204,25 +276,46 @@ export default function ConciergeQueuePanel({
         handle_availability_change,
       )
     }
-  }, [router, start_transition])
+  }, [load_queue])
 
   useEffect(() => {
-    if (!is_concierge_available) {
+    if (!is_available) {
+      set_items([])
       return
     }
+
+    let cancelled = false
+    let debounce_timer: number | null = null
+
+    function schedule_refresh() {
+      if (debounce_timer) {
+        window.clearTimeout(debounce_timer)
+      }
+
+      debounce_timer = window.setTimeout(() => {
+        if (!cancelled) {
+          void load_queue({ silent: true })
+        }
+      }, 150)
+    }
+
+    const has_initial_items =
+      (queue?.should_show_list ? (queue.rooms ?? queue.items ?? []).length : 0) >
+      0
+
+    void load_queue({ silent: has_initial_items })
 
     let supabase: ReturnType<typeof create_browser_supabase_client>
 
     try {
       supabase = create_browser_supabase_client()
     } catch {
-      return
-    }
-
-    function refresh_queue() {
-      start_transition(() => {
-        router.refresh()
-      })
+      return () => {
+        cancelled = true
+        if (debounce_timer) {
+          window.clearTimeout(debounce_timer)
+        }
+      }
     }
 
     const channel = supabase
@@ -230,17 +323,42 @@ export default function ConciergeQueuePanel({
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "rooms" },
-        refresh_queue,
+        (payload) => {
+          const old_record = payload.old as {
+            room_uuid?: string
+            mode?: string
+          } | null
+          const new_record = payload.new as {
+            room_uuid?: string
+            mode?: string
+          } | null
+          const room_uuid = new_record?.room_uuid ?? old_record?.room_uuid
+
+          if (
+            old_record?.mode === "concierge" &&
+            new_record?.mode !== "concierge" &&
+            room_uuid
+          ) {
+            set_items((current) =>
+              current.filter((item) => item.room_uuid !== room_uuid),
+            )
+            return
+          }
+
+          if (new_record?.mode === "concierge") {
+            schedule_refresh()
+          }
+        },
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "messages" },
-        refresh_queue,
+        { event: "INSERT", schema: "public", table: "messages" },
+        schedule_refresh,
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "presence" },
-        refresh_queue,
+        schedule_refresh,
       )
       .on(
         "postgres_changes",
@@ -249,42 +367,58 @@ export default function ConciergeQueuePanel({
           const next_enabled = (payload.new as { enabled?: unknown })?.enabled
 
           if (typeof next_enabled === "boolean") {
-            set_is_concierge_available(next_enabled)
-          }
+            set_is_available(next_enabled)
 
-          refresh_queue()
+            if (!next_enabled) {
+              refresh_request_ref.current += 1
+              set_items([])
+              set_is_loading(false)
+              return
+            }
+
+            void load_queue()
+          }
         },
       )
       .subscribe()
 
     return () => {
+      cancelled = true
+
+      if (debounce_timer) {
+        window.clearTimeout(debounce_timer)
+      }
+
       void supabase.removeChannel(channel)
     }
-  }, [router, is_concierge_available, start_transition])
+  }, [is_available, load_queue, queue?.items, queue?.rooms, queue?.should_show_list])
 
-  if (!is_concierge_available) {
+  if (!is_available) {
     return null
   }
 
   return (
     <section>
-      {is_pending ? (
-        <p className="py-2 text-[13px] text-neutral-500">
-          {concierge_queue_content.loading[locale]}
-        </p>
+      {is_loading && items.length === 0 ? (
+        <div className="px-2 pt-2">
+          <div className="inline-flex rounded-full bg-white/60 px-4 py-2 text-[13px] font-medium text-neutral-500">
+            {concierge_queue_content.loading[locale]}
+          </div>
+        </div>
       ) : null}
 
       <div className="flex flex-col">
-        {rendered_items.length === 0 ? (
-          <p className="text-[13px] text-neutral-500">
+        {items.length === 0 && !is_loading ? (
+          <p className="px-2 py-2 text-[13px] text-neutral-500">
             {concierge_queue_content.empty[locale]}
           </p>
         ) : (
-          rendered_items.map((item, index) => (
+          items.map((item, index) => (
             <ConciergeQueueCard
               key={item.room_uuid}
               index={index}
               item={item}
+              list_enabled={is_available}
             />
           ))
         )}
