@@ -46,7 +46,7 @@ export default async function AdminConciergeRoomPage({
   return (
     <AdminShell
       session={session}
-      pathname={`/admin/concierge/${state.room.room_uuid}`}
+      pathname={`/admin/list/${state.room.room_uuid}`}
       breadcrumb_room_name={await resolve_room_breadcrumb_name(state)}
     >
       <AdminConciergeRoom

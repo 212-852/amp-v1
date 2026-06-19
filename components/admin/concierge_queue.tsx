@@ -478,7 +478,7 @@ export default function AdminConciergeQueue({
               {concierge_queue_content.pending_title[locale]}
             </h2>
             <Link
-              href="/admin/concierge/list"
+              href="/admin/list"
               className="text-[12px] font-semibold text-neutral-500 transition hover:text-neutral-800 active:text-neutral-700"
             >
               {concierge_queue_content.view_all[locale]}

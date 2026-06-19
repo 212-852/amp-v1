@@ -15,7 +15,7 @@ export const adminPrimaryNav = [
   { label: "Dashboard", href: "/admin", icon: Gauge },
   { label: "Orders", href: "/admin/orders", icon: ClipboardList },
   { label: "Drivers", href: "/admin/drivers", icon: CarFront },
-  { label: "Concierge", href: "/admin/concierge/list", icon: MessageCircle },
+  { label: "Concierge", href: "/admin/list", icon: MessageCircle },
   { label: "Menu", href: "/admin/settings", icon: Menu },
 ]
 
@@ -23,7 +23,7 @@ export const adminSectionNav = [
   { label: "Dashboard", href: "/admin", icon: Gauge },
   { label: "Orders", href: "/admin/orders", icon: ClipboardList },
   { label: "Drivers", href: "/admin/drivers", icon: CarFront },
-  { label: "Concierge", href: "/admin/concierge/list", icon: MessageCircle },
+  { label: "Concierge", href: "/admin/list", icon: MessageCircle },
   { label: "Users", href: "/admin/users", icon: UsersRound },
   { label: "Partners", href: "/admin/partners", icon: Store },
   { label: "Notifications", href: "/admin/notifications", icon: Bell },

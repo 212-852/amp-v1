@@ -32,5 +32,5 @@ export function room_matches_concierge_queue_condition(
 }
 
 export function resolve_concierge_room_href(room_uuid: string) {
-  return `/admin/concierge/${encodeURIComponent(room_uuid)}`
+  return `/admin/list/${encodeURIComponent(room_uuid)}`
 }

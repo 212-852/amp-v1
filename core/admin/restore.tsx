@@ -16,7 +16,11 @@ import AdminShellLayout from "@/components/admin/shell_layout"
 import { loadAdminDashboardData } from "@/core/admin/data"
 import { resolveAuthContext } from "@/core/auth/context"
 import { resolveIdentity } from "@/core/auth/identity"
-import { resolveAuthRoute, resolveRoleRedirectPath } from "@/core/auth/route"
+import {
+  canAccessPath,
+  resolveAuthRoute,
+  resolveRoleRedirectPath,
+} from "@/core/auth/route"
 import { resolveSession } from "@/core/auth/session"
 import type { Session } from "@/core/auth/types"
 import { sendAuthDebug } from "@/core/debug"
@@ -79,17 +83,18 @@ export function resolveAdminRestoreStep() {
 
 async function resolveAdminAccess() {
   const context = await resolveAuthContext()
+  const requested_route = context.requested_route ?? ADMIN_PATH
 
   await sendRestoreDebug(
     "admin_restore_step_context_ok",
-    buildDebugPayload(null, context.requested_route ?? ADMIN_PATH),
+    buildDebugPayload(null, requested_route),
   )
 
   const session = await resolveSession(context)
 
   await sendRestoreDebug(
     "admin_restore_step_session_ok",
-    buildDebugPayload(session, context.requested_route ?? ADMIN_PATH),
+    buildDebugPayload(session, requested_route),
   )
 
   const entrance = await resolveEntranceContext()
@@ -98,14 +103,18 @@ async function resolveAdminAccess() {
   const redirect_to = resolveRoleRedirectPath(context, session)
 
   await sendRestoreDebug("admin_restore_step_route_ok", {
-    ...buildDebugPayload(session, context.requested_route ?? ADMIN_PATH),
+    ...buildDebugPayload(session, requested_route),
     route_path: route.path,
     route_role: route.role,
     route_tier: route.tier,
     redirect_to,
   })
 
-  if (redirect_to && redirect_to !== (context.requested_route ?? ADMIN_PATH)) {
+  if (!canAccessPath(session.role, requested_route)) {
+    throw new Error("Admin access denied")
+  }
+
+  if (redirect_to && redirect_to !== requested_route) {
     redirect(redirect_to)
   }
 

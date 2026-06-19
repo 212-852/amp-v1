@@ -78,7 +78,7 @@ export default function AdminConciergeRoom({
           <ArrowLeft aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
         </button>
         <Link
-          href="/admin/concierge/list"
+          href="/admin/list"
           aria-label={content.list[locale]}
           className={icon_button_class}
         >

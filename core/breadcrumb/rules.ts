@@ -14,17 +14,17 @@ export function resolve_breadcrumb_items(
     return [{ label: "Home" }]
   }
 
-  if (pathname === "/admin/concierge" || pathname === "/admin/concierge/list") {
+  if (pathname === "/admin/list") {
     return [
       { label: "Home", href: "/admin" },
-      { label: pathname === "/admin/concierge/list" ? "Chat List" : "Chat" },
+      { label: "Chat List" },
     ]
   }
 
-  if (pathname.startsWith("/admin/concierge/")) {
+  if (pathname.startsWith("/admin/list/")) {
     return [
       { label: "Home", href: "/admin" },
-      { label: "Chat List", href: "/admin/concierge/list" },
+      { label: "Chat List", href: "/admin/list" },
       { label: context.room_name || "Room" },
     ]
   }

@@ -28,7 +28,7 @@ export default async function AdminConciergeListPage() {
       }
 
   return (
-    <AdminShell session={session} pathname="/admin/concierge/list">
+    <AdminShell session={session} pathname="/admin/list">
       <AdminConciergeQueue queue={queue} variant="tabs" />
     </AdminShell>
   )

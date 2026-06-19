@@ -161,8 +161,15 @@ async function runProxy(request: NextRequest) {
   }
 
   const redirectPath = resolveRoleRedirectPath(context, session)
+  const isAdminPath = pathname.startsWith("/admin")
+  const redirectsOutOfAdmin =
+    isAdminPath && redirectPath && !redirectPath.startsWith("/admin")
 
-  if (redirectPath && redirectPath !== request.nextUrl.pathname) {
+  if (
+    redirectPath &&
+    redirectPath !== request.nextUrl.pathname &&
+    !redirectsOutOfAdmin
+  ) {
     const redirectUrl = request.nextUrl.clone()
     redirectUrl.pathname = redirectPath
     redirectUrl.search = ""
