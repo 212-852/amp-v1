@@ -319,3 +319,14 @@ CHAT ROOM ABSOLUTE RULE
 - All messages from web, LINE, LIFF, and PWA must be archived into the same resolved room.
 - participants must contain the user participant and bot participant for the resolved room.
 - Never create a new room if a matching user_uuid personal room already exists.
+
+#########################
+ADDRESS SELECTION RULE
+#########################
+
+- Prefecture and city must always be selected from the shared address source.
+- Do not hardcode prefecture/city lists in UI.
+- Do not create duplicate address option files.
+- Do not allow free text for prefecture/city.
+- Source tables are prefectures and cities.
+- Shared file is src/address/options.ts.

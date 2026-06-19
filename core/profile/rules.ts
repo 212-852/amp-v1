@@ -1,4 +1,5 @@
 import type { Session } from "@/core/auth/types"
+import { is_city_code, is_prefecture_code } from "@/src/address/options"
 
 export type ProfileLocale = "ja" | "en" | "es"
 
@@ -81,8 +82,6 @@ export function validate_profile_patch(
     "first_name",
     "last_name",
     "phone",
-    "prefecture",
-    "city",
     "address",
     "memo",
   ] as const) {
@@ -92,6 +91,33 @@ export function validate_profile_patch(
       if (value !== undefined) {
         patch[key] = value
       }
+    }
+  }
+
+  if ("prefecture" in body) {
+    const prefecture = normalize_optional_string(body.prefecture)
+
+    if (prefecture !== undefined) {
+      if (prefecture && !is_prefecture_code(prefecture)) {
+        throw new Error("Invalid prefecture")
+      }
+
+      patch.prefecture = prefecture
+    }
+  }
+
+  if ("city" in body) {
+    const city = normalize_optional_string(body.city)
+
+    if (city !== undefined) {
+      const prefecture =
+        "prefecture" in patch ? patch.prefecture : normalize_optional_string(body.prefecture)
+
+      if (city && !is_city_code(prefecture, city)) {
+        throw new Error("Invalid city")
+      }
+
+      patch.city = city
     }
   }
 

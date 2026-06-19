@@ -5,6 +5,10 @@ import { useEffect, useState } from "react"
 
 import { useToast } from "@/components/ui/use_toast"
 import type { ProfileDisplayPayload } from "@/core/profile/output"
+import {
+  get_city_options,
+  prefecture_options,
+} from "@/src/address/options"
 import { useLocale } from "@/src/components/locale/provider"
 import type { Locale } from "@/src/lib/locale"
 
@@ -119,6 +123,16 @@ const content = {
     en: "Close",
     es: "Cerrar",
   },
+  select_prefecture: {
+    ja: "都道府県を選択",
+    en: "Select prefecture",
+    es: "Seleccionar prefectura",
+  },
+  select_city: {
+    ja: "市区町村を選択",
+    en: "Select city",
+    es: "Seleccionar ciudad",
+  },
 } satisfies Record<string, Record<Locale, string>>
 
 export default function ProfileSettings({
@@ -154,6 +168,10 @@ export default function ProfileSettings({
     concierge_available === true,
   )
   const [is_saving, set_is_saving] = useState(false)
+  const city_options = get_city_options(prefecture)
+  const selected_city = city_options.some((option) => option.code === city)
+    ? city
+    : ""
 
   useEffect(() => {
     if (!open) {
@@ -234,7 +252,7 @@ export default function ProfileSettings({
           birth_date,
           phone,
           prefecture,
-          city,
+          city: selected_city,
           address,
           memo,
           locale: selected_locale,
@@ -368,21 +386,39 @@ export default function ProfileSettings({
               <span className="mb-1 block text-[12px] font-semibold text-neutral-600">
                 {content.prefecture[locale]}
               </span>
-              <input
+              <select
                 value={prefecture}
-                onChange={(event) => set_prefecture(event.target.value)}
+                onChange={(event) => {
+                  set_prefecture(event.target.value)
+                  set_city("")
+                }}
                 className="h-10 w-full rounded-md border border-neutral-200 px-3 text-[14px] text-neutral-950 outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100"
-              />
+              >
+                <option value="">{content.select_prefecture[locale]}</option>
+                {prefecture_options.map((option) => (
+                  <option key={option.code} value={option.code}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="block">
               <span className="mb-1 block text-[12px] font-semibold text-neutral-600">
                 {content.city[locale]}
               </span>
-              <input
-                value={city}
+              <select
+                value={selected_city}
+                disabled={!prefecture}
                 onChange={(event) => set_city(event.target.value)}
-                className="h-10 w-full rounded-md border border-neutral-200 px-3 text-[14px] text-neutral-950 outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100"
-              />
+                className="h-10 w-full rounded-md border border-neutral-200 px-3 text-[14px] text-neutral-950 outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100 disabled:bg-neutral-50 disabled:text-neutral-400"
+              >
+                <option value="">{content.select_city[locale]}</option>
+                {city_options.map((option) => (
+                  <option key={option.code} value={option.code}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
 

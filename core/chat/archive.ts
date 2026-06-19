@@ -1444,7 +1444,9 @@ export async function loadConciergeQueueRooms(
       config,
       "rooms",
       [
-        `mode=eq.${encodeURIComponent(condition.mode)}`,
+        condition.mode === "concierge"
+          ? "or=(mode.eq.concierge,thread_status.eq.open)"
+          : "or=(mode.eq.bot,thread_status.neq.open,thread_status.is.null)",
         "select=*",
         "order=updated_at.desc",
         `limit=${limit}`,

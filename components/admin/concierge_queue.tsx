@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 
 import type { ConciergeQueueItem } from "@/core/chat/concierge_queue"
 import type { ConciergeQueueResult } from "@/core/concierge/action"
+import { room_matches_concierge_queue_condition } from "@/core/concierge/rules"
 import { concierge_queue_content } from "@/core/ops/concierge_queue_content"
 import { TYPING_TIMEOUT_MS, type ChatTypingRecord } from "@/core/chat/types"
 import { useLocale } from "@/src/components/locale/provider"
@@ -364,21 +365,28 @@ export default function AdminConciergeQueue({
           const old_record = payload.old as {
             room_uuid?: string
             mode?: string
+            thread_status?: string | null
           } | null
           const new_record = payload.new as {
             room_uuid?: string
             mode?: string
+            thread_status?: string | null
           } | null
           const room_uuid = new_record?.room_uuid ?? old_record?.room_uuid
+          const matches_active_tab =
+            new_record &&
+            room_matches_concierge_queue_condition(new_record, {
+              mode: active_tab,
+            })
 
-          if (new_record?.mode !== active_tab && room_uuid) {
+          if (!matches_active_tab && room_uuid) {
             set_items((current) =>
               current.filter((item) => item.room_uuid !== room_uuid),
             )
             return
           }
 
-          if (new_record?.mode === active_tab) {
+          if (matches_active_tab) {
             schedule_refresh()
           }
         },
@@ -396,6 +404,11 @@ export default function AdminConciergeQueue({
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "users" },
+        schedule_refresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "profiles" },
         schedule_refresh,
       )
       .on(
@@ -506,15 +519,15 @@ export default function AdminConciergeQueue({
         )}
       </div>
 
-      {variant === "tabs" ? (
-      <div className="absolute bottom-0 right-2">
-        <Link
-          href="/admin/concierge"
-          className="text-[13px] font-semibold text-neutral-900 transition hover:text-neutral-600 active:text-neutral-500"
-        >
-          {concierge_queue_content.view_all[locale]}
-        </Link>
-      </div>
+      {variant === "preview" ? (
+        <div className="absolute bottom-0 right-2">
+          <Link
+            href="/admin/concierge"
+            className="text-[13px] font-semibold text-neutral-900 transition hover:text-neutral-600 active:text-neutral-500"
+          >
+            {concierge_queue_content.view_all[locale]}
+          </Link>
+        </div>
       ) : null}
     </section>
   )
