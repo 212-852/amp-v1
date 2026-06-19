@@ -335,6 +335,7 @@ ADDRESS SELECTION RULE
 ADMIN/USER UI SEPARATION RULE
 #########################
 
+ADMIN/USER UI SEPARATION RULE
 - Admin routes must never render user chat layout.
 - User routes must never render admin concierge layout.
 - AI assistant is allowed only on admin top page.
@@ -343,12 +344,3 @@ ADMIN/USER UI SEPARATION RULE
 - /admin/list is the full concierge room list.
 - /admin/list/[room_uuid] is the admin chat room page.
 - /admin/concierge must redirect to /admin.
-
-ADMIN ROUTE RULE
-- /admin is the admin top dashboard.
-- /admin must never render user UI.
-- /admin routes must use admin layout only.
-- User quick menu, user footer, user assistant, and user home cards must not appear under /admin.
-- /admin/concierge is not an independent page.
-- Chat list is /admin/list.
-- Chat room is /admin/list/[room_uuid].
