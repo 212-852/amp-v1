@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 
 import type { ConciergeQueueItem } from "@/core/chat/concierge_queue"
 import type { ConciergeQueueResult } from "@/core/concierge/action"
@@ -161,6 +161,7 @@ export default function ConciergeQueuePanel({
 }>) {
   const { locale } = useLocale()
   const router = useRouter()
+  const [is_pending, start_transition] = useTransition()
   const should_show_list = queue?.should_show_list ?? true
   const rendered_items = queue?.rooms ?? queue?.items ?? items ?? []
 
@@ -177,22 +178,28 @@ export default function ConciergeQueuePanel({
       return
     }
 
+    function refresh_queue() {
+      start_transition(() => {
+        router.refresh()
+      })
+    }
+
     const channel = supabase
       .channel("admin:concierge_queue")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "rooms" },
-        () => router.refresh(),
+        refresh_queue,
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "messages" },
-        () => router.refresh(),
+        refresh_queue,
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "presence" },
-        () => router.refresh(),
+        refresh_queue,
       )
       .subscribe()
 
@@ -207,6 +214,12 @@ export default function ConciergeQueuePanel({
 
   return (
     <section>
+      {is_pending ? (
+        <p className="py-2 text-[13px] text-neutral-500">
+          {concierge_queue_content.loading[locale]}
+        </p>
+      ) : null}
+
       <div className="flex flex-col">
         {rendered_items.length === 0 ? (
           <p className="text-[13px] text-neutral-500">

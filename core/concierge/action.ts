@@ -5,6 +5,7 @@ import {
   type ConciergeQueueItem,
 } from "@/core/chat/concierge_queue"
 import { canToggleConciergeAvailability } from "@/core/chat/concierge_access"
+import { normalize_concierge_queue_context } from "@/core/concierge/context"
 import {
   resolve_concierge_queue_room_condition,
   should_show_concierge_list,
@@ -22,12 +23,14 @@ export async function get_concierge_queue(
   session: Session,
   options?: { limit?: number },
 ): Promise<ConciergeQueueResult> {
-  if (!canToggleConciergeAvailability(session)) {
+  const context = normalize_concierge_queue_context(session, options)
+
+  if (!canToggleConciergeAvailability(context.session)) {
     throw new Error("Concierge queue access denied")
   }
 
   const availability_enabled = await loadConciergeAvailability(
-    session.user_uuid,
+    context.session.user_uuid,
   )
   const should_show_list = should_show_concierge_list({
     availability_enabled,
@@ -44,8 +47,8 @@ export async function get_concierge_queue(
     }
   }
 
-  const rooms = await loadConciergeQueue(session, {
-    limit: options?.limit,
+  const rooms = await loadConciergeQueue(context.session, {
+    limit: context.limit,
     mode: room_condition.mode,
   })
 
