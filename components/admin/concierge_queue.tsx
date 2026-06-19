@@ -10,6 +10,8 @@ import { TYPING_TIMEOUT_MS, type ChatTypingRecord } from "@/core/chat/types"
 import { useLocale } from "@/src/components/locale/provider"
 import { create_browser_supabase_client } from "@/src/lib/supabase/client"
 
+type QueueMode = "concierge" | "bot"
+
 function roomChannelName(room_uuid: string) {
   return `room:${room_uuid}`
 }
@@ -116,7 +118,7 @@ function ConciergeQueueCard({
     room_uuid: item.room_uuid,
     customer_participant_uuid: item.customer_participant_uuid,
   })
-  const row_background = index % 2 === 0 ? "bg-neutral-50" : "bg-white"
+  const row_background = (index + 1) % 2 === 0 ? "bg-neutral-50" : "bg-white"
 
   return (
     <Link
@@ -140,13 +142,12 @@ function ConciergeQueueCard({
             {resolveInitials(item.display_name)}
           </span>
         )}
-        <span
-          aria-hidden="true"
-          className={[
-            "absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white",
-            item.admin_active_count > 0 ? "bg-neutral-900" : "bg-neutral-300",
-          ].join(" ")}
-        />
+        {item.admin_active_count > 0 ? (
+          <span
+            aria-hidden="true"
+            className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-neutral-900"
+          />
+        ) : null}
       </div>
 
       <div className="min-w-0 flex-1">
@@ -170,8 +171,14 @@ function ConciergeQueueCard({
   )
 }
 
-async function fetchConciergeQueueFromApi(): Promise<ConciergeQueueResult | null> {
-  const response = await fetch("/api/chat/concierge?list=1", {
+async function fetchConciergeQueueFromApi(
+  mode: QueueMode,
+): Promise<ConciergeQueueResult | null> {
+  const params = new URLSearchParams({
+    list: "1",
+    mode,
+  })
+  const response = await fetch(`/api/chat/concierge?${params.toString()}`, {
     cache: "no-store",
   })
 
@@ -191,7 +198,7 @@ async function fetchConciergeQueueFromApi(): Promise<ConciergeQueueResult | null
   return {
     availability_enabled: payload.availability_enabled ?? payload.enabled === true,
     should_show_list: payload.should_show_list ?? false,
-    room_condition: payload.room_condition ?? { mode: "concierge" },
+    room_condition: payload.room_condition ?? { mode },
     rooms: payload.rooms ?? payload.items ?? [],
     items: payload.items ?? payload.rooms ?? [],
   }
@@ -206,13 +213,20 @@ export default function AdminConciergeQueue({
   const [is_available, set_is_available] = useState(
     queue?.availability_enabled === true,
   )
+  const [active_tab, set_active_tab] = useState<QueueMode>(
+    queue?.room_condition?.mode === "bot" ? "bot" : "concierge",
+  )
   const [items, set_items] = useState<ConciergeQueueItem[]>(
     queue?.should_show_list ? (queue.rooms ?? queue.items ?? []) : [],
   )
   const [is_loading, set_is_loading] = useState(false)
   const refresh_request_ref = useRef(0)
 
-  const load_queue = useCallback(async (options?: { silent?: boolean }) => {
+  const load_queue = useCallback(async (options?: {
+    silent?: boolean
+    mode?: QueueMode
+  }) => {
+    const mode = options?.mode ?? active_tab
     const request_id = refresh_request_ref.current + 1
     refresh_request_ref.current = request_id
 
@@ -221,7 +235,7 @@ export default function AdminConciergeQueue({
     }
 
     try {
-      const result = await fetchConciergeQueueFromApi()
+      const result = await fetchConciergeQueueFromApi(mode)
 
       if (refresh_request_ref.current !== request_id) {
         return
@@ -240,7 +254,17 @@ export default function AdminConciergeQueue({
         set_is_loading(false)
       }
     }
-  }, [])
+  }, [active_tab])
+
+  function change_tab(mode: QueueMode) {
+    if (mode === active_tab) {
+      return
+    }
+
+    set_active_tab(mode)
+    set_items([])
+    void load_queue({ mode })
+  }
 
   useEffect(() => {
     function handle_availability_change(event: Event) {
@@ -259,7 +283,7 @@ export default function AdminConciergeQueue({
         return
       }
 
-      void load_queue()
+      void load_queue({ mode: active_tab })
     }
 
     window.addEventListener(
@@ -273,7 +297,7 @@ export default function AdminConciergeQueue({
         handle_availability_change,
       )
     }
-  }, [load_queue])
+  }, [active_tab, load_queue])
 
   useEffect(() => {
     if (!is_available) {
@@ -335,30 +359,31 @@ export default function AdminConciergeQueue({
           } | null
           const room_uuid = new_record?.room_uuid ?? old_record?.room_uuid
 
-          if (
-            old_record?.mode === "concierge" &&
-            new_record?.mode !== "concierge" &&
-            room_uuid
-          ) {
+          if (new_record?.mode !== active_tab && room_uuid) {
             set_items((current) =>
               current.filter((item) => item.room_uuid !== room_uuid),
             )
             return
           }
 
-          if (new_record?.mode === "concierge") {
+          if (new_record?.mode === active_tab) {
             schedule_refresh()
           }
         },
       )
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages" },
+        { event: "*", schema: "public", table: "messages" },
         schedule_refresh,
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "presence" },
+        schedule_refresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "users" },
         schedule_refresh,
       )
       .on(
@@ -377,7 +402,7 @@ export default function AdminConciergeQueue({
               return
             }
 
-            void load_queue()
+            void load_queue({ mode: active_tab })
           }
         },
       )
@@ -396,7 +421,14 @@ export default function AdminConciergeQueue({
 
       void supabase.removeChannel(channel)
     }
-  }, [is_available, load_queue, queue?.items, queue?.rooms, queue?.should_show_list])
+  }, [
+    active_tab,
+    is_available,
+    load_queue,
+    queue?.items,
+    queue?.rooms,
+    queue?.should_show_list,
+  ])
 
   if (!is_available) {
     return null
@@ -404,6 +436,33 @@ export default function AdminConciergeQueue({
 
   return (
     <section className="relative pb-9">
+      <div className="mb-2 grid grid-cols-2 border-b border-neutral-200 text-[13px] font-semibold">
+        {(["concierge", "bot"] as const).map((mode) => {
+          const active = active_tab === mode
+          const label =
+            mode === "concierge"
+              ? concierge_queue_content.concierge_tab[locale]
+              : concierge_queue_content.bot_tab[locale]
+
+          return (
+            <button
+              key={mode}
+              type="button"
+              aria-pressed={active}
+              onClick={() => change_tab(mode)}
+              className={[
+                "border-b-2 px-3 py-2 text-center transition",
+                active
+                  ? "border-neutral-950 text-neutral-950"
+                  : "border-transparent text-neutral-500 hover:text-neutral-800",
+              ].join(" ")}
+            >
+              {label}
+            </button>
+          )
+        })}
+      </div>
+
       {is_loading && items.length === 0 ? (
         <div className="px-2 pt-2">
           <div className="inline-flex rounded-full bg-white/60 px-4 py-2 text-[13px] font-medium text-neutral-500">

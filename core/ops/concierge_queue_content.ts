@@ -6,6 +6,16 @@ export const concierge_queue_content = {
     en: "Concierge queue",
     es: "Cola de concierge",
   },
+  concierge_tab: {
+    ja: "Concierge",
+    en: "Concierge",
+    es: "Concierge",
+  },
+  bot_tab: {
+    ja: "Bot",
+    en: "Bot",
+    es: "Bot",
+  },
   unassigned: {
     ja: "未対応",
     en: "Unassigned",

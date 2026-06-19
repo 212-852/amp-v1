@@ -1,12 +1,16 @@
 "use client"
 
-import { Bell, Globe2, Mail, User } from "lucide-react"
+import { Bell, Globe2, Mail, Settings, User } from "lucide-react"
 import { SiGoogle, SiLine } from "react-icons/si"
+import { useState } from "react"
 
 import { useOverlay } from "@/components/overlay"
+import ProfileSettings from "@/components/profile/settings"
+import type { ProfileDisplayPayload } from "@/core/profile/output"
 import { useLocale } from "@/src/components/locale/provider"
 
 export type AppHeaderAuth = {
+  visitor_uuid?: string | null
   user_uuid: string | null
   role: string
   tier: string
@@ -68,6 +72,11 @@ const content = {
     ja: "ユーザープロフィール",
     en: "User profile",
     es: "Perfil de usuario",
+  },
+  settings_label: {
+    ja: "設定",
+    en: "Settings",
+    es: "Configuracion",
   },
 }
 
@@ -181,12 +190,22 @@ function UserAvatar({ auth }: { auth: AppHeaderAuth }) {
 export default function AppHeader({ auth }: { auth: AppHeaderAuth }) {
   const { openOverlay } = useOverlay()
   const { locale } = useLocale()
+  const [settings_open, set_settings_open] = useState(false)
+  const [saved_profile, set_saved_profile] =
+    useState<ProfileDisplayPayload | null>(null)
+  const display_name = saved_profile?.display_name ?? auth.display_name
+  const image_url = saved_profile?.image_url ?? auth.image_url
   const language_label = locale.toUpperCase()
   const is_logged_in = Boolean(auth.user_uuid)
   const is_linked = Boolean(auth.provider)
   const user_name = is_logged_in
-    ? auth.display_name ?? auth.email ?? auth.role
+    ? display_name ?? auth.email ?? auth.role
     : content.guest[locale]
+  const display_auth = {
+    ...auth,
+    display_name,
+    image_url,
+  }
   const open_account_link = () => {
     if (!is_logged_in) {
       openOverlay({
@@ -284,13 +303,40 @@ export default function AppHeader({ auth }: { auth: AppHeaderAuth }) {
             <button
               type="button"
               aria-label={content.user_profile_label[locale]}
+              onClick={() => set_settings_open(true)}
               className="flex h-9 w-9 items-center justify-center rounded-full bg-[#8f5d28] text-[#fdfaf6]"
             >
-              <UserAvatar auth={auth} />
+              <UserAvatar auth={display_auth} />
+            </button>
+            <button
+              type="button"
+              aria-label={content.settings_label[locale]}
+              onClick={() => set_settings_open(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-[#fdfaf6] text-[#8f5d28] ring-1 ring-[#dcc7aa]"
+            >
+              <Settings className="h-[20px] w-[20px]" strokeWidth={2} />
             </button>
           </div>
         </div>
       </div>
+      {settings_open ? (
+        <ProfileSettings
+          open={settings_open}
+          initial_profile={{
+            user_uuid: auth.user_uuid,
+            visitor_uuid: auth.visitor_uuid ?? null,
+            display_name: user_name,
+            image_url,
+            role: auth.role,
+            tier: auth.tier,
+            locale,
+            notification_preference: "all",
+          }}
+          can_edit_concierge={false}
+          onClose={() => set_settings_open(false)}
+          onSaved={set_saved_profile}
+        />
+      ) : null}
     </header>
   )
 }

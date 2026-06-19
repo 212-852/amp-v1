@@ -110,6 +110,6 @@ export function build_concierge_queue_room(input: {
     customer_avatar_url: avatar_url,
     latest_message_preview: latest_message,
     assigned_admin_name: assigned_profile?.display_name?.trim() ?? null,
-    updated_at: input.room.updated_at,
+    updated_at: input.latest_message?.created_at ?? input.room.updated_at,
   } satisfies ConciergeQueueRoom
 }

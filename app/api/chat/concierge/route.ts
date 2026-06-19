@@ -14,7 +14,12 @@ export async function GET(request: Request) {
     const url = new URL(request.url)
 
     if (url.searchParams.get("list") === "1") {
-      const queue = await get_concierge_queue(session, { limit: 50 })
+      const requested_mode = url.searchParams.get("mode")
+      const mode =
+        requested_mode === "bot" || requested_mode === "concierge"
+          ? requested_mode
+          : "concierge"
+      const queue = await get_concierge_queue(session, { limit: 50, mode })
 
       return NextResponse.json({
         ok: true,

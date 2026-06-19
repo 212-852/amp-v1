@@ -1371,7 +1371,7 @@ export async function loadUserProfiles(user_uuids: string[]) {
 
 export async function loadConciergeQueueRooms(
   limit = 10,
-  condition: { mode: "concierge" } = { mode: "concierge" },
+  condition: { mode: "concierge" | "bot" } = { mode: "concierge" },
 ) {
   const config = getRestConfig()
 

@@ -60,7 +60,7 @@ export function buildConciergeQueueItem(input: {
 
 export async function loadConciergeQueue(
   session: Session,
-  options?: { limit?: number; mode?: "concierge" },
+  options?: { limit?: number; mode?: "concierge" | "bot" },
 ) {
   if (!canToggleConciergeAvailability(session)) {
     throw new Error("Concierge queue access denied")
@@ -139,5 +139,8 @@ export async function loadConciergeQueue(
     }
   }
 
-  return items
+  return items.sort(
+    (left, right) =>
+      new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime(),
+  )
 }

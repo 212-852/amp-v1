@@ -1,5 +1,5 @@
 export type ConciergeQueueRoomCondition = {
-  mode: "concierge"
+  mode: "concierge" | "bot"
 }
 
 export function should_show_concierge_list(input: {
@@ -8,8 +8,10 @@ export function should_show_concierge_list(input: {
   return input.availability_enabled === true
 }
 
-export function resolve_concierge_queue_room_condition(): ConciergeQueueRoomCondition {
-  return { mode: "concierge" }
+export function resolve_concierge_queue_room_condition(
+  mode: ConciergeQueueRoomCondition["mode"] = "concierge",
+): ConciergeQueueRoomCondition {
+  return { mode }
 }
 
 export function resolve_concierge_room_href(room_uuid: string) {
