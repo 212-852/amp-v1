@@ -9,9 +9,17 @@ import {
   sendIdentityDebug,
 } from "@/core/auth/identity"
 import { linkCurrentVisitorToIdentity, linkVisitorToIdentity } from "@/core/auth/link"
-import { resolveSession, VISITOR_COOKIE_NAME, type AppSession } from "@/core/auth/session"
+import {
+  resolveSession,
+  VISITOR_COOKIE_NAME,
+  visitorCookieOptions,
+  type AppSession,
+} from "@/core/auth/session"
+import { resolveAuthRoute } from "@/core/auth/route"
+import type { SessionRole, SessionTier } from "@/core/auth/types"
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
 import { sendAuthDebug } from "@/core/debug"
+import { resolveEntranceContext } from "@/core/entrance/context"
 import { sendMail } from "@/core/mail/action"
 
 type OtpChannel = "email" | "line" | "sms"
@@ -75,6 +83,48 @@ function clearRuntimeAuthCookies(request: NextRequest, response: NextResponse) {
       response.cookies.delete(cookie.name)
     }
   }
+}
+
+function normalizeLinkedRole(value: string | null | undefined): SessionRole {
+  if (
+    value === "admin" ||
+    value === "owner" ||
+    value === "concierge" ||
+    value === "driver" ||
+    value === "user"
+  ) {
+    return value
+  }
+
+  return "user"
+}
+
+function normalizeLinkedTier(value: string | null | undefined): SessionTier {
+  return value?.trim() ? value : "member"
+}
+
+async function writeSessionVisitorCookie(input: {
+  response: NextResponse
+  visitor_uuid: string
+  user_uuid: string
+  pathname: string
+}) {
+  input.response.cookies.set(
+    VISITOR_COOKIE_NAME,
+    input.visitor_uuid,
+    visitorCookieOptions,
+  )
+
+  await sendAuthDebug("session_cookie_write", {
+    cookie_name: VISITOR_COOKIE_NAME,
+    visitor_uuid: input.visitor_uuid,
+    user_uuid: input.user_uuid,
+    pathname: input.pathname,
+    path: visitorCookieOptions.path,
+    max_age: visitorCookieOptions.maxAge,
+    secure: visitorCookieOptions.secure,
+    same_site: visitorCookieOptions.sameSite,
+  })
 }
 
 async function unlinkVisitorUser(visitor_uuid: string) {
@@ -1616,7 +1666,7 @@ export async function completeLineLogin(request: NextRequest) {
     const profile = await fetchLineProfile(token.access_token)
 
     if (callbackBridge) {
-      await completeLineBridge({
+      const bridgeResult = await completeLineBridge({
         bridge: callbackBridge,
         oauth_state: bridgeStatePayload?.oauth_state ?? "",
         profile,
@@ -1631,6 +1681,12 @@ export async function completeLineLogin(request: NextRequest) {
       })
 
       const response = bridgeCompletePage()
+      await writeSessionVisitorCookie({
+        response,
+        visitor_uuid: bridgeResult.visitor_uuid,
+        user_uuid: bridgeResult.user_uuid,
+        pathname: "/api/auth/line/callback",
+      })
       response.cookies.delete(LINE_LOGIN_STATE_COOKIE)
 
       return response
@@ -1653,7 +1709,60 @@ export async function completeLineLogin(request: NextRequest) {
       source_channel: result.source_channel,
     })
 
-    const response = NextResponse.redirect(new URL("/", appBaseUrl(request)), 303)
+    const linkedProfile = await resolveAuthUserProfile(result.user_uuid)
+    const linkedSession: AppSession = {
+      ...result.session,
+      visitor_uuid: result.visitor_uuid,
+      user_uuid: result.user_uuid,
+      role: normalizeLinkedRole(linkedProfile.role),
+      tier: normalizeLinkedTier(linkedProfile.tier),
+      display_name: linkedProfile.display_name ?? result.display_name,
+      image_url: linkedProfile.image_url,
+      provider: linkedProfile.provider ?? "line",
+      email: linkedProfile.email,
+      source_channel: result.source_channel as AppSession["source_channel"],
+      can_logout: true,
+      can_start_line_oauth: false,
+    }
+    const route = resolveAuthRoute(
+      { ...context, requested_route: "/" },
+      await resolveEntranceContext(),
+      linkedSession,
+      {
+        user_uuid: result.user_uuid,
+        identity_state: "linked",
+        linked_providers: ["line"],
+      },
+    )
+
+    await sendAuthDebug("resolved_user_uuid", {
+      provider: "line",
+      visitor_uuid: result.visitor_uuid,
+      user_uuid: linkedSession.user_uuid,
+      pathname: "/api/auth/line/callback",
+    })
+    await sendAuthDebug("resolved_role", {
+      provider: "line",
+      visitor_uuid: result.visitor_uuid,
+      user_uuid: linkedSession.user_uuid,
+      role: linkedSession.role,
+      pathname: "/api/auth/line/callback",
+    })
+    await sendAuthDebug("resolved_tier", {
+      provider: "line",
+      visitor_uuid: result.visitor_uuid,
+      user_uuid: linkedSession.user_uuid,
+      tier: linkedSession.tier,
+      pathname: "/api/auth/line/callback",
+    })
+
+    const response = NextResponse.redirect(new URL(route.path, appBaseUrl(request)), 303)
+    await writeSessionVisitorCookie({
+      response,
+      visitor_uuid: result.visitor_uuid,
+      user_uuid: result.user_uuid,
+      pathname: "/api/auth/line/callback",
+    })
     response.cookies.delete(LINE_LOGIN_STATE_COOKIE)
 
     return response

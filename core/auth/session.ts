@@ -970,6 +970,17 @@ async function resolveVisitorRecord(
     request_id,
   )
 
+  await send_auth_debug(
+    "session_cookie_read",
+    {
+      pathname,
+      cookie_name: VISITOR_COOKIE_NAME,
+      cookie_found,
+      visitor_uuid: cookie_found ? cookie_value : null,
+    },
+    request_id,
+  )
+
   if (cookie_value) {
     const lookupResult = await visitorStore.findVisitorByUuid(cookie_value)
     const existingVisitor = lookupResult.visitor
@@ -1165,6 +1176,38 @@ async function resolve_session_context_core(
         visitor_uuid: session.visitor_uuid,
         user_uuid: session.user_uuid,
         source_channel: session.source_channel,
+      },
+      request_id,
+    )
+
+    await send_auth_debug(
+      "resolved_user_uuid",
+      {
+        pathname,
+        visitor_uuid: session.visitor_uuid,
+        user_uuid: session.user_uuid,
+      },
+      request_id,
+    )
+
+    await send_auth_debug(
+      "resolved_role",
+      {
+        pathname,
+        visitor_uuid: session.visitor_uuid,
+        user_uuid: session.user_uuid,
+        role: session.role,
+      },
+      request_id,
+    )
+
+    await send_auth_debug(
+      "resolved_tier",
+      {
+        pathname,
+        visitor_uuid: session.visitor_uuid,
+        user_uuid: session.user_uuid,
+        tier: session.tier,
       },
       request_id,
     )
