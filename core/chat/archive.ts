@@ -607,6 +607,49 @@ export async function updateRoomMode(input: {
   return rows[0]
 }
 
+export async function updateRoomThreadState(input: {
+  room_uuid: string
+  thread_id?: string | null
+  thread_status: "open" | "closed"
+}) {
+  const config = requireConfig()
+  const body: {
+    thread_id?: string | null
+    thread_status: "open" | "closed"
+    updated_at: string
+  } = {
+    thread_status: input.thread_status,
+    updated_at: new Date().toISOString(),
+  }
+
+  if (input.thread_id !== undefined) {
+    body.thread_id = input.thread_id
+  }
+
+  const response = await fetch(
+    restUrl(config, "rooms", `room_uuid=eq.${encodeURIComponent(input.room_uuid)}&select=*`),
+    {
+      method: "PATCH",
+      headers: {
+        ...restHeaders(config),
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+    throw new Error(
+      `Failed to update room thread state: ${error.message ?? "unknown"}`,
+    )
+  }
+
+  const rows = (await response.json()) as ChatRoomRecord[]
+  return rows[0]
+}
+
 export async function findRoomByUuid(room_uuid: string) {
   const config = getRestConfig()
 

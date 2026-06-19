@@ -1,11 +1,15 @@
 export type NotifyEventName =
   | "admin_page_accessed"
   | "admin_page_unauthorized_access"
+  | "concierge_admin_entered"
+  | "concierge_admin_left"
+  | "concierge_closed"
+  | "concierge_requested"
   | "driver_page_unauthorized_access"
 
 export type NotifyPriority = "normal" | "high" | "warning"
 
-export type NotifyChannel = "discord"
+export type NotifyChannel = "discord" | "odin"
 
 export type NotifyEventInput = {
   event: NotifyEventName
@@ -45,6 +49,27 @@ function resolveWolfMention() {
 export function resolveNotifyDelivery(input: NotifyEventInput): NotifyDelivery {
   const webhook_url = resolveWolfWebhook()
   const mention = resolveWolfMention()
+
+  if (
+    input.event === "concierge_requested" ||
+    input.event === "concierge_closed" ||
+    input.event === "concierge_admin_entered" ||
+    input.event === "concierge_admin_left"
+  ) {
+    return {
+      channel: "odin",
+      webhook_url: null,
+      title: "Odin Concierge",
+      event: input.event,
+      priority: "normal",
+      mention: null,
+      summary: "concierge tracking",
+      format: "plain",
+      embed_color: null,
+      request_id: input.request_id,
+      payload: input.payload,
+    }
+  }
 
   if (input.event === "admin_page_accessed") {
     return {

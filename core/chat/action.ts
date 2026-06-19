@@ -14,9 +14,12 @@ import {
   findRoomByUuid,
   insertParticipant,
   loadConciergeAvailability,
+  loadRoomParticipants,
+  loadUserProfiles,
   loadRoomMessages,
   setConciergeAvailability,
   updateRoomMode,
+  updateRoomThreadState,
 } from "@/core/chat/archive"
 import {
   archivePreparedMessage,
@@ -99,6 +102,145 @@ function logChatBootstrap(
   data: Record<string, unknown>,
 ) {
   console.info(`[chat_bootstrap] ${event}`, data)
+}
+
+async function resolveConciergeCustomerName(room_uuid: string) {
+  const participants = await loadRoomParticipants(room_uuid)
+  const customer =
+    participants.find((participant) => participant.role === "user") ??
+    participants.find((participant) => participant.role === "guest") ??
+    null
+
+  if (!customer) {
+    return "Customer"
+  }
+
+  if (customer.user_uuid) {
+    const profiles = await loadUserProfiles([customer.user_uuid])
+    const profile = profiles.get(customer.user_uuid)
+
+    if (profile?.display_name?.trim()) {
+      return profile.display_name.trim()
+    }
+  }
+
+  return customer.role === "guest" ? "Guest" : "Customer"
+}
+
+async function syncConciergeOdinModeChange(input: {
+  previous_room: Awaited<ReturnType<typeof bootstrapChatRoom>>["room"]
+  updated_room: Awaited<ReturnType<typeof bootstrapChatRoom>>["room"]
+}) {
+  if (input.previous_room.mode === input.updated_room.mode) {
+    return
+  }
+
+  if (
+    input.updated_room.mode !== "concierge" &&
+    !(input.previous_room.mode === "concierge" && input.updated_room.mode === "bot")
+  ) {
+    return
+  }
+
+  try {
+    const { notifyEvent } = await import("@/core/notify")
+    const customer_name = await resolveConciergeCustomerName(
+      input.updated_room.room_uuid,
+    )
+
+    if (input.updated_room.mode === "concierge") {
+      const result = await notifyEvent({
+        event: "concierge_requested",
+        request_id: `${input.updated_room.room_uuid}:concierge_requested:${Date.now()}`,
+        payload: {
+          customer_name,
+          room_uuid: input.updated_room.room_uuid,
+          thread_id: input.previous_room.thread_id ?? input.updated_room.thread_id ?? null,
+          thread_status:
+            input.previous_room.thread_status ??
+            input.updated_room.thread_status ??
+            "closed",
+        },
+      })
+
+      if (result?.thread_id && result.thread_status === "open") {
+        await updateRoomThreadState({
+          room_uuid: input.updated_room.room_uuid,
+          thread_id: result.thread_id,
+          thread_status: "open",
+        })
+      }
+    }
+
+    if (
+      input.previous_room.mode === "concierge" &&
+      input.updated_room.mode === "bot"
+    ) {
+      const thread_id =
+        input.previous_room.thread_id ?? input.updated_room.thread_id ?? null
+
+      const result = await notifyEvent({
+        event: "concierge_closed",
+        request_id: `${input.updated_room.room_uuid}:concierge_closed:${Date.now()}`,
+        payload: {
+          customer_name,
+          room_uuid: input.updated_room.room_uuid,
+          thread_id,
+          thread_status:
+            input.previous_room.thread_status ??
+            input.updated_room.thread_status ??
+            "open",
+        },
+      })
+
+      if ((result?.thread_id ?? thread_id) && result?.thread_status === "closed") {
+        await updateRoomThreadState({
+          room_uuid: input.updated_room.room_uuid,
+          thread_id: result.thread_id ?? thread_id,
+          thread_status: "closed",
+        })
+      }
+    }
+  } catch (error) {
+    console.warn("[concierge_odin] mode_sync_failed", {
+      room_uuid: input.updated_room.room_uuid,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+async function syncConciergeOdinAdminPresence(input: {
+  room: Awaited<ReturnType<typeof bootstrapChatRoom>>["room"]
+  action: "enter" | "leave"
+  admin_name: string
+}) {
+  if (input.room.mode !== "concierge" || !input.room.thread_id) {
+    return
+  }
+
+  try {
+    const { notifyEvent } = await import("@/core/notify")
+
+    await notifyEvent({
+      event:
+        input.action === "enter"
+          ? "concierge_admin_entered"
+          : "concierge_admin_left",
+      request_id: `${input.room.room_uuid}:concierge_admin_${input.action}:${Date.now()}`,
+      payload: {
+        admin_name: input.admin_name,
+        room_uuid: input.room.room_uuid,
+        thread_id: input.room.thread_id,
+        thread_status: input.room.thread_status ?? "open",
+      },
+    })
+  } catch (error) {
+    console.warn("[concierge_odin] admin_presence_sync_failed", {
+      room_uuid: input.room.room_uuid,
+      action: input.action,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
 }
 
 export async function handleChatRoomBootstrap(input: {
@@ -376,6 +518,11 @@ async function handleRoomModeCommand(input: {
     source_channel: input.source_channel,
   })
 
+  await syncConciergeOdinModeChange({
+    previous_room: input.room,
+    updated_room,
+  })
+
   const output_locale = resolveOutputLocale({
     preferred: input.locale,
     room_locale: input.room.locale,
@@ -427,6 +574,11 @@ export async function handleChatModeSwitch(input: ChatModeSwitchInput) {
   const updated_room = await updateRoomMode({
     room_uuid: room.room_uuid,
     mode,
+  })
+
+  await syncConciergeOdinModeChange({
+    previous_room: room,
+    updated_room,
   })
 
   const output_locale = resolveOutputLocale({
@@ -566,6 +718,12 @@ export async function handleChatRoomPresence(input: ChatRoomPresenceInput) {
       participant_uuid: participant.participant_uuid,
     })
 
+    await syncConciergeOdinAdminPresence({
+      room,
+      action: "enter",
+      admin_name: display_name,
+    })
+
     const message = await archivePreparedMessage({
       room,
       participant,
@@ -595,6 +753,12 @@ export async function handleChatRoomPresence(input: ChatRoomPresenceInput) {
   const presence = await updateRoomPresenceLeave({
     room_uuid: room.room_uuid,
     participant_uuid: participant.participant_uuid,
+  })
+
+  await syncConciergeOdinAdminPresence({
+    room,
+    action: "leave",
+    admin_name: display_name,
   })
 
   const message = await archivePreparedMessage({

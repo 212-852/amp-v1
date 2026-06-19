@@ -6,6 +6,7 @@ import {
   deliverDiscordNotification,
   notifyDiscord,
 } from "@/core/notify/discord"
+import { deliverOdinNotification } from "@/core/notify/odin"
 import {
   resolveNotifyDelivery,
   type NotifyEventInput,
@@ -17,6 +18,13 @@ export type NotifyMessage = {
   event: string
   request_id?: string | null
   payload: Record<string, unknown>
+}
+
+export type NotifyEventResult = {
+  delivered: boolean
+  reason?: string
+  thread_id?: string | null
+  thread_status?: "open" | "closed" | null
 }
 
 async function logNotifyDebug(
@@ -34,18 +42,18 @@ async function logNotifyDebug(
 }
 
 export async function notifyEvent(input: NotifyEventInput) {
-  if (hasNotifyBeenDelivered(input.request_id, input.event)) {
+  if (input.request_id && hasNotifyBeenDelivered(input.request_id, input.event)) {
     await logNotifyDebug("notify_delivery_skipped", {
       reason: "duplicate_request",
       event: input.event,
       request_id: input.request_id ?? null,
     })
-    return
+    return { delivered: false, reason: "duplicate_request" } satisfies NotifyEventResult
   }
 
   const delivery = resolveNotifyDelivery(input)
 
-  if (!delivery.webhook_url) {
+  if (delivery.channel === "discord" && !delivery.webhook_url) {
     await logNotifyDebug("notify_delivery_skipped", {
       reason: "webhook_missing",
       event: input.event,
@@ -53,14 +61,22 @@ export async function notifyEvent(input: NotifyEventInput) {
       webhook: "NOTIFY_WOLF_WEBHOOK",
       payload: input.payload,
     })
-    return
+    return { delivered: false, reason: "webhook_missing" } satisfies NotifyEventResult
   }
 
-  markNotifyDelivered(input.request_id, input.event)
+  if (input.request_id) {
+    markNotifyDelivered(input.request_id, input.event)
+  }
 
   try {
+    let result: NotifyEventResult = { delivered: false }
+
     if (delivery.channel === "discord") {
-      await deliverDiscordNotification(delivery)
+      result = await deliverDiscordNotification(delivery)
+    }
+
+    if (delivery.channel === "odin") {
+      result = await deliverOdinNotification(delivery)
     }
 
     await logNotifyDebug("notify_delivery_sent", {
@@ -68,8 +84,12 @@ export async function notifyEvent(input: NotifyEventInput) {
       request_id: input.request_id ?? null,
       priority: delivery.priority,
       channel: delivery.channel,
+      delivered: result.delivered,
+      reason: result.reason ?? null,
       payload: input.payload,
     })
+
+    return result
   } catch (error) {
     await logNotifyDebug("notify_delivery_failed", {
       event: input.event,
@@ -77,6 +97,11 @@ export async function notifyEvent(input: NotifyEventInput) {
       error_message: error instanceof Error ? error.message : String(error),
       payload: input.payload,
     })
+
+    return {
+      delivered: false,
+      reason: error instanceof Error ? error.message : String(error),
+    } satisfies NotifyEventResult
   }
 }
 

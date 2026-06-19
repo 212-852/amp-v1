@@ -70,6 +70,8 @@ export type ChatRoomRecord = {
   mode: ChatRoomMode
   locale: ChatLocale
   channel: SourceChannel
+  thread_id?: string | null
+  thread_status?: "open" | "closed" | null
   user_uuid?: string | null
   visitor_uuid?: string | null
   order_uuid?: string | null
