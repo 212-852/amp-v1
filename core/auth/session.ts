@@ -10,6 +10,7 @@ import type {
   SourceChannel,
 } from "@/core/auth/types"
 import { sendAuthDebug as send_auth_debug } from "@/core/debug"
+import { resolve_profile_display_name } from "@/core/profile/rules"
 
 const VISITOR_COOKIE_NAME = "amp_visitor_uuid"
 const VISITOR_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
@@ -89,8 +90,15 @@ type SessionProfile = {
 type UserProfileRow = {
   role?: string | null
   tier?: string | null
+  name?: string | null
   display_name?: string | null
   image_url?: string | null
+}
+
+type ProfileNameRow = {
+  nickname?: string | null
+  first_name?: string | null
+  last_name?: string | null
 }
 
 type IdentityProfileRow = {
@@ -703,14 +711,41 @@ async function resolveSessionProfile(user_uuid: string | null): Promise<SessionP
     }
   }
 
-  const [userResponse, identityResponse] = await Promise.all([
-    fetch(
+  const userQueryBase = `user_uuid=eq.${encodeURIComponent(user_uuid)}`
+  let userResponse = await fetch(
+    restUrl(
+      config,
+      "users",
+      [userQueryBase, "select=role,tier,name,image_url", "limit=1"].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!userResponse.ok) {
+    userResponse = await fetch(
       restUrl(
         config,
         "users",
+        [userQueryBase, "select=role,tier,display_name,image_url", "limit=1"].join("&"),
+      ),
+      {
+        headers: restHeaders(config),
+        cache: "no-store",
+      },
+    )
+  }
+
+  const [profileResponse, identityResponse] = await Promise.all([
+    fetch(
+      restUrl(
+        config,
+        "profiles",
         [
-          `user_uuid=eq.${encodeURIComponent(user_uuid)}`,
-          "select=role,tier,display_name,image_url",
+          userQueryBase,
+          "select=nickname,first_name,last_name",
           "limit=1",
         ].join("&"),
       ),
@@ -748,16 +783,26 @@ async function resolveSessionProfile(user_uuid: string | null): Promise<SessionP
   }
 
   const users = (await userResponse.json()) as UserProfileRow[]
+  const profiles = profileResponse.ok
+    ? ((await profileResponse.json()) as ProfileNameRow[])
+    : []
   const identities = identityResponse.ok
     ? ((await identityResponse.json()) as IdentityProfileRow[])
     : []
   const user = users[0]
+  const profile = profiles[0]
   const identity = identities[0]
 
   return {
     role: normalizeSessionRole(user?.role ?? "user"),
     tier: normalizeSessionTier(user?.tier ?? "member"),
-    display_name: normalizeNullableString(user?.display_name),
+    display_name: resolve_profile_display_name({
+      nickname: profile?.nickname,
+      first_name: profile?.first_name,
+      last_name: profile?.last_name,
+      users_name: user?.name ?? user?.display_name,
+      fallback: "Guest",
+    }),
     image_url: normalizeNullableString(user?.image_url),
     provider: normalizeSessionProvider(identity?.provider),
     email: normalizeNullableString(identity?.email),

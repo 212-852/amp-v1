@@ -1,3 +1,7 @@
+"use client"
+
+import { useEffect, useState } from "react"
+
 import OpsNeko from "@/components/ops/neko"
 
 type AssistantNotification = {
@@ -12,9 +16,34 @@ const notifications: AssistantNotification[] = [
 ]
 
 export default function OpsAssistant() {
+  const [profile_settings_open, set_profile_settings_open] = useState(false)
   const visible_notifications = notifications.filter(
     (item) => item.message && !item.message.includes("通知なし"),
   )
+
+  useEffect(() => {
+    function handle_visibility(event: Event) {
+      const detail = (event as CustomEvent<{ open?: boolean }>).detail
+
+      set_profile_settings_open(detail?.open === true)
+    }
+
+    window.addEventListener(
+      "amp-profile-settings-visibility",
+      handle_visibility,
+    )
+
+    return () => {
+      window.removeEventListener(
+        "amp-profile-settings-visibility",
+        handle_visibility,
+      )
+    }
+  }, [])
+
+  if (profile_settings_open) {
+    return null
+  }
 
   return (
     <section

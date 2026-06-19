@@ -3,91 +3,112 @@ import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/re
 import { normalize_profile_context } from "@/core/profile/context"
 import { build_profile_output } from "@/core/profile/output"
 import type {
-  NotificationPreference,
   ProfileLocale,
   ProfileSettingsPatch,
 } from "@/core/profile/rules"
 import type { Session } from "@/core/auth/types"
 
 type ProfileRow = {
-  display_name?: string | null
-  image_url?: string | null
+  profile_uuid?: string | null
+  user_uuid?: string | null
+  visitor_uuid?: string | null
+  nickname?: string | null
+  first_name?: string | null
+  last_name?: string | null
+  birth_date?: string | null
+  phone?: string | null
+  prefecture?: string | null
+  city?: string | null
+  address?: string | null
+  memo?: string | null
   locale?: ProfileLocale | null
-  notification_preference?: NotificationPreference | null
+}
+
+type UserNameRow = {
+  name?: string | null
+  display_name?: string | null
 }
 
 function patch_has_profile_fields(patch: ProfileSettingsPatch) {
   return (
-    "display_name" in patch ||
-    "image_url" in patch ||
-    "locale" in patch ||
-    "notification_preference" in patch
+    "nickname" in patch ||
+    "first_name" in patch ||
+    "last_name" in patch ||
+    "birth_date" in patch ||
+    "phone" in patch ||
+    "prefecture" in patch ||
+    "city" in patch ||
+    "address" in patch ||
+    "memo" in patch ||
+    "locale" in patch
   )
 }
 
 function build_profile_db_patch(patch: ProfileSettingsPatch) {
   const body: Record<string, unknown> = {}
 
-  if ("display_name" in patch) {
-    body.display_name = patch.display_name
-  }
-
-  if ("image_url" in patch) {
-    body.image_url = patch.image_url
+  for (const key of [
+    "nickname",
+    "first_name",
+    "last_name",
+    "birth_date",
+    "phone",
+    "prefecture",
+    "city",
+    "address",
+    "memo",
+  ] as const) {
+    if (key in patch) {
+      body[key] = patch[key]
+    }
   }
 
   if (patch.locale) {
     body.locale = patch.locale
   }
 
-  if (patch.notification_preference) {
-    body.notification_preference = patch.notification_preference
-  }
-
   return body
 }
 
-async function patch_profile_table(input: {
-  table: "users" | "visitors"
-  key: "user_uuid" | "visitor_uuid"
-  id: string
-  patch: ProfileSettingsPatch
-}) {
+async function load_user_name(user_uuid: string | null) {
   const config = getRestConfig()
 
-  if (!config || !patch_has_profile_fields(input.patch)) {
+  if (!config || !user_uuid) {
     return null
   }
 
-  const response = await fetch(
-    restUrl(
-      config,
-      input.table,
-      `${input.key}=eq.${encodeURIComponent(input.id)}&select=*`,
-    ),
-    {
-      method: "PATCH",
-      headers: {
-        ...restHeaders(config),
-        Prefer: "return=representation",
+  const queries = [
+    "select=name&limit=1",
+    "select=display_name&limit=1",
+  ]
+
+  for (const query of queries) {
+    const response = await fetch(
+      restUrl(
+        config,
+        "users",
+        `user_uuid=eq.${encodeURIComponent(user_uuid)}&${query}`,
+      ),
+      {
+        headers: restHeaders(config),
+        cache: "no-store",
       },
-      body: JSON.stringify(build_profile_db_patch(input.patch)),
-      cache: "no-store",
-    },
-  )
+    )
 
-  if (!response.ok) {
-    const error = await readRestError(response)
-
-    if (input.table === "visitors" && error.code === "PGRST204") {
-      return null
+    if (!response.ok) {
+      continue
     }
 
-    throw new Error(error.message ?? "Failed to save profile")
+    const rows = (await response.json()) as UserNameRow[]
+    const row = rows[0]
+    const name = row?.name?.trim() || row?.display_name?.trim()
+
+    if (name) {
+      return name
+    }
   }
 
-  const rows = (await response.json()) as ProfileRow[]
-  return rows[0] ?? null
+  return null
 }
 
 async function load_profile_row(session: Session) {
@@ -97,42 +118,23 @@ async function load_profile_row(session: Session) {
     return null
   }
 
-  if (session.user_uuid) {
-    const response = await fetch(
-      restUrl(
-        config,
-        "users",
-        [
-          `user_uuid=eq.${encodeURIComponent(session.user_uuid)}`,
-          "select=display_name,image_url,locale,notification_preference",
-          "limit=1",
-        ].join("&"),
-      ),
-      {
-        headers: restHeaders(config),
-        cache: "no-store",
-      },
-    )
+  const identity_filter = session.user_uuid
+    ? `user_uuid=eq.${encodeURIComponent(session.user_uuid)}`
+    : session.visitor_uuid
+      ? `visitor_uuid=eq.${encodeURIComponent(session.visitor_uuid)}`
+      : null
 
-    if (!response.ok) {
-      return null
-    }
-
-    const rows = (await response.json()) as ProfileRow[]
-    return rows[0] ?? null
-  }
-
-  if (!session.visitor_uuid) {
+  if (!identity_filter) {
     return null
   }
 
   const response = await fetch(
     restUrl(
       config,
-      "visitors",
+      "profiles",
       [
-        `visitor_uuid=eq.${encodeURIComponent(session.visitor_uuid)}`,
-        "select=display_name,image_url,locale,notification_preference",
+        identity_filter,
+        "select=profile_uuid,user_uuid,visitor_uuid,nickname,first_name,last_name,birth_date,phone,prefecture,city,address,memo,locale",
         "limit=1",
       ].join("&"),
     ),
@@ -150,15 +152,76 @@ async function load_profile_row(session: Session) {
   return rows[0] ?? null
 }
 
+async function upsert_profile_row(input: {
+  user_uuid: string | null
+  visitor_uuid: string | null
+  patch: ProfileSettingsPatch
+}) {
+  const config = getRestConfig()
+
+  if (!config || !patch_has_profile_fields(input.patch)) {
+    return null
+  }
+
+  const identity_body = input.user_uuid
+    ? { user_uuid: input.user_uuid }
+    : input.visitor_uuid
+      ? { visitor_uuid: input.visitor_uuid }
+      : null
+
+  if (!identity_body) {
+    return null
+  }
+
+  const conflict_target = input.user_uuid ? "user_uuid" : "visitor_uuid"
+  const response = await fetch(
+    restUrl(
+      config,
+      "profiles",
+      `on_conflict=${conflict_target}&select=profile_uuid,user_uuid,visitor_uuid,nickname,first_name,last_name,birth_date,phone,prefecture,city,address,memo,locale`,
+    ),
+    {
+      method: "POST",
+      headers: {
+        ...restHeaders(config),
+        Prefer: "resolution=merge-duplicates,return=representation",
+      },
+      body: JSON.stringify({
+        ...identity_body,
+        ...build_profile_db_patch(input.patch),
+      }),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+    throw new Error(error.message ?? "Failed to save profile")
+  }
+
+  const rows = (await response.json()) as ProfileRow[]
+  return rows[0] ?? null
+}
+
 export async function get_profile_settings(session: Session) {
-  const row = await load_profile_row(session)
+  const [row, users_name] = await Promise.all([
+    load_profile_row(session),
+    load_user_name(session.user_uuid),
+  ])
 
   return build_profile_output({
     session,
-    display_name: row?.display_name ?? null,
-    image_url: row?.image_url ?? null,
+    nickname: row?.nickname ?? null,
+    first_name: row?.first_name ?? null,
+    last_name: row?.last_name ?? null,
+    birth_date: row?.birth_date ?? null,
+    phone: row?.phone ?? null,
+    prefecture: row?.prefecture ?? null,
+    city: row?.city ?? null,
+    address: row?.address ?? null,
+    memo: row?.memo ?? null,
+    users_name,
     locale: row?.locale ?? null,
-    notification_preference: row?.notification_preference ?? null,
   })
 }
 
@@ -167,21 +230,15 @@ export async function save_profile_settings(input: {
   body: unknown
 }) {
   const context = normalize_profile_context(input)
-  const row = context.user_uuid
-    ? await patch_profile_table({
-        table: "users",
-        key: "user_uuid",
-        id: context.user_uuid,
-        patch: context.patch,
-      })
-    : context.visitor_uuid
-      ? await patch_profile_table({
-          table: "visitors",
-          key: "visitor_uuid",
-          id: context.visitor_uuid,
-          patch: context.patch,
-        })
-      : null
+  const [row, users_name] = await Promise.all([
+    upsert_profile_row({
+      user_uuid: context.user_uuid,
+      visitor_uuid: context.visitor_uuid,
+      patch: context.patch,
+    }),
+    load_user_name(context.user_uuid),
+  ])
+  const fallback_row = row ?? (await load_profile_row(input.session))
   let concierge_available: boolean | undefined
 
   if (typeof context.patch.concierge_available === "boolean") {
@@ -194,16 +251,30 @@ export async function save_profile_settings(input: {
 
   return build_profile_output({
     session: input.session,
-    display_name:
-      row?.display_name ??
-      ("display_name" in context.patch ? context.patch.display_name : null),
-    image_url:
-      row?.image_url ?? ("image_url" in context.patch ? context.patch.image_url : null),
-    locale: row?.locale ?? context.patch.locale ?? null,
-    notification_preference:
-      row?.notification_preference ??
-      context.patch.notification_preference ??
-      null,
+    nickname:
+      fallback_row?.nickname ??
+      ("nickname" in context.patch ? context.patch.nickname : null),
+    first_name:
+      fallback_row?.first_name ??
+      ("first_name" in context.patch ? context.patch.first_name : null),
+    last_name:
+      fallback_row?.last_name ??
+      ("last_name" in context.patch ? context.patch.last_name : null),
+    birth_date:
+      fallback_row?.birth_date ??
+      ("birth_date" in context.patch ? context.patch.birth_date : null),
+    phone:
+      fallback_row?.phone ?? ("phone" in context.patch ? context.patch.phone : null),
+    prefecture:
+      fallback_row?.prefecture ??
+      ("prefecture" in context.patch ? context.patch.prefecture : null),
+    city: fallback_row?.city ?? ("city" in context.patch ? context.patch.city : null),
+    address:
+      fallback_row?.address ??
+      ("address" in context.patch ? context.patch.address : null),
+    memo: fallback_row?.memo ?? ("memo" in context.patch ? context.patch.memo : null),
+    users_name,
+    locale: fallback_row?.locale ?? context.patch.locale ?? null,
     concierge_available,
   })
 }

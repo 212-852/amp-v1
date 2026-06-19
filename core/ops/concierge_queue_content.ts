@@ -6,6 +6,11 @@ export const concierge_queue_content = {
     en: "Concierge queue",
     es: "Cola de concierge",
   },
+  pending_title: {
+    ja: "対応待ちコンシェルジュ",
+    en: "Pending concierge",
+    es: "Concierge pendiente",
+  },
   concierge_tab: {
     ja: "Concierge",
     en: "Concierge",

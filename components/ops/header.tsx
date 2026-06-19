@@ -390,17 +390,25 @@ export default function OpsHeader({
       {profile_settings_open ? (
         <ProfileSettings
           open={profile_settings_open}
-          initial_profile={{
-            user_uuid: safe_session.user_uuid,
-            visitor_uuid: safe_session.visitor_uuid,
-            display_name: displayName,
-            image_url: avatar_image_url,
-            role: safe_session.role,
-            tier: safe_session.tier,
-            locale,
-            notification_preference: "all",
-            concierge_available: concierge_available_state,
-          }}
+        initial_profile={{
+          user_uuid: safe_session.user_uuid,
+          visitor_uuid: safe_session.visitor_uuid,
+          nickname: saved_profile?.nickname ?? null,
+          first_name: saved_profile?.first_name ?? null,
+          last_name: saved_profile?.last_name ?? null,
+          birth_date: saved_profile?.birth_date ?? null,
+          phone: saved_profile?.phone ?? null,
+          prefecture: saved_profile?.prefecture ?? null,
+          city: saved_profile?.city ?? null,
+          address: saved_profile?.address ?? null,
+          memo: saved_profile?.memo ?? null,
+          display_name: displayName,
+          image_url: avatar_image_url,
+          role: safe_session.role,
+          tier: safe_session.tier,
+          locale,
+          concierge_available: concierge_available_state,
+        }}
           can_edit_concierge={can_toggle_concierge}
           concierge_available={concierge_available_state}
           onClose={() => set_profile_settings_open(false)}

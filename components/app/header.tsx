@@ -325,12 +325,20 @@ export default function AppHeader({ auth }: { auth: AppHeaderAuth }) {
           initial_profile={{
             user_uuid: auth.user_uuid,
             visitor_uuid: auth.visitor_uuid ?? null,
+            nickname: saved_profile?.nickname ?? null,
+            first_name: saved_profile?.first_name ?? null,
+            last_name: saved_profile?.last_name ?? null,
+            birth_date: saved_profile?.birth_date ?? null,
+            phone: saved_profile?.phone ?? null,
+            prefecture: saved_profile?.prefecture ?? null,
+            city: saved_profile?.city ?? null,
+            address: saved_profile?.address ?? null,
+            memo: saved_profile?.memo ?? null,
             display_name: user_name,
             image_url,
             role: auth.role,
             tier: auth.tier,
             locale,
-            notification_preference: "all",
           }}
           can_edit_concierge={false}
           onClose={() => set_settings_open(false)}

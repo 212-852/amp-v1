@@ -1,5 +1,6 @@
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
 import { sendAuthDebug } from "@/core/debug"
+import { resolve_profile_display_name } from "@/core/profile/rules"
 import type {
   AvailabilityRecord,
   ChatLocale,
@@ -1293,54 +1294,62 @@ export async function roomHasWelcomeMessage(room_uuid: string) {
   return rows.length > 0
 }
 
-export async function loadUserDisplayNames(user_uuids: string[]) {
-  const config = getRestConfig()
-
-  if (!config || user_uuids.length === 0) {
-    return new Map<string, string>()
-  }
-
-  const response = await fetch(
-    restUrl(
-      config,
-      "users",
-      `user_uuid=in.(${user_uuids.map((uuid) => encodeURIComponent(uuid)).join(",")})&select=user_uuid,display_name`,
-    ),
-    {
-      headers: restHeaders(config),
-      cache: "no-store",
-    },
-  )
-
-  if (!response.ok) {
-    return new Map<string, string>()
-  }
-
-  const rows = (await response.json()) as Array<{
-    user_uuid: string
-    display_name: string | null
-  }>
-
-  return new Map(
-    rows.map((row) => [row.user_uuid, row.display_name?.trim() || row.user_uuid]),
-  )
+type AccountDisplayRow = {
+  user_uuid: string
+  name?: string | null
+  display_name?: string | null
+  image_url?: string | null
 }
 
-export async function loadUserProfiles(user_uuids: string[]) {
+type ProfileDisplayRow = {
+  user_uuid: string
+  nickname: string | null
+  first_name: string | null
+  last_name: string | null
+}
+
+async function loadUserAccountDisplayRows(user_uuids: string[]) {
   const config = getRestConfig()
 
   if (!config || user_uuids.length === 0) {
-    return new Map<
-      string,
-      { display_name: string | null; image_url: string | null }
-    >()
+    return new Map<string, AccountDisplayRow>()
+  }
+
+  const encoded_uuids = user_uuids.map((uuid) => encodeURIComponent(uuid)).join(",")
+  const queries = [
+    `user_uuid=in.(${encoded_uuids})&select=user_uuid,name,image_url`,
+    `user_uuid=in.(${encoded_uuids})&select=user_uuid,display_name,image_url`,
+  ]
+
+  for (const query of queries) {
+    const response = await fetch(restUrl(config, "users", query), {
+      headers: restHeaders(config),
+      cache: "no-store",
+    })
+
+    if (!response.ok) {
+      continue
+    }
+
+    const rows = (await response.json()) as AccountDisplayRow[]
+    return new Map(rows.map((row) => [row.user_uuid, row]))
+  }
+
+  return new Map()
+}
+
+async function loadProfileDisplayRows(user_uuids: string[]) {
+  const config = getRestConfig()
+
+  if (!config || user_uuids.length === 0) {
+    return new Map<string, ProfileDisplayRow>()
   }
 
   const response = await fetch(
     restUrl(
       config,
-      "users",
-      `user_uuid=in.(${user_uuids.map((uuid) => encodeURIComponent(uuid)).join(",")})&select=user_uuid,display_name,image_url`,
+      "profiles",
+      `user_uuid=in.(${user_uuids.map((uuid) => encodeURIComponent(uuid)).join(",")})&select=user_uuid,nickname,first_name,last_name`,
     ),
     {
       headers: restHeaders(config),
@@ -1352,20 +1361,71 @@ export async function loadUserProfiles(user_uuids: string[]) {
     return new Map()
   }
 
-  const rows = (await response.json()) as Array<{
-    user_uuid: string
-    display_name: string | null
-    image_url: string | null
-  }>
+  const rows = (await response.json()) as ProfileDisplayRow[]
+  return new Map(rows.map((row) => [row.user_uuid, row]))
+}
+
+export async function loadUserDisplayNames(user_uuids: string[]) {
+  if (user_uuids.length === 0) {
+    return new Map<string, string>()
+  }
+
+  const [accounts, profiles] = await Promise.all([
+    loadUserAccountDisplayRows(user_uuids),
+    loadProfileDisplayRows(user_uuids),
+  ])
 
   return new Map(
-    rows.map((row) => [
-      row.user_uuid,
-      {
-        display_name: row.display_name?.trim() || null,
-        image_url: row.image_url?.trim() || null,
-      },
-    ]),
+    user_uuids.map((user_uuid) => {
+      const account = accounts.get(user_uuid)
+      const profile = profiles.get(user_uuid)
+
+      return [
+        user_uuid,
+        resolve_profile_display_name({
+          nickname: profile?.nickname,
+          first_name: profile?.first_name,
+          last_name: profile?.last_name,
+          users_name: account?.name ?? account?.display_name,
+          fallback: "Guest",
+        }),
+      ]
+    }),
+  )
+}
+
+export async function loadUserProfiles(user_uuids: string[]) {
+  if (user_uuids.length === 0) {
+    return new Map<
+      string,
+      { display_name: string | null; image_url: string | null }
+    >()
+  }
+
+  const [accounts, profiles] = await Promise.all([
+    loadUserAccountDisplayRows(user_uuids),
+    loadProfileDisplayRows(user_uuids),
+  ])
+
+  return new Map(
+    user_uuids.map((user_uuid) => {
+      const account = accounts.get(user_uuid)
+      const profile = profiles.get(user_uuid)
+
+      return [
+        user_uuid,
+        {
+          display_name: resolve_profile_display_name({
+            nickname: profile?.nickname,
+            first_name: profile?.first_name,
+            last_name: profile?.last_name,
+            users_name: account?.name ?? account?.display_name,
+            fallback: "Guest",
+          }),
+          image_url: account?.image_url?.trim() || null,
+        },
+      ]
+    }),
   )
 }
 

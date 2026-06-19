@@ -135,7 +135,7 @@ async function resolveConciergeQueue(session: Session) {
       }
     }
 
-    return await get_concierge_queue(session, { limit: 10 })
+    return await get_concierge_queue(session, { limit: 5 })
   } catch {
     return {
       availability_enabled: false,
@@ -164,7 +164,7 @@ function renderAdminUiShell(
         concierge_available={concierge_available}
       />
       <main className="mx-auto flex w-full max-w-[430px] flex-col gap-3 px-5 pb-[calc(118px+env(safe-area-inset-bottom,0px))] pt-4">
-        <AdminConciergeQueue queue={queue_items} />
+        <AdminConciergeQueue queue={queue_items} variant="preview" />
       </main>
       <AdminFooter />
     </div>

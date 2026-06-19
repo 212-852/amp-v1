@@ -206,8 +206,10 @@ async function fetchConciergeQueueFromApi(
 
 export default function AdminConciergeQueue({
   queue,
+  variant = "tabs",
 }: Readonly<{
   queue?: ConciergeQueueResult
+  variant?: "preview" | "tabs"
 }>) {
   const { locale } = useLocale()
   const [is_available, set_is_available] = useState(
@@ -217,7 +219,12 @@ export default function AdminConciergeQueue({
     queue?.room_condition?.mode === "bot" ? "bot" : "concierge",
   )
   const [items, set_items] = useState<ConciergeQueueItem[]>(
-    queue?.should_show_list ? (queue.rooms ?? queue.items ?? []) : [],
+    queue?.should_show_list
+      ? (queue.rooms ?? queue.items ?? []).slice(
+          0,
+          variant === "preview" ? 5 : undefined,
+        )
+      : [],
   )
   const [is_loading, set_is_loading] = useState(false)
   const refresh_request_ref = useRef(0)
@@ -248,13 +255,18 @@ export default function AdminConciergeQueue({
       }
 
       set_is_available(true)
-      set_items(result.rooms ?? result.items ?? [])
+      set_items(
+        (result.rooms ?? result.items ?? []).slice(
+          0,
+          variant === "preview" ? 5 : undefined,
+        ),
+      )
     } finally {
       if (refresh_request_ref.current === request_id) {
         set_is_loading(false)
       }
     }
-  }, [active_tab])
+  }, [active_tab, variant])
 
   function change_tab(mode: QueueMode) {
     if (mode === active_tab) {
@@ -436,32 +448,38 @@ export default function AdminConciergeQueue({
 
   return (
     <section className="relative pb-9">
-      <div className="mb-2 grid grid-cols-2 border-b border-neutral-200 text-[13px] font-semibold">
-        {(["concierge", "bot"] as const).map((mode) => {
-          const active = active_tab === mode
-          const label =
-            mode === "concierge"
-              ? concierge_queue_content.concierge_tab[locale]
-              : concierge_queue_content.bot_tab[locale]
+      {variant === "preview" ? (
+        <h2 className="mb-2 px-2 text-[15px] font-semibold text-neutral-950">
+          {concierge_queue_content.pending_title[locale]}
+        </h2>
+      ) : (
+        <div className="mb-2 grid grid-cols-2 border-b border-neutral-200 text-[13px] font-semibold">
+          {(["concierge", "bot"] as const).map((mode) => {
+            const active = active_tab === mode
+            const label =
+              mode === "concierge"
+                ? concierge_queue_content.concierge_tab[locale]
+                : concierge_queue_content.bot_tab[locale]
 
-          return (
-            <button
-              key={mode}
-              type="button"
-              aria-pressed={active}
-              onClick={() => change_tab(mode)}
-              className={[
-                "border-b-2 px-3 py-2 text-center transition",
-                active
-                  ? "border-neutral-950 text-neutral-950"
-                  : "border-transparent text-neutral-500 hover:text-neutral-800",
-              ].join(" ")}
-            >
-              {label}
-            </button>
-          )
-        })}
-      </div>
+            return (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={active}
+                onClick={() => change_tab(mode)}
+                className={[
+                  "border-b-2 px-3 py-2 text-center transition",
+                  active
+                    ? "border-neutral-950 text-neutral-950"
+                    : "border-transparent text-neutral-500 hover:text-neutral-800",
+                ].join(" ")}
+              >
+                {label}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {is_loading && items.length === 0 ? (
         <div className="px-2 pt-2">
@@ -488,6 +506,7 @@ export default function AdminConciergeQueue({
         )}
       </div>
 
+      {variant === "tabs" ? (
       <div className="absolute bottom-0 right-2">
         <Link
           href="/admin/concierge"
@@ -496,6 +515,7 @@ export default function AdminConciergeQueue({
           {concierge_queue_content.view_all[locale]}
         </Link>
       </div>
+      ) : null}
     </section>
   )
 }

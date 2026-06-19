@@ -15,19 +15,49 @@ const content = {
     es: "Configuracion de perfil",
   },
   display_name: {
-    ja: "表示名",
-    en: "Display name",
-    es: "Nombre visible",
+    ja: "ニックネーム",
+    en: "Nickname",
+    es: "Apodo",
   },
-  avatar_image: {
-    ja: "アバター画像",
-    en: "Avatar image",
-    es: "Imagen de avatar",
+  first_name: {
+    ja: "名",
+    en: "First name",
+    es: "Nombre",
   },
-  avatar_placeholder: {
-    ja: "画像URL",
-    en: "Image URL",
-    es: "URL de imagen",
+  last_name: {
+    ja: "姓",
+    en: "Last name",
+    es: "Apellido",
+  },
+  birth_date: {
+    ja: "生年月日",
+    en: "Birth date",
+    es: "Fecha de nacimiento",
+  },
+  phone: {
+    ja: "電話番号",
+    en: "Phone",
+    es: "Telefono",
+  },
+  prefecture: {
+    ja: "都道府県",
+    en: "Prefecture",
+    es: "Prefectura",
+  },
+  city: {
+    ja: "市区町村",
+    en: "City",
+    es: "Ciudad",
+  },
+  address: {
+    ja: "住所",
+    en: "Address",
+    es: "Direccion",
+  },
+  memo: {
+    ja: "メモ",
+    en: "Memo",
+    es: "Memo",
   },
   role: {
     ja: "ロール",
@@ -91,8 +121,6 @@ const content = {
   },
 } satisfies Record<string, Record<Locale, string>>
 
-type NotificationPreference = ProfileDisplayPayload["notification_preference"]
-
 export default function ProfileSettings({
   open,
   initial_profile,
@@ -110,13 +138,18 @@ export default function ProfileSettings({
 }>) {
   const { locale, set_locale } = useLocale()
   const { toast } = useToast()
-  const [display_name, set_display_name] = useState(initial_profile.display_name)
-  const [image_url, set_image_url] = useState(initial_profile.image_url ?? "")
+  const [nickname, set_nickname] = useState(initial_profile.nickname ?? "")
+  const [first_name, set_first_name] = useState(initial_profile.first_name ?? "")
+  const [last_name, set_last_name] = useState(initial_profile.last_name ?? "")
+  const [birth_date, set_birth_date] = useState(initial_profile.birth_date ?? "")
+  const [phone, set_phone] = useState(initial_profile.phone ?? "")
+  const [prefecture, set_prefecture] = useState(initial_profile.prefecture ?? "")
+  const [city, set_city] = useState(initial_profile.city ?? "")
+  const [address, set_address] = useState(initial_profile.address ?? "")
+  const [memo, set_memo] = useState(initial_profile.memo ?? "")
   const [selected_locale, set_selected_locale] = useState<Locale>(
     initial_profile.locale,
   )
-  const [notification_preference, set_notification_preference] =
-    useState<NotificationPreference>(initial_profile.notification_preference)
   const [availability, set_availability] = useState(
     concierge_available === true,
   )
@@ -126,6 +159,12 @@ export default function ProfileSettings({
     if (!open) {
       return
     }
+
+    window.dispatchEvent(
+      new CustomEvent("amp-profile-settings-visibility", {
+        detail: { open: true },
+      }),
+    )
 
     let cancelled = false
 
@@ -147,16 +186,27 @@ export default function ProfileSettings({
         return
       }
 
-      set_display_name(payload.profile.display_name)
-      set_image_url(payload.profile.image_url ?? "")
+      set_nickname(payload.profile.nickname ?? "")
+      set_first_name(payload.profile.first_name ?? "")
+      set_last_name(payload.profile.last_name ?? "")
+      set_birth_date(payload.profile.birth_date ?? "")
+      set_phone(payload.profile.phone ?? "")
+      set_prefecture(payload.profile.prefecture ?? "")
+      set_city(payload.profile.city ?? "")
+      set_address(payload.profile.address ?? "")
+      set_memo(payload.profile.memo ?? "")
       set_selected_locale(payload.profile.locale)
-      set_notification_preference(payload.profile.notification_preference)
     }
 
     void load_profile()
 
     return () => {
       cancelled = true
+      window.dispatchEvent(
+        new CustomEvent("amp-profile-settings-visibility", {
+          detail: { open: false },
+        }),
+      )
     }
   }, [open])
 
@@ -178,10 +228,16 @@ export default function ProfileSettings({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          display_name,
-          image_url,
+          nickname,
+          first_name,
+          last_name,
+          birth_date,
+          phone,
+          prefecture,
+          city,
+          address,
+          memo,
           locale: selected_locale,
-          notification_preference,
           ...(can_edit_concierge
             ? { concierge_available: availability }
             : {}),
@@ -255,21 +311,101 @@ export default function ProfileSettings({
               {content.display_name[locale]}
             </span>
             <input
-              value={display_name}
-              onChange={(event) => set_display_name(event.target.value)}
+              value={nickname}
+              onChange={(event) => set_nickname(event.target.value)}
+              className="h-10 w-full rounded-md border border-neutral-200 px-3 text-[14px] text-neutral-950 outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100"
+            />
+          </label>
+
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="mb-1 block text-[12px] font-semibold text-neutral-600">
+                {content.first_name[locale]}
+              </span>
+              <input
+                value={first_name}
+                onChange={(event) => set_first_name(event.target.value)}
+                className="h-10 w-full rounded-md border border-neutral-200 px-3 text-[14px] text-neutral-950 outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[12px] font-semibold text-neutral-600">
+                {content.last_name[locale]}
+              </span>
+              <input
+                value={last_name}
+                onChange={(event) => set_last_name(event.target.value)}
+                className="h-10 w-full rounded-md border border-neutral-200 px-3 text-[14px] text-neutral-950 outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100"
+              />
+            </label>
+          </div>
+
+          <label className="block">
+            <span className="mb-1 block text-[12px] font-semibold text-neutral-600">
+              {content.birth_date[locale]}
+            </span>
+            <input
+              type="date"
+              value={birth_date}
+              onChange={(event) => set_birth_date(event.target.value)}
               className="h-10 w-full rounded-md border border-neutral-200 px-3 text-[14px] text-neutral-950 outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100"
             />
           </label>
 
           <label className="block">
             <span className="mb-1 block text-[12px] font-semibold text-neutral-600">
-              {content.avatar_image[locale]}
+              {content.phone[locale]}
             </span>
             <input
-              value={image_url}
-              placeholder={content.avatar_placeholder[locale]}
-              onChange={(event) => set_image_url(event.target.value)}
+              value={phone}
+              onChange={(event) => set_phone(event.target.value)}
               className="h-10 w-full rounded-md border border-neutral-200 px-3 text-[14px] text-neutral-950 outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100"
+            />
+          </label>
+
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="mb-1 block text-[12px] font-semibold text-neutral-600">
+                {content.prefecture[locale]}
+              </span>
+              <input
+                value={prefecture}
+                onChange={(event) => set_prefecture(event.target.value)}
+                className="h-10 w-full rounded-md border border-neutral-200 px-3 text-[14px] text-neutral-950 outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[12px] font-semibold text-neutral-600">
+                {content.city[locale]}
+              </span>
+              <input
+                value={city}
+                onChange={(event) => set_city(event.target.value)}
+                className="h-10 w-full rounded-md border border-neutral-200 px-3 text-[14px] text-neutral-950 outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100"
+              />
+            </label>
+          </div>
+
+          <label className="block">
+            <span className="mb-1 block text-[12px] font-semibold text-neutral-600">
+              {content.address[locale]}
+            </span>
+            <input
+              value={address}
+              onChange={(event) => set_address(event.target.value)}
+              className="h-10 w-full rounded-md border border-neutral-200 px-3 text-[14px] text-neutral-950 outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100"
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-[12px] font-semibold text-neutral-600">
+              {content.memo[locale]}
+            </span>
+            <textarea
+              value={memo}
+              rows={3}
+              onChange={(event) => set_memo(event.target.value)}
+              className="w-full resize-none rounded-md border border-neutral-200 px-3 py-2 text-[14px] text-neutral-950 outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100"
             />
           </label>
 
@@ -296,27 +432,6 @@ export default function ProfileSettings({
               <option value="ja">JA</option>
               <option value="en">EN</option>
               <option value="es">ES</option>
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="mb-1 block text-[12px] font-semibold text-neutral-600">
-              {content.notifications[locale]}
-            </span>
-            <select
-              value={notification_preference}
-              onChange={(event) =>
-                set_notification_preference(
-                  event.target.value as NotificationPreference,
-                )
-              }
-              className="h-10 w-full rounded-md border border-neutral-200 bg-white px-3 text-[14px] text-neutral-950 outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100"
-            >
-              <option value="all">{content.notification_all[locale]}</option>
-              <option value="mentions">
-                {content.notification_mentions[locale]}
-              </option>
-              <option value="none">{content.notification_none[locale]}</option>
             </select>
           </label>
 
