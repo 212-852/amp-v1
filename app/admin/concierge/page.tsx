@@ -29,7 +29,7 @@ export default async function AdminConciergePage() {
 
   return (
     <AdminShell session={session} pathname="/admin/concierge">
-      <AdminConciergeQueue queue={queue} show_footer={false} />
+      <AdminConciergeQueue queue={queue} />
     </AdminShell>
   )
 }

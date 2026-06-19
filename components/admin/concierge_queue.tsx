@@ -40,7 +40,6 @@ function useCustomerTyping(input: {
 
   useEffect(() => {
     if (!input.enabled) {
-      set_is_typing(false)
       return
     }
 
@@ -99,7 +98,7 @@ function useCustomerTyping(input: {
     }
   }, [input.customer_participant_uuid, input.enabled, input.room_uuid])
 
-  return is_typing
+  return input.enabled ? is_typing : false
 }
 
 function ConciergeQueueCard({
@@ -200,10 +199,8 @@ async function fetchConciergeQueueFromApi(): Promise<ConciergeQueueResult | null
 
 export default function AdminConciergeQueue({
   queue,
-  show_footer = true,
 }: Readonly<{
   queue?: ConciergeQueueResult
-  show_footer?: boolean
 }>) {
   const { locale } = useLocale()
   const [is_available, set_is_available] = useState(
@@ -280,12 +277,12 @@ export default function AdminConciergeQueue({
 
   useEffect(() => {
     if (!is_available) {
-      set_items([])
       return
     }
 
     let cancelled = false
     let debounce_timer: number | null = null
+    let initial_timer: number | null = null
 
     function schedule_refresh() {
       if (debounce_timer) {
@@ -303,7 +300,11 @@ export default function AdminConciergeQueue({
       (queue?.should_show_list ? (queue.rooms ?? queue.items ?? []).length : 0) >
       0
 
-    void load_queue({ silent: has_initial_items })
+    initial_timer = window.setTimeout(() => {
+      if (!cancelled) {
+        void load_queue({ silent: has_initial_items })
+      }
+    }, 0)
 
     let supabase: ReturnType<typeof create_browser_supabase_client>
 
@@ -389,6 +390,10 @@ export default function AdminConciergeQueue({
         window.clearTimeout(debounce_timer)
       }
 
+      if (initial_timer) {
+        window.clearTimeout(initial_timer)
+      }
+
       void supabase.removeChannel(channel)
     }
   }, [is_available, load_queue, queue?.items, queue?.rooms, queue?.should_show_list])
@@ -398,7 +403,7 @@ export default function AdminConciergeQueue({
   }
 
   return (
-    <section>
+    <section className="relative pb-9">
       {is_loading && items.length === 0 ? (
         <div className="px-2 pt-2">
           <div className="inline-flex rounded-full bg-white/60 px-4 py-2 text-[13px] font-medium text-neutral-500">
@@ -424,16 +429,14 @@ export default function AdminConciergeQueue({
         )}
       </div>
 
-      {show_footer ? (
-        <div className="mt-4 flex justify-end">
-          <Link
-            href="/admin/concierge"
-            className="text-[13px] font-semibold text-neutral-900"
-          >
-            {concierge_queue_content.view_all[locale]}
-          </Link>
-        </div>
-      ) : null}
+      <div className="absolute bottom-0 right-2">
+        <Link
+          href="/admin/concierge"
+          className="text-[13px] font-semibold text-neutral-900 transition hover:text-neutral-600 active:text-neutral-500"
+        >
+          {concierge_queue_content.view_all[locale]}
+        </Link>
+      </div>
     </section>
   )
 }
