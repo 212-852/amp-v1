@@ -1,4 +1,6 @@
 import OpsAssistant from "@/components/ops/assistant"
+import AdminBreadcrumb from "@/components/admin/breadcrumb"
+import { build_breadcrumb_output } from "@/core/breadcrumb/output"
 
 const placeholder_cards = [
   { title: "本日の状況", body: "Placeholder card" },
@@ -9,14 +11,19 @@ const placeholder_cards = [
 export default function AdminShellLayout({
   header,
   children,
+  pathname = "/admin",
 }: Readonly<{
   header?: React.ReactNode
   children?: React.ReactNode
+  pathname?: string
 }>) {
+  const breadcrumbs = build_breadcrumb_output({ pathname })
+
   return (
     <div className="min-h-dvh bg-neutral-50 text-neutral-900">
       {header}
-      <main className="mx-auto flex w-full max-w-[430px] flex-col gap-3 px-5 pb-[calc(118px+env(safe-area-inset-bottom,0px))] pt-4">
+      <AdminBreadcrumb items={breadcrumbs.items} />
+      <main className="mx-auto flex w-full max-w-[430px] flex-col gap-3 px-5 pb-[calc(118px+env(safe-area-inset-bottom,0px))] pt-2">
         {children ?? (
           <div className="grid gap-3">
             {placeholder_cards.map((card) => (

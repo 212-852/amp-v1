@@ -470,11 +470,24 @@ export default function AdminConciergeQueue({
   }
 
   return (
-    <section className="relative pb-9">
+    <section className={variant === "preview" ? "" : "relative pb-9"}>
       {variant === "preview" ? (
-        <h2 className="mb-2 px-2 text-[15px] font-semibold text-neutral-950">
-          {concierge_queue_content.pending_title[locale]}
-        </h2>
+        <div className="mb-2 px-2">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-[13px] font-semibold text-neutral-600">
+              {concierge_queue_content.pending_title[locale]}
+            </h2>
+            <Link
+              href="/admin/concierge/list"
+              className="text-[12px] font-semibold text-neutral-500 transition hover:text-neutral-800 active:text-neutral-700"
+            >
+              {concierge_queue_content.view_all[locale]}
+            </Link>
+          </div>
+          <p className="mt-0.5 text-[12px] font-medium text-neutral-400">
+            {concierge_queue_content.waiting[locale]} {items.length}
+          </p>
+        </div>
       ) : (
         <div className="mb-2 grid grid-cols-2 border-b border-neutral-200 text-[13px] font-semibold">
           {(["concierge", "bot"] as const).map((mode) => {
@@ -528,17 +541,6 @@ export default function AdminConciergeQueue({
           ))
         )}
       </div>
-
-      {variant === "preview" ? (
-        <div className="absolute bottom-0 right-2">
-          <Link
-            href="/admin/concierge/list"
-            className="text-[13px] font-semibold text-neutral-900 transition hover:text-neutral-600 active:text-neutral-500"
-          >
-            {concierge_queue_content.view_all[locale]}
-          </Link>
-        </div>
-      ) : null}
     </section>
   )
 }

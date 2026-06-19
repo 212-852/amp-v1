@@ -4,9 +4,11 @@ import AdminConciergeQueue from "@/components/admin/concierge_queue"
 import AdminDataSections from "@/components/admin/data_sections"
 import AdminFooter from "@/components/admin/footer"
 import AdminHeader from "@/components/admin/header"
+import AdminBreadcrumb from "@/components/admin/breadcrumb"
 import {
   getConciergeAvailabilityState,
 } from "@/core/chat/action"
+import { build_breadcrumb_output } from "@/core/breadcrumb/output"
 import { get_concierge_queue } from "@/core/concierge/action"
 import AdminPageFallback from "@/components/admin/page_fallback"
 import AdminSessionPanel from "@/components/admin/session_panel"
@@ -135,7 +137,11 @@ async function resolveConciergeQueue(session: Session) {
       }
     }
 
-    return await get_concierge_queue(session, { limit: 5 })
+    return await get_concierge_queue(session, {
+      limit: 5,
+      mode: "concierge",
+      strict_concierge: true,
+    })
   } catch {
     return {
       availability_enabled: false,
@@ -155,6 +161,7 @@ function renderAdminUiShell(
 ) {
   const header_session = normalizeOpsHeaderDisplay(session)
   const page_label = resolvePageLabel(pathname)
+  const breadcrumbs = build_breadcrumb_output({ pathname })
 
   return (
     <div className="min-h-dvh bg-neutral-50 text-neutral-900">
@@ -163,7 +170,8 @@ function renderAdminUiShell(
         page_label={page_label}
         concierge_available={concierge_available}
       />
-      <main className="mx-auto flex w-full max-w-[430px] flex-col gap-3 px-5 pb-[calc(118px+env(safe-area-inset-bottom,0px))] pt-4">
+      <AdminBreadcrumb items={breadcrumbs.items} />
+      <main className="mx-auto flex w-full max-w-[430px] flex-col gap-3 px-5 pb-[calc(118px+env(safe-area-inset-bottom,0px))] pt-2">
         <AdminConciergeQueue queue={queue_items} variant="preview" />
       </main>
       <AdminFooter />

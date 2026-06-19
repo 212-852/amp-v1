@@ -7,9 +7,14 @@ export const concierge_queue_content = {
     es: "Cola de concierge",
   },
   pending_title: {
-    ja: "対応待ちコンシェルジュ",
-    en: "Pending concierge",
-    es: "Concierge pendiente",
+    ja: "Chat",
+    en: "Chat",
+    es: "Chat",
+  },
+  waiting: {
+    ja: "Waiting",
+    en: "Waiting",
+    es: "Waiting",
   },
   concierge_tab: {
     ja: "Concierge",
@@ -32,9 +37,9 @@ export const concierge_queue_content = {
     es: "Escribiendo...",
   },
   view_all: {
-    ja: "一覧へ →",
-    en: "View all →",
-    es: "Ver todo →",
+    ja: "一覧→",
+    en: "List →",
+    es: "Lista →",
   },
   empty: {
     ja: "対応が必要なルームはありません",

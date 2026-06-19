@@ -330,3 +330,16 @@ ADDRESS SELECTION RULE
 - UI must not create its own address arrays.
 - Profile forms must use prefecture_code and city_code.
 - Free text is allowed only for address line, not prefecture or city.
+
+#########################
+ADMIN/USER UI SEPARATION RULE
+#########################
+
+- Admin routes must never render user chat layout.
+- User routes must never render admin concierge layout.
+- AI assistant is allowed only on admin top page.
+- Admin concierge list and individual room pages must not show AI assistant.
+- /admin is the admin top page.
+- /admin/concierge/list is the full concierge room list.
+- /admin/concierge/[room_uuid] is the admin chat room page.
+- /admin/concierge must redirect to /admin.
