@@ -30,7 +30,7 @@ export default async function AdminShell({
         page_label={page_label}
         concierge_available={concierge_available}
       />
-      <main className="mx-auto flex w-full max-w-[430px] flex-col gap-3 px-5 pb-[calc(118px+env(safe-area-inset-bottom,0px))] pt-4">
+      <main className="mx-auto flex w-full max-w-[430px] flex-col gap-3 px-5 pb-[calc(118px+env(safe-area-inset-bottom,0px))] pt-[calc(96px+env(safe-area-inset-top,0px))]">
         {children}
       </main>
       <OpsAssistant />

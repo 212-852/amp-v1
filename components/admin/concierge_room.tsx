@@ -63,8 +63,8 @@ export default function AdminConciergeRoom({
   }, [state.room.room_uuid])
 
   return (
-    <section className="flex min-h-[calc(100dvh-120px)] flex-col gap-3 pb-24">
-      <div className="flex items-center justify-between border-b border-neutral-200 pb-3">
+    <section className="flex min-h-[calc(100dvh-120px)] flex-col gap-3 pb-24 [--chat-message-bottom-padding:112px]">
+      <div className="sticky top-[calc(86px+env(safe-area-inset-top,0px))] z-30 flex items-center justify-between border-b border-neutral-200 bg-neutral-50 pb-3 pt-1">
         <button
           type="button"
           onClick={() => router.back()}

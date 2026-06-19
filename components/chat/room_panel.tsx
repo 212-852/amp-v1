@@ -193,7 +193,7 @@ export default function ChatRoomPanel({
       ) : null}
       <div
         ref={scroll_ref}
-        className="max-h-[calc(100dvh-220px)] space-y-4 overflow-y-auto pt-0"
+        className="max-h-[calc(100dvh-220px)] space-y-4 overflow-y-auto pt-0 pb-[var(--chat-message-bottom-padding,24px)]"
       >
         {visible_messages.map((message) => (
           <ChatMessageBubble

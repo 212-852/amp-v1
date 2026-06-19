@@ -15,45 +15,6 @@ type OdinConfig = {
   channel_id: string
 }
 
-let startup_validation_logged = false
-
-export function logOdinStartupValidation() {
-  if (startup_validation_logged) {
-    return
-  }
-
-  startup_validation_logged = true
-
-  const bot_token = process.env.ACTION_ODIN_BOT_TOKEN?.trim()
-  const channel_id = process.env.ACTION_ODIN_CHANNEL_ID?.trim()
-  const webhook_url = process.env.ACTION_ODIN_WEBHOOK_URL?.trim()
-  const guild_id = process.env.ACTION_ODIN_GUILD_ID?.trim()
-
-  if (!bot_token) {
-    console.warn("[notify] notify_skipped", {
-      reason: "ACTION_ODIN_BOT_TOKEN missing",
-    })
-  }
-
-  if (!channel_id) {
-    console.warn("[notify] notify_skipped", {
-      reason: "ACTION_ODIN_CHANNEL_ID missing",
-    })
-  }
-
-  if (!webhook_url) {
-    console.warn("[notify] odin_env_missing", {
-      env: "ACTION_ODIN_WEBHOOK_URL",
-    })
-  }
-
-  if (!guild_id) {
-    console.warn("[notify] odin_env_missing", {
-      env: "ACTION_ODIN_GUILD_ID",
-    })
-  }
-}
-
 export function resolveOdinSkipReason(): string | null {
   const bot_token = process.env.ACTION_ODIN_BOT_TOKEN?.trim()
   const channel_id = process.env.ACTION_ODIN_CHANNEL_ID?.trim()

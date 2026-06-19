@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useSyncExternalStore } from "react"
 
 import FlexMessage from "@/components/chat/flex"
 import {
@@ -55,6 +55,22 @@ function formatMessageTime(created_at: string) {
   })
 }
 
+function subscribeMounted(listener: () => void) {
+  const timer = window.setTimeout(listener, 0)
+
+  return () => {
+    window.clearTimeout(timer)
+  }
+}
+
+function getMountedSnapshot() {
+  return true
+}
+
+function getServerMountedSnapshot() {
+  return false
+}
+
 function resolveSenderLabel(kind: ChatMessageKind, locale: Locale) {
   if (kind === "concierge") {
     return content.concierge[locale]
@@ -96,7 +112,12 @@ function MessageHeader({
   locale: Locale
   align: "left" | "right"
 }>) {
-  const time = formatMessageTime(created_at)
+  const is_mounted = useSyncExternalStore(
+    subscribeMounted,
+    getMountedSnapshot,
+    getServerMountedSnapshot,
+  )
+  const time = is_mounted ? formatMessageTime(created_at) : ""
 
   return (
     <div
