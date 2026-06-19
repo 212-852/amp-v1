@@ -182,11 +182,13 @@ function renderAdminUiShell(
       />
       <main className="mx-auto flex w-full max-w-[430px] flex-col gap-3 px-5 pb-[calc(118px+env(safe-area-inset-bottom,0px))] pt-[calc(112px+env(safe-area-inset-top,0px))]">
         <AdminDataSections data={data} />
-        <AdminConciergeQueue
-          queue={queue_items}
-          variant="preview"
-          seeded_from_server
-        />
+        {concierge_available ? (
+          <AdminConciergeQueue
+            queue={queue_items}
+            variant="preview"
+            seeded_from_server
+          />
+        ) : null}
       </main>
       <AdminFooter />
     </div>

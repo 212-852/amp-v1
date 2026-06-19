@@ -227,8 +227,8 @@ export default function OpsHeader({
   }
 
   const menu_items: HeaderMenuItem[] = [
-    { key: "admin-home", label: "Admin Home", href: "/admin" },
-    { key: "chat", label: "Chat", href: "/admin/list" },
+    { key: "admin-home", label: "Home", href: "/admin" },
+    { key: "chat", label: "Chat List", href: "/admin/list" },
     { key: "settings", label: "Settings", onClick: open_profile_settings },
   ]
 
