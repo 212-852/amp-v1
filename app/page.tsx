@@ -11,7 +11,7 @@ export default async function Page() {
   const context = await resolveAuthContext("/")
   const session = await resolveSession(context)
   const identity = await resolveIdentity(context, session)
-  const route = resolveAuthRoute(context, entrance, session, identity)
+  resolveAuthRoute(context, entrance, session, identity)
 
-  redirect(route.path || homePathForRole(session.role))
+  redirect(homePathForRole(session.role))
 }

@@ -716,7 +716,7 @@ export default function AppFooter({
   return (
     <footer
       ref={footer_ref}
-      className="chat_input_footer fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom,0px)+18px)] z-50"
+      className="chat_input_footer fixed left-1/2 right-auto bottom-[calc(env(safe-area-inset-bottom,0px)+18px)] z-50 w-full max-w-[430px] -translate-x-1/2"
     >
       <div className={footer_shell_class}>
         <FooterCurve />
