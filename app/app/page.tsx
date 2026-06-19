@@ -6,9 +6,12 @@ import { resolveSession } from "@/core/auth/session"
 import { resolveChatSupportAccess } from "@/core/chat/support"
 import { resolveOutputLocaleDecision } from "@/core/chat/context"
 import { sendAuthDebug } from "@/core/debug"
+import { enforceAuthRouteRedirect } from "@/core/route/rules"
 
 export default async function AppPage() {
-  const context = await resolveAuthContext()
+  await enforceAuthRouteRedirect("/app")
+
+  const context = await resolveAuthContext("/app")
   const session = await resolveSession(context)
 
   const support_access = resolveChatSupportAccess({

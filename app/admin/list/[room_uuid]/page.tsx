@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation"
 
 import AdminConciergeRoom from "@/components/admin/concierge_room"
-import AdminShell from "@/components/admin/shell"
+import AdminOpsFrame from "@/components/admin/frame"
 import { resolveAuthContext } from "@/core/auth/context"
 import { requireAdminAccess } from "@/core/admin/guard"
 import { resolveAdminChatRoom } from "@/core/chat/action"
@@ -26,14 +26,15 @@ async function resolve_room_breadcrumb_name(
   return customer?.role === "guest" ? "Guest" : state.room.room_uuid
 }
 
-export default async function AdminConciergeRoomPage({
+export default async function AdminListRoomPage({
   params,
 }: Readonly<{
   params: Promise<{ room_uuid: string }>
 }>) {
   const { room_uuid } = await params
-  const { session } = await requireAdminAccess()
-  const context = await resolveAuthContext()
+  const room_path = `/admin/list/${room_uuid}`
+  const { session } = await requireAdminAccess(room_path)
+  const context = await resolveAuthContext(room_path)
   const state = await resolveAdminChatRoom(room_uuid, session, {
     source_channel: context.source_channel,
     locale: context.locale,
@@ -43,16 +44,18 @@ export default async function AdminConciergeRoomPage({
     notFound()
   }
 
+  const resolved_room_path = `/admin/list/${state.room.room_uuid}`
+
   return (
-    <AdminShell
+    <AdminOpsFrame
+      pathname={resolved_room_path}
       session={session}
-      pathname={`/admin/list/${state.room.room_uuid}`}
       breadcrumb_room_name={await resolve_room_breadcrumb_name(state)}
     >
       <AdminConciergeRoom
         state={state}
         viewer_display_name={session.display_name}
       />
-    </AdminShell>
+    </AdminOpsFrame>
   )
 }

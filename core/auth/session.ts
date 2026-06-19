@@ -1425,42 +1425,57 @@ export async function resolveSession(
       )
     }
 
-    const session = await getResolvedSessionFromRequestHeaders()
+    const headerSession = await getResolvedSessionFromRequestHeaders()
 
-    if (session) {
-      await send_auth_debug(
-        "session_restore_success",
-        {
-          pathname: context.requested_route,
-          visitor_uuid: session.visitor_uuid,
-          user_uuid: session.user_uuid,
-          source_channel: session.source_channel,
-        },
-        request_id,
-      )
-      if (session.source_channel === "pwa") {
+    if (headerSession) {
+      const should_revalidate_header_session =
+        Boolean(context.auth_token) && !headerSession.user_uuid
+
+      if (!should_revalidate_header_session) {
         await send_auth_debug(
-          "pwa_session_restore_success",
+          "session_restore_success",
           {
             pathname: context.requested_route,
-            visitor_uuid: session.visitor_uuid,
-            user_uuid: session.user_uuid,
-            source_channel: session.source_channel,
+            visitor_uuid: headerSession.visitor_uuid,
+            user_uuid: headerSession.user_uuid,
+            source_channel: headerSession.source_channel,
           },
           request_id,
         )
+        if (headerSession.source_channel === "pwa") {
+          await send_auth_debug(
+            "pwa_session_restore_success",
+            {
+              pathname: context.requested_route,
+              visitor_uuid: headerSession.visitor_uuid,
+              user_uuid: headerSession.user_uuid,
+              source_channel: headerSession.source_channel,
+            },
+            request_id,
+          )
+        }
+        await send_auth_debug(
+          "resolve_session_exit",
+          {
+            pathname: context.requested_route,
+            visitor_uuid: headerSession.visitor_uuid,
+            source_channel: headerSession.source_channel,
+            entry: "resolveSession_header_hit",
+          },
+          request_id,
+        )
+        return headerSession
       }
+
       await send_auth_debug(
-        "resolve_session_exit",
+        "session_header_revalidated",
         {
           pathname: context.requested_route,
-          visitor_uuid: session.visitor_uuid,
-          source_channel: session.source_channel,
-          entry: "resolveSession_header_hit",
+          visitor_uuid: headerSession.visitor_uuid,
+          has_auth_token: Boolean(context.auth_token),
         },
         request_id,
       )
-      return session
     }
 
     if (visitorStore !== supabaseVisitorStore) {

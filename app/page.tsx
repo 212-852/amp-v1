@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation"
 
-import { resolveAmpRoute } from "@/core/route/rules"
+import { resolveAmpRouteForPath } from "@/core/route/rules"
 
 export default async function Page() {
-  const route = await resolveAmpRoute()
+  const route = await resolveAmpRouteForPath("/")
 
   redirect(route.path)
 }

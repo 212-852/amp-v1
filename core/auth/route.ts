@@ -31,7 +31,7 @@ const ZONE_ACCESS: Record<SessionRole, AccessZone[]> = {
   guest: ["user"],
 }
 
-function homePathForRole(role: SessionRole) {
+export function homePathForRole(role: SessionRole) {
   if (role === "admin" || role === "owner" || role === "concierge") {
     return "/admin"
   }
@@ -164,7 +164,10 @@ function resolveEntryPath(
     }
   }
 
-  const path = resolveRoleRedirectPath(context, session) ?? context.requested_route ?? "/app"
+  const path =
+    resolveRoleRedirectPath(context, session) ??
+    context.requested_route ??
+    homePathForRole(session.role)
 
   return {
     key: keyForPath(path),

@@ -1,15 +1,13 @@
 import AdminComingSoon from "@/components/admin/coming-soon"
-import AdminShell from "@/components/admin/shell"
-import { resolveAuthContext } from "@/core/auth/context"
-import { resolveSession } from "@/core/auth/session"
+import AdminOpsFrame from "@/components/admin/frame"
+import { requireAdminAccess } from "@/core/admin/guard"
 
 export default async function AdminSettingsPage() {
-  const context = await resolveAuthContext()
-  const session = await resolveSession(context)
+  const { session } = await requireAdminAccess()
 
   return (
-    <AdminShell session={session} pathname="/admin/settings">
+    <AdminOpsFrame pathname="/admin/settings" session={session}>
       <AdminComingSoon title="Settings" />
-    </AdminShell>
+    </AdminOpsFrame>
   )
 }

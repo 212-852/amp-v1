@@ -64,12 +64,16 @@ function resolveBearerToken(authorization: string | null) {
   return authorization.slice("Bearer ".length).trim() || null
 }
 
-export async function resolveAuthContext(): Promise<AuthContext> {
+export async function resolveAuthContext(
+  requested_route_override?: string | null,
+): Promise<AuthContext> {
   const entrance = await resolveEntranceContext()
   const requestHeaders = await headers()
   const cookieStore = await cookies()
   const pathname =
-    requestHeaders.get("x-amp-pathname") ?? requestHeaders.get("x-amp-route")
+    requested_route_override ??
+    requestHeaders.get("x-amp-pathname") ??
+    requestHeaders.get("x-amp-route")
   const search = requestHeaders.get("x-amp-search")
 
   const context: AuthContext = {
@@ -78,7 +82,7 @@ export async function resolveAuthContext(): Promise<AuthContext> {
       cookieStore.get("sb-access-token")?.value ??
       cookieStore.get("supabase-auth-token")?.value ??
       null,
-    requested_route: pathname,
+    requested_route: pathname ?? null,
     source_channel: resolveSourceChannel(
       entrance.surface,
       requestHeaders.get("x-amp-source-channel") ??

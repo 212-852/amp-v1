@@ -247,7 +247,15 @@ export async function proxy(request: NextRequest) {
       error_stack: formatProxyErrorStack(error),
     })
 
-    return NextResponse.next()
+    const requestHeaders = new Headers(request.headers)
+    requestHeaders.set("x-amp-pathname", request.nextUrl.pathname)
+    requestHeaders.set("x-amp-search", request.nextUrl.search)
+
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    })
   }
 }
 
