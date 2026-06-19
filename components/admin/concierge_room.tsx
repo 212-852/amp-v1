@@ -1,8 +1,7 @@
 "use client"
 
-import { ArrowLeft, List } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { useEffect } from "react"
 
 import ChatMessageInput from "@/components/chat/message_input"
@@ -11,21 +10,8 @@ import type { ChatRoomState } from "@/core/chat/types"
 import type { ConciergeQueueRoom } from "@/core/concierge/message"
 import { useLocale } from "@/src/components/locale/provider"
 
-const content = {
-  back: {
-    ja: "戻る",
-    en: "Back",
-    es: "Volver",
-  },
-  list: {
-    ja: "一覧へ",
-    en: "List",
-    es: "Lista",
-  },
-}
-
 const icon_button_class =
-  "flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-900 transition hover:bg-neutral-50 active:bg-neutral-100"
+  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-900 transition hover:bg-neutral-50 active:bg-neutral-100"
 
 function resolveInitials(value: string | null | undefined) {
   const normalized = value?.trim()
@@ -43,7 +29,7 @@ function resolveInitials(value: string | null | undefined) {
   return normalized.slice(0, 2).toUpperCase()
 }
 
-function CustomerHeader({
+function RoomHeader({
   customer,
   mode,
 }: Readonly<{
@@ -55,8 +41,16 @@ function CustomerHeader({
   const status = mode === "concierge" ? "Concierge" : mode === "bot" ? "Bot" : mode
 
   return (
-    <div className="flex shrink-0 items-center gap-3 border-b border-neutral-200 bg-neutral-50 py-2">
-      <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-neutral-100">
+    <div className="flex shrink-0 items-center gap-2 border-b border-neutral-200 bg-neutral-50 py-1.5">
+      <Link
+        href="/admin/list"
+        aria-label="Back to chat list"
+        className={icon_button_class}
+      >
+        <ArrowLeft aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
+      </Link>
+
+      <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-neutral-100">
         {avatar_url ? (
           <img
             src={avatar_url}
@@ -64,7 +58,7 @@ function CustomerHeader({
             className="h-full w-full object-cover"
           />
         ) : (
-          <span className="flex h-full w-full items-center justify-center text-[12px] font-semibold text-neutral-700">
+          <span className="flex h-full w-full items-center justify-center text-[11px] font-semibold text-neutral-700">
             {resolveInitials(display_name)}
           </span>
         )}
@@ -90,7 +84,6 @@ export default function AdminConciergeRoom({
   viewer_display_name?: string | null
   customer_header?: ConciergeQueueRoom | null
 }>) {
-  const router = useRouter()
   const { locale } = useLocale()
 
   useEffect(() => {
@@ -125,27 +118,10 @@ export default function AdminConciergeRoom({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col [--chat-message-bottom-padding:calc(80px+env(safe-area-inset-bottom,0px))]">
-      <CustomerHeader
+      <RoomHeader
         customer={customer_header ?? null}
         mode={state.room.mode}
       />
-      <div className="flex shrink-0 items-center justify-between border-b border-neutral-200 bg-neutral-50 py-2">
-        <button
-          type="button"
-          aria-label={content.back[locale]}
-          onClick={() => router.back()}
-          className={icon_button_class}
-        >
-          <ArrowLeft aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
-        </button>
-        <Link
-          href="/admin/list"
-          aria-label={content.list[locale]}
-          className={icon_button_class}
-        >
-          <List aria-hidden="true" className="h-4 w-4" strokeWidth={1.8} />
-        </Link>
-      </div>
 
       <div className="min-h-0 flex-1 overflow-hidden">
         <ChatRoomPanel
