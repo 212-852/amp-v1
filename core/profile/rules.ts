@@ -1,4 +1,5 @@
 import type { Session } from "@/core/auth/types"
+import type { NotificationType } from "@/core/chat/types"
 import { get_display_name } from "@/core/profile/display"
 import { normalize_address_code } from "@/src/address/rules"
 
@@ -18,6 +19,7 @@ export type ProfileSettingsPatch = {
   memo?: string | null
   language?: ProfileLocale
   locale?: ProfileLocale
+  notification_type?: NotificationType
 }
 
 function read_address_field(
@@ -38,6 +40,12 @@ function read_address_field(
 
 export function normalize_profile_locale(value: unknown): ProfileLocale | null {
   return value === "ja" || value === "en" || value === "es" ? value : null
+}
+
+export function normalize_notification_type(
+  value: unknown,
+): NotificationType | null {
+  return value === "line" || value === "push" ? value : null
 }
 
 function normalize_optional_string(value: unknown) {
@@ -151,5 +159,16 @@ export function validate_profile_patch(
     patch.language = locale
     patch.locale = locale
   }
+
+  if ("notification_type" in body) {
+    const notification_type = normalize_notification_type(body.notification_type)
+
+    if (!notification_type) {
+      throw new Error("Invalid notification_type")
+    }
+
+    patch.notification_type = notification_type
+  }
+
   return patch
 }

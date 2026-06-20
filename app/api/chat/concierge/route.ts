@@ -37,7 +37,6 @@ export async function GET(request: Request) {
       ok: true,
       enabled: state.enabled,
       availability: state.availability,
-      notification_type: state.notification_type,
     })
   } catch (error) {
     return NextResponse.json(

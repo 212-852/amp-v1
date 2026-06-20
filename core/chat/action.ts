@@ -1193,9 +1193,7 @@ export async function toggleConciergeAvailability(input: {
 export async function getConciergeAvailabilityState(
   session?: { user_uuid?: string | null } | null,
 ) {
-  const {
-    loadAvailabilityPreferences,
-  } = await import("@/core/chat/archive")
+  const { loadConciergeAvailability } = await import("@/core/chat/archive")
 
   let user_uuid = session?.user_uuid ?? null
 
@@ -1211,33 +1209,10 @@ export async function getConciergeAvailabilityState(
     }
   }
 
-  const preferences = await loadAvailabilityPreferences(user_uuid)
+  const enabled = await loadConciergeAvailability(user_uuid)
 
   return {
-    enabled: preferences.availability === "on",
-    availability: preferences.availability,
-    notification_type: preferences.notification_type,
+    enabled,
+    availability: enabled ? ("on" as const) : ("off" as const),
   }
-}
-
-export async function setConciergeNotificationType(input: {
-  notification_type: import("@/core/chat/types").NotificationType
-  session: Session
-}) {
-  const { canToggleConciergeAvailability, ConciergeToggleDeniedError } =
-    await import("@/core/chat/concierge_access")
-  const { setAvailabilityNotificationType } = await import("@/core/chat/archive")
-
-  if (!canToggleConciergeAvailability(input.session)) {
-    throw new ConciergeToggleDeniedError("Notification settings denied")
-  }
-
-  if (!input.session.user_uuid) {
-    throw new Error("user_uuid is required")
-  }
-
-  return setAvailabilityNotificationType({
-    user_uuid: input.session.user_uuid,
-    notification_type: input.notification_type,
-  })
 }

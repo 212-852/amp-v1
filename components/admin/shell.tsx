@@ -35,7 +35,6 @@ export default async function AdminShell({
         session={header_session}
         page_label={page_label}
         concierge_available={availability.enabled}
-        notification_type={availability.notification_type}
         breadcrumb_items={breadcrumbs.items}
       />
       <main className="mx-auto flex h-dvh w-full max-w-[430px] flex-col gap-3 overflow-hidden px-5 pb-[calc(118px+env(safe-area-inset-bottom,0px))] pt-[calc(112px+env(safe-area-inset-top,0px))]">

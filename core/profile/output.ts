@@ -1,4 +1,5 @@
 import type { Session } from "@/core/auth/types"
+import type { NotificationType } from "@/core/chat/types"
 import {
   resolve_profile_display_name,
   type ProfileLocale,
@@ -24,6 +25,7 @@ export type ProfileDisplayPayload = {
   tier: string | null
   language: ProfileLocale
   locale: ProfileLocale
+  notification_type?: NotificationType
 }
 
 export function build_profile_output(input: {
@@ -42,6 +44,7 @@ export function build_profile_output(input: {
   users_name?: string | null
   image_url?: string | null
   locale?: ProfileLocale | null
+  notification_type?: NotificationType | null
 }): ProfileDisplayPayload {
   const display_name = resolve_profile_display_name({
     nickname: input.nickname,
@@ -71,5 +74,6 @@ export function build_profile_output(input: {
     tier: input.session.tier ?? null,
     language: input.locale ?? "ja",
     locale: input.locale ?? "ja",
+    notification_type: input.notification_type === "push" ? "push" : "line",
   }
 }

@@ -1,27 +1,17 @@
 import { NextResponse } from "next/server"
 
-import {
-  getConciergeAvailabilityState,
-  setConciergeNotificationType,
-} from "@/core/chat/action"
+import { get_profile_settings, save_profile_settings } from "@/core/profile/action"
 import { resolveChatApiSession } from "@/core/chat/api"
-import { ConciergeToggleDeniedError } from "@/core/chat/concierge_access"
-import type { NotificationType } from "@/core/chat/types"
-
-function parseNotificationType(value: unknown): NotificationType | null {
-  return value === "line" || value === "push" ? value : null
-}
+import { normalize_notification_type } from "@/core/profile/rules"
 
 export async function GET() {
   try {
     const { session } = await resolveChatApiSession()
-    const state = await getConciergeAvailabilityState(session)
+    const profile = await get_profile_settings(session)
 
     return NextResponse.json({
       ok: true,
-      availability: state.availability,
-      notification_type: state.notification_type,
-      enabled: state.enabled,
+      notification_type: profile.notification_type,
     })
   } catch (error) {
     return NextResponse.json(
@@ -39,7 +29,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null)
-  const notification_type = parseNotificationType(
+  const notification_type = normalize_notification_type(
     (body as { notification_type?: unknown } | null)?.notification_type,
   )
 
@@ -52,23 +42,16 @@ export async function POST(request: Request) {
 
   try {
     const { session } = await resolveChatApiSession()
-    const result = await setConciergeNotificationType({
-      notification_type,
+    const profile = await save_profile_settings({
       session,
+      body: { notification_type },
     })
 
     return NextResponse.json({
       ok: true,
-      notification_type: result.notification_type,
+      notification_type: profile.notification_type,
     })
   } catch (error) {
-    if (error instanceof ConciergeToggleDeniedError) {
-      return NextResponse.json(
-        { ok: false, error: error.message },
-        { status: 403 },
-      )
-    }
-
     return NextResponse.json(
       {
         ok: false,

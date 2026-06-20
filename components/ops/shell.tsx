@@ -22,7 +22,6 @@ export default function OpsShell({
   breadcrumb_items = [],
   layout = "default",
   concierge_available,
-  notification_type,
 }: Readonly<{
   children: React.ReactNode
   session: OpsHeaderSession
@@ -31,7 +30,6 @@ export default function OpsShell({
   breadcrumb_items?: HeaderBreadcrumbItem[]
   layout?: "default" | "full_height"
   concierge_available?: boolean
-  notification_type?: import("@/core/chat/types").NotificationType
 }>) {
   const page_label = resolvePageLabel(pathname)
   const has_breadcrumb = breadcrumb_items.length > 0
@@ -45,7 +43,6 @@ export default function OpsShell({
           page_label={page_label}
           breadcrumb_items={breadcrumb_items}
           concierge_available={concierge_available}
-          notification_type={notification_type}
         />
         <main
           className={`mx-auto flex h-dvh w-full max-w-[430px] flex-col overflow-hidden px-5 ${header_offset}`}
@@ -63,7 +60,6 @@ export default function OpsShell({
         page_label={page_label}
         breadcrumb_items={breadcrumb_items}
         concierge_available={concierge_available}
-        notification_type={notification_type}
       />
       <main
         className={[

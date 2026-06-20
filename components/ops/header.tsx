@@ -57,13 +57,11 @@ type HeaderBreadcrumbItem = {
 export default function OpsHeader({
   session,
   concierge_available,
-  notification_type: initial_notification_type = "line",
   breadcrumb_items = [],
 }: {
   session?: HeaderSessionLike | null
   page_label: string
   concierge_available?: boolean
-  notification_type?: NotificationType
   breadcrumb_items?: HeaderBreadcrumbItem[]
 }) {
   const enabled = concierge_available === true
@@ -88,7 +86,7 @@ export default function OpsHeader({
   const [notification_settings_open, set_notification_settings_open] =
     useState(false)
   const [notification_type, set_notification_type] =
-    useState<NotificationType>(initial_notification_type)
+    useState<NotificationType>("line")
   const [is_logging_out, set_is_logging_out] = useState(false)
   const [concierge_available_state, set_concierge_available_state] = useState(
     enabled,
@@ -100,8 +98,46 @@ export default function OpsHeader({
   })
 
   useEffect(() => {
-    set_notification_type(initial_notification_type)
-  }, [initial_notification_type])
+    if (!is_logged_in) {
+      return
+    }
+
+    let cancelled = false
+
+    async function load_notification_settings() {
+      try {
+        const response = await fetch("/api/profile", {
+          credentials: "include",
+          cache: "no-store",
+        })
+
+        if (!response.ok || cancelled) {
+          return
+        }
+
+        const payload = (await response.json()) as {
+          profile?: { notification_type?: NotificationType }
+          notification_type?: NotificationType
+        }
+
+        if (!cancelled) {
+          const profile_notification_type =
+            payload.profile?.notification_type ?? payload.notification_type
+          set_notification_type(
+            profile_notification_type === "push" ? "push" : "line",
+          )
+        }
+      } catch {
+        // keep default line
+      }
+    }
+
+    void load_notification_settings()
+
+    return () => {
+      cancelled = true
+    }
+  }, [is_logged_in])
 
   useEffect(() => {
     if (!menu_open) {
@@ -146,7 +182,9 @@ export default function OpsHeader({
 
   function handle_profile_saved(profile: ProfileDisplayPayload) {
     set_saved_profile(profile)
-
+    set_notification_type(
+      profile.notification_type === "push" ? "push" : "line",
+    )
   }
 
   async function toggle_concierge_availability() {
@@ -327,20 +365,20 @@ export default function OpsHeader({
 
           <button
             type="button"
-            aria-label="Notification settings"
-            onClick={() => set_notification_settings_open(true)}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-900"
-          >
-            <Bell className="h-4 w-4" strokeWidth={1.8} />
-          </button>
-
-          <button
-            type="button"
             aria-label="Settings"
             onClick={open_profile_settings}
             className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-900"
           >
             <Settings className="h-4 w-4" strokeWidth={1.8} />
+          </button>
+
+          <button
+            type="button"
+            aria-label="Notification settings"
+            onClick={() => set_notification_settings_open(true)}
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-900"
+          >
+            <Bell className="h-4 w-4" strokeWidth={1.8} />
           </button>
 
           <div ref={menu_ref} className="relative">

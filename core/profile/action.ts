@@ -5,6 +5,7 @@ import type {
   ProfileLocale,
   ProfileSettingsPatch,
 } from "@/core/profile/rules"
+import type { NotificationType } from "@/core/chat/types"
 import type { Session } from "@/core/auth/types"
 import { assert_valid_address_selection } from "@/src/address/action"
 
@@ -25,6 +26,7 @@ type ProfileRow = {
   memo?: string | null
   language?: ProfileLocale | null
   locale?: ProfileLocale | null
+  notification_type?: NotificationType | null
 }
 
 type UserNameRow = {
@@ -45,6 +47,7 @@ const PROFILE_REQUIRED_COLUMNS = new Set([
   "address",
   "memo",
   "language",
+  "notification_type",
 ])
 
 function log_profile_core(event: string, payload: Record<string, unknown>) {
@@ -82,7 +85,8 @@ function patch_has_profile_fields(patch: ProfileSettingsPatch) {
     "city_code" in patch ||
     "address" in patch ||
     "memo" in patch ||
-    "language" in patch
+    "language" in patch ||
+    "notification_type" in patch
   )
 }
 
@@ -109,6 +113,10 @@ function build_profile_db_patch(patch: ProfileSettingsPatch) {
 
   if (patch.language) {
     body.language = patch.language
+  }
+
+  if ("notification_type" in patch) {
+    body.notification_type = patch.notification_type
   }
 
   return body
@@ -194,6 +202,38 @@ async function load_profile_row(session: Session) {
 
   const rows = (await response.json()) as ProfileRow[]
   return rows[0] ?? null
+}
+
+export async function load_profile_notification_type(
+  user_uuid: string,
+): Promise<NotificationType> {
+  const config = getRestConfig()
+
+  if (!config) {
+    return "line"
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "profiles",
+      `user_uuid=eq.${encodeURIComponent(user_uuid)}&select=notification_type&limit=1`,
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return "line"
+  }
+
+  const rows = (await response.json()) as Array<{
+    notification_type?: NotificationType | null
+  }>
+
+  return rows[0]?.notification_type === "push" ? "push" : "line"
 }
 
 async function upsert_profile_row(input: {
@@ -319,6 +359,7 @@ export async function get_profile_settings(session: Session) {
     memo: row?.memo ?? null,
     users_name,
     locale: row?.language ?? row?.locale ?? null,
+    notification_type: row?.notification_type ?? null,
   })
 }
 
@@ -379,5 +420,10 @@ export async function save_profile_settings(input: {
       context.patch.language ??
       context.patch.locale ??
       null,
+    notification_type:
+      fallback_row?.notification_type ??
+      ("notification_type" in context.patch
+        ? context.patch.notification_type
+        : null),
   })
 }

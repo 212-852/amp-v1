@@ -134,7 +134,7 @@ export default function AdminConciergeRoom({
   }, [state.room.room_uuid])
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col [--chat-composer-height:80px] [--chat-input-height:80px] [--chat-message-bottom-padding:calc(var(--chat-composer-height)+env(safe-area-inset-bottom,0px)+48px)]">
+    <div className="flex min-h-0 flex-1 flex-col [--chat-composer-height:80px] [--chat-input-height:80px] [--chat-message-bottom-padding:calc(var(--chat-composer-height)+env(safe-area-inset-bottom,0px)+32px)]">
       <RoomHeader
         customer={customer_header ?? null}
         mode={state.room.mode}

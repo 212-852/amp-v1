@@ -1,17 +1,13 @@
 "use client"
 
 import { ArrowDown } from "lucide-react"
-import {
-  type RefObject,
-  useEffect,
-} from "react"
+import { type RefObject, useEffect } from "react"
 
 import {
-  CHAT_NEAR_BOTTOM_THRESHOLD,
-  read_distance_from_bottom,
-  scroll_to_latest_message,
+  scroll_to_latest,
+  should_hide_latest_button,
   type ChatScrollView,
-} from "@/components/chat/scroll_to_bottom"
+} from "@/components/chat/scroll"
 import type { Locale } from "@/src/lib/locale"
 
 const content = {
@@ -22,41 +18,32 @@ const content = {
   },
 } satisfies Record<string, Record<Locale, string>>
 
-type ChatScrollButtonProps = {
+type ChatLatestButtonProps = {
   container_ref: RefObject<HTMLElement | null>
-  bottom_ref: RefObject<HTMLElement | null>
   placement?: "panel" | "above_input"
   view: ChatScrollView
   locale: Locale
   visible: boolean
-  on_clear: () => void
+  on_hide: () => void
 }
 
-export default function ChatScrollButton({
+export default function ChatLatestButton({
   container_ref,
-  bottom_ref,
   placement = "panel",
   view,
   locale,
   visible,
-  on_clear,
-}: Readonly<ChatScrollButtonProps>) {
-  function jump_to_bottom() {
-    scroll_to_latest_message(
+  on_hide,
+}: Readonly<ChatLatestButtonProps>) {
+  function jump_to_latest() {
+    scroll_to_latest(
       {
         scroll_container: container_ref.current,
-        bottom_anchor: bottom_ref.current,
         view,
       },
-      "manual_jump",
-      true,
+      "manual_latest",
     )
-    window.dispatchEvent(
-      new CustomEvent("amp-chat-scroll-bottom", {
-        detail: { reason: "manual_jump", force: true },
-      }),
-    )
-    on_clear()
+    on_hide()
   }
 
   useEffect(() => {
@@ -66,27 +53,31 @@ export default function ChatScrollButton({
       return
     }
 
-    const scroll_container = container
-
     function update_visibility() {
-      if (read_distance_from_bottom(scroll_container) <= CHAT_NEAR_BOTTOM_THRESHOLD) {
-        on_clear()
+      const scroll_container = container_ref.current
+
+      if (!scroll_container) {
+        return
+      }
+
+      if (should_hide_latest_button(scroll_container)) {
+        on_hide()
       }
     }
 
     const frame = window.requestAnimationFrame(update_visibility)
 
-    scroll_container.addEventListener("scroll", update_visibility, {
+    container.addEventListener("scroll", update_visibility, {
       passive: true,
     })
     window.addEventListener("resize", update_visibility)
 
     return () => {
       window.cancelAnimationFrame(frame)
-      scroll_container.removeEventListener("scroll", update_visibility)
+      container.removeEventListener("scroll", update_visibility)
       window.removeEventListener("resize", update_visibility)
     }
-  }, [container_ref, on_clear])
+  }, [container_ref, on_hide])
 
   if (!visible) {
     return null
@@ -96,7 +87,7 @@ export default function ChatScrollButton({
     <button
       type="button"
       aria-label="Scroll to latest message"
-      onClick={jump_to_bottom}
+      onClick={jump_to_latest}
       className={[
         "inline-flex h-9 items-center justify-center gap-1.5 rounded-full bg-black/70 px-3 text-[12px] font-medium text-white shadow-sm transition hover:bg-black/80 active:scale-95",
         placement === "panel" ? "absolute right-3 top-3 z-20" : "",

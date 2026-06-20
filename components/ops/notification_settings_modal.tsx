@@ -15,19 +15,19 @@ const content = {
     es: "Metodo de notificacion",
   },
   line: {
-    ja: "LINE",
-    en: "LINE",
-    es: "LINE",
+    ja: "LINE通知",
+    en: "LINE Notification",
+    es: "Notificacion LINE",
   },
   push: {
-    ja: "プッシュ通知",
-    en: "Push Notification",
-    es: "Notificacion push",
+    ja: "PWA Push通知",
+    en: "PWA Push Notification",
+    es: "Notificacion push PWA",
   },
   push_disabled: {
-    ja: "PWAが必要です",
-    en: "PWA Required",
-    es: "Se requiere PWA",
+    ja: "Push通知（PWAのみ）",
+    en: "Push (PWA only)",
+    es: "Push (solo PWA)",
   },
   save: {
     ja: "保存",
@@ -94,7 +94,7 @@ export default function NotificationSettingsModal({
     set_error_message(null)
 
     try {
-      const response = await fetch("/api/chat/notifications", {
+      const response = await fetch("/api/profile", {
         method: "POST",
         credentials: "include",
         headers: {
@@ -105,6 +105,7 @@ export default function NotificationSettingsModal({
 
       const payload = (await response.json().catch(() => null)) as {
         ok?: boolean
+        profile?: { notification_type?: NotificationType }
         notification_type?: NotificationType
         error?: string
       } | null
@@ -113,7 +114,10 @@ export default function NotificationSettingsModal({
         throw new Error(payload?.error ?? "notification_save_failed")
       }
 
-      const saved_type = payload.notification_type ?? notification_type
+      const saved_type =
+        payload.profile?.notification_type ??
+        payload.notification_type ??
+        notification_type
       onSaved?.(saved_type)
       onClose()
     } catch {

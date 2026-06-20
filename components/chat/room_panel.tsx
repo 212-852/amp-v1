@@ -9,18 +9,16 @@ import {
   mergeRealtimeInsert,
 } from "@/components/chat/message_merge"
 import { send_chat_realtime_debug } from "@/components/chat/realtime_debug"
-import ChatScrollButton from "@/components/chat/scroll"
+import ChatLatestButton from "@/components/chat/latest_button"
 import {
   CHAT_BOTTOM_SPACER_CLASS,
-  is_chat_near_bottom,
   read_chat_scroll_bottom_detail,
-  scroll_to_latest_message,
-  should_show_new_message_badge,
+  scroll_to_latest,
+  should_show_latest_button,
   type ChatScrollReason,
-} from "@/components/chat/scroll_to_bottom"
+} from "@/components/chat/scroll"
 import { useRoomMessages } from "@/components/chat/use_room_messages"
 import { useRoomTyping } from "@/components/chat/use_room_typing"
-import { useToast } from "@/components/ui/use_toast"
 import {
   filterUserVisibleChatMessages,
   readMessageMeta,
@@ -45,11 +43,6 @@ const content = {
     ja: "Botモード",
     en: "Bot mode",
     es: "Modo Bot",
-  },
-  new_realtime_message: {
-    ja: "新しいメッセージがあります",
-    en: "New message",
-    es: "Hay un mensaje nuevo",
   },
 }
 
@@ -159,9 +152,8 @@ export default function ChatRoomPanel({
   const [has_older_messages, set_has_older_messages] = useState(
     initial_messages.length >= 30,
   )
-  const [show_scroll_down_button, set_show_scroll_down_button] = useState(false)
+  const [show_latest_button, set_show_latest_button] = useState(false)
   const { locale } = useLocale()
-  const { toast } = useToast()
   const [current_viewer_display_name, set_current_viewer_display_name] =
     useState(viewer_display_name)
 
@@ -186,9 +178,7 @@ export default function ChatRoomPanel({
     room_uuid: room.room_uuid,
     participant_uuid,
   })
-  const bottom_ref = useRef<HTMLDivElement>(null)
   const scroll_ref = useRef<HTMLDivElement>(null)
-  const is_near_bottom_ref = useRef(true)
   const is_loading_older_ref = useRef(false)
   const oldest_loaded_message_ref = useRef<{
     created_at: string
@@ -205,10 +195,7 @@ export default function ChatRoomPanel({
     before_height: number
     previous_scroll_top: number
   } | null>(null)
-  const pending_scroll_ref = useRef<{
-    reason: ChatScrollReason
-    force: boolean
-  } | null>(null)
+  const pending_scroll_ref = useRef<ChatScrollReason | null>(null)
   const realtime_debug_context = useMemo(
     () => ({
       view: show_presence ? "concierge" as const : "user" as const,
@@ -218,28 +205,22 @@ export default function ChatRoomPanel({
     [room.user_uuid, room.visitor_uuid, show_presence],
   )
 
-  const scroll_to_latest = useCallback(
-    (reason: ChatScrollReason, force = false) => {
-      scroll_to_latest_message(
+  const run_scroll_to_latest = useCallback(
+    (reason: ChatScrollReason) => {
+      scroll_to_latest(
         {
           scroll_container: scroll_ref.current,
-          bottom_anchor: bottom_ref.current,
           view: realtime_debug_context.view,
-          is_near_bottom: is_near_bottom_ref.current,
         },
         reason,
-        force,
       )
     },
     [realtime_debug_context.view],
   )
 
-  const queue_scroll_to_latest = useCallback(
-    (reason: ChatScrollReason, force = false) => {
-      pending_scroll_ref.current = { reason, force }
-    },
-    [],
-  )
+  const queue_scroll_to_latest = useCallback((reason: ChatScrollReason) => {
+    pending_scroll_ref.current = reason
+  }, [])
 
   useEffect(() => {
     console.log("[chat realtime] room_uuid", {
@@ -324,8 +305,6 @@ export default function ChatRoomPanel({
       }
 
       let should_scroll_realtime = false
-      let should_force_scroll_realtime = false
-      let should_show_new_message_toast = false
 
       set_messages((current) => {
         const result = mergeRealtimeInsert(current, next_message)
@@ -353,23 +332,10 @@ export default function ChatRoomPanel({
         }
 
         if (result.action === "appended") {
+          should_scroll_realtime = true
           const rendered_count = show_presence
             ? result.messages.length
             : filterUserVisibleChatMessages(result.messages).length
-          const sender_uuid = next_message.participant_uuid ?? null
-          const is_own_message = Boolean(
-            sender_uuid && sender_uuid === participant_uuid,
-          )
-          const is_near_bottom = is_near_bottom_ref.current
-
-          should_force_scroll_realtime = is_own_message
-          should_scroll_realtime = is_own_message || is_near_bottom
-          should_show_new_message_toast = should_show_new_message_badge({
-            message: next_message,
-            current_participant_uuid: participant_uuid,
-            is_near_bottom,
-            is_duplicate: false,
-          })
 
           console.log("[chat realtime] append message", {
             room_uuid: next_message.room_uuid,
@@ -404,17 +370,7 @@ export default function ChatRoomPanel({
       })
 
       if (should_scroll_realtime) {
-        queue_scroll_to_latest("realtime_receive", should_force_scroll_realtime)
-      }
-
-      if (should_show_new_message_toast) {
-        set_show_scroll_down_button(true)
-        toast({
-          tone: "info",
-          compact: true,
-          duration_ms: 2750,
-          message: content.new_realtime_message[locale],
-        })
+        queue_scroll_to_latest("realtime_receive")
       }
 
       window.dispatchEvent(new CustomEvent("amp-admin-queue-refresh"))
@@ -423,10 +379,8 @@ export default function ChatRoomPanel({
       participant_uuid,
       queue_scroll_to_latest,
       realtime_debug_context,
-      locale,
       room.room_uuid,
       show_presence,
-      toast,
     ],
   )
 
@@ -487,9 +441,23 @@ export default function ChatRoomPanel({
   }, [refresh, room.room_uuid, show_presence])
 
   useEffect(() => {
-    is_near_bottom_ref.current = true
-    queue_scroll_to_latest("room_change", true)
+    set_show_latest_button(false)
+    queue_scroll_to_latest("initial_load")
   }, [room.room_uuid, queue_scroll_to_latest])
+
+  useEffect(() => {
+    function handle_scroll_bottom(event: Event) {
+      const detail = read_chat_scroll_bottom_detail(event)
+      set_show_latest_button(false)
+      run_scroll_to_latest(detail.reason ?? "manual_latest")
+    }
+
+    window.addEventListener("amp-chat-scroll-bottom", handle_scroll_bottom)
+
+    return () => {
+      window.removeEventListener("amp-chat-scroll-bottom", handle_scroll_bottom)
+    }
+  }, [run_scroll_to_latest])
 
   useEffect(() => {
     const oldest_message = messages[0] ?? null
@@ -501,44 +469,6 @@ export default function ChatRoomPanel({
         }
       : null
   }, [messages])
-
-  useEffect(() => {
-    is_near_bottom_ref.current = true
-    queue_scroll_to_latest("initial_load", true)
-  }, [queue_scroll_to_latest])
-
-  useEffect(() => {
-    function handle_scroll_bottom(event: Event) {
-      const detail = read_chat_scroll_bottom_detail(event)
-      is_near_bottom_ref.current = true
-      set_show_scroll_down_button(false)
-      scroll_to_latest(detail.reason ?? "manual_jump", detail.force ?? true)
-    }
-
-    function handle_input_resized(event: Event) {
-      const detail = (event as CustomEvent<{ reason?: string }>).detail
-      const reason =
-        detail?.reason === "composer_mount"
-          ? "composer_mount"
-          : detail?.reason === "composer_resize"
-            ? "composer_resize"
-            : "input_resize"
-
-      if (is_near_bottom_ref.current) {
-        scroll_to_latest(reason, true)
-      }
-    }
-
-    window.addEventListener("amp-chat-scroll-bottom", handle_scroll_bottom)
-    window.addEventListener("amp-chat-input-resized", handle_input_resized)
-    window.addEventListener("amp-chat-composer-mounted", handle_input_resized)
-
-    return () => {
-      window.removeEventListener("amp-chat-scroll-bottom", handle_scroll_bottom)
-      window.removeEventListener("amp-chat-input-resized", handle_input_resized)
-      window.removeEventListener("amp-chat-composer-mounted", handle_input_resized)
-    }
-  }, [scroll_to_latest])
 
   useEffect(() => {
     function handle_mode_change(event: Event) {
@@ -615,7 +545,6 @@ export default function ChatRoomPanel({
 
       const body = detail.body
       const client_message_id = detail.client_message_id
-      is_near_bottom_ref.current = true
 
       set_messages((current) => {
         const optimistic_message = buildOptimisticMessage({
@@ -637,7 +566,7 @@ export default function ChatRoomPanel({
             sender_uuid: participant_uuid,
             message_uuid: optimistic_message.message_uuid,
           })
-          queue_scroll_to_latest("optimistic_append", true)
+          queue_scroll_to_latest("optimistic_append")
         }
 
         return result.messages
@@ -686,10 +615,6 @@ export default function ChatRoomPanel({
           messageBundleToRecord(detail.message as MessageBundle, participant_uuid),
         ).messages,
       )
-
-      if (is_near_bottom_ref.current) {
-        queue_scroll_to_latest("message_archived", true)
-      }
     }
 
     window.addEventListener("amp-chat-message-archived", handle_archived_message)
@@ -700,7 +625,7 @@ export default function ChatRoomPanel({
         handle_archived_message,
       )
     }
-  }, [participant_uuid, queue_scroll_to_latest, room.room_uuid])
+  }, [participant_uuid, room.room_uuid])
 
   useEffect(() => {
     function handle_failed_message(event: Event) {
@@ -746,10 +671,10 @@ export default function ChatRoomPanel({
       return
     }
 
-    const { reason, force } = pending_scroll_ref.current
+    const reason = pending_scroll_ref.current
     pending_scroll_ref.current = null
-    scroll_to_latest(reason, force)
-  }, [messages.length, scroll_to_latest])
+    run_scroll_to_latest(reason)
+  }, [messages.length, run_scroll_to_latest])
 
   async function load_older_messages() {
     const oldest_message = oldest_loaded_message_ref.current
@@ -851,14 +776,13 @@ export default function ChatRoomPanel({
         fill_height ? "flex h-full min-h-0 flex-col" : "",
       ].join(" ")}
     >
-      <ChatScrollButton
+      <ChatLatestButton
         container_ref={scroll_ref}
-        bottom_ref={bottom_ref}
         placement={scroll_button_placement}
         view={realtime_debug_context.view}
         locale={locale}
-        visible={show_scroll_down_button}
-        on_clear={() => set_show_scroll_down_button(false)}
+        visible={show_latest_button}
+        on_hide={() => set_show_latest_button(false)}
       />
       {show_presence && room.mode !== "concierge" ? (
         <div className="mb-3 shrink-0 rounded-md border border-neutral-200 bg-white px-3 py-2 text-[12px] font-medium text-neutral-600">
@@ -882,8 +806,7 @@ export default function ChatRoomPanel({
         className={scroll_class}
         onScroll={(event) => {
           const target = event.currentTarget
-          is_near_bottom_ref.current = is_chat_near_bottom(target)
-          set_show_scroll_down_button(!is_near_bottom_ref.current)
+          set_show_latest_button(should_show_latest_button(target))
 
           if (target.scrollTop <= 80) {
             void load_older_messages()
@@ -913,7 +836,6 @@ export default function ChatRoomPanel({
           </p>
         ) : null}
         <div aria-hidden="true" className={[CHAT_BOTTOM_SPACER_CLASS, "shrink-0"].join(" ")} />
-        <div ref={bottom_ref} aria-hidden="true" className="h-0" />
       </div>
     </section>
   )

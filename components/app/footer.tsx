@@ -470,7 +470,7 @@ export default function AppFooter({
     setFooterMode("input")
     window.dispatchEvent(
       new CustomEvent("amp-chat-scroll-bottom", {
-        detail: { reason: "input_resize", force: true },
+        detail: { reason: "manual_latest" },
       }),
     )
   }, [])
@@ -830,7 +830,7 @@ export default function AppFooter({
       message_input_ref.current?.focus({ preventScroll: true })
       window.dispatchEvent(
         new CustomEvent("amp-chat-scroll-bottom", {
-          detail: { reason: "manual_jump", force: true },
+          detail: { reason: "manual_latest" },
         }),
       )
       pending_input_focus_ref.current = false

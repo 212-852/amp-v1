@@ -90,10 +90,10 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
 
   const {
     loadEnabledAvailabilityRecipients,
-    loadAvailabilityPreferences,
   } = await import("@/core/chat/archive")
 
   const recipients = await loadEnabledAvailabilityRecipients()
+  const { load_profile_notification_type } = await import("@/core/profile/action")
   const content = buildChatNotificationContent({
     user_name: input.user_name,
     room_uuid: input.room_uuid,
@@ -105,10 +105,12 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
   let delivered_count = 0
 
   for (const recipient of recipients) {
-    const preferences = await loadAvailabilityPreferences(recipient.user_uuid)
+    const notification_type = await load_profile_notification_type(
+      recipient.user_uuid,
+    )
     const decision = resolveChatNotifyDecision({
-      availability: preferences.availability,
-      notification_type: preferences.notification_type,
+      availability: "on",
+      notification_type,
       sender_role,
       receiver_role,
     })
@@ -134,7 +136,7 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
       receiver_user_uuid: recipient.user_uuid,
     }
 
-    if (recipient.notification_type === "line") {
+    if (notification_type === "line") {
       const line_user_id = await loadAdminContactDestination({
         user_uuid: recipient.user_uuid,
         notification_type: "line",
