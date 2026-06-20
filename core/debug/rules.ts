@@ -87,6 +87,9 @@ const userChatLoadEvents = new Set([
   "user_chat_initial_fetch_error",
   "user_chat_client_state_set",
   "user_chat_messages_state_set",
+  "user_chat_render_state",
+  "user_chat_timeout_cancelled",
+  "user_chat_resolve_ignored_stale_request",
 ])
 
 const identityEvents = new Set([

@@ -10,6 +10,9 @@ type ChatRealtimeDebugEvent =
   | "user_chat_room_resolve_failed"
   | "user_chat_client_state_set"
   | "user_chat_messages_state_set"
+  | "user_chat_render_state"
+  | "user_chat_timeout_cancelled"
+  | "user_chat_resolve_ignored_stale_request"
 
 export type ChatRealtimeDebugPayload = {
   view?: "user" | "concierge"

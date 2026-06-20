@@ -54,19 +54,38 @@ export default function AppChatSection({
   chat_state: ChatRoomState | null
   viewer_display_name?: string | null
 }>) {
-  const { chat_state, render_state, retry } =
+  const { chat_state, render_state, loading, retry } =
     useChatRoomBootstrap(initial_chat_state)
 
+  const room_uuid = chat_state?.room?.room_uuid ?? null
+  const message_count = chat_state?.messages.length ?? 0
+  const rendered_count = message_count
+
   useEffect(() => {
-    if (chat_state || render_state !== "empty_error_recoverable") {
+    console.info("[chat_bootstrap] user_chat_render_result", {
+      room_uuid,
+      rendered_count,
+      loading,
+      message_count,
+      render_state,
+    })
+
+    if (room_uuid || message_count > 0 || !loading) {
+      return
+    }
+
+    if (render_state !== "empty_error_recoverable") {
       return
     }
 
     send_chat_realtime_debug("user_chat_room_resolve_failed", {
       view: "user",
       reason: "client_timeout_missing_room_uuid",
+      loading,
+      message_count,
+      rendered_count,
     })
-  }, [chat_state, render_state])
+  }, [loading, message_count, render_state, rendered_count, room_uuid])
 
   if (!chat_state) {
     return (
