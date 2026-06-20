@@ -454,6 +454,7 @@ export default function AppFooter({
     initial_mode === "concierge" ? "concierge" : "bot",
   )
   const [member_modal_open, set_member_modal_open] = useState(false)
+  const [profile_modal_open, set_profile_modal_open] = useState(false)
   const typing_timer_ref = useRef<number | null>(null)
   const footer_ref = useRef<HTMLElement | null>(null)
   const message_input_ref = useRef<HTMLInputElement | null>(null)
@@ -674,6 +675,25 @@ export default function AppFooter({
   }
 
   useEffect(() => {
+    function handle_profile_modal_visibility(event: Event) {
+      const detail = (event as CustomEvent<{ open?: boolean }>).detail
+      set_profile_modal_open(detail?.open === true)
+    }
+
+    window.addEventListener(
+      "amp-profile-settings-visibility",
+      handle_profile_modal_visibility,
+    )
+
+    return () => {
+      window.removeEventListener(
+        "amp-profile-settings-visibility",
+        handle_profile_modal_visibility,
+      )
+    }
+  }, [])
+
+  useEffect(() => {
     function handle_mode_change(event: Event) {
       const detail = (event as CustomEvent<{ mode?: ChatSupportMode }>).detail
 
@@ -713,6 +733,10 @@ export default function AppFooter({
       window.clearTimeout(timer)
     }
   }, [isInputMode, assistantMode])
+
+  if (profile_modal_open) {
+    return null
+  }
 
   return (
     <footer

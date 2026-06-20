@@ -27,13 +27,28 @@ export default function ChatMessageInput({
 }: Readonly<ChatMessageInputProps>) {
   const [value, set_value] = useState("")
   const [is_sending, set_is_sending] = useState(false)
+  const [profile_modal_open, set_profile_modal_open] = useState(false)
   const typing_timer_ref = useRef<number | null>(null)
 
   useEffect(() => {
+    function handle_profile_modal_visibility(event: Event) {
+      const detail = (event as CustomEvent<{ open?: boolean }>).detail
+      set_profile_modal_open(detail?.open === true)
+    }
+
+    window.addEventListener(
+      "amp-profile-settings-visibility",
+      handle_profile_modal_visibility,
+    )
+
     return () => {
       if (typing_timer_ref.current) {
         window.clearTimeout(typing_timer_ref.current)
       }
+      window.removeEventListener(
+        "amp-profile-settings-visibility",
+        handle_profile_modal_visibility,
+      )
     }
   }, [])
 
@@ -87,6 +102,10 @@ export default function ChatMessageInput({
     } finally {
       set_is_sending(false)
     }
+  }
+
+  if (profile_modal_open) {
+    return null
   }
 
   return (

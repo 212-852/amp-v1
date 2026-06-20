@@ -2,12 +2,16 @@
 
 import { useEffect, useState } from "react"
 
-import { ADDRESS_OPTIONS_DATA } from "@/src/address/data"
 import type { AddressOptions } from "@/src/address/rules"
+
+const EMPTY_ADDRESS_OPTIONS: AddressOptions = {
+  prefectures: [],
+  cities_by_prefecture: {},
+}
 
 export function useAddressOptions(enabled: boolean) {
   const [address_options, set_address_options] = useState<AddressOptions>(
-    ADDRESS_OPTIONS_DATA,
+    EMPTY_ADDRESS_OPTIONS,
   )
 
   useEffect(() => {

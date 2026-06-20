@@ -63,6 +63,24 @@ export function resolve_selected_city_code(
     : ""
 }
 
+export function resolve_address_labels(
+  options: AddressOptions,
+  input: {
+    prefecture_code?: string | null
+    city_code?: string | null
+  },
+) {
+  const prefecture =
+    options.prefectures.find((option) => option.code === input.prefecture_code)
+      ?.label ?? null
+  const city =
+    get_city_options(options, input.prefecture_code).find(
+      (option) => option.code === input.city_code,
+    )?.label ?? null
+
+  return { prefecture, city }
+}
+
 export function validate_address_selection(
   options: AddressOptions,
   input: {

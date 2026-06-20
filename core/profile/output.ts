@@ -12,6 +12,8 @@ export type ProfileDisplayPayload = {
   last_name: string | null
   birth_date: string | null
   phone: string | null
+  prefecture: string | null
+  city: string | null
   prefecture_code: string | null
   city_code: string | null
   address: string | null
@@ -20,6 +22,7 @@ export type ProfileDisplayPayload = {
   image_url: string | null
   role: string
   tier: string | null
+  language: ProfileLocale
   locale: ProfileLocale
 }
 
@@ -30,6 +33,8 @@ export function build_profile_output(input: {
   last_name?: string | null
   birth_date?: string | null
   phone?: string | null
+  prefecture?: string | null
+  city?: string | null
   prefecture_code?: string | null
   city_code?: string | null
   address?: string | null
@@ -54,6 +59,8 @@ export function build_profile_output(input: {
     last_name: input.last_name ?? null,
     birth_date: input.birth_date ?? null,
     phone: input.phone ?? null,
+    prefecture: input.prefecture ?? null,
+    city: input.city ?? null,
     prefecture_code: input.prefecture_code ?? null,
     city_code: input.city_code ?? null,
     address: input.address ?? null,
@@ -62,6 +69,7 @@ export function build_profile_output(input: {
     image_url: input.image_url ?? input.session.image_url ?? null,
     role: input.session.role,
     tier: input.session.tier ?? null,
+    language: input.locale ?? "ja",
     locale: input.locale ?? "ja",
   }
 }

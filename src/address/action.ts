@@ -1,6 +1,5 @@
 import { getRestConfig, restHeaders, restUrl } from "@/core/db/rest"
 import { normalize_address_context } from "@/src/address/context"
-import { ADDRESS_OPTIONS_DATA } from "@/src/address/data"
 import { build_address_output } from "@/src/address/output"
 import {
   group_city_options,
@@ -82,20 +81,11 @@ async function load_cities() {
 
 export async function get_address_options() {
   normalize_address_context("api")
-  const config = getRestConfig()
-
-  if (!config) {
-    return build_address_output(ADDRESS_OPTIONS_DATA)
-  }
 
   const [prefectures, cities] = await Promise.all([
     load_prefectures(),
     load_cities(),
   ])
-
-  if (prefectures.length === 0) {
-    return build_address_output(ADDRESS_OPTIONS_DATA)
-  }
 
   return build_address_output({
     prefectures,

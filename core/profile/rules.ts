@@ -9,10 +9,13 @@ export type ProfileSettingsPatch = {
   last_name?: string | null
   birth_date?: string | null
   phone?: string | null
+  prefecture?: string | null
+  city?: string | null
   prefecture_code?: string | null
   city_code?: string | null
   address?: string | null
   memo?: string | null
+  language?: ProfileLocale
   locale?: ProfileLocale
 }
 
@@ -90,6 +93,8 @@ export function validate_profile_patch(
     "first_name",
     "last_name",
     "phone",
+    "prefecture",
+    "city",
     "address",
     "memo",
   ] as const) {
@@ -130,13 +135,16 @@ export function validate_profile_patch(
     }
   }
 
-  if ("locale" in body) {
-    const locale = normalize_profile_locale(body.locale)
+  const language_input = "language" in body ? body.language : body.locale
+
+  if (language_input !== undefined) {
+    const locale = normalize_profile_locale(language_input)
 
     if (!locale) {
-      throw new Error("Invalid locale")
+      throw new Error("Invalid language")
     }
 
+    patch.language = locale
     patch.locale = locale
   }
   return patch

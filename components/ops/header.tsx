@@ -436,6 +436,8 @@ export default function OpsHeader({
           last_name: saved_profile?.last_name ?? null,
           birth_date: saved_profile?.birth_date ?? null,
           phone: saved_profile?.phone ?? null,
+          prefecture: saved_profile?.prefecture ?? null,
+          city: saved_profile?.city ?? null,
           prefecture_code: saved_profile?.prefecture_code ?? null,
           city_code: saved_profile?.city_code ?? null,
           address: saved_profile?.address ?? null,
@@ -444,6 +446,7 @@ export default function OpsHeader({
           image_url: avatar_image_url,
           role: safe_session.role,
           tier: safe_session.tier,
+          language: saved_profile?.language ?? locale,
           locale,
         }}
           onClose={() => set_profile_settings_open(false)}

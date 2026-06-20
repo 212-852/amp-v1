@@ -9,7 +9,10 @@ import type { ProfileDisplayPayload } from "@/core/profile/output"
 import ProfileAddressSelector, {
   useProfileAddressOptions,
 } from "@/src/address/profile_selector"
-import { resolve_selected_city_code } from "@/src/address/rules"
+import {
+  resolve_address_labels,
+  resolve_selected_city_code,
+} from "@/src/address/rules"
 import { useLocale } from "@/src/components/locale/provider"
 import type { Locale } from "@/src/lib/locale"
 import { ui_layer_class } from "@/src/ui/layers"
@@ -141,6 +144,10 @@ export default function ProfileSettings({
     prefecture_code,
     city_code,
   )
+  const selected_address_labels = resolve_address_labels(address_options, {
+    prefecture_code,
+    city_code: selected_city_code,
+  })
 
   useEffect(() => {
     if (!open) {
@@ -220,18 +227,20 @@ export default function ProfileSettings({
         last_name,
         birth_date,
         phone,
+        prefecture: selected_address_labels.prefecture,
+        city: selected_address_labels.city,
+        language: selected_locale,
         prefecture_code,
         city_code: selected_city_code,
         address,
         memo,
-        locale: selected_locale,
       }
 
       console.debug("profile_save_payload", {
         fields: Object.keys(payload),
         has_prefecture: Boolean(payload.prefecture_code),
         has_city: Boolean(payload.city_code),
-        locale: payload.locale,
+        language: payload.language,
       })
 
       const response = await fetch("/api/profile", {

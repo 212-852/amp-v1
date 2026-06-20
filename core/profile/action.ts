@@ -17,10 +17,13 @@ type ProfileRow = {
   last_name?: string | null
   birth_date?: string | null
   phone?: string | null
+  prefecture?: string | null
+  city?: string | null
   prefecture_code?: string | null
   city_code?: string | null
   address?: string | null
   memo?: string | null
+  language?: ProfileLocale | null
   locale?: ProfileLocale | null
 }
 
@@ -36,10 +39,13 @@ function patch_has_profile_fields(patch: ProfileSettingsPatch) {
     "last_name" in patch ||
     "birth_date" in patch ||
     "phone" in patch ||
+    "prefecture" in patch ||
+    "city" in patch ||
     "prefecture_code" in patch ||
     "city_code" in patch ||
     "address" in patch ||
     "memo" in patch ||
+    "language" in patch ||
     "locale" in patch
   )
 }
@@ -53,6 +59,8 @@ function build_profile_db_patch(patch: ProfileSettingsPatch) {
     "last_name",
     "birth_date",
     "phone",
+    "prefecture",
+    "city",
     "prefecture_code",
     "city_code",
     "address",
@@ -63,10 +71,13 @@ function build_profile_db_patch(patch: ProfileSettingsPatch) {
     }
   }
 
+  if (patch.language) {
+    body.language = patch.language
+  }
+
   if (patch.locale) {
     body.locale = patch.locale
   }
-
   return body
 }
 
@@ -134,7 +145,7 @@ async function load_profile_row(session: Session) {
       "profiles",
       [
         identity_filter,
-        "select=profile_uuid,user_uuid,visitor_uuid,nickname,first_name,last_name,birth_date,phone,prefecture_code,city_code,address,memo,locale",
+        "select=profile_uuid,user_uuid,visitor_uuid,nickname,first_name,last_name,birth_date,phone,prefecture,city,prefecture_code,city_code,address,memo,language,locale",
         "limit=1",
       ].join("&"),
     ),
@@ -178,7 +189,7 @@ async function upsert_profile_row(input: {
     restUrl(
       config,
       "profiles",
-      `on_conflict=${conflict_target}&select=profile_uuid,user_uuid,visitor_uuid,nickname,first_name,last_name,birth_date,phone,prefecture_code,city_code,address,memo,locale`,
+      `on_conflict=${conflict_target}&select=profile_uuid,user_uuid,visitor_uuid,nickname,first_name,last_name,birth_date,phone,prefecture,city,prefecture_code,city_code,address,memo,language,locale`,
     ),
     {
       method: "POST",
@@ -216,12 +227,14 @@ export async function get_profile_settings(session: Session) {
     last_name: row?.last_name ?? null,
     birth_date: row?.birth_date ?? null,
     phone: row?.phone ?? null,
+    prefecture: row?.prefecture ?? null,
+    city: row?.city ?? null,
     prefecture_code: row?.prefecture_code ?? null,
     city_code: row?.city_code ?? null,
     address: row?.address ?? null,
     memo: row?.memo ?? null,
     users_name,
-    locale: row?.locale ?? null,
+    locale: row?.language ?? row?.locale ?? null,
   })
 }
 
@@ -260,6 +273,11 @@ export async function save_profile_settings(input: {
       ("birth_date" in context.patch ? context.patch.birth_date : null),
     phone:
       fallback_row?.phone ?? ("phone" in context.patch ? context.patch.phone : null),
+    prefecture:
+      fallback_row?.prefecture ??
+      ("prefecture" in context.patch ? context.patch.prefecture : null),
+    city:
+      fallback_row?.city ?? ("city" in context.patch ? context.patch.city : null),
     prefecture_code:
       fallback_row?.prefecture_code ??
       ("prefecture_code" in context.patch ? context.patch.prefecture_code : null),
@@ -271,6 +289,11 @@ export async function save_profile_settings(input: {
       ("address" in context.patch ? context.patch.address : null),
     memo: fallback_row?.memo ?? ("memo" in context.patch ? context.patch.memo : null),
     users_name,
-    locale: fallback_row?.locale ?? context.patch.locale ?? null,
+    locale:
+      fallback_row?.language ??
+      fallback_row?.locale ??
+      context.patch.language ??
+      context.patch.locale ??
+      null,
   })
 }
