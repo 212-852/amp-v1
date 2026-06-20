@@ -121,6 +121,8 @@ export default function AppChatSection({
       initial_presence={chat_state.presence}
       participant_uuid={chat_state.participant.participant_uuid}
       viewer_display_name={viewer_display_name}
+      fill_height
+      scroll_button_placement="above_input"
     />
   )
 }

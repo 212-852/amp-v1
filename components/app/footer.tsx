@@ -3,6 +3,7 @@
 import { Bot, Headphones, Menu, MessageCircle, RefreshCw, User } from "lucide-react"
 import Image from "next/image"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { flushSync } from "react-dom"
 import type { RefObject } from "react"
 
 import ConciergeMemberModal from "@/components/app/concierge_member_modal"
@@ -437,6 +438,7 @@ export default function AppFooter({
   const [profile_modal_open, set_profile_modal_open] = useState(false)
   const [input_value, set_input_value] = useState("")
   const [is_sending, set_is_sending] = useState(false)
+  const input_value_ref = useRef("")
   const typing_timer_ref = useRef<number | null>(null)
   const is_sending_ref = useRef(false)
   const footer_ref = useRef<HTMLElement | null>(null)
@@ -605,14 +607,17 @@ export default function AppFooter({
     return false
   }
 
-  async function handle_send_message() {
-    const text = input_value.trim()
+  const handle_send_message = useCallback(() => {
+    const text = input_value_ref.current.trim()
 
     if (!text || is_sending_ref.current) {
       return
     }
 
-    set_input_value("")
+    flushSync(() => {
+      input_value_ref.current = ""
+      set_input_value("")
+    })
     handleTyping(false)
 
     const client_message_id = create_client_message_id()
@@ -626,32 +631,39 @@ export default function AppFooter({
     is_sending_ref.current = true
     set_is_sending(true)
 
-    try {
-      const result = await send_chat_message({
-        message: text,
-        locale,
-        client_message_id,
-      })
-
-      if (!result.ok) {
-        dispatch_message_failed(client_message_id)
-        return
-      }
-
-      if (result.payload?.message) {
-        dispatch_message_archived({
-          room_uuid: chat_room_ref.current.room_uuid,
-          message: result.payload.message,
+    void (async () => {
+      try {
+        const result = await send_chat_message({
+          message: text,
+          locale,
+          client_message_id,
         })
-      }
 
-      dispatch_message_created()
-    } catch {
-      dispatch_message_failed(client_message_id)
-    } finally {
-      is_sending_ref.current = false
-      set_is_sending(false)
-    }
+        if (!result.ok) {
+          dispatch_message_failed(client_message_id)
+          return
+        }
+
+        if (result.payload?.message) {
+          dispatch_message_archived({
+            room_uuid: chat_room_ref.current.room_uuid,
+            message: result.payload.message,
+          })
+        }
+
+        dispatch_message_created()
+      } catch {
+        dispatch_message_failed(client_message_id)
+      } finally {
+        is_sending_ref.current = false
+        set_is_sending(false)
+      }
+    })()
+  }, [locale])
+
+  function set_chat_input_value(value: string) {
+    input_value_ref.current = value
+    set_input_value(value)
   }
 
   async function handleQuickMenu() {
@@ -846,8 +858,8 @@ export default function AppFooter({
                 <MessageInputRow
                   locale={locale}
                   input_value={input_value}
-                  on_input_change={set_input_value}
-                  on_send_message={() => void handle_send_message()}
+                  on_input_change={set_chat_input_value}
+                  on_send_message={handle_send_message}
                   onTyping={handleTyping}
                   input_ref={message_input_ref}
                   is_sending={is_sending}

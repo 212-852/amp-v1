@@ -184,9 +184,21 @@ export default function ChatRoomPanel({
 
   const scroll_to_bottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     window.requestAnimationFrame(() => {
-      bottom_ref.current?.scrollIntoView({ behavior, block: "end" })
+      const container = scroll_ref.current
+
+      if (!container) {
+        return
+      }
+
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior,
+      })
       window.requestAnimationFrame(() => {
-        bottom_ref.current?.scrollIntoView({ behavior, block: "end" })
+        container.scrollTo({
+          top: container.scrollHeight,
+          behavior,
+        })
       })
     })
   }, [])
@@ -396,12 +408,6 @@ export default function ChatRoomPanel({
   }, [refresh, room.room_uuid, show_presence])
 
   useEffect(() => {
-    if (is_near_bottom_ref.current) {
-      scroll_to_bottom("smooth")
-    }
-  }, [messages.length, scroll_to_bottom, typing.length])
-
-  useEffect(() => {
     is_near_bottom_ref.current = true
     scroll_to_bottom("auto")
   }, [room.room_uuid, scroll_to_bottom])
@@ -603,6 +609,12 @@ export default function ChatRoomPanel({
       window.removeEventListener("amp-chat-message-failed", handle_failed_message)
     }
   }, [])
+
+  useEffect(() => {
+    if (is_near_bottom_ref.current) {
+      scroll_to_bottom("smooth")
+    }
+  }, [messages.length, scroll_to_bottom, typing.length])
 
   async function load_older_messages() {
     if (is_loading_older || !has_older_messages || messages.length === 0) {

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { flushSync } from "react-dom"
 
 import ChatSendButton from "@/components/chat/send_button"
 import {
@@ -38,6 +39,7 @@ export default function ChatMessageInput({
   const [input_value, set_input_value] = useState("")
   const [is_sending, set_is_sending] = useState(false)
   const [profile_modal_open, set_profile_modal_open] = useState(false)
+  const input_value_ref = useRef("")
   const typing_timer_ref = useRef<number | null>(null)
   const is_sending_ref = useRef(false)
 
@@ -84,14 +86,17 @@ export default function ChatMessageInput({
     }
   }
 
-  async function handle_send_message() {
-    const text = input_value.trim()
+  function handle_send_message() {
+    const text = input_value_ref.current.trim()
 
     if (!text || is_sending_ref.current) {
       return
     }
 
-    set_input_value("")
+    flushSync(() => {
+      input_value_ref.current = ""
+      set_input_value("")
+    })
     send_typing(false)
 
     const client_message_id = create_client_message_id()
@@ -105,34 +110,41 @@ export default function ChatMessageInput({
     is_sending_ref.current = true
     set_is_sending(true)
 
-    try {
-      const result = await send_chat_message({
-        message: text,
-        locale,
-        room_uuid,
-        client_message_id,
-      })
-
-      if (!result.ok) {
-        dispatch_message_failed(client_message_id)
-        return
-      }
-
-      if (result.payload?.message) {
-        dispatch_message_archived({
+    void (async () => {
+      try {
+        const result = await send_chat_message({
+          message: text,
+          locale,
           room_uuid,
-          message: result.payload.message,
+          client_message_id,
         })
-      }
 
-      dispatch_message_created()
-      on_sent?.()
-    } catch {
-      dispatch_message_failed(client_message_id)
-    } finally {
-      is_sending_ref.current = false
-      set_is_sending(false)
-    }
+        if (!result.ok) {
+          dispatch_message_failed(client_message_id)
+          return
+        }
+
+        if (result.payload?.message) {
+          dispatch_message_archived({
+            room_uuid,
+            message: result.payload.message,
+          })
+        }
+
+        dispatch_message_created()
+        on_sent?.()
+      } catch {
+        dispatch_message_failed(client_message_id)
+      } finally {
+        is_sending_ref.current = false
+        set_is_sending(false)
+      }
+    })()
+  }
+
+  function set_chat_input_value(value: string) {
+    input_value_ref.current = value
+    set_input_value(value)
   }
 
   if (profile_modal_open) {
@@ -152,7 +164,7 @@ export default function ChatMessageInput({
           rows={1}
           placeholder={content.placeholder[locale]}
           onChange={(event) => {
-            set_input_value(event.target.value)
+            set_chat_input_value(event.target.value)
             send_typing(Boolean(event.target.value.trim()))
           }}
           onKeyDown={(event) => {
@@ -162,7 +174,7 @@ export default function ChatMessageInput({
 
             if (event.key === "Enter") {
               event.preventDefault()
-              void handle_send_message()
+              handle_send_message()
             }
           }}
           className="min-h-11 flex-1 resize-none rounded-md border border-neutral-300 bg-white px-3 py-2 text-[14px] leading-6 text-neutral-900 outline-none transition focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
@@ -171,7 +183,7 @@ export default function ChatMessageInput({
           locale={locale}
           disabled={is_sending}
           variant="compact"
-          onClick={() => void handle_send_message()}
+          onClick={handle_send_message}
         />
       </div>
     </div>
