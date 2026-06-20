@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 
 import ChatMessageBubble from "@/components/chat/message_bubble"
 import ChatScrollButton from "@/components/chat/scroll"
+import { use_room_messages } from "@/components/chat/use_room_messages"
 import { useRoomTyping } from "@/components/chat/use_room_typing"
 import {
   filterUserVisibleChatMessages,
@@ -61,17 +62,31 @@ function getClientMessageId(message: ChatMessageRecord) {
 function mergeMessage(
   current: ChatMessageRecord[],
   next_message: ChatMessageRecord,
+  source = "local",
 ) {
   const next_client_id = getClientMessageId(next_message)
   let replaced = false
   const merged = current.map((message) => {
     if (message.message_uuid === next_message.message_uuid) {
       replaced = true
+      console.info("[chat_realtime] skipped_duplicate", {
+        room_uuid: next_message.room_uuid,
+        message_uuid: next_message.message_uuid,
+        reason: "message_uuid",
+        source,
+      })
       return next_message
     }
 
     if (next_client_id && getClientMessageId(message) === next_client_id) {
       replaced = true
+      console.info("[chat_realtime] skipped_duplicate", {
+        room_uuid: next_message.room_uuid,
+        message_uuid: next_message.message_uuid,
+        client_message_id: next_client_id,
+        reason: "client_message_id",
+        source,
+      })
       return next_message
     }
 
@@ -79,6 +94,11 @@ function mergeMessage(
   })
 
   if (!replaced) {
+    console.info("[chat_realtime] append_message", {
+      room_uuid: next_message.room_uuid,
+      message_uuid: next_message.message_uuid,
+      source,
+    })
     merged.push(next_message)
   }
 
@@ -193,6 +213,7 @@ export default function ChatRoomPanel({
   })
   const bottom_ref = useRef<HTMLDivElement>(null)
   const scroll_ref = useRef<HTMLDivElement>(null)
+  const is_near_bottom_ref = useRef(true)
 
   const refresh = useCallback(async () => {
     const params = new URLSearchParams()
@@ -239,6 +260,15 @@ export default function ChatRoomPanel({
     }
   }, [locale, room.mode, room.room_uuid, room_uuid, show_presence])
 
+  const handle_room_message_insert = useCallback((next_message: ChatMessageRecord) => {
+    set_messages((current) => mergeMessage(current, next_message, "realtime"))
+    window.dispatchEvent(new CustomEvent("amp-admin-queue-refresh"))
+  }, [])
+
+  use_room_messages(room.room_uuid, {
+    on_insert: handle_room_message_insert,
+  })
+
   useEffect(() => {
     let supabase: ReturnType<typeof create_browser_supabase_client>
 
@@ -265,21 +295,6 @@ export default function ChatRoomPanel({
           }))
         },
       )
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "messages",
-          filter: `room_uuid=eq.${room.room_uuid}`,
-        },
-        (payload) => {
-          const next_message = payload.new as ChatMessageRecord
-
-          set_messages((current) => mergeMessage(current, next_message))
-          window.dispatchEvent(new CustomEvent("amp-admin-queue-refresh"))
-        },
-      )
 
     if (show_presence) {
       channel.on(
@@ -296,18 +311,7 @@ export default function ChatRoomPanel({
       )
     }
 
-    channel.subscribe((status) => {
-      if (
-        status === "SUBSCRIBED" ||
-        status === "CHANNEL_ERROR" ||
-        status === "TIMED_OUT"
-      ) {
-        console.info("[chat_realtime] subscription_status", {
-          room_uuid: room.room_uuid,
-          status,
-        })
-      }
-    })
+    channel.subscribe()
 
     return () => {
       void supabase.removeChannel(channel)
@@ -315,7 +319,9 @@ export default function ChatRoomPanel({
   }, [refresh, room.room_uuid, show_presence])
 
   useEffect(() => {
-    bottom_ref.current?.scrollIntoView({ behavior: "smooth" })
+    if (is_near_bottom_ref.current) {
+      bottom_ref.current?.scrollIntoView({ behavior: "smooth" })
+    }
   }, [messages.length, typing.length])
 
   useEffect(() => {
@@ -383,6 +389,7 @@ export default function ChatRoomPanel({
 
       const body = detail.body
       const client_message_id = detail.client_message_id
+      is_near_bottom_ref.current = true
 
       set_messages((current) =>
         mergeMessage(
@@ -396,6 +403,7 @@ export default function ChatRoomPanel({
             actor_display_name: current_viewer_display_name,
             locale: (room.locale as Locale) ?? "ja",
           }),
+          "optimistic",
         ),
       )
     }
@@ -438,6 +446,7 @@ export default function ChatRoomPanel({
         mergeMessage(
           current,
           messageBundleToRecord(detail.message as MessageBundle, participant_uuid),
+          "archive_response",
         ),
       )
     }
@@ -574,7 +583,11 @@ export default function ChatRoomPanel({
         ref={scroll_ref}
         className={scroll_class}
         onScroll={(event) => {
-          if (event.currentTarget.scrollTop < 80) {
+          const target = event.currentTarget
+          is_near_bottom_ref.current =
+            target.scrollHeight - target.scrollTop - target.clientHeight < 96
+
+          if (target.scrollTop < 80) {
             void load_older_messages()
           }
         }}
