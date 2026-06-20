@@ -425,9 +425,8 @@ export default function OpsHeader({
         </nav>
       ) : null}
 
-      {profile_settings_open ? (
-        <ProfileSettings
-          open={profile_settings_open}
+      <ProfileSettings
+        open={profile_settings_open}
         initial_profile={{
           user_uuid: safe_session.user_uuid,
           visitor_uuid: safe_session.visitor_uuid,
@@ -449,10 +448,9 @@ export default function OpsHeader({
           language: saved_profile?.language ?? locale,
           locale,
         }}
-          onClose={() => set_profile_settings_open(false)}
-          onSaved={handle_profile_saved}
-        />
-      ) : null}
+        onClose={() => set_profile_settings_open(false)}
+        onSaved={handle_profile_saved}
+      />
     </header>
   )
 }

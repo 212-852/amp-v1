@@ -108,6 +108,16 @@ const content = {
     en: "Select city",
     es: "Seleccionar ciudad",
   },
+  address_loading: {
+    ja: "住所リストを読み込んでいます",
+    en: "Loading address options",
+    es: "Cargando opciones de direccion",
+  },
+  address_failed: {
+    ja: "住所リストを読み込めませんでした",
+    en: "Could not load address options",
+    es: "No se pudieron cargar las opciones de direccion",
+  },
 } satisfies Record<string, Record<Locale, string>>
 
 export default function ProfileSettings({
@@ -138,7 +148,8 @@ export default function ProfileSettings({
     initial_profile.locale,
   )
   const [is_saving, set_is_saving] = useState(false)
-  const address_options = useProfileAddressOptions(open)
+  const address_state = useProfileAddressOptions()
+  const address_options = address_state.options
   const selected_city_code = resolve_selected_city_code(
     address_options,
     prefecture_code,
@@ -388,28 +399,36 @@ export default function ProfileSettings({
             />
           </label>
 
-          <ProfileAddressSelector
-            options={address_options}
-            prefecture_code={prefecture_code}
-            city_code={city_code}
-            labels={{
-              prefecture: content.prefecture[locale],
-              city: content.city[locale],
-              select_prefecture: content.select_prefecture[locale],
-              select_city: content.select_city[locale],
-            }}
-            classes={{
-              label: "block",
-              field_label:
-                "mb-1 block text-[12px] font-semibold text-neutral-600",
-              select:
-                "h-10 w-full rounded-md border border-neutral-200 px-3 text-[14px] text-neutral-950 outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100 disabled:bg-neutral-50 disabled:text-neutral-400",
-            }}
-            onChange={(value) => {
-              set_prefecture_code(value.prefecture_code)
-              set_city_code(value.city_code)
-            }}
-          />
+          {address_state.is_ready ? (
+            <ProfileAddressSelector
+              options={address_options}
+              prefecture_code={prefecture_code}
+              city_code={city_code}
+              labels={{
+                prefecture: content.prefecture[locale],
+                city: content.city[locale],
+                select_prefecture: content.select_prefecture[locale],
+                select_city: content.select_city[locale],
+              }}
+              classes={{
+                label: "block",
+                field_label:
+                  "mb-1 block text-[12px] font-semibold text-neutral-600",
+                select:
+                  "h-10 w-full rounded-md border border-neutral-200 px-3 text-[14px] text-neutral-950 outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100 disabled:bg-neutral-50 disabled:text-neutral-400",
+              }}
+              onChange={(value) => {
+                set_prefecture_code(value.prefecture_code)
+                set_city_code(value.city_code)
+              }}
+            />
+          ) : (
+            <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-[13px] text-neutral-500">
+              {address_state.error_message
+                ? content.address_failed[locale]
+                : content.address_loading[locale]}
+            </div>
+          )}
 
           <label className="block">
             <span className="mb-1 block text-[12px] font-semibold text-neutral-600">
@@ -461,7 +480,7 @@ export default function ProfileSettings({
           </button>
           <button
             type="button"
-            disabled={is_saving}
+            disabled={is_saving || !address_state.is_ready}
             onClick={() => void save_profile()}
             className="rounded-md bg-neutral-950 px-3 py-2 text-[13px] font-semibold text-white disabled:bg-neutral-300"
           >

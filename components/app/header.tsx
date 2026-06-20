@@ -306,34 +306,32 @@ export default function AppHeader({ auth }: { auth: AppHeaderAuth }) {
           </div>
         </div>
       </div>
-      {settings_open ? (
-        <ProfileSettings
-          open={settings_open}
-          initial_profile={{
-            user_uuid: auth.user_uuid,
-            visitor_uuid: auth.visitor_uuid ?? null,
-            nickname: saved_profile?.nickname ?? null,
-            first_name: saved_profile?.first_name ?? null,
-            last_name: saved_profile?.last_name ?? null,
-            birth_date: saved_profile?.birth_date ?? null,
-            phone: saved_profile?.phone ?? null,
-            prefecture: saved_profile?.prefecture ?? null,
-            city: saved_profile?.city ?? null,
-            prefecture_code: saved_profile?.prefecture_code ?? null,
-            city_code: saved_profile?.city_code ?? null,
-            address: saved_profile?.address ?? null,
-            memo: saved_profile?.memo ?? null,
-            display_name: user_name,
-            image_url,
-            role: auth.role,
-            tier: auth.tier,
-            language: saved_profile?.language ?? locale,
-            locale,
-          }}
-          onClose={() => set_settings_open(false)}
-          onSaved={set_saved_profile}
-        />
-      ) : null}
+      <ProfileSettings
+        open={settings_open}
+        initial_profile={{
+          user_uuid: auth.user_uuid,
+          visitor_uuid: auth.visitor_uuid ?? null,
+          nickname: saved_profile?.nickname ?? null,
+          first_name: saved_profile?.first_name ?? null,
+          last_name: saved_profile?.last_name ?? null,
+          birth_date: saved_profile?.birth_date ?? null,
+          phone: saved_profile?.phone ?? null,
+          prefecture: saved_profile?.prefecture ?? null,
+          city: saved_profile?.city ?? null,
+          prefecture_code: saved_profile?.prefecture_code ?? null,
+          city_code: saved_profile?.city_code ?? null,
+          address: saved_profile?.address ?? null,
+          memo: saved_profile?.memo ?? null,
+          display_name: user_name,
+          image_url,
+          role: auth.role,
+          tier: auth.tier,
+          language: saved_profile?.language ?? locale,
+          locale,
+        }}
+        onClose={() => set_settings_open(false)}
+        onSaved={set_saved_profile}
+      />
     </header>
   )
 }
