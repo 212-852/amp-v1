@@ -361,4 +361,4 @@ function useRoomMessages(
   }, [enabled, room_uuid])
 }
 
-export const use_room_messages = useRoomMessages
+export { useRoomMessages, useRoomMessages as use_room_messages }

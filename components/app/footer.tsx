@@ -167,7 +167,11 @@ function PawButtonCluster({
         type="button"
         aria-label={content.switch_input_menu[locale]}
         aria-pressed={isInputMode}
-        onClick={onClick}
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          onClick()
+        }}
         className={[fixed_paw_button_class, "relative"].join(" ")}
       >
         <PinkPawIcon />
@@ -445,6 +449,8 @@ export default function AppFooter({
   const footer_ref = useRef<HTMLElement | null>(null)
 
   useComposerHeightReporter(footer_ref)
+  const input_value_ref = useRef("")
+  const is_sending_ref = useRef(false)
   const message_input_ref = useRef<HTMLTextAreaElement | null>(null)
   const pending_input_focus_ref = useRef(false)
   const chat_room_ref = useRef<{
@@ -615,9 +621,11 @@ export default function AppFooter({
   }
 
   const handle_send_message = useCallback(() => {
-    const text = input_value.trim()
+    const text = (
+      message_input_ref.current?.value ?? input_value_ref.current
+    ).trim()
 
-    if (!text || is_sending) {
+    if (!text || is_sending_ref.current) {
       return
     }
 
@@ -625,7 +633,11 @@ export default function AppFooter({
     const client_message_id = create_client_message_id()
 
     flushSync(() => {
+      input_value_ref.current = ""
       set_input_value("")
+      if (message_input_ref.current) {
+        message_input_ref.current.value = ""
+      }
     })
     handleTyping(false)
 
@@ -642,6 +654,7 @@ export default function AppFooter({
       client_message_id,
     })
 
+    is_sending_ref.current = true
     set_is_sending(true)
 
     void (async () => {
@@ -684,12 +697,14 @@ export default function AppFooter({
         })
         dispatch_message_failed(client_message_id)
       } finally {
+        is_sending_ref.current = false
         set_is_sending(false)
       }
     })()
   }, [locale])
 
   function set_chat_input_value(value: string) {
+    input_value_ref.current = value
     set_input_value(value)
   }
 

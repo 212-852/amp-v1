@@ -41,6 +41,7 @@ export default function ChatMessageInput({
   const [is_sending, set_is_sending] = useState(false)
   const [profile_modal_open, set_profile_modal_open] = useState(false)
   const composer_ref = useRef<HTMLDivElement>(null)
+  const textarea_ref = useRef<HTMLTextAreaElement | null>(null)
   const typing_timer_ref = useRef<number | null>(null)
 
   useComposerHeightReporter(composer_ref)
@@ -89,7 +90,7 @@ export default function ChatMessageInput({
   }
 
   function handle_send_message() {
-    const text = input_value.trim()
+    const text = (textarea_ref.current?.value ?? input_value).trim()
 
     if (!text || is_sending) {
       return
@@ -97,6 +98,9 @@ export default function ChatMessageInput({
 
     flushSync(() => {
       set_input_value("")
+      if (textarea_ref.current) {
+        textarea_ref.current.value = ""
+      }
     })
 
     const client_message_id = create_client_message_id()
@@ -155,6 +159,7 @@ export default function ChatMessageInput({
     >
       <div className="mx-auto flex w-full max-w-[430px] items-end gap-2">
         <textarea
+          ref={textarea_ref}
           value={input_value}
           rows={1}
           placeholder={content.placeholder[locale]}

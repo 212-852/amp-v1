@@ -17,7 +17,7 @@ import {
   scroll_to_latest_message,
   type ChatScrollReason,
 } from "@/components/chat/scroll_to_bottom"
-import { use_room_messages } from "@/components/chat/use_room_messages"
+import { useRoomMessages } from "@/components/chat/use_room_messages"
 import { useRoomTyping } from "@/components/chat/use_room_typing"
 import {
   filterUserVisibleChatMessages,
@@ -373,7 +373,7 @@ export default function ChatRoomPanel({
     [queue_scroll_to_latest, realtime_debug_context, room.room_uuid, show_presence],
   )
 
-  use_room_messages(room.room_uuid, {
+  useRoomMessages(room.room_uuid, {
     on_insert: handle_room_message_insert,
     view: realtime_debug_context.view,
     current_user_uuid: realtime_debug_context.current_user_uuid,
