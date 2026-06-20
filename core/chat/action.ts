@@ -636,6 +636,17 @@ export async function handleIncomingChatMessageArchive(
     source_channel: input.source_channel,
   })
 
+  if (participant.role === "user" || participant.role === "guest") {
+    const { notifyChatMessageReceived } = await import("@/core/notify")
+    await notifyChatMessageReceived({
+      room_uuid: room.room_uuid,
+      sender_role: participant.role,
+      receiver_role: "concierge",
+      user_name: actor_display_name,
+      request_id: message.message_uuid,
+    }).catch(() => null)
+  }
+
   if (
     (participant.role === "admin" || participant.role === "concierge") &&
     room.mode === "concierge"
@@ -1182,7 +1193,9 @@ export async function toggleConciergeAvailability(input: {
 export async function getConciergeAvailabilityState(
   session?: { user_uuid?: string | null } | null,
 ) {
-  const { loadConciergeAvailability } = await import("@/core/chat/archive")
+  const {
+    loadAvailabilityPreferences,
+  } = await import("@/core/chat/archive")
 
   let user_uuid = session?.user_uuid ?? null
 
@@ -1198,5 +1211,33 @@ export async function getConciergeAvailabilityState(
     }
   }
 
-  return { enabled: await loadConciergeAvailability(user_uuid) }
+  const preferences = await loadAvailabilityPreferences(user_uuid)
+
+  return {
+    enabled: preferences.availability === "on",
+    availability: preferences.availability,
+    notification_type: preferences.notification_type,
+  }
+}
+
+export async function setConciergeNotificationType(input: {
+  notification_type: import("@/core/chat/types").NotificationType
+  session: Session
+}) {
+  const { canToggleConciergeAvailability, ConciergeToggleDeniedError } =
+    await import("@/core/chat/concierge_access")
+  const { setAvailabilityNotificationType } = await import("@/core/chat/archive")
+
+  if (!canToggleConciergeAvailability(input.session)) {
+    throw new ConciergeToggleDeniedError("Notification settings denied")
+  }
+
+  if (!input.session.user_uuid) {
+    throw new Error("user_uuid is required")
+  }
+
+  return setAvailabilityNotificationType({
+    user_uuid: input.session.user_uuid,
+    notification_type: input.notification_type,
+  })
 }

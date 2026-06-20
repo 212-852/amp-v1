@@ -38,6 +38,7 @@ export default async function AdminOpsFrame({
       breadcrumb_items={show_breadcrumb ? breadcrumbs.items : []}
       layout={is_room_page ? "full_height" : "default"}
       concierge_available={availability.enabled}
+      notification_type={availability.notification_type}
     >
       {children}
     </OpsShell>

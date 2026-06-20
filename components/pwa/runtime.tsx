@@ -32,7 +32,7 @@ function reloadOnce(storage_key: string) {
   window.location.reload()
 }
 
-function isStandalonePwa() {
+export function isStandalonePwa() {
   if (typeof window === "undefined") {
     return false
   }

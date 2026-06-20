@@ -27,14 +27,15 @@ export default async function AdminShell({
     pathname,
     room_name: breadcrumb_room_name,
   })
-  const concierge_available = (await getConciergeAvailabilityState(session)).enabled
+  const availability = await getConciergeAvailabilityState(session)
 
   return (
     <div className="min-h-dvh bg-neutral-50 text-neutral-900">
       <OpsHeader
         session={header_session}
         page_label={page_label}
-        concierge_available={concierge_available}
+        concierge_available={availability.enabled}
+        notification_type={availability.notification_type}
         breadcrumb_items={breadcrumbs.items}
       />
       <main className="mx-auto flex h-dvh w-full max-w-[430px] flex-col gap-3 overflow-hidden px-5 pb-[calc(118px+env(safe-area-inset-bottom,0px))] pt-[calc(112px+env(safe-area-inset-top,0px))]">

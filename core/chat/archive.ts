@@ -46,15 +46,23 @@ function isMissingRoomKeyColumn(error: {
 }
 
 export async function loadConciergeAvailability(user_uuid?: string | null) {
+  const preferences = await loadAvailabilityPreferences(user_uuid)
+  return preferences.availability === "on"
+}
+
+export async function loadAvailabilityPreferences(
+  user_uuid?: string | null,
+): Promise<import("@/core/chat/types").AvailabilityPreferences> {
   const config = getRestConfig()
 
-  if (!config) {
-    return false
+  if (!config || !user_uuid) {
+    return {
+      availability: "off",
+      notification_type: "line",
+    }
   }
 
-  const filter = user_uuid
-    ? `user_uuid=eq.${encodeURIComponent(user_uuid)}&select=enabled&limit=1`
-    : "enabled=eq.true&select=user_uuid&limit=1"
+  const filter = `user_uuid=eq.${encodeURIComponent(user_uuid)}&select=enabled,notification_type&limit=1`
 
   const response = await fetch(restUrl(config, "availability", filter), {
     headers: restHeaders(config),
@@ -62,18 +70,132 @@ export async function loadConciergeAvailability(user_uuid?: string | null) {
   })
 
   if (!response.ok) {
-    return false
+    return {
+      availability: "off",
+      notification_type: "line",
+    }
   }
 
   const rows = (await response.json()) as Array<
-    Pick<AvailabilityRecord, "enabled" | "user_uuid">
+    Pick<AvailabilityRecord, "enabled" | "notification_type">
   >
+  const row = rows[0]
 
-  if (user_uuid) {
-    return rows[0]?.enabled ?? false
+  return {
+    availability: row?.enabled ? "on" : "off",
+    notification_type: row?.notification_type === "push" ? "push" : "line",
+  }
+}
+
+export async function loadEnabledAvailabilityRecipients(): Promise<
+  Array<Pick<AvailabilityRecord, "user_uuid" | "notification_type">>
+> {
+  const config = getRestConfig()
+
+  if (!config) {
+    return []
   }
 
-  return rows.length > 0
+  const response = await fetch(
+    restUrl(
+      config,
+      "availability",
+      "enabled=eq.true&select=user_uuid,notification_type",
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return []
+  }
+
+  const rows = (await response.json()) as Array<
+    Pick<AvailabilityRecord, "user_uuid" | "notification_type">
+  >
+
+  return rows.map((row) => ({
+    user_uuid: row.user_uuid,
+    notification_type: row.notification_type === "push" ? "push" : "line",
+  }))
+}
+
+export async function setAvailabilityNotificationType(input: {
+  user_uuid: string
+  notification_type: import("@/core/chat/types").NotificationType
+}) {
+  const config = getRestConfig()
+
+  if (!config) {
+    return {
+      notification_type: input.notification_type,
+    }
+  }
+
+  const patch_response = await fetch(
+    restUrl(
+      config,
+      "availability",
+      `user_uuid=eq.${encodeURIComponent(input.user_uuid)}`,
+    ),
+    {
+      method: "PATCH",
+      headers: {
+        ...restHeaders(config),
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        notification_type: input.notification_type,
+        updated_at: new Date().toISOString(),
+      }),
+      cache: "no-store",
+    },
+  )
+
+  if (patch_response.ok) {
+    const rows = (await patch_response.json()) as AvailabilityRecord[]
+
+    return {
+      notification_type:
+        rows[0]?.notification_type === "push" ? "push" : "line",
+    }
+  }
+
+  const upsert_body: AvailabilityRecord = {
+    user_uuid: input.user_uuid,
+    enabled: false,
+    notification_type: input.notification_type,
+    updated_at: new Date().toISOString(),
+  }
+
+  const response = await fetch(
+    restUrl(config, "availability", "on_conflict=user_uuid"),
+    {
+      method: "POST",
+      headers: {
+        ...restHeaders(config),
+        Prefer: "resolution=merge-duplicates,return=representation",
+      },
+      body: JSON.stringify(upsert_body),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+    throw new Error(
+      `Failed to update notification type: ${error.message ?? "unknown"}`,
+    )
+  }
+
+  const rows = (await response.json()) as AvailabilityRecord[]
+
+  return {
+    notification_type:
+      rows[0]?.notification_type === "push" ? "push" : "line",
+  }
 }
 
 export async function setConciergeAvailability(input: {
@@ -90,9 +212,12 @@ export async function setConciergeAvailability(input: {
     throw new Error("user_uuid is required")
   }
 
+  const existing = await loadAvailabilityPreferences(input.updated_by)
+
   const upsert_body: AvailabilityRecord = {
     user_uuid: input.updated_by,
     enabled: input.available,
+    notification_type: existing.notification_type,
     updated_at: new Date().toISOString(),
   }
 

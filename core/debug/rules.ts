@@ -4,6 +4,7 @@ import {
   DEBUG_CHAT_FLOW,
   CHAT_REALTIME_DEBUG,
   DEBUG_LINE_WEBHOOK,
+  DEBUG_NOTIFY,
 } from "@/core/control"
 
 const alwaysReportEvents = new Set([
@@ -257,6 +258,15 @@ const authSessionEvents = new Set([
   "session_failed",
 ])
 
+const notifyEvents = new Set([
+  "notification_requested",
+  "notification_skipped_availability_off",
+  "notification_skipped_invalid_sender",
+  "notification_sent_line",
+  "notification_sent_push",
+  "notification_failed",
+])
+
 function isUnexpectedEvent(event: string) {
   return event.includes("failed") || event.includes("error")
 }
@@ -284,6 +294,10 @@ export function shouldSendAuthSessionDebug(event: string) {
 
   if (chatRealtimeEvents.has(event)) {
     return CHAT_REALTIME_DEBUG
+  }
+
+  if (notifyEvents.has(event)) {
+    return DEBUG_NOTIFY
   }
 
   if (userChatLoadEvents.has(event)) {
@@ -324,6 +338,10 @@ export function resolveDebugTitle(event: string) {
 
   if (chatRealtimeEvents.has(event)) {
     return "CHAT_REALTIME"
+  }
+
+  if (notifyEvents.has(event)) {
+    return "NOTIFY"
   }
 
   if (userChatLoadEvents.has(event)) {

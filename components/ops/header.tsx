@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  Bell,
   ChevronDown,
   MessageCircle,
   Settings,
@@ -10,6 +11,7 @@ import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 
 import ProfileSettings from "@/components/profile/settings"
+import NotificationSettingsModal from "@/components/ops/notification_settings_modal"
 import { useToast } from "@/components/ui/use_toast"
 import { canToggleConciergeAvailability } from "@/core/chat/concierge_access"
 import {
@@ -18,6 +20,7 @@ import {
 } from "@/core/ops/header_session"
 import { concierge_toggle_content } from "@/core/ops/concierge_toggle_content"
 import { get_display_name } from "@/core/profile/display"
+import type { NotificationType } from "@/core/chat/types"
 import type { ProfileDisplayPayload } from "@/core/profile/output"
 import { useLocale } from "@/src/components/locale/provider"
 
@@ -54,11 +57,13 @@ type HeaderBreadcrumbItem = {
 export default function OpsHeader({
   session,
   concierge_available,
+  notification_type: initial_notification_type = "line",
   breadcrumb_items = [],
 }: {
   session?: HeaderSessionLike | null
   page_label: string
   concierge_available?: boolean
+  notification_type?: NotificationType
   breadcrumb_items?: HeaderBreadcrumbItem[]
 }) {
   const enabled = concierge_available === true
@@ -80,6 +85,10 @@ export default function OpsHeader({
   const concierge_toggle_ref = useRef<HTMLButtonElement>(null)
   const [menu_open, set_menu_open] = useState(false)
   const [profile_settings_open, set_profile_settings_open] = useState(false)
+  const [notification_settings_open, set_notification_settings_open] =
+    useState(false)
+  const [notification_type, set_notification_type] =
+    useState<NotificationType>(initial_notification_type)
   const [is_logging_out, set_is_logging_out] = useState(false)
   const [concierge_available_state, set_concierge_available_state] = useState(
     enabled,
@@ -89,6 +98,10 @@ export default function OpsHeader({
     role: safe_session.role,
     tier: safe_session.tier,
   })
+
+  useEffect(() => {
+    set_notification_type(initial_notification_type)
+  }, [initial_notification_type])
 
   useEffect(() => {
     if (!menu_open) {
@@ -314,6 +327,15 @@ export default function OpsHeader({
 
           <button
             type="button"
+            aria-label="Notification settings"
+            onClick={() => set_notification_settings_open(true)}
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-900"
+          >
+            <Bell className="h-4 w-4" strokeWidth={1.8} />
+          </button>
+
+          <button
+            type="button"
             aria-label="Settings"
             onClick={open_profile_settings}
             className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-900"
@@ -425,6 +447,13 @@ export default function OpsHeader({
           </ol>
         </nav>
       ) : null}
+
+      <NotificationSettingsModal
+        open={notification_settings_open}
+        initial_notification_type={notification_type}
+        onClose={() => set_notification_settings_open(false)}
+        onSaved={set_notification_type}
+      />
 
       <ProfileSettings
         open={profile_settings_open}
