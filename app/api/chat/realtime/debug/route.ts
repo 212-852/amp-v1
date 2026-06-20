@@ -5,6 +5,14 @@ const realtime_events = new Set([
   "chat_realtime_insert_received",
   "chat_realtime_append_done",
   "chat_realtime_channel_error",
+  "user_chat_realtime_subscribe_creating",
+  "user_chat_realtime_subscribed",
+  "user_chat_room_resolve_start",
+  "user_chat_room_resolve_success",
+  "user_chat_room_resolve_failed",
+  "user_chat_initial_fetch_start",
+  "user_chat_initial_fetch_success",
+  "user_chat_initial_fetch_error",
 ])
 
 export async function POST(request: Request) {

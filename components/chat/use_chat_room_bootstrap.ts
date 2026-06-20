@@ -22,6 +22,7 @@ const CHAT_BOOTSTRAP_RETRY_MS = 5000
 export type ChatRoomBootstrapViewState = {
   chat_state: ChatRoomState | null
   timed_out: boolean
+  retry: () => void
   render_state:
     | "loading"
     | "ready_with_messages"
@@ -199,5 +200,11 @@ export function useChatRoomBootstrap(
     })
   }, [chat_state?.messages.length, chat_state?.room, locale, render_state])
 
-  return { chat_state, timed_out, render_state }
+  function retry() {
+    bootstrap_promise = null
+    set_timed_out(false)
+    set_retry_tick((current) => current + 1)
+  }
+
+  return { chat_state, timed_out, retry, render_state }
 }

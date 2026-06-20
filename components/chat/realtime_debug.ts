@@ -5,6 +5,9 @@ type ChatRealtimeDebugEvent =
   | "chat_realtime_insert_received"
   | "chat_realtime_append_done"
   | "chat_realtime_channel_error"
+  | "user_chat_realtime_subscribe_creating"
+  | "user_chat_realtime_subscribed"
+  | "user_chat_room_resolve_failed"
 
 export type ChatRealtimeDebugPayload = {
   view?: "user" | "concierge"
@@ -14,6 +17,7 @@ export type ChatRealtimeDebugPayload = {
   client_message_id?: string | null
   sender_uuid?: string | null
   current_user_uuid?: string | null
+  visitor_uuid?: string | null
   reason?: string | null
   [key: string]: unknown
 }

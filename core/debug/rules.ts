@@ -74,6 +74,17 @@ const chatRealtimeEvents = new Set([
   "chat_realtime_insert_received",
   "chat_realtime_append_done",
   "chat_realtime_channel_error",
+  "user_chat_realtime_subscribe_creating",
+  "user_chat_realtime_subscribed",
+])
+
+const userChatLoadEvents = new Set([
+  "user_chat_room_resolve_start",
+  "user_chat_room_resolve_success",
+  "user_chat_room_resolve_failed",
+  "user_chat_initial_fetch_start",
+  "user_chat_initial_fetch_success",
+  "user_chat_initial_fetch_error",
 ])
 
 const identityEvents = new Set([
@@ -251,6 +262,10 @@ export function shouldSendAuthSessionDebug(event: string) {
     return CHAT_REALTIME_DEBUG
   }
 
+  if (userChatLoadEvents.has(event)) {
+    return CHAT_REALTIME_DEBUG
+  }
+
   if (identityEvents.has(event)) {
     if (!AUTH_SESSION_DEBUG) {
       console.warn("[IDENTITY_DEBUG_AUTH_SESSION_DEBUG_FALSE]", {
@@ -285,6 +300,10 @@ export function resolveDebugTitle(event: string) {
 
   if (chatRealtimeEvents.has(event)) {
     return "CHAT_REALTIME"
+  }
+
+  if (userChatLoadEvents.has(event)) {
+    return "USER_CHAT"
   }
 
   if (chatFlowInfoEvents.has(event)) {

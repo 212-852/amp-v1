@@ -1272,6 +1272,7 @@ export async function loadRoomMessages(
 
     console.error("[chat] message initial fetch error", error_payload)
     await sendAuthDebug("message_initial_fetch_error", error_payload)
+    await sendAuthDebug("user_chat_initial_fetch_error", error_payload)
 
     return []
   }

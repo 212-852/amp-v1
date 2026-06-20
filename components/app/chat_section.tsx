@@ -1,6 +1,9 @@
 "use client"
 
+import { useEffect } from "react"
+
 import ChatRoomPanel from "@/components/chat/room_panel"
+import { send_chat_realtime_debug } from "@/components/chat/realtime_debug"
 import { useChatRoomBootstrap } from "@/components/chat/use_chat_room_bootstrap"
 import type { ChatRoomState } from "@/core/chat/types"
 import { useLocale } from "@/src/components/locale/provider"
@@ -11,16 +14,35 @@ const content = {
     en: "Loading chat",
     es: "Cargando chat",
   },
+  retry: {
+    ja: "チャットを再読み込み",
+    en: "Retry chat",
+    es: "Reintentar chat",
+  },
 }
 
-function ChatLoadingState() {
+function ChatLoadingState({
+  retry = null,
+}: Readonly<{
+  retry?: (() => void) | null
+}>) {
   const { locale } = useLocale()
 
   return (
     <section className="px-2 pt-2">
-      <div className="inline-flex rounded-full bg-white/60 px-4 py-2 text-[13px] font-medium text-[#8c7358]">
-        {content.loading[locale]}
-      </div>
+      {retry ? (
+        <button
+          type="button"
+          onClick={retry}
+          className="inline-flex rounded-full bg-white/60 px-4 py-2 text-[13px] font-medium text-[#8c7358]"
+        >
+          {content.retry[locale]}
+        </button>
+      ) : (
+        <div className="inline-flex rounded-full bg-white/60 px-4 py-2 text-[13px] font-medium text-[#8c7358]">
+          {content.loading[locale]}
+        </div>
+      )}
     </section>
   )
 }
@@ -32,10 +54,26 @@ export default function AppChatSection({
   chat_state: ChatRoomState | null
   viewer_display_name?: string | null
 }>) {
-  const { chat_state } = useChatRoomBootstrap(initial_chat_state)
+  const { chat_state, render_state, retry } =
+    useChatRoomBootstrap(initial_chat_state)
+
+  useEffect(() => {
+    if (render_state !== "empty_error_recoverable") {
+      return
+    }
+
+    send_chat_realtime_debug("user_chat_room_resolve_failed", {
+      view: "user",
+      reason: "client_timeout_missing_room_uuid",
+    })
+  }, [render_state])
 
   if (!chat_state) {
-    return <ChatLoadingState />
+    return (
+      <ChatLoadingState
+        retry={render_state === "empty_error_recoverable" ? retry : null}
+      />
+    )
   }
 
   return (

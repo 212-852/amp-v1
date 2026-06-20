@@ -69,9 +69,11 @@ function mergeMessage(
   debug_context: {
     view: "user" | "concierge"
     current_user_uuid: string | null
+    visitor_uuid?: string | null
   } = {
     view: "user",
     current_user_uuid: null,
+    visitor_uuid: null,
   },
 ) {
   const incoming_message_uuid = next_message.message_uuid || null
@@ -140,6 +142,7 @@ function mergeMessage(
       client_message_id: incoming_client_message_id,
       sender_uuid: next_message.participant_uuid ?? null,
       current_user_uuid: debug_context.current_user_uuid,
+      visitor_uuid: debug_context.visitor_uuid ?? null,
     })
     merged.push(next_message)
   }
@@ -260,8 +263,9 @@ export default function ChatRoomPanel({
     () => ({
       view: show_presence ? "concierge" as const : "user" as const,
       current_user_uuid: show_presence ? null : room.user_uuid ?? null,
+      visitor_uuid: room.visitor_uuid ?? null,
     }),
-    [room.user_uuid, show_presence],
+    [room.user_uuid, room.visitor_uuid, show_presence],
   )
 
   const scroll_to_bottom = useCallback((behavior: ScrollBehavior = "smooth") => {
@@ -351,6 +355,7 @@ export default function ChatRoomPanel({
     on_insert: handle_room_message_insert,
     view: realtime_debug_context.view,
     current_user_uuid: realtime_debug_context.current_user_uuid,
+    visitor_uuid: room.visitor_uuid ?? null,
   })
 
   useEffect(() => {

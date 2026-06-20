@@ -379,6 +379,10 @@ export async function handleChatRoomBootstrap(input: {
   const debug = await readChatBootstrapDebugContext(input.session)
 
   logChatBootstrap("chat_bootstrap_requested", debug)
+  await sendAuthDebug("user_chat_room_resolve_start", {
+    ...debug,
+    source_channel: input.source_channel,
+  })
 
   const context = buildChatContext(input.session, {
     source_channel: input.source_channel,
@@ -390,6 +394,11 @@ export async function handleChatRoomBootstrap(input: {
   try {
     result = await bootstrapChatRoom(context, input.session)
   } catch (error) {
+    await sendAuthDebug("user_chat_room_resolve_failed", {
+      ...debug,
+      source_channel: input.source_channel,
+      error_message: error instanceof Error ? error.message : String(error),
+    })
     await sendAuthDebug("chat_bootstrap_failed", {
       ...debug,
       error_message: error instanceof Error ? error.message : String(error),
@@ -403,11 +412,26 @@ export async function handleChatRoomBootstrap(input: {
     locale: resolveChatLocale(input.locale, result.room.locale),
   })
 
+  await sendAuthDebug("user_chat_room_resolve_success", {
+    ...debug,
+    source_channel: input.source_channel,
+    room_uuid: result.room.room_uuid,
+  })
+  await sendAuthDebug("user_chat_initial_fetch_start", {
+    ...debug,
+    source_channel: input.source_channel,
+    room_uuid: result.room.room_uuid,
+  })
   const messages = await loadRoomMessages(result.room.room_uuid)
   const debug_with_room = {
     ...debug,
     room_uuid: result.room.room_uuid,
   }
+  await sendAuthDebug("user_chat_initial_fetch_success", {
+    ...debug_with_room,
+    source_channel: input.source_channel,
+    row_count: messages.length,
+  })
 
   if (result.created) {
     logChatBootstrap("chat_bootstrap_room_created", debug_with_room)
