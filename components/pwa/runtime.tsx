@@ -4,6 +4,7 @@ import { useEffect } from "react"
 
 const CHUNK_RELOAD_KEY = "amp_chunk_reload_done"
 const SW_RELOAD_KEY = "amp_sw_update_reload_done"
+const PWA_APP_BOOT_REDIRECT_KEY = "amp_pwa_app_boot_redirected"
 
 function isChunkLoadError(reason: unknown) {
   const message =
@@ -112,6 +113,24 @@ function registerServiceWorker() {
     .catch(() => undefined)
 }
 
+function redirectOldPwaAppBootUrl() {
+  if (!isStandalonePwa()) {
+    return false
+  }
+
+  if (window.location.pathname !== "/app") {
+    return false
+  }
+
+  if (sessionStorage.getItem(PWA_APP_BOOT_REDIRECT_KEY)) {
+    return false
+  }
+
+  sessionStorage.setItem(PWA_APP_BOOT_REDIRECT_KEY, "1")
+  window.location.replace("/")
+  return true
+}
+
 export function PwaRuntime() {
   useEffect(() => {
     sessionStorage.removeItem(CHUNK_RELOAD_KEY)
@@ -124,6 +143,10 @@ export function PwaRuntime() {
         referrer: document.referrer || null,
         display_mode: "standalone",
       })
+    }
+
+    if (redirectOldPwaAppBootUrl()) {
+      return
     }
 
     const onError = (event: ErrorEvent) => {

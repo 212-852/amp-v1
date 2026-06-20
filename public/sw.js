@@ -2,7 +2,12 @@ const SW_VERSION = "v5"
 const BUILD_ID = "mqmfqtk3"
 const CACHE_NAME = "amp-pwa-" + SW_VERSION + "-" + BUILD_ID
 const LEGACY_CACHE_PREFIX = "amp-pwa-"
-const APP_SHELL_URL = "/app"
+const APP_SHELL_URL = "/"
+
+const BYPASS_PATHS = [
+  "/api/chat/room",
+  "/api/auth/session",
+]
 
 const BYPASS_PREFIXES = [
   "/_next/static/",
@@ -47,6 +52,10 @@ function shouldBypass(url) {
   }
 
   if (isSupabaseHost(parsed_url.hostname)) {
+    return true
+  }
+
+  if (BYPASS_PATHS.includes(pathname)) {
     return true
   }
 
