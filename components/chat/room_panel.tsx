@@ -347,10 +347,7 @@ export default function ChatRoomPanel({
     [realtime_debug_context, room.room_uuid],
   )
 
-  const realtime_enabled = room.room_uuid !== "fallback-room"
-
   use_room_messages(room.room_uuid, {
-    enabled: realtime_enabled,
     on_insert: handle_room_message_insert,
     view: realtime_debug_context.view,
     current_user_uuid: realtime_debug_context.current_user_uuid,

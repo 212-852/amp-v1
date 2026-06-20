@@ -62,6 +62,7 @@ const chatFlowInfoEvents = new Set([
   "chat_room_resolved",
   "chat_welcome_bundle_built",
   "message_archived",
+  "message_initial_fetch_error",
   "output_route_resolved",
   "participant_created",
   "quick_menu_locale_used",

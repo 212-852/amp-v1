@@ -1260,6 +1260,19 @@ export async function loadRoomMessages(
   )
 
   if (!response.ok) {
+    const error = await readRestError(response)
+    const error_payload = {
+      room_uuid,
+      status: response.status,
+      code: error.code ?? null,
+      message: error.message ?? null,
+      details: error.details ?? null,
+      hint: error.hint ?? null,
+    }
+
+    console.error("[chat] message initial fetch error", error_payload)
+    await sendAuthDebug("message_initial_fetch_error", error_payload)
+
     return []
   }
 

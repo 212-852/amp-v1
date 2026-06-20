@@ -36,34 +36,9 @@ function logClientBootstrap(
   console.info(`[chat_bootstrap] ${event}`, data)
 }
 
-async function getChatRoom(locale: Locale): Promise<ChatRoomApiPayload | null> {
-  logClientBootstrap("chat_messages_fetch_started", { locale })
-  const response = await fetch(
-    `/api/chat/room?locale=${encodeURIComponent(locale)}`,
-    { cache: "no-store" },
-  )
-
-  if (!response.ok) {
-    logClientBootstrap("chat_messages_fetch_completed", {
-      locale,
-      ok: false,
-      status: response.status,
-    })
-    return null
-  }
-
-  const payload = (await response.json()) as ChatRoomApiPayload
-  logClientBootstrap("chat_messages_fetch_completed", {
-    locale,
-    ok: true,
-    message_count: payload.messages?.length ?? 0,
-    has_room: Boolean(payload.room),
-  })
-  return payload
-}
-
 async function bootstrapChatRoomRequest(locale: Locale): Promise<ChatRoomState | null> {
   logClientBootstrap("chat_bootstrap_started", { locale })
+  logClientBootstrap("message initial fetch start", { locale })
   const response = await fetch("/api/chat/room", {
     method: "POST",
     headers: {
@@ -73,10 +48,16 @@ async function bootstrapChatRoomRequest(locale: Locale): Promise<ChatRoomState |
   })
 
   if (!response.ok) {
+    const error_message = await response.text().catch(() => "")
     logClientBootstrap("chat_bootstrap_completed", {
       locale,
       ok: false,
       status: response.status,
+    })
+    logClientBootstrap("message initial fetch error", {
+      locale,
+      status: response.status,
+      error_message,
     })
     return null
   }
@@ -91,9 +72,23 @@ async function bootstrapChatRoomRequest(locale: Locale): Promise<ChatRoomState |
       has_participant: Boolean(payload.participant),
       message_count: payload.messages?.length ?? 0,
     })
+    logClientBootstrap("message initial fetch error", {
+      locale,
+      reason: "missing_room_or_participant",
+      has_room: Boolean(payload.room),
+      has_participant: Boolean(payload.participant),
+    })
     return null
   }
 
+  logClientBootstrap("user room_uuid resolved", {
+    room_uuid: payload.room.room_uuid,
+  })
+  logClientBootstrap("message initial fetch success count", {
+    locale,
+    room_uuid: payload.room.room_uuid,
+    message_count: payload.messages?.length ?? 0,
+  })
   logClientBootstrap("chat_bootstrap_completed", {
     locale,
     ok: true,
@@ -111,31 +106,8 @@ async function bootstrapChatRoomRequest(locale: Locale): Promise<ChatRoomState |
   }
 }
 
-function toChatRoomState(payload: ChatRoomApiPayload): ChatRoomState | null {
-  if (!payload.room || !payload.participant) {
-    return null
-  }
-
-  return {
-    room: payload.room,
-    participant: payload.participant,
-    messages: payload.messages,
-    presence: payload.presence,
-    concierge_available: payload.concierge_available,
-  }
-}
-
 async function loadOrBootstrapChatRoom(locale: Locale): Promise<ChatRoomState | null> {
-  const existing_request = getChatRoom(locale).catch(() => null)
-  const bootstrap_request = bootstrapChatRoomRequest(locale).catch(() => null)
-  const existing = await existing_request
-  const existing_state = existing ? toChatRoomState(existing) : null
-
-  if (existing_state && existing_state.messages.length > 0) {
-    return existing_state
-  }
-
-  return (await bootstrap_request) ?? existing_state
+  return bootstrapChatRoomRequest(locale).catch(() => null)
 }
 
 export function useChatRoomBootstrap(
