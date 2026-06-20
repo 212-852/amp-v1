@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { LiffAutoLogin } from "@/components/access/liff";
+import { PwaOfflineScreen } from "@/components/pwa/offline_screen";
 import { PwaRuntime } from "@/components/pwa/runtime";
 import { PwaSessionRestore } from "@/components/pwa/session_restore";
 import { AccessPresence } from "@/components/access/presence";
@@ -43,6 +44,7 @@ export default function RootLayout({
             <OverlayProvider>
               <PwaRuntime />
               <PwaSessionRestore />
+              <PwaOfflineScreen />
               <AccessPresence />
               <LiffAutoLogin />
               {children}

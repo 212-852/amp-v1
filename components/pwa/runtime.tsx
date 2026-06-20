@@ -60,6 +60,12 @@ async function sendPwaDebug(event: string, payload: Record<string, unknown>) {
   }).catch(() => null)
 }
 
+function activateWaitingWorker(registration: ServiceWorkerRegistration) {
+  if (registration.waiting) {
+    registration.waiting.postMessage({ type: "SKIP_WAITING" })
+  }
+}
+
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) {
     return
@@ -79,6 +85,8 @@ function registerServiceWorker() {
   void navigator.serviceWorker
     .register("/sw.js", { scope: "/", updateViaCache: "none" })
     .then((registration) => {
+      activateWaitingWorker(registration)
+
       registration.addEventListener("updatefound", () => {
         const worker = registration.installing
 
@@ -87,20 +95,19 @@ function registerServiceWorker() {
         }
 
         worker.addEventListener("statechange", () => {
-          if (
-            worker.state === "installed" &&
-            navigator.serviceWorker.controller
-          ) {
-            worker.postMessage({ type: "SKIP_WAITING" })
+          if (worker.state === "installed") {
+            activateWaitingWorker(registration)
           }
         })
       })
 
-      if (registration.waiting && navigator.serviceWorker.controller) {
-        registration.waiting.postMessage({ type: "SKIP_WAITING" })
-      }
-
       void registration.update()
+
+      if (isStandalonePwa()) {
+        window.setInterval(() => {
+          void registration.update()
+        }, 60 * 60 * 1000)
+      }
     })
     .catch(() => undefined)
 }
@@ -108,6 +115,7 @@ function registerServiceWorker() {
 export function PwaRuntime() {
   useEffect(() => {
     sessionStorage.removeItem(CHUNK_RELOAD_KEY)
+    sessionStorage.removeItem(SW_RELOAD_KEY)
 
     if (isStandalonePwa()) {
       void sendPwaDebug("pwa_launch_entered", {
