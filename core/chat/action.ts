@@ -45,6 +45,7 @@ import {
 import type {
   ChatIncomingInput,
   ChatModeSwitchInput,
+  ChatParticipantRecord,
   ChatRoomMode,
   ChatRoomPresenceInput,
   ChatRoomState,
@@ -126,6 +127,22 @@ async function resolveConciergeCustomerName(room_uuid: string) {
   }
 
   return customer.role === "guest" ? "Guest" : "Customer"
+}
+
+async function resolveCurrentParticipantDisplayName(input: {
+  session: Session
+  participant: ChatParticipantRecord
+}) {
+  if (input.participant.user_uuid) {
+    const profiles = await loadUserProfiles([input.participant.user_uuid])
+    const profile = profiles.get(input.participant.user_uuid)
+
+    if (profile?.display_name?.trim()) {
+      return profile.display_name.trim()
+    }
+  }
+
+  return resolveParticipantDisplayName(input.session, input.participant.role)
 }
 
 async function syncConciergeOdinModeChange(input: {
@@ -536,7 +553,10 @@ export async function handleIncomingChatMessageArchive(
   await broadcastTypingEvent({
     room_uuid: room.room_uuid,
     participant_uuid: participant.participant_uuid,
-    display_name: resolveParticipantDisplayName(input.session, participant.role),
+    display_name: await resolveCurrentParticipantDisplayName({
+      session: input.session,
+      participant,
+    }),
     locale: room.locale,
     event: "typing_stop",
   })
@@ -590,7 +610,10 @@ export async function handleIncomingChatMessageArchive(
   ) {
     await syncConciergeOdinAdminMessage({
       room,
-      admin_name: resolveParticipantDisplayName(input.session, participant.role),
+      admin_name: await resolveCurrentParticipantDisplayName({
+        session: input.session,
+        participant,
+      }),
       message_body: body,
       message_uuid: message.message_uuid,
     })
@@ -831,7 +854,10 @@ export async function handleChatTyping(input: ChatTypingInput) {
   await broadcastTypingEvent({
     room_uuid: room.room_uuid,
     participant_uuid: participant.participant_uuid,
-    display_name: resolveParticipantDisplayName(input.session, participant.role),
+    display_name: await resolveCurrentParticipantDisplayName({
+      session: input.session,
+      participant,
+    }),
     locale: room.locale,
     event: resolveTypingEvent(input.is_typing),
   })
@@ -885,7 +911,10 @@ export async function handleChatRoomPresence(input: ChatRoomPresenceInput) {
     session: input.session,
   })
 
-  const display_name = resolveParticipantDisplayName(input.session, participant.role)
+  const display_name = await resolveCurrentParticipantDisplayName({
+    session: input.session,
+    participant,
+  })
 
   if (input.action === "enter") {
     const presence = await upsertRoomPresenceEnter({
