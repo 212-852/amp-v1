@@ -28,6 +28,7 @@ type ChatRealtimeDebugEvent =
   | "chat_send_failed"
   | "chat_scroll_called"
   | "chat_scroll_done"
+  | "chat_scroll_target_mismatch"
 
 export type ChatRealtimeDebugPayload = {
   view?: "user" | "concierge"

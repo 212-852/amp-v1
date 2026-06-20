@@ -76,19 +76,32 @@ export function scroll_to_latest_message(
   })
 
   function scroll() {
-    scroll_container.scrollTo({
-      top: scroll_container.scrollHeight,
-      behavior: "smooth",
-    })
-    target.bottom_anchor?.scrollIntoView({
-      block: "end",
-      behavior: "smooth",
-    })
+    scroll_container.scrollTop = Math.max(
+      0,
+      scroll_container.scrollHeight - scroll_container.clientHeight,
+    )
+
+    const distance_from_bottom_after = read_distance_from_bottom(scroll_container)
+
+    if (distance_from_bottom_after > 5) {
+      const mismatch_payload = {
+        reason,
+        view: target.view,
+        className: scroll_container.className,
+        scrollTop: scroll_container.scrollTop,
+        scrollHeight: scroll_container.scrollHeight,
+        clientHeight: scroll_container.clientHeight,
+        distance_from_bottom_after,
+      }
+
+      console.warn("[chat] chat_scroll_target_mismatch", mismatch_payload)
+      send_chat_realtime_debug("chat_scroll_target_mismatch", mismatch_payload)
+    }
 
     send_chat_realtime_debug("chat_scroll_done", {
       reason,
       view: target.view,
-      distance_from_bottom_after: read_distance_from_bottom(scroll_container),
+      distance_from_bottom_after,
     })
   }
 

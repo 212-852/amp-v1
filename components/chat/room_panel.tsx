@@ -48,7 +48,7 @@ const content = {
   },
   new_realtime_message: {
     ja: "新しいメッセージがあります",
-    en: "You have a new message",
+    en: "New message",
     es: "Hay un mensaje nuevo",
   },
 }
@@ -808,6 +808,7 @@ export default function ChatRoomPanel({
         )
 
         if (unique_older_messages.length === 0) {
+          set_has_older_messages(false)
           return current
         }
 
@@ -884,15 +885,16 @@ export default function ChatRoomPanel({
           is_near_bottom_ref.current = is_chat_near_bottom(target)
           set_show_scroll_down_button(!is_near_bottom_ref.current)
 
-          if (is_near_bottom_ref.current) {
-            set_show_scroll_down_button(false)
-          }
-
-          if (target.scrollTop < 80) {
+          if (target.scrollTop <= 80) {
             void load_older_messages()
           }
         }}
       >
+        {is_loading_older ? (
+          <p className="px-2 py-1 text-center text-[12px] font-medium text-[#8c7358]">
+            Loading...
+          </p>
+        ) : null}
         {visible_messages.map((message, index) => (
           <ChatMessageBubble
             key={message.message_uuid}

@@ -33,6 +33,7 @@ const realtime_events = new Set([
   "chat_send_failed",
   "chat_scroll_called",
   "chat_scroll_done",
+  "chat_scroll_target_mismatch",
 ])
 
 export async function POST(request: Request) {
