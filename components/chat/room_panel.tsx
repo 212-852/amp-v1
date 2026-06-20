@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import ChatMessageBubble from "@/components/chat/message_bubble"
+import {
+  appendOptimisticMessage,
+  mergeArchivedResponse,
+  mergeRealtimeInsert,
+} from "@/components/chat/message_merge"
 import { send_chat_realtime_debug } from "@/components/chat/realtime_debug"
 import ChatScrollButton from "@/components/chat/scroll"
 import { use_room_messages } from "@/components/chat/use_room_messages"
@@ -60,97 +65,6 @@ function getClientMessageId(message: ChatMessageRecord) {
   return typeof client_message_id === "string" && client_message_id.trim()
     ? client_message_id.trim()
     : null
-}
-
-function mergeMessage(
-  current: ChatMessageRecord[],
-  next_message: ChatMessageRecord,
-  source = "local",
-  debug_context: {
-    view: "user" | "concierge"
-    current_user_uuid: string | null
-    visitor_uuid?: string | null
-  } = {
-    view: "user",
-    current_user_uuid: null,
-    visitor_uuid: null,
-  },
-) {
-  const incoming_message_uuid = next_message.message_uuid || null
-  const incoming_client_message_id = getClientMessageId(next_message)
-  let replaced = false
-  const merged = current.map((message) => {
-    const existing_message_uuid = message.message_uuid || null
-    const existing_client_message_id = getClientMessageId(message)
-    const matches_message_uuid = Boolean(
-      incoming_message_uuid &&
-        existing_message_uuid &&
-        existing_message_uuid === incoming_message_uuid,
-    )
-    const is_optimistic_existing = Boolean(
-      message.status === "sending" ||
-        existing_message_uuid?.startsWith("client:"),
-    )
-    const matches_client_message_id = Boolean(
-      incoming_client_message_id &&
-        existing_client_message_id &&
-        existing_client_message_id === incoming_client_message_id &&
-        (matches_message_uuid || is_optimistic_existing),
-    )
-
-    if (matches_message_uuid || matches_client_message_id) {
-      replaced = true
-
-      if (DEBUG_REALTIME_DUPLICATES) {
-        console.log("[chat realtime] duplicate skipped", {
-          room_uuid: next_message.room_uuid,
-          existing_message_uuid,
-          incoming_message_uuid,
-          existing_client_message_id,
-          incoming_client_message_id,
-          sender_uuid: next_message.participant_uuid ?? null,
-          current_user_uuid: debug_context.current_user_uuid,
-          view: debug_context.view,
-          reason: matches_message_uuid
-            ? "message_uuid"
-            : "client_message_id",
-          source,
-        })
-      }
-
-      return next_message
-    }
-
-    return message
-  })
-
-  if (!replaced) {
-    console.log("[chat realtime] append message", {
-      room_uuid: next_message.room_uuid,
-      incoming_message_uuid,
-      incoming_client_message_id,
-      sender_uuid: next_message.participant_uuid ?? null,
-      current_user_uuid: debug_context.current_user_uuid,
-      view: debug_context.view,
-      source,
-    })
-    send_chat_realtime_debug("chat_realtime_append_done", {
-      view: debug_context.view,
-      room_uuid: next_message.room_uuid,
-      incoming_room_uuid: next_message.room_uuid,
-      message_uuid: incoming_message_uuid,
-      client_message_id: incoming_client_message_id,
-      sender_uuid: next_message.participant_uuid ?? null,
-      current_user_uuid: debug_context.current_user_uuid,
-      visitor_uuid: debug_context.visitor_uuid ?? null,
-    })
-    merged.push(next_message)
-  }
-
-  return merged.sort(
-    (left, right) =>
-      new Date(left.created_at).getTime() - new Date(right.created_at).getTime(),
-  )
 }
 
 function buildOptimisticMessage(input: {
@@ -335,20 +249,75 @@ export default function ChatRoomPanel({
   const handle_room_message_insert = useCallback(
     (next_message: ChatMessageRecord) => {
       if (next_message.room_uuid !== room.room_uuid) {
-        console.log("[chat realtime] room mismatch", {
-          insert_room_uuid: next_message.room_uuid,
-          current_room_uuid: room.room_uuid,
+        send_chat_realtime_debug("chat_realtime_insert_room_mismatch", {
+          receiver_view: realtime_debug_context.view,
+          room_uuid: room.room_uuid,
+          incoming_room_uuid: next_message.room_uuid,
           message_uuid: next_message.message_uuid,
+          client_message_id: getClientMessageId(next_message),
+          sender_uuid: next_message.participant_uuid ?? null,
+          current_user_uuid: realtime_debug_context.current_user_uuid,
+          visitor_uuid: realtime_debug_context.visitor_uuid ?? null,
         })
         return
       }
 
-      set_messages((current) =>
-        mergeMessage(current, next_message, "realtime", realtime_debug_context),
-      )
+      set_messages((current) => {
+        const result = mergeRealtimeInsert(current, next_message)
+
+        if (result.action === "duplicate_replaced") {
+          if (DEBUG_REALTIME_DUPLICATES) {
+            console.log("[chat realtime] duplicate skipped", {
+              room_uuid: next_message.room_uuid,
+              message_uuid: result.incoming_message_uuid,
+              client_message_id: result.incoming_client_message_id,
+              sender_uuid: result.sender_uuid,
+              receiver_view: realtime_debug_context.view,
+            })
+          }
+          send_chat_realtime_debug("chat_realtime_insert_duplicate_skipped", {
+            receiver_view: realtime_debug_context.view,
+            room_uuid: room.room_uuid,
+            incoming_room_uuid: next_message.room_uuid,
+            message_uuid: result.incoming_message_uuid,
+            client_message_id: result.incoming_client_message_id,
+            sender_uuid: result.sender_uuid,
+            current_user_uuid: realtime_debug_context.current_user_uuid,
+            visitor_uuid: realtime_debug_context.visitor_uuid ?? null,
+          })
+        }
+
+        if (result.action === "appended") {
+          const rendered_count = show_presence
+            ? result.messages.length
+            : filterUserVisibleChatMessages(result.messages).length
+
+          console.log("[chat realtime] append message", {
+            room_uuid: next_message.room_uuid,
+            message_uuid: result.incoming_message_uuid,
+            client_message_id: result.incoming_client_message_id,
+            sender_uuid: result.sender_uuid,
+            receiver_view: realtime_debug_context.view,
+            rendered_count,
+          })
+          send_chat_realtime_debug("chat_realtime_insert_append_done", {
+            receiver_view: realtime_debug_context.view,
+            room_uuid: room.room_uuid,
+            incoming_room_uuid: next_message.room_uuid,
+            message_uuid: result.incoming_message_uuid,
+            client_message_id: result.incoming_client_message_id,
+            sender_uuid: result.sender_uuid,
+            current_user_uuid: realtime_debug_context.current_user_uuid,
+            visitor_uuid: realtime_debug_context.visitor_uuid ?? null,
+            rendered_count,
+          })
+        }
+
+        return result.messages
+      })
       window.dispatchEvent(new CustomEvent("amp-admin-queue-refresh"))
     },
-    [realtime_debug_context, room.room_uuid],
+    [realtime_debug_context, room.room_uuid, show_presence],
   )
 
   use_room_messages(room.room_uuid, {
@@ -481,9 +450,17 @@ export default function ChatRoomPanel({
     function handle_optimistic_message(event: Event) {
       const detail = (event as CustomEvent<{
         room_uuid?: string | null
+        participant_uuid?: string | null
         body?: string
         client_message_id?: string
       }>).detail
+
+      if (
+        detail?.participant_uuid &&
+        detail.participant_uuid !== participant_uuid
+      ) {
+        return
+      }
 
       if (
         detail?.room_uuid &&
@@ -500,22 +477,30 @@ export default function ChatRoomPanel({
       const client_message_id = detail.client_message_id
       is_near_bottom_ref.current = true
 
-      set_messages((current) =>
-        mergeMessage(
-          current,
-          buildOptimisticMessage({
+      set_messages((current) => {
+        const optimistic_message = buildOptimisticMessage({
+          room_uuid: room.room_uuid,
+          participant_uuid,
+          body,
+          client_message_id,
+          source_kind: show_presence ? "concierge" : "user",
+          actor_display_name: current_viewer_display_name,
+          locale: (room.locale as Locale) ?? "ja",
+        })
+        const result = appendOptimisticMessage(current, optimistic_message)
+
+        if (result.action === "appended") {
+          send_chat_realtime_debug("chat_optimistic_append_done", {
+            view: realtime_debug_context.view,
             room_uuid: room.room_uuid,
-            participant_uuid,
-            body,
             client_message_id,
-            source_kind: show_presence ? "concierge" : "user",
-            actor_display_name: current_viewer_display_name,
-            locale: (room.locale as Locale) ?? "ja",
-          }),
-          "optimistic",
-          realtime_debug_context,
-        ),
-      )
+            sender_uuid: participant_uuid,
+            message_uuid: optimistic_message.message_uuid,
+          })
+        }
+
+        return result.messages
+      })
       scroll_to_bottom("smooth")
     }
 
@@ -556,12 +541,10 @@ export default function ChatRoomPanel({
       }
 
       set_messages((current) =>
-        mergeMessage(
+        mergeArchivedResponse(
           current,
           messageBundleToRecord(detail.message as MessageBundle, participant_uuid),
-          "archive_response",
-          realtime_debug_context,
-        ),
+        ).messages,
       )
       scroll_to_bottom("smooth")
     }

@@ -20,6 +20,7 @@ const alwaysReportEvents = new Set([
   "line_webhook_event_failed",
   "line_webhook_failed",
   "chat_archive_failed",
+  "chat_archive_insert_error",
   "chat_bootstrap_failed",
   "output_failed",
 ])
@@ -47,6 +48,9 @@ const lineWebhookInfoEvents = new Set([
 const chatFlowInfoEvents = new Set([
   "app_locale_resolved",
   "chat_archive_incoming_saved",
+  "chat_archive_insert_start",
+  "chat_archive_insert_success",
+  "chat_archive_insert_error",
   "chat_bootstrap_completed",
   "chat_bootstrap_failed",
   "chat_bootstrap_started",
@@ -72,7 +76,10 @@ const chatFlowInfoEvents = new Set([
 const chatRealtimeEvents = new Set([
   "chat_realtime_subscribed",
   "chat_realtime_insert_received",
-  "chat_realtime_append_done",
+  "chat_realtime_insert_append_done",
+  "chat_realtime_insert_duplicate_skipped",
+  "chat_realtime_insert_room_mismatch",
+  "chat_optimistic_append_done",
   "chat_realtime_channel_error",
   "user_chat_realtime_subscribe_creating",
   "user_chat_realtime_subscribed",

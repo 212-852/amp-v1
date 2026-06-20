@@ -1079,6 +1079,22 @@ export async function archiveWelcomeMessage(input: {
   }
 }
 
+function readArchiveClientMessageId(
+  payload: Record<string, unknown> | null | undefined,
+) {
+  const meta = payload?.meta
+
+  if (!meta || typeof meta !== "object" || Array.isArray(meta)) {
+    return null
+  }
+
+  const client_message_id = (meta as Record<string, unknown>).client_message_id
+
+  return typeof client_message_id === "string" && client_message_id.trim()
+    ? client_message_id.trim()
+    : null
+}
+
 export async function insertMessage(input: {
   message_uuid?: string
   room_uuid: string
@@ -1111,6 +1127,16 @@ export async function insertMessage(input: {
   if (input.external_id) {
     body.external_id = input.external_id
   }
+
+  const archive_debug = {
+    room_uuid: input.room_uuid,
+    message_uuid: input.message_uuid ?? null,
+    client_message_id: readArchiveClientMessageId(input.payload),
+    sender_uuid: input.participant_uuid,
+    body_length: input.body.length,
+  }
+
+  await sendAuthDebug("chat_archive_insert_start", archive_debug)
 
   const response = await fetch(restUrl(config, "messages", "select=*"), {
     method: "POST",
@@ -1170,6 +1196,12 @@ export async function insertMessage(input: {
       }
     }
 
+    await sendAuthDebug("chat_archive_insert_error", {
+      ...archive_debug,
+      error_code: error.code ?? null,
+      error_message: error.message ?? "unknown",
+    })
+
     await sendAuthDebug("chat_archive_failed", {
       room_uuid: input.room_uuid,
       participant_uuid: input.participant_uuid,
@@ -1193,6 +1225,16 @@ export async function insertMessage(input: {
   const message = rows[0]
 
   if (message) {
+    await sendAuthDebug("chat_archive_insert_success", {
+      room_uuid: message.room_uuid,
+      message_uuid: message.message_uuid,
+      client_message_id: readArchiveClientMessageId(
+        message.payload as Record<string, unknown> | null,
+      ),
+      sender_uuid: message.participant_uuid,
+      body_length: message.body?.length ?? input.body.length,
+    })
+
     await touchRoomUpdatedAt(input.room_uuid).catch((error) => {
       console.warn("[chat_core] room_touch_failed", {
         room_uuid: input.room_uuid,

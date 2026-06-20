@@ -443,6 +443,13 @@ export default function AppFooter({
   const footer_ref = useRef<HTMLElement | null>(null)
   const message_input_ref = useRef<HTMLTextAreaElement | null>(null)
   const pending_input_focus_ref = useRef(false)
+  const chat_room_ref = useRef<{
+    room_uuid: string | null
+    participant_uuid: string | null
+  }>({
+    room_uuid: null,
+    participant_uuid: null,
+  })
   const { locale } = useLocale()
   const { openOverlay } = useOverlay()
   const { toast } = useToast()
@@ -608,6 +615,8 @@ export default function AppFooter({
     window.dispatchEvent(
       new CustomEvent("amp-chat-optimistic-message", {
         detail: {
+          room_uuid: chat_room_ref.current.room_uuid,
+          participant_uuid: chat_room_ref.current.participant_uuid,
           body: message,
           client_message_id,
         },
@@ -641,6 +650,7 @@ export default function AppFooter({
         window.dispatchEvent(
           new CustomEvent("amp-chat-message-archived", {
             detail: {
+              room_uuid: chat_room_ref.current.room_uuid,
               message: payload.message,
             },
           }),
@@ -705,6 +715,26 @@ export default function AppFooter({
       can_start_line_oauth,
     })
   }
+
+  useEffect(() => {
+    function handle_chat_room_ready(event: Event) {
+      const detail = (event as CustomEvent<{
+        room_uuid?: string | null
+        participant_uuid?: string | null
+      }>).detail
+
+      chat_room_ref.current = {
+        room_uuid: detail?.room_uuid ?? null,
+        participant_uuid: detail?.participant_uuid ?? null,
+      }
+    }
+
+    window.addEventListener("amp-chat-room-ready", handle_chat_room_ready)
+
+    return () => {
+      window.removeEventListener("amp-chat-room-ready", handle_chat_room_ready)
+    }
+  }, [])
 
   useEffect(() => {
     function handle_profile_modal_visibility(event: Event) {

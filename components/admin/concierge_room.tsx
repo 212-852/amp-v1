@@ -154,7 +154,11 @@ export default function AdminConciergeRoom({
         />
       </div>
 
-      <ChatMessageInput locale={locale} room_uuid={state.room.room_uuid} />
+      <ChatMessageInput
+        locale={locale}
+        room_uuid={state.room.room_uuid}
+        participant_uuid={state.participant.participant_uuid}
+      />
     </div>
   )
 }

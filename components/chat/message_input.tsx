@@ -17,12 +17,14 @@ const content = {
 type ChatMessageInputProps = {
   locale: Locale
   room_uuid?: string | null
+  participant_uuid?: string | null
   on_sent?: () => void
 }
 
 export default function ChatMessageInput({
   locale,
   room_uuid = null,
+  participant_uuid = null,
   on_sent,
 }: Readonly<ChatMessageInputProps>) {
   const [value, set_value] = useState("")
@@ -86,6 +88,7 @@ export default function ChatMessageInput({
       new CustomEvent("amp-chat-optimistic-message", {
         detail: {
           room_uuid,
+          participant_uuid,
           body: sent_text,
           client_message_id,
         },

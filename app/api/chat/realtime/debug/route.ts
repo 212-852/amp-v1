@@ -3,7 +3,10 @@ import { sendAuthDebug } from "@/core/debug"
 const realtime_events = new Set([
   "chat_realtime_subscribed",
   "chat_realtime_insert_received",
-  "chat_realtime_append_done",
+  "chat_realtime_insert_append_done",
+  "chat_realtime_insert_duplicate_skipped",
+  "chat_realtime_insert_room_mismatch",
+  "chat_optimistic_append_done",
   "chat_realtime_channel_error",
   "user_chat_realtime_subscribe_creating",
   "user_chat_realtime_subscribed",

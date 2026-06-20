@@ -62,6 +62,24 @@ export default function AppChatSection({
   const rendered_count = message_count
 
   useEffect(() => {
+    if (!chat_state?.room?.room_uuid) {
+      return
+    }
+
+    window.dispatchEvent(
+      new CustomEvent("amp-chat-room-ready", {
+        detail: {
+          room_uuid: chat_state.room.room_uuid,
+          participant_uuid: chat_state.participant.participant_uuid,
+        },
+      }),
+    )
+  }, [
+    chat_state?.participant.participant_uuid,
+    chat_state?.room?.room_uuid,
+  ])
+
+  useEffect(() => {
     console.info("[chat_bootstrap] user_chat_render_result", {
       room_uuid,
       rendered_count,

@@ -3,7 +3,10 @@
 type ChatRealtimeDebugEvent =
   | "chat_realtime_subscribed"
   | "chat_realtime_insert_received"
-  | "chat_realtime_append_done"
+  | "chat_realtime_insert_append_done"
+  | "chat_realtime_insert_duplicate_skipped"
+  | "chat_realtime_insert_room_mismatch"
+  | "chat_optimistic_append_done"
   | "chat_realtime_channel_error"
   | "user_chat_realtime_subscribe_creating"
   | "user_chat_realtime_subscribed"
@@ -16,6 +19,7 @@ type ChatRealtimeDebugEvent =
 
 export type ChatRealtimeDebugPayload = {
   view?: "user" | "concierge"
+  receiver_view?: "user" | "concierge"
   room_uuid?: string | null
   incoming_room_uuid?: string | null
   message_uuid?: string | null
@@ -23,6 +27,7 @@ export type ChatRealtimeDebugPayload = {
   sender_uuid?: string | null
   current_user_uuid?: string | null
   visitor_uuid?: string | null
+  rendered_count?: number
   reason?: string | null
   [key: string]: unknown
 }
