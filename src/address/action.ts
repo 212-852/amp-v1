@@ -3,7 +3,6 @@ import { normalize_address_context } from "@/src/address/context"
 import { ADDRESS_OPTIONS } from "@/src/address/options"
 import { build_address_output } from "@/src/address/output"
 import {
-  group_city_options,
   validate_address_selection,
   type AddressOptions,
 } from "@/src/address/rules"
@@ -17,6 +16,46 @@ type CityRow = {
   city_code: string
   prefecture_code: string
   label: string
+}
+
+function merge_address_options(input: {
+  prefectures: Array<{ code: string; label: string }>
+  cities: Array<{ code: string; label: string; prefecture_code: string }>
+}): AddressOptions {
+  const prefectures_by_code = new Map(
+    ADDRESS_OPTIONS.prefectures.map((option) => [option.code, option]),
+  )
+
+  for (const prefecture of input.prefectures) {
+    prefectures_by_code.set(prefecture.code, prefecture)
+  }
+
+  const cities_by_prefecture: AddressOptions["cities_by_prefecture"] = {}
+
+  for (const [prefecture_code, cities] of Object.entries(
+    ADDRESS_OPTIONS.cities_by_prefecture,
+  )) {
+    cities_by_prefecture[prefecture_code] = [...cities]
+  }
+
+  for (const city of input.cities) {
+    const current = cities_by_prefecture[city.prefecture_code] ?? []
+    const next = { code: city.code, label: city.label }
+    const existing_index = current.findIndex((option) => option.code === city.code)
+
+    if (existing_index >= 0) {
+      current[existing_index] = next
+    } else {
+      current.push(next)
+    }
+
+    cities_by_prefecture[city.prefecture_code] = current
+  }
+
+  return {
+    prefectures: [...prefectures_by_code.values()],
+    cities_by_prefecture,
+  }
 }
 
 async function load_prefectures() {
@@ -94,15 +133,7 @@ export async function get_address_options() {
     load_cities(),
   ])
 
-  if (prefectures.length === 0) {
-    return build_address_output(ADDRESS_OPTIONS)
-  }
-
-  return build_address_output({
-    prefectures,
-    cities_by_prefecture:
-      cities.length > 0 ? group_city_options(cities) : ADDRESS_OPTIONS.cities_by_prefecture,
-  })
+  return build_address_output(merge_address_options({ prefectures, cities }))
 }
 
 export async function assert_valid_address_selection(input: {

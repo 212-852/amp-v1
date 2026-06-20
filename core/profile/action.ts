@@ -32,6 +32,43 @@ type UserNameRow = {
   display_name?: string | null
 }
 
+const PROFILE_REQUIRED_COLUMNS = new Set([
+  "nickname",
+  "first_name",
+  "last_name",
+  "birth_date",
+  "phone",
+  "prefecture",
+  "city",
+  "prefecture_code",
+  "city_code",
+  "address",
+  "memo",
+  "language",
+])
+
+function log_profile_core(event: string, payload: Record<string, unknown>) {
+  console.info(event, payload)
+}
+
+function resolve_missing_profile_column(error: {
+  code?: string | null
+  message?: string | null
+}) {
+  if (error.code !== "PGRST204" || !error.message) {
+    return null
+  }
+
+  const quoted_match = error.message.match(/'([^']+)' column/)
+
+  if (quoted_match?.[1]) {
+    return quoted_match[1]
+  }
+
+  const cache_match = error.message.match(/Could not find the '([^']+)'/)
+  return cache_match?.[1] ?? null
+}
+
 function patch_has_profile_fields(patch: ProfileSettingsPatch) {
   return (
     "nickname" in patch ||
@@ -45,8 +82,7 @@ function patch_has_profile_fields(patch: ProfileSettingsPatch) {
     "city_code" in patch ||
     "address" in patch ||
     "memo" in patch ||
-    "language" in patch ||
-    "locale" in patch
+    "language" in patch
   )
 }
 
@@ -75,9 +111,6 @@ function build_profile_db_patch(patch: ProfileSettingsPatch) {
     body.language = patch.language
   }
 
-  if (patch.locale) {
-    body.locale = patch.locale
-  }
   return body
 }
 
@@ -145,7 +178,7 @@ async function load_profile_row(session: Session) {
       "profiles",
       [
         identity_filter,
-        "select=profile_uuid,user_uuid,visitor_uuid,nickname,first_name,last_name,birth_date,phone,prefecture,city,prefecture_code,city_code,address,memo,language,locale",
+        "select=*",
         "limit=1",
       ].join("&"),
     ),
@@ -170,8 +203,12 @@ async function upsert_profile_row(input: {
 }) {
   const config = getRestConfig()
 
-  if (!config || !patch_has_profile_fields(input.patch)) {
-    return null
+  if (!config) {
+    throw new Error("Database is unavailable")
+  }
+
+  if (!patch_has_profile_fields(input.patch)) {
+    throw new Error("No profile fields to save")
   }
 
   const identity_body = input.user_uuid
@@ -181,37 +218,84 @@ async function upsert_profile_row(input: {
       : null
 
   if (!identity_body) {
-    return null
+    throw new Error("Profile requires a user_uuid or visitor_uuid")
   }
 
   const conflict_target = input.user_uuid ? "user_uuid" : "visitor_uuid"
-  const response = await fetch(
-    restUrl(
-      config,
-      "profiles",
-      `on_conflict=${conflict_target}&select=profile_uuid,user_uuid,visitor_uuid,nickname,first_name,last_name,birth_date,phone,prefecture,city,prefecture_code,city_code,address,memo,language,locale`,
-    ),
-    {
-      method: "POST",
-      headers: {
-        ...restHeaders(config),
-        Prefer: "resolution=merge-duplicates,return=representation",
-      },
-      body: JSON.stringify({
-        ...identity_body,
-        ...build_profile_db_patch(input.patch),
-      }),
-      cache: "no-store",
-    },
-  )
+  const patch_body = build_profile_db_patch(input.patch)
+  const skipped_columns = new Set<string>()
 
-  if (!response.ok) {
+  while (true) {
+    const body = {
+      ...identity_body,
+      ...Object.fromEntries(
+        Object.entries(patch_body).filter(([key]) => !skipped_columns.has(key)),
+      ),
+    }
+
+    log_profile_core("profile_upsert_payload", {
+      conflict_target,
+      user_uuid: input.user_uuid,
+      visitor_uuid: input.visitor_uuid,
+      fields: Object.keys(body),
+      skipped_columns: [...skipped_columns],
+    })
+
+    const response = await fetch(
+      restUrl(config, "profiles", `on_conflict=${conflict_target}&select=*`),
+      {
+        method: "POST",
+        headers: {
+          ...restHeaders(config),
+          Prefer: "resolution=merge-duplicates,return=representation",
+        },
+        body: JSON.stringify(body),
+        cache: "no-store",
+      },
+    )
+
+    if (response.ok) {
+      const rows = (await response.json()) as ProfileRow[]
+      const row = rows[0] ?? null
+
+      if (!row) {
+        throw new Error("Profile save returned no row")
+      }
+
+      log_profile_core("profile_upsert_success", {
+        profile_uuid: row.profile_uuid ?? null,
+        user_uuid: row.user_uuid ?? null,
+        visitor_uuid: row.visitor_uuid ?? null,
+        saved_fields: Object.keys(body),
+        skipped_columns: [...skipped_columns],
+      })
+
+      return row
+    }
+
     const error = await readRestError(response)
+    const missing_column = resolve_missing_profile_column(error)
+
+    log_profile_core("profile_upsert_failed", {
+      status: response.status,
+      error,
+      missing_column,
+      attempted_fields: Object.keys(body),
+      skipped_columns: [...skipped_columns],
+    })
+
+    if (
+      missing_column &&
+      PROFILE_REQUIRED_COLUMNS.has(missing_column) &&
+      missing_column in patch_body &&
+      !skipped_columns.has(missing_column)
+    ) {
+      skipped_columns.add(missing_column)
+      continue
+    }
+
     throw new Error(error.message ?? "Failed to save profile")
   }
-
-  const rows = (await response.json()) as ProfileRow[]
-  return rows[0] ?? null
 }
 
 export async function get_profile_settings(session: Session) {

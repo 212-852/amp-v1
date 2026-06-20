@@ -39,6 +39,7 @@ export async function POST(request: Request) {
       user_uuid: session.user_uuid ?? null,
       visitor_uuid: session.visitor_uuid ?? null,
       fields: Object.keys(body as Record<string, unknown>),
+      payload: body,
     })
     const profile = await save_profile_settings({
       session,
