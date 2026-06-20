@@ -17,7 +17,26 @@ function useRoomMessages(
   const { enabled = true, on_insert } = options
 
   useEffect(() => {
-    if (!room_uuid || !enabled) {
+    console.info("[chat_realtime] room_uuid_received", {
+      room_uuid: room_uuid ?? null,
+      enabled,
+    })
+  }, [enabled, room_uuid])
+
+  useEffect(() => {
+    if (!room_uuid) {
+      console.info("[chat_realtime] subscription_skipped", {
+        room_uuid: null,
+        reason: "missing_room_uuid",
+      })
+      return
+    }
+
+    if (!enabled) {
+      console.info("[chat_realtime] subscription_skipped", {
+        room_uuid,
+        reason: "disabled",
+      })
       return
     }
 
@@ -33,6 +52,11 @@ function useRoomMessages(
       return
     }
 
+    console.info("[chat_realtime] subscription_creating", {
+      room_uuid,
+      filter: `room_uuid=eq.${room_uuid}`,
+    })
+
     const channel = supabase
       .channel(`room_messages:${room_uuid}`)
       .on(
@@ -46,10 +70,25 @@ function useRoomMessages(
         (payload) => {
           const message = payload.new as ChatMessageRecord | null
 
+          console.info("[chat_realtime] message_insert_received", {
+            insert_room_uuid: message?.room_uuid ?? null,
+            current_room_uuid: room_uuid,
+            message_uuid: message?.message_uuid ?? null,
+          })
+
           if (!message?.message_uuid) {
             console.info("[chat_realtime] realtime_insert_skipped", {
               room_uuid,
               reason: "missing_message_uuid",
+            })
+            return
+          }
+
+          if (message.room_uuid !== room_uuid) {
+            console.info("[chat_realtime] ignored_room_uuid_mismatch", {
+              insert_room_uuid: message.room_uuid,
+              current_room_uuid: room_uuid,
+              message_uuid: message.message_uuid,
             })
             return
           }
@@ -72,10 +111,23 @@ function useRoomMessages(
           room_uuid,
           status,
         })
+
+        if (status === "SUBSCRIBED") {
+          console.info("[chat_realtime] subscribed", { room_uuid })
+        }
+
+        if (status === "CHANNEL_ERROR") {
+          console.info("[chat_realtime] rls_or_channel_error", { room_uuid })
+        }
+
+        if (status === "TIMED_OUT") {
+          console.info("[chat_realtime] timed_out", { room_uuid })
+        }
       }
     })
 
     return () => {
+      console.info("[chat_realtime] subscription_cleanup", { room_uuid })
       void supabase.removeChannel(channel)
     }
   }, [enabled, on_insert, room_uuid])

@@ -260,10 +260,22 @@ export default function ChatRoomPanel({
     }
   }, [locale, room.mode, room.room_uuid, room_uuid, show_presence])
 
-  const handle_room_message_insert = useCallback((next_message: ChatMessageRecord) => {
-    set_messages((current) => mergeMessage(current, next_message, "realtime"))
-    window.dispatchEvent(new CustomEvent("amp-admin-queue-refresh"))
-  }, [])
+  const handle_room_message_insert = useCallback(
+    (next_message: ChatMessageRecord) => {
+      if (next_message.room_uuid !== room.room_uuid) {
+        console.info("[chat_realtime] ignored_room_uuid_mismatch", {
+          insert_room_uuid: next_message.room_uuid,
+          current_room_uuid: room.room_uuid,
+          message_uuid: next_message.message_uuid,
+        })
+        return
+      }
+
+      set_messages((current) => mergeMessage(current, next_message, "realtime"))
+      window.dispatchEvent(new CustomEvent("amp-admin-queue-refresh"))
+    },
+    [room.room_uuid],
+  )
 
   use_room_messages(room.room_uuid, {
     on_insert: handle_room_message_insert,
