@@ -47,6 +47,22 @@ export function get_city_options(
   return options.cities_by_prefecture[prefecture_code] ?? []
 }
 
+export function resolve_selected_city_code(
+  options: AddressOptions,
+  prefecture_code: string | null | undefined,
+  city_code: string | null | undefined,
+) {
+  if (!city_code) {
+    return ""
+  }
+
+  return get_city_options(options, prefecture_code).some(
+    (option) => option.code === city_code,
+  )
+    ? city_code
+    : ""
+}
+
 export function validate_address_selection(
   options: AddressOptions,
   input: {

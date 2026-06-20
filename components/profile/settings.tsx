@@ -5,7 +5,9 @@ import { useEffect, useState } from "react"
 
 import { useToast } from "@/components/ui/use_toast"
 import type { ProfileDisplayPayload } from "@/core/profile/output"
-import type { AddressOptions } from "@/src/address/rules"
+import AddressSelector from "@/src/address/selector"
+import { resolve_selected_city_code } from "@/src/address/rules"
+import { useAddressOptions } from "@/src/address/use_options"
 import { useLocale } from "@/src/components/locale/provider"
 import type { Locale } from "@/src/lib/locale"
 
@@ -130,15 +132,12 @@ export default function ProfileSettings({
     initial_profile.locale,
   )
   const [is_saving, set_is_saving] = useState(false)
-  const [address_options, set_address_options] = useState<AddressOptions>({
-    prefectures: [],
-    cities_by_prefecture: {},
-  })
-  const city_options =
-    address_options.cities_by_prefecture[prefecture_code] ?? []
-  const selected_city_code = city_options.some((option) => option.code === city_code)
-    ? city_code
-    : ""
+  const address_options = useAddressOptions(open)
+  const selected_city_code = resolve_selected_city_code(
+    address_options,
+    prefecture_code,
+    city_code,
+  )
 
   useEffect(() => {
     if (!open) {
@@ -154,47 +153,14 @@ export default function ProfileSettings({
     let cancelled = false
 
     async function load_profile() {
-      const [profile_response, address_response] = await Promise.all([
-        fetch("/api/profile", { cache: "no-store" }).catch((error) => {
+      const profile_response = await fetch("/api/profile", {
+        cache: "no-store",
+      }).catch((error) => {
           console.error("profile_load_failed", {
             error_message: error instanceof Error ? error.message : String(error),
           })
           return null
-        }),
-        fetch("/api/address", { cache: "no-store" }).catch((error) => {
-          console.error("address_options_load_failed", {
-            error_message: error instanceof Error ? error.message : String(error),
-          })
-          return null
-        }),
-      ])
-
-      if (address_response?.ok && !cancelled) {
-        const address_payload = (await address_response.json().catch(() => null)) as
-          | AddressOptions
-          | null
-
-        if (address_payload?.prefectures && address_payload.cities_by_prefecture) {
-          set_address_options(address_payload)
-
-          if (address_payload.prefectures.length === 0) {
-            console.error("address_options_load_failed", {
-              error_message: "No prefecture options returned",
-            })
-          }
-        } else {
-          console.error("address_options_load_failed", {
-            error_message: "Invalid address options response",
-          })
-        }
-      } else if (!cancelled) {
-        console.error("address_options_load_failed", {
-          status: address_response?.status ?? null,
-          error_message: address_response
-            ? "Address options request failed"
-            : "Address options request was not sent",
         })
-      }
 
       if (!profile_response?.ok || cancelled) {
         return
@@ -400,46 +366,28 @@ export default function ProfileSettings({
             />
           </label>
 
-          <div className="grid grid-cols-2 gap-2">
-            <label className="block">
-              <span className="mb-1 block text-[12px] font-semibold text-neutral-600">
-                {content.prefecture[locale]}
-              </span>
-              <select
-                value={prefecture_code}
-                onChange={(event) => {
-                  set_prefecture_code(event.target.value)
-                  set_city_code("")
-                }}
-                className="h-10 w-full rounded-md border border-neutral-200 px-3 text-[14px] text-neutral-950 outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100"
-              >
-                <option value="">{content.select_prefecture[locale]}</option>
-                {address_options.prefectures.map((option) => (
-                  <option key={option.code} value={option.code}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-[12px] font-semibold text-neutral-600">
-                {content.city[locale]}
-              </span>
-              <select
-                value={selected_city_code}
-                disabled={!prefecture_code}
-                onChange={(event) => set_city_code(event.target.value)}
-                className="h-10 w-full rounded-md border border-neutral-200 px-3 text-[14px] text-neutral-950 outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100 disabled:bg-neutral-50 disabled:text-neutral-400"
-              >
-                <option value="">{content.select_city[locale]}</option>
-                {city_options.map((option) => (
-                  <option key={option.code} value={option.code}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <AddressSelector
+            options={address_options}
+            prefecture_code={prefecture_code}
+            city_code={city_code}
+            labels={{
+              prefecture: content.prefecture[locale],
+              city: content.city[locale],
+              select_prefecture: content.select_prefecture[locale],
+              select_city: content.select_city[locale],
+            }}
+            classes={{
+              label: "block",
+              field_label:
+                "mb-1 block text-[12px] font-semibold text-neutral-600",
+              select:
+                "h-10 w-full rounded-md border border-neutral-200 px-3 text-[14px] text-neutral-950 outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100 disabled:bg-neutral-50 disabled:text-neutral-400",
+            }}
+            onChange={(value) => {
+              set_prefecture_code(value.prefecture_code)
+              set_city_code(value.city_code)
+            }}
+          />
 
           <label className="block">
             <span className="mb-1 block text-[12px] font-semibold text-neutral-600">

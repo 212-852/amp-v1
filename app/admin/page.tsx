@@ -9,11 +9,13 @@ export default async function AdminPage() {
 
   return (
     <AdminOpsFrame pathname="/admin" session={session}>
-      <AdminConciergeQueue
-        queue={queue}
-        variant="preview"
-        seeded_from_server
-      />
+      {queue.availability_enabled ? (
+        <AdminConciergeQueue
+          queue={queue}
+          variant="preview"
+          seeded_from_server
+        />
+      ) : null}
     </AdminOpsFrame>
   )
 }

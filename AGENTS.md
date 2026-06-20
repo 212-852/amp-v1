@@ -326,8 +326,11 @@ ADDRESS SELECTION RULE
 
 - Prefecture and city must always come from the centralized address core.
 - Source tables are prefectures and cities.
+- Shared address option flow is src/address/context.ts -> src/address/rules.ts -> src/address/action.ts -> src/address/output.ts.
+- Shared profile selector UI is src/address/selector.tsx.
 - UI must not hardcode prefecture or city lists.
 - UI must not create its own address arrays.
+- UI must not generate prefecture or city options inside individual pages/components.
 - Profile forms must use prefecture_code and city_code.
 - Free text is allowed only for address line, not prefecture or city.
 
