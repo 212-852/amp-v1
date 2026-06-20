@@ -57,6 +57,7 @@ export type ChatMessageMeta = {
   presence_action?: "enter" | "leave"
   actor_role?: ChatParticipantRole
   actor_display_name?: string
+  client_message_id?: string
 }
 
 export type ChatMessagePayload = {
@@ -165,6 +166,7 @@ export type ChatIncomingInput = {
   participant_uuid?: string | null
   room_uuid?: string | null
   external_id?: string | null
+  client_message_id?: string | null
   line_reply_token?: string | null
   line_provider_user_id?: string | null
   line_reply_allowed?: boolean

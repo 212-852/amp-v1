@@ -386,7 +386,6 @@ export default function AdminConciergeQueue({
     let cancelled = false
     let debounce_timer: number | null = null
     let initial_timer: number | null = null
-    let poll_timer: number | null = null
 
     function schedule_refresh() {
       if (debounce_timer) {
@@ -516,12 +515,6 @@ export default function AdminConciergeQueue({
       )
       .subscribe()
 
-    poll_timer = window.setInterval(() => {
-      if (!cancelled && document.visibilityState === "visible") {
-        void load_queue({ silent: true })
-      }
-    }, 10000)
-
     return () => {
       cancelled = true
 
@@ -531,10 +524,6 @@ export default function AdminConciergeQueue({
 
       if (initial_timer) {
         window.clearTimeout(initial_timer)
-      }
-
-      if (poll_timer) {
-        window.clearInterval(poll_timer)
       }
 
       void supabase.removeChannel(channel)

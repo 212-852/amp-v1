@@ -427,6 +427,10 @@ export async function resolveOwnedRoom(input: {
 export async function findChatRoomState(
   context: ChatContext,
   session: Session,
+  options?: {
+    before?: string | null
+    limit?: number
+  },
 ): Promise<ChatRoomState | null> {
   const identity = resolveRoomIdentity(context, session)
   const mode = resolveRoomMode(session)
@@ -453,7 +457,11 @@ export async function findChatRoomState(
     room_uuid: resolved.room.room_uuid,
     source_channel: context.source_channel,
   })
-  const messages = await loadRoomMessages(resolved.room.room_uuid)
+  const messages = await loadRoomMessages(
+    resolved.room.room_uuid,
+    options?.limit,
+    options?.before ?? null,
+  )
 
   await sendAuthDebug("chat_messages_fetch_completed", {
     room_uuid: resolved.room.room_uuid,
@@ -526,6 +534,10 @@ export async function loadChatRoomStateByUuid(
   session: Session,
   source_channel: Session["source_channel"],
   locale?: string | null,
+  options?: {
+    before?: string | null
+    limit?: number
+  },
 ): Promise<ChatRoomState | null> {
   const room = await findRoomByUuid(room_uuid)
 
@@ -575,7 +587,11 @@ export async function loadChatRoomStateByUuid(
   return {
     room,
     participant,
-    messages: await loadRoomMessages(room.room_uuid),
+    messages: await loadRoomMessages(
+      room.room_uuid,
+      options?.limit,
+      options?.before ?? null,
+    ),
     presence: await loadOnlinePresenceViews(room.room_uuid),
     concierge_available: await loadConciergeAvailability(),
   }

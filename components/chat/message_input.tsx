@@ -80,6 +80,17 @@ export default function ChatMessageInput({
       return
     }
 
+    const client_message_id = `client:${crypto.randomUUID()}`
+
+    window.dispatchEvent(
+      new CustomEvent("amp-chat-optimistic-message", {
+        detail: {
+          room_uuid,
+          body: message,
+          client_message_id,
+        },
+      }),
+    )
     set_is_sending(true)
 
     try {
@@ -88,10 +99,15 @@ export default function ChatMessageInput({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ message, locale, room_uuid }),
+        body: JSON.stringify({ message, locale, room_uuid, client_message_id }),
       })
 
       if (!response.ok) {
+        window.dispatchEvent(
+          new CustomEvent("amp-chat-message-failed", {
+            detail: { client_message_id },
+          }),
+        )
         return
       }
 
@@ -99,6 +115,12 @@ export default function ChatMessageInput({
       send_typing(false)
       window.dispatchEvent(new CustomEvent("amp-chat-message-created"))
       on_sent?.()
+    } catch {
+      window.dispatchEvent(
+        new CustomEvent("amp-chat-message-failed", {
+          detail: { client_message_id },
+        }),
+      )
     } finally {
       set_is_sending(false)
     }

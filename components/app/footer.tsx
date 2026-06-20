@@ -597,13 +597,42 @@ export default function AppFooter({
   }
 
   async function handleSendMessage(message: string) {
-    await fetch("/api/chat/room", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ message, locale }),
-    })
+    const client_message_id = `client:${crypto.randomUUID()}`
+
+    window.dispatchEvent(
+      new CustomEvent("amp-chat-optimistic-message", {
+        detail: {
+          body: message,
+          client_message_id,
+        },
+      }),
+    )
+
+    try {
+      const response = await fetch("/api/chat/room", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ message, locale, client_message_id }),
+      })
+
+      if (!response.ok) {
+        window.dispatchEvent(
+          new CustomEvent("amp-chat-message-failed", {
+            detail: { client_message_id },
+          }),
+        )
+        return
+      }
+    } catch {
+      window.dispatchEvent(
+        new CustomEvent("amp-chat-message-failed", {
+          detail: { client_message_id },
+        }),
+      )
+      return
+    }
 
     await refreshCurrentMode()
     window.dispatchEvent(new CustomEvent("amp-chat-message-created"))

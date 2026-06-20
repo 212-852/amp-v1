@@ -49,6 +49,12 @@ export async function GET(request: Request) {
     const { context, session } = await resolveChatApiSession()
     const url = new URL(request.url)
     const room_uuid = url.searchParams.get("room_uuid")
+    const before = url.searchParams.get("before")
+    const limit_value = Number(url.searchParams.get("limit") ?? "30")
+    const limit =
+      Number.isFinite(limit_value) && limit_value > 0
+        ? Math.min(Math.floor(limit_value), 50)
+        : 30
     const request_locale = url.searchParams.get("locale") ?? context.locale
     const locale_decision = resolveOutputLocaleDecision({
       preferred: request_locale,
@@ -70,10 +76,14 @@ export async function GET(request: Request) {
       ? await resolveAdminChatRoom(room_uuid, session, {
           source_channel: context.source_channel,
           locale: request_locale,
+          before,
+          limit,
         })
       : await loadChatRoom(session, {
           source_channel: context.source_channel,
           locale: request_locale,
+          before,
+          limit,
         })
 
     if (!state) {
@@ -123,6 +133,7 @@ export async function POST(request: Request) {
       trigger?: "quick_menu_requested" | "chat_opened"
       locale?: string
       room_uuid?: string
+      client_message_id?: string
     }
     const request_locale =
       typeof body.locale === "string" && body.locale.trim()
@@ -180,6 +191,10 @@ export async function POST(request: Request) {
       room_uuid:
         typeof body.room_uuid === "string" && body.room_uuid.trim()
           ? body.room_uuid.trim()
+          : null,
+      client_message_id:
+        typeof body.client_message_id === "string" && body.client_message_id.trim()
+          ? body.client_message_id.trim()
           : null,
     })
 

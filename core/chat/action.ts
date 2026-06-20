@@ -433,6 +433,8 @@ export async function resolveChatRoom(
   input?: {
     source_channel?: Session["source_channel"]
     locale?: string | null
+    before?: string | null
+    limit?: number
   },
 ): Promise<ChatRoomState | null> {
   const context = buildChatContext(session, {
@@ -440,7 +442,10 @@ export async function resolveChatRoom(
     locale: input?.locale ?? null,
   })
 
-  return findChatRoomState(context, session)
+  return findChatRoomState(context, session, {
+    before: input?.before ?? null,
+    limit: input?.limit,
+  })
 }
 
 export async function loadChatRoom(
@@ -448,6 +453,8 @@ export async function loadChatRoom(
   input?: {
     source_channel?: Session["source_channel"]
     locale?: string | null
+    before?: string | null
+    limit?: number
   },
 ): Promise<ChatRoomState | null> {
   const context = buildChatContext(session, {
@@ -594,6 +601,7 @@ export async function handleIncomingChatMessageArchive(
       meta: {
         actor_role: participant.role,
         actor_display_name,
+        client_message_id: input.client_message_id ?? undefined,
       },
     },
   })
@@ -1003,6 +1011,8 @@ export async function resolveAdminChatRoom(
   input?: {
     source_channel?: Session["source_channel"]
     locale?: string | null
+    before?: string | null
+    limit?: number
   },
 ) {
   if (session.role !== "admin") {
@@ -1014,6 +1024,10 @@ export async function resolveAdminChatRoom(
     session,
     input?.source_channel ?? session.source_channel,
     input?.locale ?? null,
+    {
+      before: input?.before ?? null,
+      limit: input?.limit,
+    },
   )
 
   if (!state) {

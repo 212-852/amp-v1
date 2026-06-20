@@ -1228,7 +1228,11 @@ async function touchRoomUpdatedAt(room_uuid: string) {
   )
 }
 
-export async function loadRoomMessages(room_uuid: string, limit = 50) {
+export async function loadRoomMessages(
+  room_uuid: string,
+  limit = 30,
+  before?: string | null,
+) {
   const config = getRestConfig()
 
   if (!config) {
@@ -1239,7 +1243,15 @@ export async function loadRoomMessages(room_uuid: string, limit = 50) {
     restUrl(
       config,
       "messages",
-      `room_uuid=eq.${encodeURIComponent(room_uuid)}&select=*&order=created_at.asc&limit=${limit}`,
+      [
+        `room_uuid=eq.${encodeURIComponent(room_uuid)}`,
+        before ? `created_at=lt.${encodeURIComponent(before)}` : null,
+        "select=*",
+        "order=created_at.desc",
+        `limit=${Math.min(Math.max(limit, 1), 50)}`,
+      ]
+        .filter(Boolean)
+        .join("&"),
     ),
     {
       headers: restHeaders(config),
@@ -1251,7 +1263,7 @@ export async function loadRoomMessages(room_uuid: string, limit = 50) {
     return []
   }
 
-  return (await response.json()) as ChatMessageRecord[]
+  return ((await response.json()) as ChatMessageRecord[]).reverse()
 }
 
 export async function countRoomMessages(room_uuid: string) {
