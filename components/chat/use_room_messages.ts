@@ -19,12 +19,6 @@ type RoomMessageSubscriptionOptions = {
   visitor_uuid?: string | null
 }
 
-const INSERT_SUBSCRIPTION = {
-  event: "INSERT" as const,
-  schema: "public",
-  table: "messages",
-}
-
 function readPayloadNewRecord(payload: unknown) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return null

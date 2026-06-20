@@ -5,7 +5,12 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { send_chat_realtime_debug } from "@/components/chat/realtime_debug"
 import type { ChatRoomState } from "@/core/chat/types"
 import { useLocale } from "@/src/components/locale/provider"
-import type { Locale } from "@/src/lib/locale"
+import {
+  default_locale,
+  get_browser_locale,
+  get_stored_locale,
+  type Locale,
+} from "@/src/lib/locale"
 
 type ChatRoomApiPayload = {
   room: ChatRoomState["room"] | null
@@ -17,6 +22,8 @@ type ChatRoomApiPayload = {
 
 let bootstrap_promise: Promise<ChatRoomState | null> | null = null
 let bootstrap_promise_locale: Locale | null = null
+let bootstrap_session_room_uuid: string | null = null
+let bootstrap_session_in_flight = false
 const CHAT_BOOTSTRAP_TIMEOUT_MS = 3000
 
 export type ChatRoomBootstrapViewState = {
@@ -36,6 +43,14 @@ function logClientBootstrap(
   data: Record<string, unknown> = {},
 ) {
   console.info(`[chat_bootstrap] ${event}`, data)
+}
+
+function resolveBootstrapLocale(fallback: Locale = default_locale): Locale {
+  if (typeof window === "undefined") {
+    return fallback
+  }
+
+  return get_stored_locale() ?? get_browser_locale() ?? fallback
 }
 
 async function bootstrapChatRoomRequest(locale: Locale): Promise<ChatRoomState | null> {
@@ -111,7 +126,6 @@ export function useChatRoomBootstrap(
   const resolved_room_uuid_ref = useRef<string | null>(
     initial_state?.room?.room_uuid ?? null,
   )
-  const active_locale_ref = useRef(locale)
 
   const clearBootstrapTimeout = useCallback((reason: string) => {
     if (!timeout_ref.current) {
@@ -131,6 +145,8 @@ export function useChatRoomBootstrap(
   const applyResolvedState = useCallback(
     (state: ChatRoomState) => {
       resolved_room_uuid_ref.current = state.room.room_uuid
+      bootstrap_session_room_uuid = state.room.room_uuid
+      bootstrap_session_in_flight = false
       clearBootstrapTimeout("resolve_success")
       set_chat_state(state)
       set_timed_out(false)
@@ -155,44 +171,38 @@ export function useChatRoomBootstrap(
   useEffect(() => {
     if (initial_state?.room?.room_uuid) {
       resolved_room_uuid_ref.current = initial_state.room.room_uuid
-      set_loading(false)
+      bootstrap_session_room_uuid = initial_state.room.room_uuid
       return
     }
 
-    if (active_locale_ref.current !== locale) {
-      active_locale_ref.current = locale
-      bootstrap_promise = null
-      bootstrap_promise_locale = null
-      resolved_room_uuid_ref.current = null
-      set_chat_state(null)
-      set_timed_out(false)
-    }
-
-    if (resolved_room_uuid_ref.current) {
-      set_loading(false)
+    if (bootstrap_session_room_uuid || resolved_room_uuid_ref.current) {
       return
     }
 
     let cancelled = false
     request_id_ref.current += 1
     const current_request_id = request_id_ref.current
+    const bootstrap_locale =
+      bootstrap_promise_locale ?? resolveBootstrapLocale(default_locale)
 
-    clearBootstrapTimeout("new_resolve")
-    set_loading(true)
-    set_timed_out(false)
+    if (!bootstrap_session_in_flight) {
+      bootstrap_session_in_flight = true
+      clearBootstrapTimeout("new_resolve")
 
-    timeout_ref.current = window.setTimeout(() => {
-      timeout_ref.current = null
+      timeout_ref.current = window.setTimeout(() => {
+        timeout_ref.current = null
 
-      if (resolved_room_uuid_ref.current) {
-        return
-      }
+        if (resolved_room_uuid_ref.current || bootstrap_session_room_uuid) {
+          return
+        }
 
-      set_timed_out(true)
-      set_loading(false)
-    }, CHAT_BOOTSTRAP_TIMEOUT_MS)
+        set_timed_out(true)
+        set_loading(false)
+        bootstrap_session_in_flight = false
+      }, CHAT_BOOTSTRAP_TIMEOUT_MS)
+    }
 
-    void getBootstrapPromise(locale).then((state) => {
+    void getBootstrapPromise(bootstrap_locale).then((state) => {
       if (cancelled || current_request_id !== request_id_ref.current) {
         logClientBootstrap("user_chat_resolve_ignored_stale_request", {
           current_request_id,
@@ -206,10 +216,11 @@ export function useChatRoomBootstrap(
         return
       }
 
-      if (resolved_room_uuid_ref.current) {
+      if (resolved_room_uuid_ref.current || bootstrap_session_room_uuid) {
         return
       }
 
+      bootstrap_session_in_flight = false
       clearBootstrapTimeout("resolve_empty")
       set_timed_out(true)
       set_loading(false)
@@ -219,7 +230,7 @@ export function useChatRoomBootstrap(
       cancelled = true
       clearBootstrapTimeout("unmount")
     }
-  }, [applyResolvedState, clearBootstrapTimeout, initial_state?.room?.room_uuid, locale])
+  }, [applyResolvedState, clearBootstrapTimeout, initial_state?.room?.room_uuid])
 
   const render_state = chat_state
     ? chat_state.messages.length > 0
@@ -250,6 +261,8 @@ export function useChatRoomBootstrap(
   const retry = useCallback(() => {
     bootstrap_promise = null
     bootstrap_promise_locale = null
+    bootstrap_session_room_uuid = null
+    bootstrap_session_in_flight = false
     resolved_room_uuid_ref.current = null
     set_chat_state(null)
     set_timed_out(false)
@@ -258,9 +271,11 @@ export function useChatRoomBootstrap(
     const current_request_id = request_id_ref.current
 
     clearBootstrapTimeout("retry")
+    bootstrap_session_in_flight = true
     timeout_ref.current = window.setTimeout(() => {
       timeout_ref.current = null
-      if (!resolved_room_uuid_ref.current) {
+      if (!resolved_room_uuid_ref.current && !bootstrap_session_room_uuid) {
+        bootstrap_session_in_flight = false
         set_timed_out(true)
         set_loading(false)
       }
@@ -276,7 +291,8 @@ export function useChatRoomBootstrap(
         return
       }
 
-      if (!resolved_room_uuid_ref.current) {
+      if (!resolved_room_uuid_ref.current && !bootstrap_session_room_uuid) {
+        bootstrap_session_in_flight = false
         clearBootstrapTimeout("resolve_empty")
         set_timed_out(true)
         set_loading(false)

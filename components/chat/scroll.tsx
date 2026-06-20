@@ -15,7 +15,7 @@ type ChatScrollButtonProps = {
 
 export default function ChatScrollButton({
   container_ref,
-  bottom_ref: _bottom_ref,
+  bottom_ref,
   placement = "panel",
 }: Readonly<ChatScrollButtonProps>) {
   const [is_visible, set_is_visible] = useState(false)
@@ -31,6 +31,7 @@ export default function ChatScrollButton({
       top: container.scrollHeight,
       behavior,
     })
+    bottom_ref.current?.scrollIntoView({ behavior, block: "end" })
     window.dispatchEvent(new CustomEvent("amp-chat-scroll-bottom"))
   }
 

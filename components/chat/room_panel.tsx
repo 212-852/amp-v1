@@ -190,15 +190,20 @@ export default function ChatRoomPanel({
         return
       }
 
-      container.scrollTo({
-        top: container.scrollHeight,
-        behavior,
-      })
-      window.requestAnimationFrame(() => {
-        container.scrollTo({
-          top: container.scrollHeight,
+      const container_element = container
+
+      function scroll() {
+        container_element.scrollTo({
+          top: container_element.scrollHeight,
           behavior,
         })
+        bottom_ref.current?.scrollIntoView({ behavior, block: "end" })
+      }
+
+      scroll()
+      window.requestAnimationFrame(() => {
+        scroll()
+        window.setTimeout(scroll, 80)
       })
     })
   }, [])
@@ -419,9 +424,13 @@ export default function ChatRoomPanel({
     }
 
     window.addEventListener("amp-chat-scroll-bottom", handle_scroll_bottom)
+    window.addEventListener("amp-chat-input-resized", handle_scroll_bottom)
+    window.addEventListener("resize", handle_scroll_bottom)
 
     return () => {
       window.removeEventListener("amp-chat-scroll-bottom", handle_scroll_bottom)
+      window.removeEventListener("amp-chat-input-resized", handle_scroll_bottom)
+      window.removeEventListener("resize", handle_scroll_bottom)
     }
   }, [scroll_to_bottom])
 
@@ -688,8 +697,8 @@ export default function ChatRoomPanel({
     : filterUserVisibleChatMessages(messages)
 
   const scroll_class = fill_height
-    ? "h-full space-y-4 overflow-y-auto pt-0 pb-[var(--chat-message-bottom-padding,24px)]"
-    : "max-h-[calc(100dvh-220px)] space-y-4 overflow-y-auto pt-0 pb-[var(--chat-message-bottom-padding,24px)]"
+    ? "h-full space-y-4 overflow-y-auto pt-0"
+    : "max-h-[calc(100dvh-220px)] space-y-4 overflow-y-auto pt-0"
 
   return (
     <section
@@ -723,6 +732,10 @@ export default function ChatRoomPanel({
       <div
         ref={scroll_ref}
         className={scroll_class}
+        style={{
+          paddingBottom:
+            "var(--chat-message-bottom-padding, calc(var(--chat-composer-height, var(--chat-input-height, 88px)) + env(safe-area-inset-bottom, 0px) + 32px))",
+        }}
         onScroll={(event) => {
           const target = event.currentTarget
           is_near_bottom_ref.current =
@@ -750,7 +763,7 @@ export default function ChatRoomPanel({
             {typing_label}
           </p>
         ) : null}
-        <div ref={bottom_ref} />
+        <div ref={bottom_ref} className="h-2" />
       </div>
     </section>
   )

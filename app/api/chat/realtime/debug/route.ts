@@ -27,6 +27,10 @@ const realtime_events = new Set([
   "user_chat_render_state",
   "user_chat_timeout_cancelled",
   "user_chat_resolve_ignored_stale_request",
+  "chat_input_cleared",
+  "chat_send_started",
+  "chat_send_success",
+  "chat_send_failed",
 ])
 
 export async function POST(request: Request) {

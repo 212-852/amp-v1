@@ -8,6 +8,7 @@ import type { RefObject } from "react"
 
 import ConciergeMemberModal from "@/components/app/concierge_member_modal"
 import ChatSendButton from "@/components/chat/send_button"
+import { send_chat_realtime_debug } from "@/components/chat/realtime_debug"
 import {
   create_client_message_id,
   dispatch_message_archived,
@@ -337,6 +338,7 @@ function MessageInputRow({
             onChange={(event) => {
               on_input_change(event.target.value)
               onTyping(event.target.value.trim().length > 0)
+              window.dispatchEvent(new CustomEvent("amp-chat-input-resized"))
             }}
             onKeyDown={(event) => {
               if (event.key === "Enter" && event.shiftKey) {
@@ -614,17 +616,32 @@ export default function AppFooter({
       return
     }
 
+    const room_uuid = chat_room_ref.current.room_uuid
+    const client_message_id = create_client_message_id()
+
+    dispatch_optimistic_message({
+      room_uuid,
+      participant_uuid: chat_room_ref.current.participant_uuid,
+      body: text,
+      client_message_id,
+    })
+
     flushSync(() => {
       input_value_ref.current = ""
       set_input_value("")
+      if (message_input_ref.current) {
+        message_input_ref.current.value = ""
+      }
+      send_chat_realtime_debug("chat_input_cleared", {
+        view: "user",
+        room_uuid,
+      })
     })
     handleTyping(false)
 
-    const client_message_id = create_client_message_id()
-    dispatch_optimistic_message({
-      room_uuid: chat_room_ref.current.room_uuid,
-      participant_uuid: chat_room_ref.current.participant_uuid,
-      body: text,
+    send_chat_realtime_debug("chat_send_started", {
+      view: "user",
+      room_uuid,
       client_message_id,
     })
 
@@ -640,9 +657,20 @@ export default function AppFooter({
         })
 
         if (!result.ok) {
+          send_chat_realtime_debug("chat_send_failed", {
+            view: "user",
+            room_uuid,
+            client_message_id,
+          })
           dispatch_message_failed(client_message_id)
           return
         }
+
+        send_chat_realtime_debug("chat_send_success", {
+          view: "user",
+          room_uuid,
+          client_message_id,
+        })
 
         if (result.payload?.message) {
           dispatch_message_archived({
@@ -653,6 +681,11 @@ export default function AppFooter({
 
         dispatch_message_created()
       } catch {
+        send_chat_realtime_debug("chat_send_failed", {
+          view: "user",
+          room_uuid,
+          client_message_id,
+        })
         dispatch_message_failed(client_message_id)
       } finally {
         is_sending_ref.current = false

@@ -89,6 +89,10 @@ const chatRealtimeEvents = new Set([
   "chat_realtime_channel_error",
   "user_chat_realtime_subscribe_creating",
   "user_chat_realtime_subscribed",
+  "chat_input_cleared",
+  "chat_send_started",
+  "chat_send_success",
+  "chat_send_failed",
 ])
 
 const userChatLoadEvents = new Set([
