@@ -921,6 +921,7 @@ export async function handleChatRoomPresence(input: ChatRoomPresenceInput) {
       room_uuid: room.room_uuid,
       participant_uuid: participant.participant_uuid,
     })
+    const body = resolvePresenceSystemMessage("enter", display_name, room.locale)
 
     await syncConciergeOdinAdminPresence({
       room,
@@ -934,13 +935,14 @@ export async function handleChatRoomPresence(input: ChatRoomPresenceInput) {
       source_channel: input.source_channel,
       source_kind: "system",
       type: "system",
-      body: resolvePresenceSystemMessage("enter", display_name, room.locale),
+      body,
       original_locale: room.locale,
       session: input.session,
       payload: {
         meta: {
           presence_action: "enter",
           actor_role: participant.role,
+          actor_display_name: display_name,
         },
       },
     })
@@ -957,6 +959,7 @@ export async function handleChatRoomPresence(input: ChatRoomPresenceInput) {
     room_uuid: room.room_uuid,
     participant_uuid: participant.participant_uuid,
   })
+  const body = resolvePresenceSystemMessage("leave", display_name, room.locale)
 
   await syncConciergeOdinAdminPresence({
     room,
@@ -970,13 +973,14 @@ export async function handleChatRoomPresence(input: ChatRoomPresenceInput) {
     source_channel: input.source_channel,
     source_kind: "system",
     type: "system",
-    body: resolvePresenceSystemMessage("leave", display_name, room.locale),
+    body,
     original_locale: room.locale,
     session: input.session,
     payload: {
       meta: {
         presence_action: "leave",
         actor_role: participant.role,
+        actor_display_name: display_name,
       },
     },
   })
