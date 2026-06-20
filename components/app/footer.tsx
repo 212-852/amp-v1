@@ -303,7 +303,7 @@ function MessageInputRow({
   input_ref,
 }: Readonly<{
   locale: Locale
-  onSend: (message: string, clear_input: () => void) => Promise<void>
+  onSend: (message: string) => Promise<void>
   onTyping: (is_typing: boolean) => void
   input_ref?: RefObject<HTMLTextAreaElement | null>
 }>) {
@@ -311,19 +311,18 @@ function MessageInputRow({
   const [is_sending, set_is_sending] = useState(false)
 
   async function handleSend() {
-    const message = draft.trim()
+    const text = draft.trim()
 
-    if (!message || is_sending) {
+    if (!text || is_sending) {
       return
     }
 
+    set_draft("")
     onTyping(false)
     set_is_sending(true)
 
     try {
-      await onSend(message, () => {
-        set_draft("")
-      })
+      await onSend(text)
     } finally {
       set_is_sending(false)
     }
@@ -606,10 +605,7 @@ export default function AppFooter({
     return false
   }
 
-  async function handleSendMessage(
-    message: string,
-    clear_input: () => void,
-  ) {
+  async function handleSendMessage(message: string) {
     const client_message_id = `client:${crypto.randomUUID()}`
 
     window.dispatchEvent(
@@ -622,7 +618,6 @@ export default function AppFooter({
         },
       }),
     )
-    clear_input()
 
     try {
       const response = await fetch("/api/chat/room", {

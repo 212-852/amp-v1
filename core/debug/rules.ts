@@ -77,6 +77,7 @@ const chatRealtimeEvents = new Set([
   "chat_realtime_subscribe_start",
   "chat_realtime_subscription_details",
   "chat_realtime_subscribed",
+  "chat_realtime_raw_event_received",
   "chat_realtime_insert_received",
   "chat_realtime_filter_pass",
   "chat_realtime_payload_rejected",

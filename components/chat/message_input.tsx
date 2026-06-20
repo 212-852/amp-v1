@@ -76,11 +76,14 @@ export default function ChatMessageInput({
   }
 
   async function send_message() {
-    const sent_text = value.trim()
+    const text = value.trim()
 
-    if (!sent_text || is_sending) {
+    if (!text || is_sending) {
       return
     }
+
+    set_value("")
+    send_typing(false)
 
     const client_message_id = `client:${crypto.randomUUID()}`
 
@@ -89,13 +92,11 @@ export default function ChatMessageInput({
         detail: {
           room_uuid,
           participant_uuid,
-          body: sent_text,
+          body: text,
           client_message_id,
         },
       }),
     )
-    set_value("")
-    send_typing(false)
     set_is_sending(true)
 
     try {
@@ -105,7 +106,7 @@ export default function ChatMessageInput({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          message: sent_text,
+          message: text,
           locale,
           room_uuid,
           client_message_id,
