@@ -2,7 +2,7 @@
 
 import { send_chat_realtime_debug } from "@/components/chat/realtime_debug"
 
-export const CHAT_NEAR_BOTTOM_THRESHOLD = 240
+export const CHAT_NEAR_BOTTOM_THRESHOLD = 120
 
 export const CHAT_BOTTOM_SPACER_CLASS = "chat-bottom-spacer"
 
@@ -47,10 +47,12 @@ export function scroll_to_latest_message(
     return
   }
 
-  const scroll_height = container.scrollHeight
-  const client_height = container.clientHeight
-  const distance_from_bottom = read_distance_from_bottom(container)
-  const is_near_bottom = target.is_near_bottom ?? is_chat_near_bottom(container)
+  const scroll_container = container
+  const scroll_height = scroll_container.scrollHeight
+  const client_height = scroll_container.clientHeight
+  const distance_from_bottom = read_distance_from_bottom(scroll_container)
+  const is_near_bottom =
+    target.is_near_bottom ?? is_chat_near_bottom(scroll_container)
 
   if (!force) {
     if (reason === "realtime_receive" && !is_near_bottom) {
@@ -71,7 +73,11 @@ export function scroll_to_latest_message(
     client_height,
   })
 
-  window.requestAnimationFrame(() => {
+  function scroll() {
+    scroll_container.scrollTo({
+      top: scroll_container.scrollHeight,
+      behavior: "smooth",
+    })
     target.bottom_anchor?.scrollIntoView({
       block: "end",
       behavior: "smooth",
@@ -80,8 +86,12 @@ export function scroll_to_latest_message(
     send_chat_realtime_debug("chat_scroll_done", {
       reason,
       view: target.view,
-      distance_from_bottom_after: read_distance_from_bottom(container),
+      distance_from_bottom_after: read_distance_from_bottom(scroll_container),
     })
+  }
+
+  window.requestAnimationFrame(() => {
+    window.setTimeout(scroll, 0)
   })
 }
 

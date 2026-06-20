@@ -330,7 +330,7 @@ export default function ChatRoomPanel({
             ? result.messages.length
             : filterUserVisibleChatMessages(result.messages).length
 
-          should_scroll_realtime = true
+          should_scroll_realtime = is_near_bottom_ref.current
 
           console.log("[chat realtime] append message", {
             room_uuid: next_message.room_uuid,
@@ -365,7 +365,7 @@ export default function ChatRoomPanel({
       })
 
       if (should_scroll_realtime) {
-        queue_scroll_to_latest("realtime_receive", true)
+        queue_scroll_to_latest("realtime_receive", false)
       }
 
       window.dispatchEvent(new CustomEvent("amp-admin-queue-refresh"))
@@ -756,6 +756,7 @@ export default function ChatRoomPanel({
         bottom_ref={bottom_ref}
         placement={scroll_button_placement}
         view={realtime_debug_context.view}
+        locale={locale}
       />
       {show_presence && room.mode !== "concierge" ? (
         <div className="mb-3 shrink-0 rounded-md border border-neutral-200 bg-white px-3 py-2 text-[12px] font-medium text-neutral-600">

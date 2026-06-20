@@ -13,12 +13,22 @@ import {
   scroll_to_latest_message,
   type ChatScrollView,
 } from "@/components/chat/scroll_to_bottom"
+import type { Locale } from "@/src/lib/locale"
+
+const content = {
+  new_message: {
+    ja: "新着メッセージ",
+    en: "New message",
+    es: "Nuevo mensaje",
+  },
+} satisfies Record<string, Record<Locale, string>>
 
 type ChatScrollButtonProps = {
   container_ref: RefObject<HTMLElement | null>
   bottom_ref: RefObject<HTMLElement | null>
   placement?: "panel" | "above_input"
   view: ChatScrollView
+  locale: Locale
 }
 
 export default function ChatScrollButton({
@@ -26,6 +36,7 @@ export default function ChatScrollButton({
   bottom_ref,
   placement = "panel",
   view,
+  locale,
 }: Readonly<ChatScrollButtonProps>) {
   const [is_visible, set_is_visible] = useState(false)
 
@@ -85,11 +96,12 @@ export default function ChatScrollButton({
       aria-label="Scroll to latest message"
       onClick={jump_to_bottom}
       className={[
-        "inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-white shadow-sm transition hover:bg-black/80 active:scale-95",
+        "inline-flex h-9 items-center justify-center gap-1.5 rounded-full bg-black/70 px-3 text-[12px] font-medium text-white shadow-sm transition hover:bg-black/80 active:scale-95",
         placement === "panel" ? "absolute right-3 top-3 z-20" : "",
       ].join(" ")}
     >
       <ArrowDown aria-hidden="true" className="h-4 w-4" />
+      <span>{content.new_message[locale]}</span>
     </button>
   )
 
