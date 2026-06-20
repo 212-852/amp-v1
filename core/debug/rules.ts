@@ -74,11 +74,16 @@ const chatFlowInfoEvents = new Set([
 ])
 
 const chatRealtimeEvents = new Set([
+  "chat_realtime_subscribe_start",
+  "chat_realtime_subscription_details",
   "chat_realtime_subscribed",
   "chat_realtime_insert_received",
+  "chat_realtime_filter_pass",
+  "chat_realtime_payload_rejected",
   "chat_realtime_insert_append_done",
   "chat_realtime_insert_duplicate_skipped",
   "chat_realtime_insert_room_mismatch",
+  "chat_realtime_render_done",
   "chat_optimistic_append_done",
   "chat_realtime_channel_error",
   "user_chat_realtime_subscribe_creating",

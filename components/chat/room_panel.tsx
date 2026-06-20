@@ -249,6 +249,17 @@ export default function ChatRoomPanel({
   const handle_room_message_insert = useCallback(
     (next_message: ChatMessageRecord) => {
       if (next_message.room_uuid !== room.room_uuid) {
+        send_chat_realtime_debug("chat_realtime_payload_rejected", {
+          receiver_view: realtime_debug_context.view,
+          room_uuid: room.room_uuid,
+          incoming_room_uuid: next_message.room_uuid,
+          message_uuid: next_message.message_uuid,
+          client_message_id: getClientMessageId(next_message),
+          sender_uuid: next_message.participant_uuid ?? null,
+          current_user_uuid: realtime_debug_context.current_user_uuid,
+          visitor_uuid: realtime_debug_context.visitor_uuid ?? null,
+          reason: "panel_room_mismatch",
+        })
         send_chat_realtime_debug("chat_realtime_insert_room_mismatch", {
           receiver_view: realtime_debug_context.view,
           room_uuid: room.room_uuid,
@@ -309,6 +320,14 @@ export default function ChatRoomPanel({
             sender_uuid: result.sender_uuid,
             current_user_uuid: realtime_debug_context.current_user_uuid,
             visitor_uuid: realtime_debug_context.visitor_uuid ?? null,
+            rendered_count,
+          })
+          send_chat_realtime_debug("chat_realtime_render_done", {
+            receiver_view: realtime_debug_context.view,
+            room_uuid: room.room_uuid,
+            message_uuid: result.incoming_message_uuid,
+            client_message_id: result.incoming_client_message_id,
+            sender_uuid: result.sender_uuid,
             rendered_count,
           })
         }

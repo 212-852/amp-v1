@@ -1,11 +1,16 @@
 "use client"
 
 type ChatRealtimeDebugEvent =
+  | "chat_realtime_subscribe_start"
+  | "chat_realtime_subscription_details"
   | "chat_realtime_subscribed"
   | "chat_realtime_insert_received"
+  | "chat_realtime_filter_pass"
+  | "chat_realtime_payload_rejected"
   | "chat_realtime_insert_append_done"
   | "chat_realtime_insert_duplicate_skipped"
   | "chat_realtime_insert_room_mismatch"
+  | "chat_realtime_render_done"
   | "chat_optimistic_append_done"
   | "chat_realtime_channel_error"
   | "user_chat_realtime_subscribe_creating"
@@ -29,6 +34,14 @@ export type ChatRealtimeDebugPayload = {
   visitor_uuid?: string | null
   rendered_count?: number
   reason?: string | null
+  eventType?: string | null
+  channel_name?: string | null
+  schema?: string | null
+  table?: string | null
+  event?: string | null
+  filter?: string | null
+  filter_mode?: string | null
+  payload_new?: unknown
   [key: string]: unknown
 }
 
