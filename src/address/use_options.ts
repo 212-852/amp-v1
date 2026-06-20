@@ -2,18 +2,14 @@
 
 import { useEffect, useState } from "react"
 
+import { ADDRESS_OPTIONS } from "@/src/address/options"
 import type { AddressOptions } from "@/src/address/rules"
-
-const EMPTY_ADDRESS_OPTIONS: AddressOptions = {
-  prefectures: [],
-  cities_by_prefecture: {},
-}
 
 export function useAddressOptions() {
   const [address_options, set_address_options] = useState<AddressOptions>(
-    EMPTY_ADDRESS_OPTIONS,
+    ADDRESS_OPTIONS,
   )
-  const [is_loading, set_is_loading] = useState(true)
+  const [is_loading, set_is_loading] = useState(false)
   const [error_message, set_error_message] = useState<string | null>(null)
 
   useEffect(() => {
