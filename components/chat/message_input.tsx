@@ -91,6 +91,8 @@ export default function ChatMessageInput({
         },
       }),
     )
+    set_value("")
+    send_typing(false)
     set_is_sending(true)
 
     try {
@@ -126,8 +128,6 @@ export default function ChatMessageInput({
         )
       }
 
-      set_value("")
-      send_typing(false)
       window.dispatchEvent(new CustomEvent("amp-chat-message-created"))
       on_sent?.()
     } catch {

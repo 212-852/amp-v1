@@ -94,7 +94,7 @@ function mergeMessage(
   })
 
   if (!replaced) {
-    console.log("[chat realtime] appended", {
+    console.log("[chat realtime] append message", {
       room_uuid: next_message.room_uuid,
       message_uuid: next_message.message_uuid,
       source,
@@ -214,6 +214,15 @@ export default function ChatRoomPanel({
   const bottom_ref = useRef<HTMLDivElement>(null)
   const scroll_ref = useRef<HTMLDivElement>(null)
   const is_near_bottom_ref = useRef(true)
+
+  const scroll_to_bottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    window.requestAnimationFrame(() => {
+      bottom_ref.current?.scrollIntoView({ behavior, block: "end" })
+      window.requestAnimationFrame(() => {
+        bottom_ref.current?.scrollIntoView({ behavior, block: "end" })
+      })
+    })
+  }, [])
 
   useEffect(() => {
     console.log("[chat realtime] room_uuid", {
@@ -339,13 +348,19 @@ export default function ChatRoomPanel({
 
   useEffect(() => {
     if (is_near_bottom_ref.current) {
-      bottom_ref.current?.scrollIntoView({ behavior: "smooth" })
+      scroll_to_bottom("smooth")
     }
-  }, [messages.length, typing.length])
+  }, [messages.length, scroll_to_bottom, typing.length])
+
+  useEffect(() => {
+    is_near_bottom_ref.current = true
+    scroll_to_bottom("auto")
+  }, [room.room_uuid, scroll_to_bottom])
 
   useEffect(() => {
     function handle_scroll_bottom() {
-      bottom_ref.current?.scrollIntoView({ behavior: "smooth" })
+      is_near_bottom_ref.current = true
+      scroll_to_bottom("smooth")
     }
 
     window.addEventListener("amp-chat-scroll-bottom", handle_scroll_bottom)
@@ -353,7 +368,7 @@ export default function ChatRoomPanel({
     return () => {
       window.removeEventListener("amp-chat-scroll-bottom", handle_scroll_bottom)
     }
-  }, [])
+  }, [scroll_to_bottom])
 
   useEffect(() => {
     function handle_mode_change(event: Event) {
@@ -425,6 +440,7 @@ export default function ChatRoomPanel({
           "optimistic",
         ),
       )
+      scroll_to_bottom("smooth")
     }
 
     window.addEventListener("amp-chat-optimistic-message", handle_optimistic_message)
@@ -440,6 +456,7 @@ export default function ChatRoomPanel({
     participant_uuid,
     room.locale,
     room.room_uuid,
+    scroll_to_bottom,
     show_presence,
   ])
 
@@ -468,6 +485,7 @@ export default function ChatRoomPanel({
           "archive_response",
         ),
       )
+      scroll_to_bottom("smooth")
     }
 
     window.addEventListener("amp-chat-message-archived", handle_archived_message)
@@ -478,7 +496,7 @@ export default function ChatRoomPanel({
         handle_archived_message,
       )
     }
-  }, [participant_uuid, room.room_uuid])
+  }, [participant_uuid, room.room_uuid, scroll_to_bottom])
 
   useEffect(() => {
     function handle_failed_message(event: Event) {

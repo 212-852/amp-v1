@@ -317,12 +317,12 @@ function MessageInputRow({
       return
     }
 
+    set_draft("")
+    onTyping(false)
     set_is_sending(true)
 
     try {
       await onSend(message)
-      set_draft("")
-      onTyping(false)
     } finally {
       set_is_sending(false)
     }
