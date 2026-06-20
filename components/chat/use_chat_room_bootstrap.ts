@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 
+import { send_chat_realtime_debug } from "@/components/chat/realtime_debug"
 import type { ChatRoomState } from "@/core/chat/types"
 import { useLocale } from "@/src/components/locale/provider"
 import type { Locale } from "@/src/lib/locale"
@@ -121,11 +122,21 @@ export function useChatRoomBootstrap(
   const [timed_out, set_timed_out] = useState(false)
   const [retry_tick, set_retry_tick] = useState(0)
   const bootstrapping_ref = useRef(false)
+  const active_request_id_ref = useRef(0)
+  const resolved_room_uuid_ref = useRef<string | null>(
+    initial_state?.room.room_uuid ?? null,
+  )
 
   useEffect(() => {
     let cancelled = false
+    const request_id = active_request_id_ref.current + 1
+    active_request_id_ref.current = request_id
     let timeout_timer: number | null = window.setTimeout(() => {
-      if (!cancelled) {
+      if (
+        !cancelled &&
+        active_request_id_ref.current === request_id &&
+        !resolved_room_uuid_ref.current
+      ) {
         set_timed_out(true)
       }
     }, CHAT_BOOTSTRAP_TIMEOUT_MS)
@@ -157,9 +168,35 @@ export function useChatRoomBootstrap(
         const state = await bootstrap_promise
 
         if (!cancelled && state) {
+          resolved_room_uuid_ref.current = state.room.room_uuid
+          clearTimeoutTimer()
           set_chat_state(state)
           set_timed_out(false)
-          clearTimeoutTimer()
+          logClientBootstrap("user_chat_client_state_set", {
+            room_uuid: state.room.room_uuid,
+            row_count: state.messages.length,
+          })
+          logClientBootstrap("user_chat_messages_state_set", {
+            room_uuid: state.room.room_uuid,
+            row_count: state.messages.length,
+            rendered_count: state.messages.length,
+          })
+          send_chat_realtime_debug("user_chat_client_state_set", {
+            view: "user",
+            room_uuid: state.room.room_uuid,
+            current_user_uuid: state.room.user_uuid ?? null,
+            visitor_uuid: state.room.visitor_uuid ?? null,
+            row_count: state.messages.length,
+            rendered_count: state.messages.length,
+          })
+          send_chat_realtime_debug("user_chat_messages_state_set", {
+            view: "user",
+            room_uuid: state.room.room_uuid,
+            current_user_uuid: state.room.user_uuid ?? null,
+            visitor_uuid: state.room.visitor_uuid ?? null,
+            row_count: state.messages.length,
+            rendered_count: state.messages.length,
+          })
         } else if (!cancelled) {
           set_timed_out(true)
           retry_timer = window.setTimeout(() => {
@@ -202,6 +239,7 @@ export function useChatRoomBootstrap(
 
   function retry() {
     bootstrap_promise = null
+    resolved_room_uuid_ref.current = null
     set_timed_out(false)
     set_retry_tick((current) => current + 1)
   }

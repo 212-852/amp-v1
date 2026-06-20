@@ -8,6 +8,8 @@ type ChatRealtimeDebugEvent =
   | "user_chat_realtime_subscribe_creating"
   | "user_chat_realtime_subscribed"
   | "user_chat_room_resolve_failed"
+  | "user_chat_client_state_set"
+  | "user_chat_messages_state_set"
 
 export type ChatRealtimeDebugPayload = {
   view?: "user" | "concierge"

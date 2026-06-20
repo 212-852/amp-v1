@@ -58,7 +58,7 @@ export default function AppChatSection({
     useChatRoomBootstrap(initial_chat_state)
 
   useEffect(() => {
-    if (render_state !== "empty_error_recoverable") {
+    if (chat_state || render_state !== "empty_error_recoverable") {
       return
     }
 
@@ -66,7 +66,7 @@ export default function AppChatSection({
       view: "user",
       reason: "client_timeout_missing_room_uuid",
     })
-  }, [render_state])
+  }, [chat_state, render_state])
 
   if (!chat_state) {
     return (

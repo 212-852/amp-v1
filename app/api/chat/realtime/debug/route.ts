@@ -13,6 +13,8 @@ const realtime_events = new Set([
   "user_chat_initial_fetch_start",
   "user_chat_initial_fetch_success",
   "user_chat_initial_fetch_error",
+  "user_chat_client_state_set",
+  "user_chat_messages_state_set",
 ])
 
 export async function POST(request: Request) {
