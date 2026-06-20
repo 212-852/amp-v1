@@ -4,6 +4,7 @@ import { Send } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 import type { Locale } from "@/src/lib/locale"
+import { ui_layer_class } from "@/src/ui/layers"
 
 const content = {
   placeholder: {
@@ -90,7 +91,10 @@ export default function ChatMessageInput({
 
   return (
     <form
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-200 bg-white px-4 py-3"
+      className={[
+        "fixed inset-x-0 bottom-0 border-t border-neutral-200 bg-white px-4 py-3",
+        ui_layer_class.chat_composer,
+      ].join(" ")}
       onSubmit={(event) => {
         event.preventDefault()
         void send_message()

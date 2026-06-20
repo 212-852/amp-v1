@@ -2,6 +2,7 @@
 
 import { X } from "lucide-react"
 import { useEffect, useState } from "react"
+import { createPortal } from "react-dom"
 
 import { useToast } from "@/components/ui/use_toast"
 import type { ProfileDisplayPayload } from "@/core/profile/output"
@@ -11,6 +12,7 @@ import ProfileAddressSelector, {
 import { resolve_selected_city_code } from "@/src/address/rules"
 import { useLocale } from "@/src/components/locale/provider"
 import type { Locale } from "@/src/lib/locale"
+import { ui_layer_class } from "@/src/ui/layers"
 
 const content = {
   title: {
@@ -200,7 +202,7 @@ export default function ProfileSettings({
     }
   }, [open])
 
-  if (!open) {
+  if (!open || typeof document === "undefined") {
     return null
   }
 
@@ -292,9 +294,19 @@ export default function ProfileSettings({
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/30 px-4 pb-4 pt-8">
-      <section className="w-full max-w-[430px] rounded-2xl bg-white p-4 shadow-[0_18px_46px_rgba(0,0,0,0.18)]">
+  return createPortal(
+    <div
+      className={[
+        "fixed inset-0 flex items-end justify-center bg-black/30 px-4 pb-4 pt-8",
+        ui_layer_class.overlay,
+      ].join(" ")}
+    >
+      <section
+        className={[
+          "relative w-full max-w-[430px] rounded-2xl bg-white p-4 shadow-[0_18px_46px_rgba(0,0,0,0.18)]",
+          ui_layer_class.modal,
+        ].join(" ")}
+      >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-[16px] font-semibold text-neutral-950">
             {content.title[locale]}
@@ -448,6 +460,7 @@ export default function ProfileSettings({
           </button>
         </div>
       </section>
-    </div>
+    </div>,
+    document.body,
   )
 }

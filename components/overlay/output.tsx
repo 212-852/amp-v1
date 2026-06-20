@@ -3,6 +3,7 @@
 import { getOverlayBackdropAnimationClass } from "@/components/overlay/animations"
 import OverlayModal from "@/components/overlay/modal"
 import type { OverlayAction, OverlayPhase } from "@/components/overlay/types"
+import { ui_layer_class } from "@/src/ui/layers"
 
 function getOverlayPlacementClass(action: OverlayAction) {
   if (action.rule.placement === "bottom") {
@@ -18,18 +19,20 @@ function getOverlayPlacementClass(action: OverlayAction) {
 
 function getOverlayContentClass(action: OverlayAction) {
   if (action.rule.placement === "bottom") {
-    return "relative z-[1010] flex w-full"
+    return ["relative flex w-full", ui_layer_class.modal].join(" ")
   }
 
   if (action.rule.placement === "left") {
-    return "relative z-[1010] flex h-full"
+    return ["relative flex h-full", ui_layer_class.modal].join(" ")
   }
 
   if (action.rule.placement === "center") {
-    return "relative z-[1010] flex w-full justify-center px-5"
+    return ["relative flex w-full justify-center px-5", ui_layer_class.modal].join(
+      " ",
+    )
   }
 
-  return "relative z-[1010] flex w-full justify-center"
+  return ["relative flex w-full justify-center", ui_layer_class.modal].join(" ")
 }
 
 export default function OverlayOutput({
@@ -43,9 +46,11 @@ export default function OverlayOutput({
 }>) {
   return (
     <div
-      className={["fixed inset-0 z-[1000] flex", getOverlayPlacementClass(action)].join(
-        " ",
-      )}
+      className={[
+        "fixed inset-0 flex",
+        ui_layer_class.overlay,
+        getOverlayPlacementClass(action),
+      ].join(" ")}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
           onClose()

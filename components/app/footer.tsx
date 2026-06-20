@@ -20,6 +20,7 @@ import {
 } from "@/core/chat/mode_toast_content"
 import { useLocale } from "@/src/components/locale/provider"
 import type { Locale } from "@/src/lib/locale"
+import { ui_layer_class } from "@/src/ui/layers"
 
 type FooterMode = "normal" | "input"
 
@@ -716,7 +717,10 @@ export default function AppFooter({
   return (
     <footer
       ref={footer_ref}
-      className="chat_input_footer fixed left-1/2 right-auto bottom-[calc(env(safe-area-inset-bottom,0px)+18px)] z-50 w-full max-w-[430px] -translate-x-1/2"
+      className={[
+        "chat_input_footer fixed left-1/2 right-auto bottom-[calc(env(safe-area-inset-bottom,0px)+18px)] w-full max-w-[430px] -translate-x-1/2",
+        ui_layer_class.chat_composer,
+      ].join(" ")}
     >
       <div className={footer_shell_class}>
         <FooterCurve />

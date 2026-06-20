@@ -2,6 +2,7 @@
 
 import { useLocale } from "@/src/components/locale/provider"
 import type { Locale } from "@/src/lib/locale"
+import { ui_layer_class } from "@/src/ui/layers"
 
 const content = {
   title: {
@@ -43,7 +44,10 @@ export default function ConciergeMemberModal({
 
   return (
     <div
-      className="fixed inset-0 z-[1000] flex items-center justify-center px-5"
+      className={[
+        "fixed inset-0 flex items-center justify-center px-5",
+        ui_layer_class.overlay,
+      ].join(" ")}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
           onClose()
@@ -60,7 +64,10 @@ export default function ConciergeMemberModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="concierge-member-modal-title"
-        className="relative z-[1010] w-full max-w-[340px] rounded-[28px] border border-[#dcc7aa] bg-[#fdfaf6] px-5 py-5 text-[#3d2a19] shadow-[0_18px_48px_rgba(61,42,25,0.18)]"
+        className={[
+          "relative w-full max-w-[340px] rounded-[28px] border border-[#dcc7aa] bg-[#fdfaf6] px-5 py-5 text-[#3d2a19] shadow-[0_18px_48px_rgba(61,42,25,0.18)]",
+          ui_layer_class.modal,
+        ].join(" ")}
       >
         <h2
           id="concierge-member-modal-title"

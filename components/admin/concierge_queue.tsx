@@ -293,14 +293,22 @@ export default function AdminConciergeQueue({
 
   useEffect(() => {
     if (typeof availability_enabled === "boolean") {
-      set_is_available(availability_enabled)
+      const timer = window.setTimeout(() => {
+        set_is_available(availability_enabled)
 
-      if (!availability_enabled) {
-        refresh_request_ref.current += 1
-        set_items([])
-        set_is_loading(false)
+        if (!availability_enabled) {
+          refresh_request_ref.current += 1
+          set_items([])
+          set_is_loading(false)
+        }
+      }, 0)
+
+      return () => {
+        window.clearTimeout(timer)
       }
     }
+
+    return undefined
   }, [availability_enabled])
 
   useEffect(() => {
@@ -338,10 +346,15 @@ export default function AdminConciergeQueue({
 
   useEffect(() => {
     if (!is_available) {
-      refresh_request_ref.current += 1
-      set_items([])
-      set_is_loading(false)
-      return
+      const timer = window.setTimeout(() => {
+        refresh_request_ref.current += 1
+        set_items([])
+        set_is_loading(false)
+      }, 0)
+
+      return () => {
+        window.clearTimeout(timer)
+      }
     }
 
     let cancelled = false
