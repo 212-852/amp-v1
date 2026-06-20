@@ -5,11 +5,26 @@ const APP_SHELL_URL = "/app"
 const BYPASS_PREFIXES = [
   "/_next/static/",
   "/_next/image",
+  "/admin/",
   "/api/",
 ]
 
 function shouldBypass(url) {
-  const pathname = new URL(url).pathname
+  const parsed_url = new URL(url)
+  const pathname = parsed_url.pathname
+
+  if (parsed_url.protocol === "ws:" || parsed_url.protocol === "wss:") {
+    return true
+  }
+
+  if (parsed_url.hostname.endsWith(".supabase.co")) {
+    return true
+  }
+
+  if (pathname === "/admin") {
+    return true
+  }
+
   return BYPASS_PREFIXES.some((prefix) => pathname.startsWith(prefix))
 }
 
@@ -164,5 +179,5 @@ self.addEventListener("fetch", (event) => {
     return
   }
 
-  event.respondWith(fetch(request))
+  return
 })

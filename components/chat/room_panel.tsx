@@ -64,27 +64,34 @@ function mergeMessage(
   next_message: ChatMessageRecord,
   source = "local",
 ) {
-  const next_client_id = getClientMessageId(next_message)
+  const incoming_message_uuid = next_message.message_uuid || null
+  const incoming_client_message_id = getClientMessageId(next_message)
   let replaced = false
   const merged = current.map((message) => {
-    if (message.message_uuid === next_message.message_uuid) {
-      replaced = true
-      console.log("[chat realtime] duplicate skipped", {
-        room_uuid: next_message.room_uuid,
-        message_uuid: next_message.message_uuid,
-        reason: "message_uuid",
-        source,
-      })
-      return next_message
-    }
+    const existing_message_uuid = message.message_uuid || null
+    const existing_client_message_id = getClientMessageId(message)
+    const matches_message_uuid = Boolean(
+      incoming_message_uuid &&
+        existing_message_uuid &&
+        existing_message_uuid === incoming_message_uuid,
+    )
+    const matches_client_message_id = Boolean(
+      incoming_client_message_id &&
+        existing_client_message_id &&
+        existing_client_message_id === incoming_client_message_id,
+    )
 
-    if (next_client_id && getClientMessageId(message) === next_client_id) {
+    if (matches_message_uuid || matches_client_message_id) {
       replaced = true
       console.log("[chat realtime] duplicate skipped", {
         room_uuid: next_message.room_uuid,
-        message_uuid: next_message.message_uuid,
-        client_message_id: next_client_id,
-        reason: "client_message_id",
+        existing_message_uuid,
+        incoming_message_uuid,
+        existing_client_message_id,
+        incoming_client_message_id,
+        reason: matches_message_uuid
+          ? "message_uuid"
+          : "client_message_id",
         source,
       })
       return next_message
@@ -96,7 +103,8 @@ function mergeMessage(
   if (!replaced) {
     console.log("[chat realtime] append message", {
       room_uuid: next_message.room_uuid,
-      message_uuid: next_message.message_uuid,
+      incoming_message_uuid,
+      incoming_client_message_id,
       source,
     })
     merged.push(next_message)
