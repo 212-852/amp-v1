@@ -13,6 +13,8 @@ import { create_browser_supabase_client } from "@/src/lib/supabase/client"
 
 type QueueMode = "concierge" | "bot"
 
+export const ADMIN_QUEUE_REFRESH_EVENT = "amp-admin-queue-refresh"
+
 function roomChannelName(room_uuid: string) {
   return `room:${room_uuid}`
 }
@@ -261,13 +263,19 @@ export default function AdminConciergeQueue({
         return
       }
 
-      if (!result?.should_show_list) {
-        set_is_available(false)
+      if (!result) {
+        return
+      }
+
+      if (!result.should_show_list) {
+        if (result.availability_enabled === false) {
+          set_is_available(false)
+        }
         set_items([])
         return
       }
 
-      set_is_available(true)
+      set_is_available(result.availability_enabled === true)
       set_items(
         (result.rooms ?? result.items ?? []).slice(
           0,
@@ -346,6 +354,24 @@ export default function AdminConciergeQueue({
 
   useEffect(() => {
     if (!is_available) {
+      return
+    }
+
+    function handle_queue_refresh() {
+      void load_queue({ silent: true })
+    }
+
+    window.addEventListener(ADMIN_QUEUE_REFRESH_EVENT, handle_queue_refresh)
+    window.addEventListener("amp-chat-message-created", handle_queue_refresh)
+
+    return () => {
+      window.removeEventListener(ADMIN_QUEUE_REFRESH_EVENT, handle_queue_refresh)
+      window.removeEventListener("amp-chat-message-created", handle_queue_refresh)
+    }
+  }, [is_available, load_queue])
+
+  useEffect(() => {
+    if (!is_available) {
       const timer = window.setTimeout(() => {
         refresh_request_ref.current += 1
         set_items([])
@@ -360,6 +386,7 @@ export default function AdminConciergeQueue({
     let cancelled = false
     let debounce_timer: number | null = null
     let initial_timer: number | null = null
+    let poll_timer: number | null = null
 
     function schedule_refresh() {
       if (debounce_timer) {
@@ -371,6 +398,12 @@ export default function AdminConciergeQueue({
           void load_queue({ silent: true })
         }
       }, 150)
+    }
+
+    function handle_message_insert() {
+      if (!cancelled) {
+        void load_queue({ silent: true })
+      }
     }
 
     const has_initial_items =
@@ -438,7 +471,12 @@ export default function AdminConciergeQueue({
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "messages" },
+        { event: "INSERT", schema: "public", table: "messages" },
+        handle_message_insert,
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "messages" },
         schedule_refresh,
       )
       .on(
@@ -478,6 +516,12 @@ export default function AdminConciergeQueue({
       )
       .subscribe()
 
+    poll_timer = window.setInterval(() => {
+      if (!cancelled && document.visibilityState === "visible") {
+        void load_queue({ silent: true })
+      }
+    }, 10000)
+
     return () => {
       cancelled = true
 
@@ -487,6 +531,10 @@ export default function AdminConciergeQueue({
 
       if (initial_timer) {
         window.clearTimeout(initial_timer)
+      }
+
+      if (poll_timer) {
+        window.clearInterval(poll_timer)
       }
 
       void supabase.removeChannel(channel)

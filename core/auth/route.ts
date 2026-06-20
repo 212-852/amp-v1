@@ -223,13 +223,13 @@ export async function emitGuardedAccessSecurityEvents(
 
   if (pathname.startsWith("/admin")) {
     if (session.role === "admin") {
-      const { notifyEvent } = await import("@/core/notify")
+      const { sendAuthDebug } = await import("@/core/debug")
 
-      await notifyEvent({
-        event: "admin_page_accessed",
-        request_id: meta.request_id ?? null,
-        payload: base_payload,
-      })
+      await sendAuthDebug(
+        "admin_page_accessed",
+        base_payload,
+        meta.request_id ?? null,
+      )
       return
     }
 

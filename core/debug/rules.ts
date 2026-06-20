@@ -1,5 +1,6 @@
 import {
   AUTH_SESSION_DEBUG,
+  DEBUG_ADMIN_ACCESS,
   DEBUG_CHAT_FLOW,
   DEBUG_LINE_WEBHOOK,
 } from "@/core/control"
@@ -222,6 +223,10 @@ export function shouldSendAuthSessionDebug(event: string) {
     return false
   }
 
+  if (event === "admin_page_accessed") {
+    return DEBUG_ADMIN_ACCESS
+  }
+
   if (alwaysReportEvents.has(event)) {
     return true
   }
@@ -249,6 +254,10 @@ export function shouldSendAuthSessionDebug(event: string) {
 }
 
 export function resolveDebugTitle(event: string) {
+  if (event === "admin_page_accessed") {
+    return "ADMIN_ACCESS"
+  }
+
   if (deniedDiscordEvents.has(event)) {
     return "DEBUG"
   }

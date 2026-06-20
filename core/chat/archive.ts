@@ -1385,9 +1385,12 @@ async function loadUserAccountDisplayRows(user_uuids: string[]) {
 
   const encoded_uuids = user_uuids.map((uuid) => encodeURIComponent(uuid)).join(",")
   const queries = [
+    `user_uuid=in.(${encoded_uuids})&select=user_uuid,name,display_name,image_url`,
     `user_uuid=in.(${encoded_uuids})&select=user_uuid,name,image_url`,
     `user_uuid=in.(${encoded_uuids})&select=user_uuid,display_name,image_url`,
   ]
+
+  const merged = new Map<string, AccountDisplayRow>()
 
   for (const query of queries) {
     const response = await fetch(restUrl(config, "users", query), {
@@ -1400,10 +1403,26 @@ async function loadUserAccountDisplayRows(user_uuids: string[]) {
     }
 
     const rows = (await response.json()) as AccountDisplayRow[]
-    return new Map(rows.map((row) => [row.user_uuid, row]))
+
+    for (const row of rows) {
+      const existing = merged.get(row.user_uuid)
+
+      merged.set(row.user_uuid, {
+        user_uuid: row.user_uuid,
+        name: row.name ?? existing?.name ?? null,
+        display_name: row.display_name ?? existing?.display_name ?? null,
+        image_url: row.image_url ?? existing?.image_url ?? null,
+      })
+    }
+
+    if (merged.size > 0 && [...merged.values()].every(
+      (row) => row.name || row.display_name,
+    )) {
+      break
+    }
   }
 
-  return new Map()
+  return merged
 }
 
 async function loadProfileDisplayRows(user_uuids: string[]) {

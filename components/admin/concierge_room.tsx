@@ -6,6 +6,7 @@ import { useEffect } from "react"
 
 import ChatMessageInput from "@/components/chat/message_input"
 import ChatRoomPanel from "@/components/chat/room_panel"
+import { ADMIN_QUEUE_REFRESH_EVENT } from "@/components/admin/concierge_queue"
 import type { ChatRoomState } from "@/core/chat/types"
 import type { ConciergeQueueRoom } from "@/core/concierge/message"
 import { useLocale } from "@/src/components/locale/provider"
@@ -92,6 +93,10 @@ export default function AdminConciergeRoom({
       action: "enter",
     })
 
+    function notify_queue_refresh() {
+      window.dispatchEvent(new CustomEvent(ADMIN_QUEUE_REFRESH_EVENT))
+    }
+
     void fetch("/api/chat/presence", {
       method: "POST",
       headers: {
@@ -100,6 +105,12 @@ export default function AdminConciergeRoom({
       body,
       cache: "no-store",
     })
+      .then((response) => {
+        if (response.ok) {
+          notify_queue_refresh()
+        }
+      })
+      .catch(() => null)
 
     return () => {
       void fetch("/api/chat/presence", {
@@ -113,6 +124,12 @@ export default function AdminConciergeRoom({
         }),
         cache: "no-store",
       })
+        .then((response) => {
+          if (response.ok) {
+            notify_queue_refresh()
+          }
+        })
+        .catch(() => null)
     }
   }, [state.room.room_uuid])
 
