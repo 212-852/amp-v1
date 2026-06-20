@@ -36,11 +36,11 @@ function ChatLoadingState() {
 
 function buildFallbackWelcome({
   locale,
-  room_uuid = "fallback-room",
+  room_uuid,
   source_channel = "web",
 }: {
   locale: "ja" | "en" | "es"
-  room_uuid?: string
+  room_uuid: string
   source_channel?: SourceChannel | null
 }): ChatMessageRecord {
   const bundle = createBotMessageBundle({
@@ -68,44 +68,21 @@ function buildFallbackWelcome({
   }
 }
 
-function ChatWelcomeFallback({
-  viewer_display_name,
-  chat_state = null,
-}: Readonly<{
-  viewer_display_name?: string | null
-  chat_state?: ChatRoomState | null
-}>) {
-  const { locale } = useLocale()
-  const room = chat_state?.room ?? {
-    room_uuid: "fallback-room",
-    mode: "bot" as const,
-    locale,
-    channel: "web",
-    created_at: FALLBACK_CREATED_AT,
-    updated_at: FALLBACK_CREATED_AT,
+function resolveInitialMessages(
+  chat_state: ChatRoomState,
+  locale: "ja" | "en" | "es",
+): ChatMessageRecord[] {
+  if (chat_state.messages.length > 0) {
+    return chat_state.messages
   }
-  const participant_uuid =
-    chat_state?.participant.participant_uuid ?? "fallback-participant"
-  const welcome = useMemo(
-    () =>
-      buildFallbackWelcome({
-        locale,
-        room_uuid: room.room_uuid,
-        source_channel: room.channel,
-      }),
-    [locale, room.channel, room.room_uuid],
-  )
 
-  return (
-    <ChatRoomPanel
-      key={room.room_uuid}
-      initial_room={room}
-      initial_messages={[welcome]}
-      initial_presence={chat_state?.presence ?? []}
-      participant_uuid={participant_uuid}
-      viewer_display_name={viewer_display_name}
-    />
-  )
+  return [
+    buildFallbackWelcome({
+      locale,
+      room_uuid: chat_state.room.room_uuid,
+      source_channel: chat_state.room.channel,
+    }),
+  ]
 }
 
 export default function AppChatSection({
@@ -115,30 +92,23 @@ export default function AppChatSection({
   chat_state: ChatRoomState | null
   viewer_display_name?: string | null
 }>) {
-  const { chat_state, render_state } = useChatRoomBootstrap(initial_chat_state)
+  const { locale } = useLocale()
+  const { chat_state } = useChatRoomBootstrap(initial_chat_state)
+
+  const initial_messages = useMemo(
+    () => (chat_state ? resolveInitialMessages(chat_state, locale) : []),
+    [chat_state, locale],
+  )
 
   if (!chat_state) {
-    if (render_state === "empty_error_recoverable") {
-      return <ChatWelcomeFallback viewer_display_name={viewer_display_name} />
-    }
-
     return <ChatLoadingState />
-  }
-
-  if (chat_state.messages.length === 0) {
-    return (
-      <ChatWelcomeFallback
-        chat_state={chat_state}
-        viewer_display_name={viewer_display_name}
-      />
-    )
   }
 
   return (
     <ChatRoomPanel
       key={chat_state.room.room_uuid}
       initial_room={chat_state.room}
-      initial_messages={chat_state.messages}
+      initial_messages={initial_messages}
       initial_presence={chat_state.presence}
       participant_uuid={chat_state.participant.participant_uuid}
       viewer_display_name={viewer_display_name}

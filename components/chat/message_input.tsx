@@ -74,9 +74,9 @@ export default function ChatMessageInput({
   }
 
   async function send_message() {
-    const message = value.trim()
+    const sent_text = value.trim()
 
-    if (!message || is_sending) {
+    if (!sent_text || is_sending) {
       return
     }
 
@@ -86,7 +86,7 @@ export default function ChatMessageInput({
       new CustomEvent("amp-chat-optimistic-message", {
         detail: {
           room_uuid,
-          body: message,
+          body: sent_text,
           client_message_id,
         },
       }),
@@ -101,7 +101,12 @@ export default function ChatMessageInput({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ message, locale, room_uuid, client_message_id }),
+        body: JSON.stringify({
+          message: sent_text,
+          locale,
+          room_uuid,
+          client_message_id,
+        }),
       })
 
       if (!response.ok) {

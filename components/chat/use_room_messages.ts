@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 
 import { send_chat_realtime_debug } from "@/components/chat/realtime_debug"
 import type { ChatMessageRecord } from "@/core/chat/types"
@@ -32,6 +32,11 @@ function useRoomMessages(
     view = "user",
     current_user_uuid = null,
   } = options
+  const on_insert_ref = useRef(on_insert)
+
+  useEffect(() => {
+    on_insert_ref.current = on_insert
+  }, [on_insert])
 
   useEffect(() => {
     console.log("[chat realtime] room_uuid", {
@@ -162,7 +167,7 @@ function useRoomMessages(
             return
           }
 
-          on_insert(message)
+          on_insert_ref.current(message)
         },
       )
 
@@ -211,7 +216,7 @@ function useRoomMessages(
       })
       void supabase.removeChannel(channel)
     }
-  }, [current_user_uuid, enabled, on_insert, room_uuid, view])
+  }, [current_user_uuid, enabled, room_uuid, view])
 }
 
 export const use_room_messages = useRoomMessages

@@ -83,10 +83,15 @@ function mergeMessage(
         existing_message_uuid &&
         existing_message_uuid === incoming_message_uuid,
     )
+    const is_optimistic_existing = Boolean(
+      message.status === "sending" ||
+        existing_message_uuid?.startsWith("client:"),
+    )
     const matches_client_message_id = Boolean(
       incoming_client_message_id &&
         existing_client_message_id &&
-        existing_client_message_id === incoming_client_message_id,
+        existing_client_message_id === incoming_client_message_id &&
+        (matches_message_uuid || is_optimistic_existing),
     )
 
     if (matches_message_uuid || matches_client_message_id) {
@@ -277,6 +282,23 @@ export default function ChatRoomPanel({
   }, [])
 
   useEffect(() => {
+    set_messages((current) => {
+      let merged = current
+
+      for (const message of initial_messages) {
+        merged = mergeMessage(
+          merged,
+          message,
+          "initial_sync",
+          realtime_debug_context,
+        )
+      }
+
+      return merged
+    })
+  }, [initial_messages, realtime_debug_context])
+
+  useEffect(() => {
     console.log("[chat realtime] room_uuid", {
       room_uuid: room.room_uuid,
       view: show_presence ? "concierge" : "user",
@@ -320,13 +342,28 @@ export default function ChatRoomPanel({
     }
 
     set_room(payload.room)
-    set_messages(payload.messages)
+    set_messages((current) => {
+      let merged = current
+
+      for (const message of payload.messages) {
+        merged = mergeMessage(merged, message, "refresh", realtime_debug_context)
+      }
+
+      return merged
+    })
     set_has_older_messages(payload.messages.length >= 30)
 
     if (payload.presence) {
       set_presence(payload.presence)
     }
-  }, [locale, room.mode, room.room_uuid, room_uuid, show_presence])
+  }, [
+    locale,
+    realtime_debug_context,
+    room.mode,
+    room.room_uuid,
+    room_uuid,
+    show_presence,
+  ])
 
   const handle_room_message_insert = useCallback(
     (next_message: ChatMessageRecord) => {
@@ -347,7 +384,10 @@ export default function ChatRoomPanel({
     [realtime_debug_context, room.room_uuid],
   )
 
+  const realtime_enabled = room.room_uuid !== "fallback-room"
+
   use_room_messages(room.room_uuid, {
+    enabled: realtime_enabled,
     on_insert: handle_room_message_insert,
     view: realtime_debug_context.view,
     current_user_uuid: realtime_debug_context.current_user_uuid,
@@ -430,8 +470,22 @@ export default function ChatRoomPanel({
     function handle_mode_change(event: Event) {
       const detail = (event as CustomEvent<{ mode: ChatRoomMode }>).detail
 
-      if (detail?.mode) {
-        set_room((current) => ({ ...current, mode: detail.mode }))
+      if (!detail?.mode) {
+        return
+      }
+
+      let mode_changed = false
+
+      set_room((current) => {
+        if (current.mode === detail.mode) {
+          return current
+        }
+
+        mode_changed = true
+        return { ...current, mode: detail.mode }
+      })
+
+      if (mode_changed) {
         void refresh()
       }
     }

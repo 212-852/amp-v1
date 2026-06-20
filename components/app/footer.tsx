@@ -303,7 +303,7 @@ function MessageInputRow({
   input_ref,
 }: Readonly<{
   locale: Locale
-  onSend: (message: string) => Promise<void>
+  onSend: (message: string, clear_input: () => void) => Promise<void>
   onTyping: (is_typing: boolean) => void
   input_ref?: RefObject<HTMLTextAreaElement | null>
 }>) {
@@ -317,12 +317,13 @@ function MessageInputRow({
       return
     }
 
-    set_draft("")
     onTyping(false)
     set_is_sending(true)
 
     try {
-      await onSend(message)
+      await onSend(message, () => {
+        set_draft("")
+      })
     } finally {
       set_is_sending(false)
     }
@@ -483,17 +484,19 @@ export default function AppFooter({
     const mode = payload?.room?.mode
 
     if (mode === "bot" || mode === "concierge") {
-      setAssistantMode(mode)
-      if (mode === "concierge") {
-        settleChatInput()
-      } else {
-        settleChatToggle()
+      if (mode !== assistantMode) {
+        setAssistantMode(mode)
+        if (mode === "concierge") {
+          settleChatInput()
+        } else {
+          settleChatToggle()
+        }
+        window.dispatchEvent(
+          new CustomEvent("amp-chat-mode-changed", {
+            detail: { mode },
+          }),
+        )
       }
-      window.dispatchEvent(
-        new CustomEvent("amp-chat-mode-changed", {
-          detail: { mode },
-        }),
-      )
     }
   }, [locale, settleChatInput, settleChatToggle])
 
@@ -596,7 +599,10 @@ export default function AppFooter({
     return false
   }
 
-  async function handleSendMessage(message: string) {
+  async function handleSendMessage(
+    message: string,
+    clear_input: () => void,
+  ) {
     const client_message_id = `client:${crypto.randomUUID()}`
 
     window.dispatchEvent(
@@ -607,6 +613,7 @@ export default function AppFooter({
         },
       }),
     )
+    clear_input()
 
     try {
       const response = await fetch("/api/chat/room", {
@@ -648,7 +655,6 @@ export default function AppFooter({
       return
     }
 
-    await refreshCurrentMode()
     window.dispatchEvent(new CustomEvent("amp-chat-message-created"))
   }
 
