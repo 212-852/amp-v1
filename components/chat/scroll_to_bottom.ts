@@ -1,6 +1,8 @@
 "use client"
 
 import { send_chat_realtime_debug } from "@/components/chat/realtime_debug"
+import { isAdminPresenceSystemMessage } from "@/core/chat/rules"
+import type { ChatMessageRecord } from "@/core/chat/types"
 
 export const CHAT_NEAR_BOTTOM_THRESHOLD = 120
 
@@ -121,4 +123,27 @@ export function build_chat_scroll_target(input: {
     view: input.view,
     is_near_bottom: input.is_near_bottom,
   }
+}
+
+export function should_show_new_message_badge(input: {
+  message: ChatMessageRecord
+  current_participant_uuid: string | null
+  is_near_bottom: boolean
+  is_duplicate: boolean
+}) {
+  if (input.is_near_bottom || input.is_duplicate) {
+    return false
+  }
+
+  if (isAdminPresenceSystemMessage(input.message)) {
+    return false
+  }
+
+  const sender_uuid = input.message.participant_uuid ?? null
+
+  return Boolean(
+    sender_uuid &&
+      input.current_participant_uuid &&
+      sender_uuid !== input.current_participant_uuid,
+  )
 }

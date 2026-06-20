@@ -4,7 +4,6 @@ import { ArrowDown } from "lucide-react"
 import {
   type RefObject,
   useEffect,
-  useState,
 } from "react"
 
 import {
@@ -29,6 +28,8 @@ type ChatScrollButtonProps = {
   placement?: "panel" | "above_input"
   view: ChatScrollView
   locale: Locale
+  visible: boolean
+  on_clear: () => void
 }
 
 export default function ChatScrollButton({
@@ -37,9 +38,9 @@ export default function ChatScrollButton({
   placement = "panel",
   view,
   locale,
+  visible,
+  on_clear,
 }: Readonly<ChatScrollButtonProps>) {
-  const [is_visible, set_is_visible] = useState(false)
-
   function jump_to_bottom() {
     scroll_to_latest_message(
       {
@@ -55,6 +56,7 @@ export default function ChatScrollButton({
         detail: { reason: "manual_jump", force: true },
       }),
     )
+    on_clear()
   }
 
   useEffect(() => {
@@ -67,9 +69,9 @@ export default function ChatScrollButton({
     const scroll_container = container
 
     function update_visibility() {
-      set_is_visible(
-        read_distance_from_bottom(scroll_container) >= CHAT_NEAR_BOTTOM_THRESHOLD,
-      )
+      if (read_distance_from_bottom(scroll_container) < CHAT_NEAR_BOTTOM_THRESHOLD) {
+        on_clear()
+      }
     }
 
     const frame = window.requestAnimationFrame(update_visibility)
@@ -84,9 +86,9 @@ export default function ChatScrollButton({
       scroll_container.removeEventListener("scroll", update_visibility)
       window.removeEventListener("resize", update_visibility)
     }
-  }, [container_ref])
+  }, [container_ref, on_clear])
 
-  if (!is_visible) {
+  if (!visible) {
     return null
   }
 

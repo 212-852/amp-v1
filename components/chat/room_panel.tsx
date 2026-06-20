@@ -15,6 +15,7 @@ import {
   is_chat_near_bottom,
   read_chat_scroll_bottom_detail,
   scroll_to_latest_message,
+  should_show_new_message_badge,
   type ChatScrollReason,
 } from "@/components/chat/scroll_to_bottom"
 import { useRoomMessages } from "@/components/chat/use_room_messages"
@@ -152,6 +153,7 @@ export default function ChatRoomPanel({
   const [has_older_messages, set_has_older_messages] = useState(
     initial_messages.length >= 30,
   )
+  const [show_new_message_badge, set_show_new_message_badge] = useState(false)
   const { locale } = useLocale()
   const [current_viewer_display_name, set_current_viewer_display_name] =
     useState(viewer_display_name)
@@ -299,6 +301,7 @@ export default function ChatRoomPanel({
       }
 
       let should_scroll_realtime = false
+      let should_show_badge = false
 
       set_messages((current) => {
         const result = mergeRealtimeInsert(current, next_message)
@@ -331,6 +334,12 @@ export default function ChatRoomPanel({
             : filterUserVisibleChatMessages(result.messages).length
 
           should_scroll_realtime = is_near_bottom_ref.current
+          should_show_badge = should_show_new_message_badge({
+            message: next_message,
+            current_participant_uuid: participant_uuid,
+            is_near_bottom: is_near_bottom_ref.current,
+            is_duplicate: false,
+          })
 
           console.log("[chat realtime] append message", {
             room_uuid: next_message.room_uuid,
@@ -368,9 +377,19 @@ export default function ChatRoomPanel({
         queue_scroll_to_latest("realtime_receive", false)
       }
 
+      if (should_show_badge) {
+        set_show_new_message_badge(true)
+      }
+
       window.dispatchEvent(new CustomEvent("amp-admin-queue-refresh"))
     },
-    [queue_scroll_to_latest, realtime_debug_context, room.room_uuid, show_presence],
+    [
+      participant_uuid,
+      queue_scroll_to_latest,
+      realtime_debug_context,
+      room.room_uuid,
+      show_presence,
+    ],
   )
 
   useRoomMessages(room.room_uuid, {
@@ -443,6 +462,7 @@ export default function ChatRoomPanel({
     function handle_scroll_bottom(event: Event) {
       const detail = read_chat_scroll_bottom_detail(event)
       is_near_bottom_ref.current = true
+      set_show_new_message_badge(false)
       scroll_to_latest(detail.reason ?? "manual_jump", detail.force ?? true)
     }
 
@@ -757,6 +777,8 @@ export default function ChatRoomPanel({
         placement={scroll_button_placement}
         view={realtime_debug_context.view}
         locale={locale}
+        visible={show_new_message_badge}
+        on_clear={() => set_show_new_message_badge(false)}
       />
       {show_presence && room.mode !== "concierge" ? (
         <div className="mb-3 shrink-0 rounded-md border border-neutral-200 bg-white px-3 py-2 text-[12px] font-medium text-neutral-600">
@@ -781,6 +803,10 @@ export default function ChatRoomPanel({
         onScroll={(event) => {
           const target = event.currentTarget
           is_near_bottom_ref.current = is_chat_near_bottom(target)
+
+          if (is_near_bottom_ref.current) {
+            set_show_new_message_badge(false)
+          }
 
           if (target.scrollTop < 80) {
             void load_older_messages()
