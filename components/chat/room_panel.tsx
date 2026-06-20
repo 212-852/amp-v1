@@ -69,7 +69,7 @@ function mergeMessage(
   const merged = current.map((message) => {
     if (message.message_uuid === next_message.message_uuid) {
       replaced = true
-      console.info("[chat_realtime] skipped_duplicate", {
+      console.log("[chat realtime] duplicate skipped", {
         room_uuid: next_message.room_uuid,
         message_uuid: next_message.message_uuid,
         reason: "message_uuid",
@@ -80,7 +80,7 @@ function mergeMessage(
 
     if (next_client_id && getClientMessageId(message) === next_client_id) {
       replaced = true
-      console.info("[chat_realtime] skipped_duplicate", {
+      console.log("[chat realtime] duplicate skipped", {
         room_uuid: next_message.room_uuid,
         message_uuid: next_message.message_uuid,
         client_message_id: next_client_id,
@@ -94,7 +94,7 @@ function mergeMessage(
   })
 
   if (!replaced) {
-    console.info("[chat_realtime] append_message", {
+    console.log("[chat realtime] appended", {
       room_uuid: next_message.room_uuid,
       message_uuid: next_message.message_uuid,
       source,
@@ -215,6 +215,13 @@ export default function ChatRoomPanel({
   const scroll_ref = useRef<HTMLDivElement>(null)
   const is_near_bottom_ref = useRef(true)
 
+  useEffect(() => {
+    console.log("[chat realtime] room_uuid", {
+      room_uuid: room.room_uuid,
+      view: show_presence ? "concierge" : "user",
+    })
+  }, [room.room_uuid, show_presence])
+
   const refresh = useCallback(async () => {
     const params = new URLSearchParams()
 
@@ -263,7 +270,7 @@ export default function ChatRoomPanel({
   const handle_room_message_insert = useCallback(
     (next_message: ChatMessageRecord) => {
       if (next_message.room_uuid !== room.room_uuid) {
-        console.info("[chat_realtime] ignored_room_uuid_mismatch", {
+        console.log("[chat realtime] room mismatch", {
           insert_room_uuid: next_message.room_uuid,
           current_room_uuid: room.room_uuid,
           message_uuid: next_message.message_uuid,

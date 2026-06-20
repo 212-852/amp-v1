@@ -17,8 +17,6 @@ type OdinConfig = {
   webhook_url: string
 }
 
-let odin_env_ready_logged = false
-
 function resolveOdinEnv() {
   const bot_token = process.env.ACTION_ODIN_BOT_TOKEN?.trim() ?? ""
   const channel_id = process.env.ACTION_ODIN_CHANNEL_ID?.trim() ?? ""
@@ -66,19 +64,6 @@ function resolveOdinConfig(): OdinConfig | null {
 
   if (env.missing.length > 0) {
     return null
-  }
-
-  if (!odin_env_ready_logged) {
-    odin_env_ready_logged = true
-    const payload = {
-      event: "odin_env_ready",
-      has_bot_token: true,
-      has_channel_id: true,
-      has_guild_id: true,
-      has_webhook_url: true,
-    }
-    console.log(payload)
-    void logOdinServerDebug("odin_env_ready", payload)
   }
 
   return {

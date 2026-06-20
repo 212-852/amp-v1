@@ -6,7 +6,6 @@ import {
 } from "@/core/control"
 
 const alwaysReportEvents = new Set([
-  "odin_env_ready",
   "odin_smoke_entered",
   "odin_thread_create_entered",
   "odin_thread_create_response",
