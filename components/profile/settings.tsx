@@ -89,9 +89,9 @@ const content = {
     es: "Perfil guardado.",
   },
   failed: {
-    ja: "保存に失敗しました",
-    en: "Failed to save profile.",
-    es: "No se pudo guardar el perfil.",
+    ja: "保存できませんでした",
+    en: "Could not save.",
+    es: "No se pudo guardar.",
   },
   close: {
     ja: "閉じる",
@@ -248,6 +248,7 @@ export default function ProfileSettings({
       }
 
       console.debug("profile_save_payload", {
+        payload,
         fields: Object.keys(payload),
         has_prefecture: Boolean(payload.prefecture_code),
         has_city: Boolean(payload.city_code),
@@ -280,6 +281,16 @@ export default function ProfileSettings({
         locale: response_payload.profile.locale,
       })
 
+      set_nickname(response_payload.profile.nickname ?? "")
+      set_first_name(response_payload.profile.first_name ?? "")
+      set_last_name(response_payload.profile.last_name ?? "")
+      set_birth_date(response_payload.profile.birth_date ?? "")
+      set_phone(response_payload.profile.phone ?? "")
+      set_prefecture_code(response_payload.profile.prefecture_code ?? "")
+      set_city_code(response_payload.profile.city_code ?? "")
+      set_address(response_payload.profile.address ?? "")
+      set_memo(response_payload.profile.memo ?? "")
+      set_selected_locale(response_payload.profile.locale)
       set_locale(response_payload.profile.locale)
       onSaved(response_payload.profile)
       window.dispatchEvent(
@@ -290,7 +301,7 @@ export default function ProfileSettings({
 
       toast({
         tone: "success",
-        message: content.saved[locale],
+        message: content.saved.ja,
         compact: true,
         duration_ms: 2400,
       })
@@ -305,7 +316,7 @@ export default function ProfileSettings({
 
       toast({
         tone: "error",
-        message: error_message,
+        message: content.failed.ja,
         compact: true,
         duration_ms: 2800,
       })
@@ -480,7 +491,7 @@ export default function ProfileSettings({
           </button>
           <button
             type="button"
-            disabled={is_saving || !address_state.is_ready}
+            disabled={is_saving}
             onClick={() => void save_profile()}
             className="rounded-md bg-neutral-950 px-3 py-2 text-[13px] font-semibold text-white disabled:bg-neutral-300"
           >

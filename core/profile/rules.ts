@@ -1,4 +1,5 @@
 import type { Session } from "@/core/auth/types"
+import { get_display_name } from "@/core/profile/display"
 import { normalize_address_code } from "@/src/address/rules"
 
 export type ProfileLocale = "ja" | "en" | "es"
@@ -70,15 +71,18 @@ export function resolve_profile_display_name(input: {
   display_name?: string | null
   fallback?: string | null
 }) {
-  const nickname = input.nickname?.trim()
-  const full_name = [input.first_name, input.last_name]
-    .map((value) => value?.trim())
-    .filter(Boolean)
-    .join(" ")
-  const users_name = input.users_name?.trim() || input.display_name?.trim()
-  const fallback = input.fallback?.trim()
-
-  return nickname || full_name || users_name || fallback || "Guest"
+  return get_display_name(
+    {
+      nickname: input.nickname,
+      first_name: input.first_name,
+      last_name: input.last_name,
+    },
+    {
+      name: input.users_name,
+      display_name: input.display_name,
+      fallback: input.fallback,
+    },
+  )
 }
 
 export function validate_profile_patch(

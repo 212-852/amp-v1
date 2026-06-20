@@ -6,6 +6,7 @@ import { useState } from "react"
 
 import { useOverlay } from "@/components/overlay"
 import ProfileSettings from "@/components/profile/settings"
+import { get_display_name } from "@/core/profile/display"
 import type { ProfileDisplayPayload } from "@/core/profile/output"
 import { useLocale } from "@/src/components/locale/provider"
 
@@ -188,13 +189,18 @@ export default function AppHeader({ auth }: { auth: AppHeaderAuth }) {
   const [settings_open, set_settings_open] = useState(false)
   const [saved_profile, set_saved_profile] =
     useState<ProfileDisplayPayload | null>(null)
-  const display_name = saved_profile?.display_name ?? auth.display_name
+  const display_name = get_display_name(saved_profile, {
+    name: auth.display_name,
+    email: auth.email,
+    role: auth.role,
+    fallback: content.guest[locale],
+  })
   const image_url = saved_profile?.image_url ?? auth.image_url
   const language_label = locale.toUpperCase()
   const is_logged_in = Boolean(auth.user_uuid)
   const is_linked = Boolean(auth.provider)
   const user_name = is_logged_in
-    ? display_name ?? auth.email ?? auth.role
+    ? display_name
     : content.guest[locale]
   const display_auth = {
     ...auth,
@@ -216,8 +222,8 @@ export default function AppHeader({ auth }: { auth: AppHeaderAuth }) {
       source: "user",
       account: {
         user_uuid: auth.user_uuid,
-        display_name: auth.display_name,
-        image_url: auth.image_url,
+        display_name,
+        image_url,
         provider: auth.provider,
         email: auth.email,
         can_logout: auth.can_logout,

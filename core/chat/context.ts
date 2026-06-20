@@ -1,5 +1,6 @@
 import type { Session, SessionRole } from "@/core/auth/types"
 import { sendAuthDebug } from "@/core/debug"
+import { get_display_name } from "@/core/profile/display"
 import {
   type ChatContext,
   type ChatIncomingInput,
@@ -186,13 +187,9 @@ export function resolveParticipantDisplayName(
   session: Session,
   role: ChatParticipantRole,
 ) {
-  if (session.display_name?.trim()) {
-    return session.display_name.trim()
-  }
-
-  if (role === "guest") {
-    return "Guest"
-  }
-
-  return session.role
+  return get_display_name(null, {
+    name: session.display_name,
+    role: role === "guest" ? "Guest" : session.role,
+    fallback: role === "guest" ? "Guest" : session.role,
+  })
 }

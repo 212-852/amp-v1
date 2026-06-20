@@ -6,6 +6,8 @@ import ChatMessageBubble from "@/components/chat/message_bubble"
 import ChatScrollButton from "@/components/chat/scroll"
 import { useRoomTyping } from "@/components/chat/use_room_typing"
 import { filterUserVisibleChatMessages, resolveTypingLabel } from "@/core/chat/rules"
+import { get_display_name } from "@/core/profile/display"
+import type { ProfileDisplayPayload } from "@/core/profile/output"
 import { create_browser_supabase_client } from "@/src/lib/supabase/client"
 import { useLocale } from "@/src/components/locale/provider"
 import type {
@@ -51,6 +53,26 @@ export default function ChatRoomPanel({
   const [messages, set_messages] = useState(initial_messages)
   const [presence, set_presence] = useState(initial_presence)
   const { locale } = useLocale()
+  const [current_viewer_display_name, set_current_viewer_display_name] =
+    useState(viewer_display_name)
+
+  useEffect(() => {
+    function handle_profile_updated(event: Event) {
+      const profile = (event as CustomEvent<ProfileDisplayPayload>).detail
+      set_current_viewer_display_name(
+        get_display_name(profile, {
+          name: viewer_display_name,
+          fallback: "Guest",
+        }),
+      )
+    }
+
+    window.addEventListener("amp-profile-updated", handle_profile_updated)
+
+    return () => {
+      window.removeEventListener("amp-profile-updated", handle_profile_updated)
+    }
+  }, [viewer_display_name])
   const typing = useRoomTyping({
     room_uuid: room.room_uuid,
     participant_uuid,
@@ -259,7 +281,7 @@ export default function ChatRoomPanel({
             key={message.message_uuid}
             message={message}
             room_locale={(room.locale as Locale) ?? "ja"}
-            viewer_display_name={viewer_display_name}
+            viewer_display_name={current_viewer_display_name}
           />
         ))}
         {typing_label ? (
