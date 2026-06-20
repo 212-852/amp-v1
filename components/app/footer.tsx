@@ -1,11 +1,12 @@
 "use client"
 
-import { Bot, Headphones, Menu, MessageCircle, PawPrint, RefreshCw, User } from "lucide-react"
+import { Bot, Headphones, Menu, MessageCircle, RefreshCw, User } from "lucide-react"
 import Image from "next/image"
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { RefObject } from "react"
 
 import ConciergeMemberModal from "@/components/app/concierge_member_modal"
+import ChatSendButton from "@/components/chat/send_button"
 import { useOverlay, type OverlayType } from "@/components/overlay"
 import { useToast } from "@/components/ui/use_toast"
 import {
@@ -39,11 +40,6 @@ const content = {
     ja: "チャット入力とクイックメニューを切り替える",
     en: "Switch between chat input and quick menu",
     es: "Cambiar entre chat y menu rapido",
-  },
-  send: {
-    ja: "送信",
-    en: "Send",
-    es: "Enviar",
   },
   message: {
     ja: "メッセージ",
@@ -300,21 +296,6 @@ function AssistantToggle({
   )
 }
 
-function SendPawButton({ locale }: Readonly<{ locale: Locale }>) {
-  return (
-    <button
-      type="button"
-      aria-label={content.send[locale]}
-      className="flex h-[62px] w-[58px] shrink-0 items-center justify-center bg-transparent p-0 text-[#8f5d28] shadow-none"
-    >
-      <PawPrint
-        className="h-[58px] w-[58px] fill-[#8f5d28] text-[#8f5d28]"
-        strokeWidth={3}
-      />
-    </button>
-  )
-}
-
 function MessageInputRow({
   locale,
   onSend,
@@ -324,7 +305,7 @@ function MessageInputRow({
   locale: Locale
   onSend: (message: string) => Promise<void>
   onTyping: (is_typing: boolean) => void
-  input_ref?: RefObject<HTMLInputElement | null>
+  input_ref?: RefObject<HTMLTextAreaElement | null>
 }>) {
   const [draft, set_draft] = useState("")
   const [is_sending, set_is_sending] = useState(false)
@@ -354,28 +335,30 @@ function MessageInputRow({
           <label className="sr-only" htmlFor="app-message-input">
             {content.message[locale]}
           </label>
-          <input
+          <textarea
             ref={input_ref}
             id="app-message-input"
-            type="text"
             value={draft}
+            rows={1}
             onChange={(event) => {
               set_draft(event.target.value)
               onTyping(event.target.value.trim().length > 0)
             }}
             onKeyDown={(event) => {
-              if (event.key === "Enter") {
+              if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault()
                 void handleSend()
               }
             }}
             placeholder={content.message_placeholder[locale]}
-            className="h-[58px] w-full min-w-0 rounded-full border border-transparent bg-[#fdfaf6] px-5 text-[16px] font-semibold text-[#3d2a19] outline-none placeholder:text-[#8c7358] transition-[border-color,box-shadow] duration-150 focus:border-[#c49a6c] focus:shadow-[0_0_0_4px_rgba(164,106,42,0.16)]"
+            className="h-[58px] w-full min-w-0 resize-none rounded-full border border-transparent bg-[#fdfaf6] px-5 py-4 text-[16px] font-semibold leading-6 text-[#3d2a19] outline-none placeholder:text-[#8c7358] transition-[border-color,box-shadow] duration-150 focus:border-[#c49a6c] focus:shadow-[0_0_0_4px_rgba(164,106,42,0.16)]"
           />
         </div>
-        <button type="button" onClick={() => void handleSend()} disabled={is_sending}>
-          <SendPawButton locale={locale} />
-        </button>
+        <ChatSendButton
+          locale={locale}
+          disabled={is_sending}
+          onClick={() => void handleSend()}
+        />
       </div>
     </div>
   )
@@ -457,7 +440,7 @@ export default function AppFooter({
   const [profile_modal_open, set_profile_modal_open] = useState(false)
   const typing_timer_ref = useRef<number | null>(null)
   const footer_ref = useRef<HTMLElement | null>(null)
-  const message_input_ref = useRef<HTMLInputElement | null>(null)
+  const message_input_ref = useRef<HTMLTextAreaElement | null>(null)
   const pending_input_focus_ref = useRef(false)
   const { locale } = useLocale()
   const { openOverlay } = useOverlay()

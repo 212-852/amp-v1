@@ -61,6 +61,14 @@ Not Allowed
 * resize
 
 #########################
+CHAT UI FREEZE RULE
+#########################
+
+Current chat UI is approved and frozen.
+
+Future work may add functionality but must not redesign the existing chat UI unless explicitly requested.
+
+#########################
 SHARED UI RULE
 #########################
 
@@ -346,3 +354,27 @@ ADMIN/USER UI SEPARATION RULE
 - /admin/list is the full concierge room list.
 - /admin/list/[room_uuid] is the admin chat room page.
 - /admin/concierge must redirect to /admin.
+
+#########################
+APPROVED UI / CHAT FREEZE RULE
+#########################
+
+The current approved UI and chat implementation must not be changed without explicit instruction.
+
+Do not redesign, rearrange, rename, or replace chat, profile, or admin UI components unless the task specifically asks for it.
+
+Frozen scope:
+- admin home UI
+- admin chat list UI
+- chat room UI
+- chat input UI
+- profile modal UI
+- current nickname display behavior
+- chat realtime behavior
+- join/leave archive behavior
+- toast save behavior
+
+Allowed without explicit UI/chat change request:
+- bug fixes that do not change visual layout
+- small internal refactors that keep the same behavior
+- changes explicitly requested in the task

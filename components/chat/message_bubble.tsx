@@ -21,9 +21,9 @@ const content = {
     es: "Bot",
   },
   concierge: {
-    ja: "Concierge",
-    en: "Concierge",
-    es: "Concierge",
+    ja: "Staff",
+    en: "Staff",
+    es: "Staff",
   },
   you: {
     ja: "You",
@@ -106,15 +106,30 @@ function resolveSenderLabel(kind: ChatMessageKind, locale: Locale) {
   return content.bot[locale]
 }
 
+function resolveActorDisplayName(message: ChatMessageRecord) {
+  const actor_display_name = readMessageMeta(message.payload).actor_display_name
+  const normalized =
+    typeof actor_display_name === "string" ? actor_display_name.trim() : ""
+
+  return normalized || null
+}
+
 function resolveAvatarInitials(
   kind: ChatMessageKind,
   viewer_display_name: string | null,
+  actor_display_name: string | null,
 ) {
   if (kind === "concierge") {
+    const concierge_name = actor_display_name?.trim()
+
+    if (concierge_name) {
+      return concierge_name.slice(0, 2).toUpperCase()
+    }
+
     return "C"
   }
 
-  const name = viewer_display_name?.trim() || "Guest"
+  const name = actor_display_name?.trim() || viewer_display_name?.trim() || "Guest"
   const parts = name.split(/\s+/).filter(Boolean)
 
   if (parts.length >= 2) {
@@ -129,11 +144,13 @@ function MessageHeader({
   created_at,
   locale,
   align,
+  actor_display_name,
 }: Readonly<{
   kind: ChatMessageKind
   created_at: string
   locale: Locale
   align: "left" | "right"
+  actor_display_name?: string | null
 }>) {
   const is_mounted = useSyncExternalStore(
     subscribeMounted,
@@ -150,7 +167,7 @@ function MessageHeader({
       ].join(" ")}
     >
       <span className="font-semibold text-[#6f5842]">
-        {resolveSenderLabel(kind, locale)}
+        {actor_display_name?.trim() || resolveSenderLabel(kind, locale)}
       </span>
       {time ? <span>{time}</span> : null}
     </div>
@@ -173,10 +190,12 @@ export default function ChatMessageBubble({
   message,
   room_locale = "ja",
   viewer_display_name = null,
+  show_header = true,
 }: Readonly<{
   message: ChatMessageRecord
   room_locale?: Locale
   viewer_display_name?: string | null
+  show_header?: boolean
 }>) {
   const { locale } = useLocale()
   const active_locale = locale as Locale
@@ -193,6 +212,7 @@ export default function ChatMessageBubble({
   const is_user = source_kind === "user"
   const is_concierge = source_kind === "concierge"
   const align = is_user ? "right" : "left"
+  const actor_display_name = resolveActorDisplayName(message)
 
   const body = show_original
     ? resolveMessageBodyOriginal(message)
@@ -233,12 +253,15 @@ export default function ChatMessageBubble({
     return (
       <div className="relative flex w-full justify-start overflow-visible pt-0">
         <div className="w-full min-w-0 max-w-full">
-          <MessageHeader
-            kind={source_kind}
-            created_at={message.created_at}
-            locale={active_locale}
-            align={align}
-          />
+          {show_header ? (
+            <MessageHeader
+              kind={source_kind}
+              created_at={message.created_at}
+              locale={active_locale}
+              align={align}
+              actor_display_name={actor_display_name}
+            />
+          ) : null}
           <FlexMessage payload={message.payload} />
         </div>
       </div>
@@ -280,24 +303,35 @@ export default function ChatMessageBubble({
           is_flex ? "w-full max-w-full" : "max-w-[85%]",
         ].join(" ")}
       >
-        <MessageHeader
-          kind={source_kind}
-          created_at={message.created_at}
-          locale={active_locale}
-          align={align}
-        />
+        {show_header ? (
+          <MessageHeader
+            kind={source_kind}
+            created_at={message.created_at}
+            locale={active_locale}
+            align={align}
+            actor_display_name={actor_display_name}
+          />
+        ) : null}
 
         {is_user ? (
           <div className="flex items-start justify-end gap-2">
             {text_bubble}
             <MessageAvatar
-              initials={resolveAvatarInitials(source_kind, viewer_display_name)}
+              initials={resolveAvatarInitials(
+                source_kind,
+                viewer_display_name,
+                actor_display_name,
+              )}
             />
           </div>
         ) : is_concierge ? (
           <div className="flex items-start gap-2">
             <MessageAvatar
-              initials={resolveAvatarInitials(source_kind, viewer_display_name)}
+              initials={resolveAvatarInitials(
+                source_kind,
+                viewer_display_name,
+                actor_display_name,
+              )}
             />
             {text_bubble}
           </div>

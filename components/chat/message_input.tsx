@@ -1,8 +1,8 @@
 "use client"
 
-import { Send } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
+import ChatSendButton from "@/components/chat/send_button"
 import type { Locale } from "@/src/lib/locale"
 import { ui_layer_class } from "@/src/ui/layers"
 
@@ -136,13 +136,12 @@ export default function ChatMessageInput({
           }}
           className="min-h-11 flex-1 resize-none rounded-md border border-neutral-300 bg-white px-3 py-2 text-[14px] leading-6 text-neutral-900 outline-none transition focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
         />
-        <button
+        <ChatSendButton
           type="submit"
+          locale={locale}
           disabled={!value.trim() || is_sending}
-          className="inline-flex h-11 w-11 items-center justify-center rounded-md bg-neutral-900 text-white transition hover:bg-neutral-700 disabled:cursor-not-allowed disabled:bg-neutral-300"
-        >
-          <Send aria-hidden="true" className="h-4 w-4" />
-        </button>
+          variant="compact"
+        />
       </div>
     </form>
   )

@@ -574,6 +574,10 @@ export async function handleIncomingChatMessageArchive(
     }
   }
 
+  const actor_display_name = await resolveCurrentParticipantDisplayName({
+    session: input.session,
+    participant,
+  })
   const message = await archivePreparedMessage({
     room,
     participant,
@@ -586,6 +590,12 @@ export async function handleIncomingChatMessageArchive(
     original_locale: resolveChatLocale(input.locale, room.locale),
     session: input.session,
     external_id: input.external_id,
+    payload: {
+      meta: {
+        actor_role: participant.role,
+        actor_display_name,
+      },
+    },
   })
 
   await sendAuthDebug("chat_archive_incoming_saved", {
@@ -600,10 +610,7 @@ export async function handleIncomingChatMessageArchive(
   ) {
     await syncConciergeOdinAdminMessage({
       room,
-      admin_name: await resolveCurrentParticipantDisplayName({
-        session: input.session,
-        participant,
-      }),
+      admin_name: actor_display_name,
       message_body: body,
       message_uuid: message.message_uuid,
     })
@@ -662,6 +669,10 @@ async function handleRoomModeCommand(input: {
     }
   }
 
+  const actor_display_name = await resolveCurrentParticipantDisplayName({
+    session: input.session,
+    participant: input.participant,
+  })
   const incoming_message = await archivePreparedMessage({
     room: input.room,
     participant: input.participant,
@@ -670,6 +681,12 @@ async function handleRoomModeCommand(input: {
     body: input.body,
     original_locale: resolveChatLocale(input.locale, input.room.locale),
     session: input.session,
+    payload: {
+      meta: {
+        actor_role: input.participant.role,
+        actor_display_name,
+      },
+    },
   })
 
   await sendAuthDebug("chat_archive_incoming_saved", {

@@ -5,7 +5,11 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import ChatMessageBubble from "@/components/chat/message_bubble"
 import ChatScrollButton from "@/components/chat/scroll"
 import { useRoomTyping } from "@/components/chat/use_room_typing"
-import { filterUserVisibleChatMessages, resolveTypingLabel } from "@/core/chat/rules"
+import {
+  filterUserVisibleChatMessages,
+  readMessageSourceKind,
+  resolveTypingLabel,
+} from "@/core/chat/rules"
 import { get_display_name } from "@/core/profile/display"
 import type { ProfileDisplayPayload } from "@/core/profile/output"
 import { create_browser_supabase_client } from "@/src/lib/supabase/client"
@@ -24,6 +28,24 @@ const content = {
     en: "Bot mode",
     es: "Modo Bot",
   },
+}
+
+function shouldShowMessageHeader(
+  message: ChatMessageRecord,
+  previous_message: ChatMessageRecord | null,
+) {
+  if (!previous_message || message.type === "system") {
+    return true
+  }
+
+  if (previous_message.type === "system") {
+    return true
+  }
+
+  return !(
+    previous_message.participant_uuid === message.participant_uuid &&
+    readMessageSourceKind(previous_message) === readMessageSourceKind(message)
+  )
 }
 
 type ChatRoomPanelProps = {
@@ -276,12 +298,16 @@ export default function ChatRoomPanel({
         </div>
       ) : null}
       <div ref={scroll_ref} className={scroll_class}>
-        {visible_messages.map((message) => (
+        {visible_messages.map((message, index) => (
           <ChatMessageBubble
             key={message.message_uuid}
             message={message}
             room_locale={(room.locale as Locale) ?? "ja"}
             viewer_display_name={current_viewer_display_name}
+            show_header={shouldShowMessageHeader(
+              message,
+              visible_messages[index - 1] ?? null,
+            )}
           />
         ))}
         {typing_label ? (

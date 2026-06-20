@@ -1190,7 +1190,42 @@ export async function insertMessage(input: {
   }
 
   const rows = (await response.json()) as ChatMessageRecord[]
-  return rows[0]
+  const message = rows[0]
+
+  if (message) {
+    await touchRoomUpdatedAt(input.room_uuid).catch((error) => {
+      console.warn("[chat_core] room_touch_failed", {
+        room_uuid: input.room_uuid,
+        message_uuid: message.message_uuid,
+        error_message: error instanceof Error ? error.message : String(error),
+      })
+    })
+  }
+
+  return message
+}
+
+async function touchRoomUpdatedAt(room_uuid: string) {
+  const config = getRestConfig()
+
+  if (!config) {
+    return
+  }
+
+  await fetch(
+    restUrl(config, "rooms", `room_uuid=eq.${encodeURIComponent(room_uuid)}`),
+    {
+      method: "PATCH",
+      headers: {
+        ...restHeaders(config),
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify({
+        updated_at: new Date().toISOString(),
+      }),
+      cache: "no-store",
+    },
+  )
 }
 
 export async function loadRoomMessages(room_uuid: string, limit = 50) {
@@ -1313,6 +1348,7 @@ type LineIdentityRow = {
 }
 
 function resolveArchiveDisplayName(input: {
+  user_uuid: string
   profile?: ProfileDisplayRow | null
   account?: AccountDisplayRow | null
   line_linked?: boolean
@@ -1329,7 +1365,7 @@ function resolveArchiveDisplayName(input: {
     {
       line_name,
       name: input.account?.name,
-      fallback: "Guest",
+      fallback: input.user_uuid,
     },
   )
 }
@@ -1370,6 +1406,7 @@ export async function resolveParticipantArchiveDisplayName(user_uuid: string) {
   ])
 
   return resolveArchiveDisplayName({
+    user_uuid,
     profile: profiles.get(user_uuid),
     account: accounts.get(user_uuid),
     line_linked: line_linked_uuids.has(user_uuid),
@@ -1467,6 +1504,7 @@ export async function loadUserDisplayNames(user_uuids: string[]) {
     user_uuids.map((user_uuid) => [
       user_uuid,
       resolveArchiveDisplayName({
+        user_uuid,
         profile: profiles.get(user_uuid),
         account: accounts.get(user_uuid),
         line_linked: line_linked_uuids.has(user_uuid),
@@ -1497,6 +1535,7 @@ export async function loadUserProfiles(user_uuids: string[]) {
         user_uuid,
         {
           display_name: resolveArchiveDisplayName({
+            user_uuid,
             profile: profiles.get(user_uuid),
             account,
             line_linked: line_linked_uuids.has(user_uuid),
