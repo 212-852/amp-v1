@@ -127,7 +127,7 @@ async function resolveConciergeAvailability(
     const state = await getConciergeAvailabilityState(session)
     return state.enabled
   } catch {
-    return true
+    return false
   }
 }
 

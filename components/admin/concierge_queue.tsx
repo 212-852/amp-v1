@@ -214,15 +214,17 @@ export default function AdminConciergeQueue({
   queue,
   variant = "tabs",
   seeded_from_server = false,
+  availability_enabled,
 }: Readonly<{
   queue?: ConciergeQueueResult
   variant?: "preview" | "tabs"
   seeded_from_server?: boolean
+  availability_enabled?: boolean
 }>) {
   const { locale } = useLocale()
-  const [is_available, set_is_available] = useState(
-    queue?.availability_enabled === true,
-  )
+  const resolved_availability =
+    availability_enabled ?? queue?.availability_enabled === true
+  const [is_available, set_is_available] = useState(resolved_availability)
   const [active_tab, set_active_tab] = useState<QueueMode>(
     queue?.room_condition?.mode === "bot" ? "bot" : "concierge",
   )
@@ -290,6 +292,18 @@ export default function AdminConciergeQueue({
   }
 
   useEffect(() => {
+    if (typeof availability_enabled === "boolean") {
+      set_is_available(availability_enabled)
+
+      if (!availability_enabled) {
+        refresh_request_ref.current += 1
+        set_items([])
+        set_is_loading(false)
+      }
+    }
+  }, [availability_enabled])
+
+  useEffect(() => {
     function handle_availability_change(event: Event) {
       const detail = (event as CustomEvent<{ enabled?: boolean }>).detail
 
@@ -324,6 +338,9 @@ export default function AdminConciergeQueue({
 
   useEffect(() => {
     if (!is_available) {
+      refresh_request_ref.current += 1
+      set_items([])
+      set_is_loading(false)
       return
     }
 

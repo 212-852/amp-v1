@@ -2,16 +2,12 @@
 
 import { useEffect, useState } from "react"
 
+import { ADDRESS_OPTIONS_DATA } from "@/src/address/data"
 import type { AddressOptions } from "@/src/address/rules"
-
-const empty_address_options: AddressOptions = {
-  prefectures: [],
-  cities_by_prefecture: {},
-}
 
 export function useAddressOptions(enabled: boolean) {
   const [address_options, set_address_options] = useState<AddressOptions>(
-    empty_address_options,
+    ADDRESS_OPTIONS_DATA,
   )
 
   useEffect(() => {
@@ -48,13 +44,14 @@ export function useAddressOptions(enabled: boolean) {
           return
         }
 
-        set_address_options(payload)
-
         if (payload.prefectures.length === 0) {
           console.error("address_options_load_failed", {
             error_message: "No prefecture options returned",
           })
+          return
         }
+
+        set_address_options(payload)
       } catch (error) {
         console.error("address_options_load_failed", {
           error_message: error instanceof Error ? error.message : String(error),

@@ -49,7 +49,7 @@ export async function loadConciergeAvailability(user_uuid?: string | null) {
   const config = getRestConfig()
 
   if (!config) {
-    return true
+    return false
   }
 
   const filter = user_uuid

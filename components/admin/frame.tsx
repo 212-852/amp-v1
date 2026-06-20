@@ -1,11 +1,12 @@
 import OpsShell from "@/components/ops/shell"
 import { build_breadcrumb_output } from "@/core/breadcrumb/output"
+import { getConciergeAvailabilityState } from "@/core/chat/action"
 import {
   normalizeOpsHeaderSession,
   type HeaderSessionLike,
 } from "@/core/ops/header_session"
 
-export default function AdminOpsFrame({
+export default async function AdminOpsFrame({
   children,
   session,
   pathname,
@@ -27,6 +28,7 @@ export default function AdminOpsFrame({
   const is_room_page = /^\/admin\/list\/[^/]+$/.test(pathname)
   const show_breadcrumb =
     pathname !== "/admin" && breadcrumbs.items.length > 0
+  const availability = await getConciergeAvailabilityState(session)
 
   return (
     <OpsShell
@@ -35,6 +37,7 @@ export default function AdminOpsFrame({
       show_assistant={pathname === "/admin"}
       breadcrumb_items={show_breadcrumb ? breadcrumbs.items : []}
       layout={is_room_page ? "full_height" : "default"}
+      concierge_available={availability.enabled}
     >
       {children}
     </OpsShell>

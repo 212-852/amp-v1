@@ -5,9 +5,10 @@ import { useEffect, useState } from "react"
 
 import { useToast } from "@/components/ui/use_toast"
 import type { ProfileDisplayPayload } from "@/core/profile/output"
-import AddressSelector from "@/src/address/selector"
+import ProfileAddressSelector, {
+  useProfileAddressOptions,
+} from "@/src/address/profile_selector"
 import { resolve_selected_city_code } from "@/src/address/rules"
-import { useAddressOptions } from "@/src/address/use_options"
 import { useLocale } from "@/src/components/locale/provider"
 import type { Locale } from "@/src/lib/locale"
 
@@ -132,7 +133,7 @@ export default function ProfileSettings({
     initial_profile.locale,
   )
   const [is_saving, set_is_saving] = useState(false)
-  const address_options = useAddressOptions(open)
+  const address_options = useProfileAddressOptions(open)
   const selected_city_code = resolve_selected_city_code(
     address_options,
     prefecture_code,
@@ -217,8 +218,8 @@ export default function ProfileSettings({
         last_name,
         birth_date,
         phone,
-        prefecture: prefecture_code,
-        city: selected_city_code,
+        prefecture_code,
+        city_code: selected_city_code,
         address,
         memo,
         locale: selected_locale,
@@ -226,8 +227,8 @@ export default function ProfileSettings({
 
       console.debug("profile_save_payload", {
         fields: Object.keys(payload),
-        has_prefecture: Boolean(payload.prefecture),
-        has_city: Boolean(payload.city),
+        has_prefecture: Boolean(payload.prefecture_code),
+        has_city: Boolean(payload.city_code),
         locale: payload.locale,
       })
 
@@ -366,7 +367,7 @@ export default function ProfileSettings({
             />
           </label>
 
-          <AddressSelector
+          <ProfileAddressSelector
             options={address_options}
             prefecture_code={prefecture_code}
             city_code={city_code}

@@ -6,16 +6,17 @@ import { resolveAdminHomeQueue } from "@/core/admin/queue"
 export default async function AdminPage() {
   const { session } = await requireAdminAccess("/admin")
   const queue = await resolveAdminHomeQueue(session)
+  const show_waiting_list =
+    queue.availability_enabled === true && queue.should_show_list === true
 
   return (
     <AdminOpsFrame pathname="/admin" session={session}>
-      {queue.availability_enabled ? (
-        <AdminConciergeQueue
-          queue={queue}
-          variant="preview"
-          seeded_from_server
-        />
-      ) : null}
+      <AdminConciergeQueue
+        queue={queue}
+        variant="preview"
+        seeded_from_server={show_waiting_list}
+        availability_enabled={show_waiting_list}
+      />
     </AdminOpsFrame>
   )
 }

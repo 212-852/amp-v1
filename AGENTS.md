@@ -324,13 +324,12 @@ CHAT ROOM ABSOLUTE RULE
 ADDRESS SELECTION RULE
 #########################
 
-- Prefecture and city must always come from the centralized address core.
-- Source tables are prefectures and cities.
-- Shared address option flow is src/address/context.ts -> src/address/rules.ts -> src/address/action.ts -> src/address/output.ts.
-- Shared profile selector UI is src/address/selector.tsx.
-- UI must not hardcode prefecture or city lists.
-- UI must not create its own address arrays.
-- UI must not generate prefecture or city options inside individual pages/components.
+- Prefecture and city selectors must use the shared common prefecture > city source.
+- Canonical shared data is src/address/data.ts (mirrors prefectures and cities tables).
+- Shared address option flow is src/address/data.ts -> src/address/rules.ts -> src/address/action.ts -> src/address/output.ts -> src/address/use_options.ts.
+- Shared profile selector UI is src/address/selector.tsx and src/address/profile_selector.tsx.
+- Do not create prefecture/city arrays or option generation inside individual pages or components.
+- Pages and components may only import the shared address selector, helper, or hook from src/address/.
 - Profile forms must use prefecture_code and city_code.
 - Free text is allowed only for address line, not prefecture or city.
 
