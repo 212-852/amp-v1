@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { flushSync } from "react-dom"
 
+import { prepare_chat_send_text } from "@/components/chat/input_send_core"
 import ChatSendButton from "@/components/chat/send_button"
 import { useComposerHeightReporter } from "@/components/chat/use_composer_height"
 import {
@@ -90,18 +91,22 @@ export default function ChatMessageInput({
   }
 
   function handle_send_message() {
-    const text = (textarea_ref.current?.value ?? input_value).trim()
-
-    if (!text || is_sending) {
+    if (is_sending) {
       return
     }
 
+    let text: string | null = null
     flushSync(() => {
-      set_input_value("")
-      if (textarea_ref.current) {
-        textarea_ref.current.value = ""
-      }
+      text = prepare_chat_send_text({
+        input_value,
+        input_ref: textarea_ref,
+        set_input_value,
+      })
     })
+
+    if (!text) {
+      return
+    }
 
     const client_message_id = create_client_message_id()
     dispatch_optimistic_message({

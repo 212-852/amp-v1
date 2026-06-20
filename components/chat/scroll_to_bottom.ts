@@ -35,7 +35,7 @@ export function read_distance_from_bottom(container: HTMLElement) {
 }
 
 export function is_chat_near_bottom(container: HTMLElement) {
-  return read_distance_from_bottom(container) < CHAT_NEAR_BOTTOM_THRESHOLD
+  return read_distance_from_bottom(container) <= CHAT_NEAR_BOTTOM_THRESHOLD
 }
 
 export function scroll_to_latest_message(

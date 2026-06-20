@@ -20,6 +20,7 @@ import {
 } from "@/components/chat/scroll_to_bottom"
 import { useRoomMessages } from "@/components/chat/use_room_messages"
 import { useRoomTyping } from "@/components/chat/use_room_typing"
+import { useToast } from "@/components/ui/use_toast"
 import {
   filterUserVisibleChatMessages,
   readMessageMeta,
@@ -44,6 +45,11 @@ const content = {
     ja: "Botモード",
     en: "Bot mode",
     es: "Modo Bot",
+  },
+  new_realtime_message: {
+    ja: "新しいメッセージがあります",
+    en: "You have a new message",
+    es: "Hay un mensaje nuevo",
   },
 }
 
@@ -153,8 +159,9 @@ export default function ChatRoomPanel({
   const [has_older_messages, set_has_older_messages] = useState(
     initial_messages.length >= 30,
   )
-  const [show_new_message_badge, set_show_new_message_badge] = useState(false)
+  const [show_scroll_down_button, set_show_scroll_down_button] = useState(false)
   const { locale } = useLocale()
+  const { toast } = useToast()
   const [current_viewer_display_name, set_current_viewer_display_name] =
     useState(viewer_display_name)
 
@@ -182,6 +189,22 @@ export default function ChatRoomPanel({
   const bottom_ref = useRef<HTMLDivElement>(null)
   const scroll_ref = useRef<HTMLDivElement>(null)
   const is_near_bottom_ref = useRef(true)
+  const is_loading_older_ref = useRef(false)
+  const oldest_loaded_message_ref = useRef<{
+    created_at: string
+    message_uuid: string | null
+  } | null>(
+    initial_messages[0]
+      ? {
+          created_at: initial_messages[0].created_at,
+          message_uuid: initial_messages[0].message_uuid ?? null,
+        }
+      : null,
+  )
+  const pending_prepend_scroll_ref = useRef<{
+    before_height: number
+    previous_scroll_top: number
+  } | null>(null)
   const pending_scroll_ref = useRef<{
     reason: ChatScrollReason
     force: boolean
@@ -301,7 +324,8 @@ export default function ChatRoomPanel({
       }
 
       let should_scroll_realtime = false
-      let should_show_badge = false
+      let should_force_scroll_realtime = false
+      let should_show_new_message_toast = false
 
       set_messages((current) => {
         const result = mergeRealtimeInsert(current, next_message)
@@ -332,12 +356,18 @@ export default function ChatRoomPanel({
           const rendered_count = show_presence
             ? result.messages.length
             : filterUserVisibleChatMessages(result.messages).length
+          const sender_uuid = next_message.participant_uuid ?? null
+          const is_own_message = Boolean(
+            sender_uuid && sender_uuid === participant_uuid,
+          )
+          const is_near_bottom = is_near_bottom_ref.current
 
-          should_scroll_realtime = is_near_bottom_ref.current
-          should_show_badge = should_show_new_message_badge({
+          should_force_scroll_realtime = is_own_message
+          should_scroll_realtime = is_own_message || is_near_bottom
+          should_show_new_message_toast = should_show_new_message_badge({
             message: next_message,
             current_participant_uuid: participant_uuid,
-            is_near_bottom: is_near_bottom_ref.current,
+            is_near_bottom,
             is_duplicate: false,
           })
 
@@ -374,11 +404,17 @@ export default function ChatRoomPanel({
       })
 
       if (should_scroll_realtime) {
-        queue_scroll_to_latest("realtime_receive", false)
+        queue_scroll_to_latest("realtime_receive", should_force_scroll_realtime)
       }
 
-      if (should_show_badge) {
-        set_show_new_message_badge(true)
+      if (should_show_new_message_toast) {
+        set_show_scroll_down_button(true)
+        toast({
+          tone: "info",
+          compact: true,
+          duration_ms: 2750,
+          message: content.new_realtime_message[locale],
+        })
       }
 
       window.dispatchEvent(new CustomEvent("amp-admin-queue-refresh"))
@@ -387,8 +423,10 @@ export default function ChatRoomPanel({
       participant_uuid,
       queue_scroll_to_latest,
       realtime_debug_context,
+      locale,
       room.room_uuid,
       show_presence,
+      toast,
     ],
   )
 
@@ -454,6 +492,17 @@ export default function ChatRoomPanel({
   }, [room.room_uuid, queue_scroll_to_latest])
 
   useEffect(() => {
+    const oldest_message = messages[0] ?? null
+
+    oldest_loaded_message_ref.current = oldest_message
+      ? {
+          created_at: oldest_message.created_at,
+          message_uuid: oldest_message.message_uuid ?? null,
+        }
+      : null
+  }, [messages])
+
+  useEffect(() => {
     is_near_bottom_ref.current = true
     queue_scroll_to_latest("initial_load", true)
   }, [queue_scroll_to_latest])
@@ -462,7 +511,7 @@ export default function ChatRoomPanel({
     function handle_scroll_bottom(event: Event) {
       const detail = read_chat_scroll_bottom_detail(event)
       is_near_bottom_ref.current = true
-      set_show_new_message_badge(false)
+      set_show_scroll_down_button(false)
       scroll_to_latest(detail.reason ?? "manual_jump", detail.force ?? true)
     }
 
@@ -680,6 +729,19 @@ export default function ChatRoomPanel({
   }, [])
 
   useLayoutEffect(() => {
+    if (pending_prepend_scroll_ref.current) {
+      const scroll_container = scroll_ref.current
+      const pending = pending_prepend_scroll_ref.current
+
+      pending_prepend_scroll_ref.current = null
+
+      if (scroll_container) {
+        const after_height = scroll_container.scrollHeight
+        scroll_container.scrollTop =
+          after_height - pending.before_height + pending.previous_scroll_top
+      }
+    }
+
     if (!pending_scroll_ref.current) {
       return
     }
@@ -690,22 +752,29 @@ export default function ChatRoomPanel({
   }, [messages.length, scroll_to_latest])
 
   async function load_older_messages() {
-    if (is_loading_older || !has_older_messages || messages.length === 0) {
+    const oldest_message = oldest_loaded_message_ref.current
+
+    if (
+      is_loading_older_ref.current ||
+      is_loading_older ||
+      !has_older_messages ||
+      !oldest_message
+    ) {
       return
     }
 
+    is_loading_older_ref.current = true
     set_is_loading_older(true)
 
     try {
       const params = new URLSearchParams()
-      const first_message = messages[0]
       const scroll_container = scroll_ref.current
-      const previous_scroll_height = scroll_container?.scrollHeight ?? 0
+      const before_height = scroll_container?.scrollHeight ?? 0
       const previous_scroll_top = scroll_container?.scrollTop ?? 0
 
       params.set("locale", locale)
       params.set("room_uuid", room.room_uuid)
-      params.set("before", first_message.created_at)
+      params.set("before", oldest_message.created_at)
       params.set("limit", "30")
 
       const response = await fetch(`/api/chat/room?${params.toString()}`, {
@@ -719,31 +788,41 @@ export default function ChatRoomPanel({
       const payload = (await response.json()) as {
         messages: ChatMessageRecord[]
       }
-      const older_messages = payload.messages ?? []
+      const older_messages = [...(payload.messages ?? [])].sort(
+        (left, right) =>
+          new Date(left.created_at).getTime() -
+          new Date(right.created_at).getTime(),
+      )
+
+      if (older_messages.length === 0) {
+        set_has_older_messages(false)
+        return
+      }
 
       set_has_older_messages(older_messages.length >= 30)
 
-      if (older_messages.length > 0) {
-        set_messages((current) => {
-          const current_ids = new Set(current.map((message) => message.message_uuid))
-          return [
-            ...older_messages.filter(
-              (message) => !current_ids.has(message.message_uuid),
-            ),
-            ...current,
-          ]
-        })
-        window.requestAnimationFrame(() => {
-          if (!scroll_container) {
-            return
-          }
+      set_messages((current) => {
+        const current_ids = new Set(current.map((message) => message.message_uuid))
+        const unique_older_messages = older_messages.filter(
+          (message) => !current_ids.has(message.message_uuid),
+        )
 
-          const height_delta =
-            scroll_container.scrollHeight - previous_scroll_height
-          scroll_container.scrollTop = previous_scroll_top + height_delta
-        })
-      }
+        if (unique_older_messages.length === 0) {
+          return current
+        }
+
+        pending_prepend_scroll_ref.current = {
+          before_height,
+          previous_scroll_top,
+        }
+
+        return [
+          ...unique_older_messages,
+          ...current,
+        ]
+      })
     } finally {
+      is_loading_older_ref.current = false
       set_is_loading_older(false)
     }
   }
@@ -777,8 +856,8 @@ export default function ChatRoomPanel({
         placement={scroll_button_placement}
         view={realtime_debug_context.view}
         locale={locale}
-        visible={show_new_message_badge}
-        on_clear={() => set_show_new_message_badge(false)}
+        visible={show_scroll_down_button}
+        on_clear={() => set_show_scroll_down_button(false)}
       />
       {show_presence && room.mode !== "concierge" ? (
         <div className="mb-3 shrink-0 rounded-md border border-neutral-200 bg-white px-3 py-2 text-[12px] font-medium text-neutral-600">
@@ -803,9 +882,10 @@ export default function ChatRoomPanel({
         onScroll={(event) => {
           const target = event.currentTarget
           is_near_bottom_ref.current = is_chat_near_bottom(target)
+          set_show_scroll_down_button(!is_near_bottom_ref.current)
 
           if (is_near_bottom_ref.current) {
-            set_show_new_message_badge(false)
+            set_show_scroll_down_button(false)
           }
 
           if (target.scrollTop < 80) {

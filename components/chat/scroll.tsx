@@ -15,10 +15,10 @@ import {
 import type { Locale } from "@/src/lib/locale"
 
 const content = {
-  new_message: {
-    ja: "新着メッセージ",
-    en: "New message",
-    es: "Nuevo mensaje",
+  scroll_latest: {
+    ja: "最新へ",
+    en: "Latest",
+    es: "Reciente",
   },
 } satisfies Record<string, Record<Locale, string>>
 
@@ -69,7 +69,7 @@ export default function ChatScrollButton({
     const scroll_container = container
 
     function update_visibility() {
-      if (read_distance_from_bottom(scroll_container) < CHAT_NEAR_BOTTOM_THRESHOLD) {
+      if (read_distance_from_bottom(scroll_container) <= CHAT_NEAR_BOTTOM_THRESHOLD) {
         on_clear()
       }
     }
@@ -103,7 +103,7 @@ export default function ChatScrollButton({
       ].join(" ")}
     >
       <ArrowDown aria-hidden="true" className="h-4 w-4" />
-      <span>{content.new_message[locale]}</span>
+      <span>{content.scroll_latest[locale]}</span>
     </button>
   )
 

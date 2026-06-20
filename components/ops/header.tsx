@@ -53,7 +53,6 @@ type HeaderBreadcrumbItem = {
 
 export default function OpsHeader({
   session,
-  page_label,
   concierge_available,
   breadcrumb_items = [],
 }: {
@@ -269,9 +268,6 @@ export default function OpsHeader({
             </p>
             <p className="mt-0.5 text-[12px] font-medium leading-tight text-neutral-500">
               {tierLabel ? `${roleLabel} / ${tierLabel}` : roleLabel}
-            </p>
-            <p className="mt-1 truncate text-[11px] font-medium leading-tight text-neutral-500">
-              {page_label}
             </p>
           </div>
         </div>

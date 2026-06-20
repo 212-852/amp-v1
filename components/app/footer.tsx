@@ -7,6 +7,7 @@ import { flushSync } from "react-dom"
 import type { RefObject } from "react"
 
 import ConciergeMemberModal from "@/components/app/concierge_member_modal"
+import { prepare_chat_send_text } from "@/components/chat/input_send_core"
 import ChatSendButton from "@/components/chat/send_button"
 import { send_chat_realtime_debug } from "@/components/chat/realtime_debug"
 import { useComposerHeightReporter } from "@/components/chat/use_composer_height"
@@ -449,7 +450,6 @@ export default function AppFooter({
   const footer_ref = useRef<HTMLElement | null>(null)
 
   useComposerHeightReporter(footer_ref)
-  const input_value_ref = useRef("")
   const is_sending_ref = useRef(false)
   const message_input_ref = useRef<HTMLTextAreaElement | null>(null)
   const pending_input_focus_ref = useRef(false)
@@ -621,24 +621,26 @@ export default function AppFooter({
   }
 
   const handle_send_message = useCallback(() => {
-    const text = (
-      message_input_ref.current?.value ?? input_value_ref.current
-    ).trim()
+    if (is_sending_ref.current) {
+      return
+    }
 
-    if (!text || is_sending_ref.current) {
+    let text: string | null = null
+    flushSync(() => {
+      text = prepare_chat_send_text({
+        input_value,
+        input_ref: message_input_ref,
+        set_input_value,
+      })
+    })
+
+    if (!text) {
       return
     }
 
     const room_uuid = chat_room_ref.current.room_uuid
     const client_message_id = create_client_message_id()
 
-    flushSync(() => {
-      input_value_ref.current = ""
-      set_input_value("")
-      if (message_input_ref.current) {
-        message_input_ref.current.value = ""
-      }
-    })
     handleTyping(false)
 
     dispatch_optimistic_message({
@@ -701,10 +703,9 @@ export default function AppFooter({
         set_is_sending(false)
       }
     })()
-  }, [locale])
+  }, [input_value, locale])
 
   function set_chat_input_value(value: string) {
-    input_value_ref.current = value
     set_input_value(value)
   }
 
