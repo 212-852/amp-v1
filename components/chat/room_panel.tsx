@@ -34,6 +34,8 @@ const content = {
   },
 }
 
+const DEBUG_REALTIME_DUPLICATES = false
+
 function shouldShowMessageHeader(
   message: ChatMessageRecord,
   previous_message: ChatMessageRecord | null,
@@ -96,34 +98,24 @@ function mergeMessage(
 
     if (matches_message_uuid || matches_client_message_id) {
       replaced = true
-      console.log("[chat realtime] duplicate skipped", {
-        room_uuid: next_message.room_uuid,
-        existing_message_uuid,
-        incoming_message_uuid,
-        existing_client_message_id,
-        incoming_client_message_id,
-        sender_uuid: next_message.participant_uuid ?? null,
-        current_user_uuid: debug_context.current_user_uuid,
-        view: debug_context.view,
-        reason: matches_message_uuid
-          ? "message_uuid"
-          : "client_message_id",
-        source,
-      })
-      send_chat_realtime_debug("chat_realtime_duplicate_skipped", {
-        view: debug_context.view,
-        room_uuid: next_message.room_uuid,
-        incoming_room_uuid: next_message.room_uuid,
-        message_uuid: incoming_message_uuid,
-        client_message_id: incoming_client_message_id,
-        sender_uuid: next_message.participant_uuid ?? null,
-        current_user_uuid: debug_context.current_user_uuid,
-        existing_message_uuid,
-        existing_client_message_id,
-        reason: matches_message_uuid
-          ? "message_uuid"
-          : "client_message_id",
-      })
+
+      if (DEBUG_REALTIME_DUPLICATES) {
+        console.log("[chat realtime] duplicate skipped", {
+          room_uuid: next_message.room_uuid,
+          existing_message_uuid,
+          incoming_message_uuid,
+          existing_client_message_id,
+          incoming_client_message_id,
+          sender_uuid: next_message.participant_uuid ?? null,
+          current_user_uuid: debug_context.current_user_uuid,
+          view: debug_context.view,
+          reason: matches_message_uuid
+            ? "message_uuid"
+            : "client_message_id",
+          source,
+        })
+      }
+
       return next_message
     }
 
@@ -282,23 +274,6 @@ export default function ChatRoomPanel({
   }, [])
 
   useEffect(() => {
-    set_messages((current) => {
-      let merged = current
-
-      for (const message of initial_messages) {
-        merged = mergeMessage(
-          merged,
-          message,
-          "initial_sync",
-          realtime_debug_context,
-        )
-      }
-
-      return merged
-    })
-  }, [initial_messages, realtime_debug_context])
-
-  useEffect(() => {
     console.log("[chat realtime] room_uuid", {
       room_uuid: room.room_uuid,
       view: show_presence ? "concierge" : "user",
@@ -342,23 +317,11 @@ export default function ChatRoomPanel({
     }
 
     set_room(payload.room)
-    set_messages((current) => {
-      let merged = current
-
-      for (const message of payload.messages) {
-        merged = mergeMessage(merged, message, "refresh", realtime_debug_context)
-      }
-
-      return merged
-    })
-    set_has_older_messages(payload.messages.length >= 30)
-
     if (payload.presence) {
       set_presence(payload.presence)
     }
   }, [
     locale,
-    realtime_debug_context,
     room.mode,
     room.room_uuid,
     room_uuid,
@@ -647,6 +610,9 @@ export default function ChatRoomPanel({
     try {
       const params = new URLSearchParams()
       const first_message = messages[0]
+      const scroll_container = scroll_ref.current
+      const previous_scroll_height = scroll_container?.scrollHeight ?? 0
+      const previous_scroll_top = scroll_container?.scrollTop ?? 0
 
       params.set("locale", locale)
       params.set("room_uuid", room.room_uuid)
@@ -677,6 +643,15 @@ export default function ChatRoomPanel({
             ),
             ...current,
           ]
+        })
+        window.requestAnimationFrame(() => {
+          if (!scroll_container) {
+            return
+          }
+
+          const height_delta =
+            scroll_container.scrollHeight - previous_scroll_height
+          scroll_container.scrollTop = previous_scroll_top + height_delta
         })
       }
     } finally {

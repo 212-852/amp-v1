@@ -1,12 +1,8 @@
 "use client"
 
 type ChatRealtimeDebugEvent =
-  | "chat_realtime_hook_mounted"
-  | "chat_realtime_subscribe_creating"
   | "chat_realtime_subscribed"
   | "chat_realtime_insert_received"
-  | "chat_realtime_room_mismatch"
-  | "chat_realtime_duplicate_skipped"
   | "chat_realtime_append_done"
   | "chat_realtime_channel_error"
 

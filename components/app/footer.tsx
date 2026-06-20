@@ -498,7 +498,7 @@ export default function AppFooter({
         )
       }
     }
-  }, [locale, settleChatInput, settleChatToggle])
+  }, [assistantMode, locale, settleChatInput, settleChatToggle])
 
   async function persistModeSwitch(mode: ChatSupportMode) {
     const response = await fetch("/api/chat/mode", {

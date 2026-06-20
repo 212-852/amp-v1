@@ -45,11 +45,6 @@ function useRoomMessages(
       view,
       current_user_uuid,
     })
-    send_chat_realtime_debug("chat_realtime_hook_mounted", {
-      view,
-      room_uuid: room_uuid ?? null,
-      current_user_uuid,
-    })
   }, [current_user_uuid, enabled, room_uuid, view])
 
   useEffect(() => {
@@ -94,11 +89,6 @@ function useRoomMessages(
       room_uuid,
       filter: `room_uuid=eq.${room_uuid}`,
       view,
-      current_user_uuid,
-    })
-    send_chat_realtime_debug("chat_realtime_subscribe_creating", {
-      view,
-      room_uuid,
       current_user_uuid,
     })
 
@@ -153,16 +143,6 @@ function useRoomMessages(
               sender_uuid: message.participant_uuid ?? null,
               current_user_uuid,
               view,
-            })
-            send_chat_realtime_debug("chat_realtime_room_mismatch", {
-              view,
-              room_uuid,
-              incoming_room_uuid: message.room_uuid,
-              message_uuid: message.message_uuid,
-              client_message_id,
-              sender_uuid: message.participant_uuid ?? null,
-              current_user_uuid,
-              reason: "room_uuid_mismatch",
             })
             return
           }
