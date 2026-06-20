@@ -36,7 +36,7 @@ export default async function AppPage() {
 
   return (
     <div
-      className="flex h-dvh min-h-dvh flex-col overflow-hidden bg-[#f5e8d5] text-[#3d2a19] pt-[calc(108px+env(safe-area-inset-top,0px))] [--chat-composer-height:186px] [--chat-input-height:186px] [--chat-message-bottom-padding:calc(var(--chat-composer-height)+env(safe-area-inset-bottom,0px)+32px)]"
+      className="flex h-dvh min-h-dvh flex-col overflow-hidden bg-[#f5e8d5] text-[#3d2a19] pt-[calc(108px+env(safe-area-inset-top,0px))] [--chat-composer-height:186px] [--chat-input-height:186px] [--chat-message-bottom-padding:calc(var(--chat-composer-height)+env(safe-area-inset-bottom,0px)+48px)]"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
       <AppHeader auth={session} />

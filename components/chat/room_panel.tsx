@@ -10,6 +10,13 @@ import {
 } from "@/components/chat/message_merge"
 import { send_chat_realtime_debug } from "@/components/chat/realtime_debug"
 import ChatScrollButton from "@/components/chat/scroll"
+import {
+  CHAT_BOTTOM_SPACER_HEIGHT,
+  is_chat_near_bottom,
+  read_chat_scroll_bottom_detail,
+  request_chat_scroll_to_bottom,
+  type ChatScrollReason,
+} from "@/components/chat/scroll_to_bottom"
 import { use_room_messages } from "@/components/chat/use_room_messages"
 import { useRoomTyping } from "@/components/chat/use_room_typing"
 import {
@@ -173,6 +180,10 @@ export default function ChatRoomPanel({
   const bottom_ref = useRef<HTMLDivElement>(null)
   const scroll_ref = useRef<HTMLDivElement>(null)
   const is_near_bottom_ref = useRef(true)
+  const pending_scroll_ref = useRef<{
+    reason: ChatScrollReason
+    force: boolean
+  } | null>(null)
   const realtime_debug_context = useMemo(
     () => ({
       view: show_presence ? "concierge" as const : "user" as const,
@@ -182,31 +193,26 @@ export default function ChatRoomPanel({
     [room.user_uuid, room.visitor_uuid, show_presence],
   )
 
-  const scroll_to_bottom = useCallback((behavior: ScrollBehavior = "smooth") => {
-    window.requestAnimationFrame(() => {
-      const container = scroll_ref.current
-
-      if (!container) {
-        return
-      }
-
-      const container_element = container
-
-      function scroll() {
-        container_element.scrollTo({
-          top: container_element.scrollHeight,
-          behavior,
-        })
-        bottom_ref.current?.scrollIntoView({ behavior, block: "end" })
-      }
-
-      scroll()
-      window.requestAnimationFrame(() => {
-        scroll()
-        window.setTimeout(scroll, 80)
+  const scroll_to_bottom = useCallback(
+    (reason: ChatScrollReason, force = false) => {
+      request_chat_scroll_to_bottom({
+        scroll_container: scroll_ref.current,
+        bottom_anchor: bottom_ref.current,
+        reason,
+        view: realtime_debug_context.view,
+        force,
+        is_near_bottom: is_near_bottom_ref.current,
       })
-    })
-  }, [])
+    },
+    [realtime_debug_context.view],
+  )
+
+  const queue_scroll_to_bottom = useCallback(
+    (reason: ChatScrollReason, force = false) => {
+      pending_scroll_ref.current = { reason, force }
+    },
+    [],
+  )
 
   useEffect(() => {
     console.log("[chat realtime] room_uuid", {
@@ -290,6 +296,8 @@ export default function ChatRoomPanel({
         return
       }
 
+      let should_scroll_realtime = false
+
       set_messages((current) => {
         const result = mergeRealtimeInsert(current, next_message)
 
@@ -319,6 +327,10 @@ export default function ChatRoomPanel({
           const rendered_count = show_presence
             ? result.messages.length
             : filterUserVisibleChatMessages(result.messages).length
+
+          if (is_near_bottom_ref.current) {
+            should_scroll_realtime = true
+          }
 
           console.log("[chat realtime] append message", {
             room_uuid: next_message.room_uuid,
@@ -351,9 +363,14 @@ export default function ChatRoomPanel({
 
         return result.messages
       })
+
+      if (should_scroll_realtime) {
+        queue_scroll_to_bottom("realtime_receive", false)
+      }
+
       window.dispatchEvent(new CustomEvent("amp-admin-queue-refresh"))
     },
-    [realtime_debug_context, room.room_uuid, show_presence],
+    [queue_scroll_to_bottom, realtime_debug_context, room.room_uuid, show_presence],
   )
 
   use_room_messages(room.room_uuid, {
@@ -414,23 +431,43 @@ export default function ChatRoomPanel({
 
   useEffect(() => {
     is_near_bottom_ref.current = true
-    scroll_to_bottom("auto")
-  }, [room.room_uuid, scroll_to_bottom])
+    queue_scroll_to_bottom("room_change", true)
+  }, [room.room_uuid, queue_scroll_to_bottom])
 
   useEffect(() => {
-    function handle_scroll_bottom() {
+    is_near_bottom_ref.current = true
+    queue_scroll_to_bottom("initial_load", true)
+  }, [queue_scroll_to_bottom])
+
+  useEffect(() => {
+    function handle_scroll_bottom(event: Event) {
+      const detail = read_chat_scroll_bottom_detail(event)
       is_near_bottom_ref.current = true
-      scroll_to_bottom("smooth")
+      scroll_to_bottom(detail.reason ?? "manual_jump", detail.force ?? true)
+    }
+
+    function handle_input_resized(event: Event) {
+      const detail = (event as CustomEvent<{ reason?: string }>).detail
+      const reason =
+        detail?.reason === "composer_mount"
+          ? "composer_mount"
+          : detail?.reason === "composer_resize"
+            ? "composer_resize"
+            : "input_resize"
+
+      if (is_near_bottom_ref.current) {
+        scroll_to_bottom(reason, false)
+      }
     }
 
     window.addEventListener("amp-chat-scroll-bottom", handle_scroll_bottom)
-    window.addEventListener("amp-chat-input-resized", handle_scroll_bottom)
-    window.addEventListener("resize", handle_scroll_bottom)
+    window.addEventListener("amp-chat-input-resized", handle_input_resized)
+    window.addEventListener("amp-chat-composer-mounted", handle_input_resized)
 
     return () => {
       window.removeEventListener("amp-chat-scroll-bottom", handle_scroll_bottom)
-      window.removeEventListener("amp-chat-input-resized", handle_scroll_bottom)
-      window.removeEventListener("resize", handle_scroll_bottom)
+      window.removeEventListener("amp-chat-input-resized", handle_input_resized)
+      window.removeEventListener("amp-chat-composer-mounted", handle_input_resized)
     }
   }, [scroll_to_bottom])
 
@@ -510,6 +547,7 @@ export default function ChatRoomPanel({
       const body = detail.body
       const client_message_id = detail.client_message_id
       is_near_bottom_ref.current = true
+      queue_scroll_to_bottom("own_send", true)
 
       set_messages((current) => {
         const optimistic_message = buildOptimisticMessage({
@@ -535,7 +573,6 @@ export default function ChatRoomPanel({
 
         return result.messages
       })
-      scroll_to_bottom("smooth")
     }
 
     window.addEventListener("amp-chat-optimistic-message", handle_optimistic_message)
@@ -549,10 +586,10 @@ export default function ChatRoomPanel({
   }, [
     current_viewer_display_name,
     participant_uuid,
+    queue_scroll_to_bottom,
     room.locale,
     room.room_uuid,
     realtime_debug_context,
-    scroll_to_bottom,
     show_presence,
   ])
 
@@ -580,7 +617,10 @@ export default function ChatRoomPanel({
           messageBundleToRecord(detail.message as MessageBundle, participant_uuid),
         ).messages,
       )
-      scroll_to_bottom("smooth")
+
+      if (is_near_bottom_ref.current) {
+        queue_scroll_to_bottom("message_archived", false)
+      }
     }
 
     window.addEventListener("amp-chat-message-archived", handle_archived_message)
@@ -591,7 +631,7 @@ export default function ChatRoomPanel({
         handle_archived_message,
       )
     }
-  }, [participant_uuid, realtime_debug_context, room.room_uuid, scroll_to_bottom])
+  }, [participant_uuid, queue_scroll_to_bottom, room.room_uuid])
 
   useEffect(() => {
     function handle_failed_message(event: Event) {
@@ -620,8 +660,15 @@ export default function ChatRoomPanel({
   }, [])
 
   useEffect(() => {
+    if (pending_scroll_ref.current) {
+      const { reason, force } = pending_scroll_ref.current
+      pending_scroll_ref.current = null
+      scroll_to_bottom(reason, force)
+      return
+    }
+
     if (is_near_bottom_ref.current) {
-      scroll_to_bottom("smooth")
+      scroll_to_bottom("typing", false)
     }
   }, [messages.length, scroll_to_bottom, typing.length])
 
@@ -711,6 +758,7 @@ export default function ChatRoomPanel({
         container_ref={scroll_ref}
         bottom_ref={bottom_ref}
         placement={scroll_button_placement}
+        view={realtime_debug_context.view}
       />
       {show_presence && room.mode !== "concierge" ? (
         <div className="mb-3 shrink-0 rounded-md border border-neutral-200 bg-white px-3 py-2 text-[12px] font-medium text-neutral-600">
@@ -732,14 +780,9 @@ export default function ChatRoomPanel({
       <div
         ref={scroll_ref}
         className={scroll_class}
-        style={{
-          paddingBottom:
-            "var(--chat-message-bottom-padding, calc(var(--chat-composer-height, var(--chat-input-height, 88px)) + env(safe-area-inset-bottom, 0px) + 32px))",
-        }}
         onScroll={(event) => {
           const target = event.currentTarget
-          is_near_bottom_ref.current =
-            target.scrollHeight - target.scrollTop - target.clientHeight < 96
+          is_near_bottom_ref.current = is_chat_near_bottom(target)
 
           if (target.scrollTop < 80) {
             void load_older_messages()
@@ -763,7 +806,12 @@ export default function ChatRoomPanel({
             {typing_label}
           </p>
         ) : null}
-        <div ref={bottom_ref} className="h-2" />
+        <div
+          aria-hidden="true"
+          className="chat-bottom-spacer shrink-0"
+          style={{ height: CHAT_BOTTOM_SPACER_HEIGHT }}
+        />
+        <div ref={bottom_ref} aria-hidden="true" className="h-0" />
       </div>
     </section>
   )

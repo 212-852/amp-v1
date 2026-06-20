@@ -9,6 +9,7 @@ import type { RefObject } from "react"
 import ConciergeMemberModal from "@/components/app/concierge_member_modal"
 import ChatSendButton from "@/components/chat/send_button"
 import { send_chat_realtime_debug } from "@/components/chat/realtime_debug"
+import { useComposerHeightReporter } from "@/components/chat/use_composer_height"
 import {
   create_client_message_id,
   dispatch_message_archived,
@@ -444,6 +445,8 @@ export default function AppFooter({
   const typing_timer_ref = useRef<number | null>(null)
   const is_sending_ref = useRef(false)
   const footer_ref = useRef<HTMLElement | null>(null)
+
+  useComposerHeightReporter(footer_ref)
   const message_input_ref = useRef<HTMLTextAreaElement | null>(null)
   const pending_input_focus_ref = useRef(false)
   const chat_room_ref = useRef<{
@@ -461,7 +464,11 @@ export default function AppFooter({
   const settleChatInput = useCallback(() => {
     pending_input_focus_ref.current = true
     setFooterMode("input")
-    window.dispatchEvent(new CustomEvent("amp-chat-scroll-bottom"))
+    window.dispatchEvent(
+      new CustomEvent("amp-chat-scroll-bottom", {
+        detail: { reason: "input_resize", force: true },
+      }),
+    )
   }, [])
 
   const settleChatToggle = useCallback(() => {
@@ -818,7 +825,11 @@ export default function AppFooter({
 
     const timer = window.setTimeout(() => {
       message_input_ref.current?.focus({ preventScroll: true })
-      window.dispatchEvent(new CustomEvent("amp-chat-scroll-bottom"))
+      window.dispatchEvent(
+        new CustomEvent("amp-chat-scroll-bottom", {
+          detail: { reason: "manual_jump", force: true },
+        }),
+      )
       pending_input_focus_ref.current = false
     }, 320)
 

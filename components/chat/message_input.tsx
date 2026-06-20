@@ -5,6 +5,7 @@ import { flushSync } from "react-dom"
 
 import ChatSendButton from "@/components/chat/send_button"
 import { send_chat_realtime_debug } from "@/components/chat/realtime_debug"
+import { useComposerHeightReporter } from "@/components/chat/use_composer_height"
 import {
   create_client_message_id,
   dispatch_message_archived,
@@ -42,8 +43,11 @@ export default function ChatMessageInput({
   const [profile_modal_open, set_profile_modal_open] = useState(false)
   const input_value_ref = useRef("")
   const textarea_ref = useRef<HTMLTextAreaElement>(null)
+  const composer_ref = useRef<HTMLDivElement>(null)
   const typing_timer_ref = useRef<number | null>(null)
   const is_sending_ref = useRef(false)
+
+  useComposerHeightReporter(composer_ref)
 
   useEffect(() => {
     function handle_profile_modal_visibility(event: Event) {
@@ -189,6 +193,7 @@ export default function ChatMessageInput({
 
   return (
     <div
+      ref={composer_ref}
       className={[
         "fixed inset-x-0 bottom-0 border-t border-neutral-200 bg-white px-4 py-3",
         ui_layer_class.chat_composer,
