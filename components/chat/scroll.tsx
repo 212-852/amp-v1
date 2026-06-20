@@ -10,7 +10,7 @@ import {
 import {
   CHAT_NEAR_BOTTOM_THRESHOLD,
   read_distance_from_bottom,
-  scroll_chat_to_bottom,
+  scroll_to_latest_message,
   type ChatScrollView,
 } from "@/components/chat/scroll_to_bottom"
 
@@ -30,18 +30,15 @@ export default function ChatScrollButton({
   const [is_visible, set_is_visible] = useState(false)
 
   function jump_to_bottom() {
-    const container = container_ref.current
-
-    if (!container) {
-      return
-    }
-
-    scroll_chat_to_bottom({
-      scroll_container: container,
-      bottom_anchor: bottom_ref.current,
-      reason: "manual_jump",
-      view,
-    })
+    scroll_to_latest_message(
+      {
+        scroll_container: container_ref.current,
+        bottom_anchor: bottom_ref.current,
+        view,
+      },
+      "manual_jump",
+      true,
+    )
     window.dispatchEvent(
       new CustomEvent("amp-chat-scroll-bottom", {
         detail: { reason: "manual_jump", force: true },
@@ -60,7 +57,7 @@ export default function ChatScrollButton({
 
     function update_visibility() {
       set_is_visible(
-        read_distance_from_bottom(scroll_container) > CHAT_NEAR_BOTTOM_THRESHOLD,
+        read_distance_from_bottom(scroll_container) >= CHAT_NEAR_BOTTOM_THRESHOLD,
       )
     }
 

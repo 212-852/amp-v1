@@ -11,10 +11,10 @@ import {
 import { send_chat_realtime_debug } from "@/components/chat/realtime_debug"
 import ChatScrollButton from "@/components/chat/scroll"
 import {
-  CHAT_BOTTOM_SPACER_HEIGHT,
+  CHAT_BOTTOM_SPACER_CLASS,
   is_chat_near_bottom,
   read_chat_scroll_bottom_detail,
-  request_chat_scroll_to_bottom,
+  scroll_to_latest_message,
   type ChatScrollReason,
 } from "@/components/chat/scroll_to_bottom"
 import { use_room_messages } from "@/components/chat/use_room_messages"
@@ -193,21 +193,23 @@ export default function ChatRoomPanel({
     [room.user_uuid, room.visitor_uuid, show_presence],
   )
 
-  const scroll_to_bottom = useCallback(
+  const scroll_to_latest = useCallback(
     (reason: ChatScrollReason, force = false) => {
-      request_chat_scroll_to_bottom({
-        scroll_container: scroll_ref.current,
-        bottom_anchor: bottom_ref.current,
+      scroll_to_latest_message(
+        {
+          scroll_container: scroll_ref.current,
+          bottom_anchor: bottom_ref.current,
+          view: realtime_debug_context.view,
+          is_near_bottom: is_near_bottom_ref.current,
+        },
         reason,
-        view: realtime_debug_context.view,
         force,
-        is_near_bottom: is_near_bottom_ref.current,
-      })
+      )
     },
     [realtime_debug_context.view],
   )
 
-  const queue_scroll_to_bottom = useCallback(
+  const queue_scroll_to_latest = useCallback(
     (reason: ChatScrollReason, force = false) => {
       pending_scroll_ref.current = { reason, force }
     },
@@ -365,12 +367,12 @@ export default function ChatRoomPanel({
       })
 
       if (should_scroll_realtime) {
-        queue_scroll_to_bottom("realtime_receive", false)
+        queue_scroll_to_latest("realtime_receive", true)
       }
 
       window.dispatchEvent(new CustomEvent("amp-admin-queue-refresh"))
     },
-    [queue_scroll_to_bottom, realtime_debug_context, room.room_uuid, show_presence],
+    [queue_scroll_to_latest, realtime_debug_context, room.room_uuid, show_presence],
   )
 
   use_room_messages(room.room_uuid, {
@@ -431,19 +433,19 @@ export default function ChatRoomPanel({
 
   useEffect(() => {
     is_near_bottom_ref.current = true
-    queue_scroll_to_bottom("room_change", true)
-  }, [room.room_uuid, queue_scroll_to_bottom])
+    queue_scroll_to_latest("room_change", true)
+  }, [room.room_uuid, queue_scroll_to_latest])
 
   useEffect(() => {
     is_near_bottom_ref.current = true
-    queue_scroll_to_bottom("initial_load", true)
-  }, [queue_scroll_to_bottom])
+    queue_scroll_to_latest("initial_load", true)
+  }, [queue_scroll_to_latest])
 
   useEffect(() => {
     function handle_scroll_bottom(event: Event) {
       const detail = read_chat_scroll_bottom_detail(event)
       is_near_bottom_ref.current = true
-      scroll_to_bottom(detail.reason ?? "manual_jump", detail.force ?? true)
+      scroll_to_latest(detail.reason ?? "manual_jump", detail.force ?? true)
     }
 
     function handle_input_resized(event: Event) {
@@ -456,7 +458,7 @@ export default function ChatRoomPanel({
             : "input_resize"
 
       if (is_near_bottom_ref.current) {
-        scroll_to_bottom(reason, false)
+        scroll_to_latest(reason, true)
       }
     }
 
@@ -469,7 +471,7 @@ export default function ChatRoomPanel({
       window.removeEventListener("amp-chat-input-resized", handle_input_resized)
       window.removeEventListener("amp-chat-composer-mounted", handle_input_resized)
     }
-  }, [scroll_to_bottom])
+  }, [scroll_to_latest])
 
   useEffect(() => {
     function handle_mode_change(event: Event) {
@@ -547,7 +549,7 @@ export default function ChatRoomPanel({
       const body = detail.body
       const client_message_id = detail.client_message_id
       is_near_bottom_ref.current = true
-      queue_scroll_to_bottom("own_send", true)
+      queue_scroll_to_latest("own_send", true)
 
       set_messages((current) => {
         const optimistic_message = buildOptimisticMessage({
@@ -586,7 +588,7 @@ export default function ChatRoomPanel({
   }, [
     current_viewer_display_name,
     participant_uuid,
-    queue_scroll_to_bottom,
+    queue_scroll_to_latest,
     room.locale,
     room.room_uuid,
     realtime_debug_context,
@@ -619,7 +621,7 @@ export default function ChatRoomPanel({
       )
 
       if (is_near_bottom_ref.current) {
-        queue_scroll_to_bottom("message_archived", false)
+        queue_scroll_to_latest("message_archived", true)
       }
     }
 
@@ -631,7 +633,7 @@ export default function ChatRoomPanel({
         handle_archived_message,
       )
     }
-  }, [participant_uuid, queue_scroll_to_bottom, room.room_uuid])
+  }, [participant_uuid, queue_scroll_to_latest, room.room_uuid])
 
   useEffect(() => {
     function handle_failed_message(event: Event) {
@@ -660,17 +662,14 @@ export default function ChatRoomPanel({
   }, [])
 
   useEffect(() => {
-    if (pending_scroll_ref.current) {
-      const { reason, force } = pending_scroll_ref.current
-      pending_scroll_ref.current = null
-      scroll_to_bottom(reason, force)
+    if (!pending_scroll_ref.current) {
       return
     }
 
-    if (is_near_bottom_ref.current) {
-      scroll_to_bottom("typing", false)
-    }
-  }, [messages.length, scroll_to_bottom, typing.length])
+    const { reason, force } = pending_scroll_ref.current
+    pending_scroll_ref.current = null
+    scroll_to_latest(reason, force)
+  }, [messages.length, scroll_to_latest])
 
   async function load_older_messages() {
     if (is_loading_older || !has_older_messages || messages.length === 0) {
@@ -806,11 +805,7 @@ export default function ChatRoomPanel({
             {typing_label}
           </p>
         ) : null}
-        <div
-          aria-hidden="true"
-          className="chat-bottom-spacer shrink-0"
-          style={{ height: CHAT_BOTTOM_SPACER_HEIGHT }}
-        />
+        <div aria-hidden="true" className={[CHAT_BOTTOM_SPACER_CLASS, "shrink-0"].join(" ")} />
         <div ref={bottom_ref} aria-hidden="true" className="h-0" />
       </div>
     </section>

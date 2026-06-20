@@ -31,8 +31,8 @@ const realtime_events = new Set([
   "chat_send_started",
   "chat_send_success",
   "chat_send_failed",
-  "chat_scroll_to_bottom_called",
-  "chat_scroll_to_bottom_done",
+  "chat_scroll_called",
+  "chat_scroll_done",
 ])
 
 export async function POST(request: Request) {

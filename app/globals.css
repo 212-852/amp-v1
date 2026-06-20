@@ -39,6 +39,16 @@ select {
   padding-bottom: calc(var(--chat-input-height, 120px) + env(safe-area-inset-bottom, 0px));
 }
 
+.chat-bottom-spacer {
+  height: 120px;
+}
+
+@media (max-width: 768px) {
+  .chat-bottom-spacer {
+    height: calc(140px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 a {
   color: inherit;
   text-decoration: none;
