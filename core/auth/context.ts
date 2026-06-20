@@ -1,6 +1,7 @@
 import { cookies, headers } from "next/headers"
 
 import type { AuthContext, SourceChannel } from "@/core/auth/types"
+import { SOURCE_CHANNEL_COOKIE_NAME } from "@/core/auth/session"
 import { sendAuthDebug } from "@/core/debug"
 import { resolveEntranceContext } from "@/core/entrance/context"
 
@@ -76,6 +77,18 @@ export async function resolveAuthContext(
     requestHeaders.get("x-amp-route")
   const search = requestHeaders.get("x-amp-search")
 
+  const persisted_channel = cookieStore.get(SOURCE_CHANNEL_COOKIE_NAME)?.value
+  const header_channel =
+    requestHeaders.get("x-amp-source-channel") ??
+    requestHeaders.get("x-amp-session-source-channel") ??
+    requestHeaders.get("x-amp-channel") ??
+    (persisted_channel === "pwa" ||
+    persisted_channel === "web" ||
+    persisted_channel === "liff" ||
+    persisted_channel === "line"
+      ? persisted_channel
+      : null)
+
   const context: AuthContext = {
     auth_token:
       resolveBearerToken(requestHeaders.get("authorization")) ??
@@ -85,9 +98,7 @@ export async function resolveAuthContext(
     requested_route: pathname ?? null,
     source_channel: resolveSourceChannel(
       entrance.surface,
-      requestHeaders.get("x-amp-source-channel") ??
-        requestHeaders.get("x-amp-session-source-channel") ??
-        requestHeaders.get("x-amp-channel"),
+      header_channel,
       pathname,
       search,
       requestHeaders.get("user-agent"),

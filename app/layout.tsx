@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { LiffAutoLogin } from "@/components/access/liff";
 import { PwaRuntime } from "@/components/pwa/runtime";
+import { PwaSessionRestore } from "@/components/pwa/session_restore";
 import { AccessPresence } from "@/components/access/presence";
 import { OverlayProvider } from "@/components/overlay";
 import { ToastProvider } from "@/components/ui/toast_provider";
@@ -41,6 +42,7 @@ export default function RootLayout({
           <ToastProvider>
             <OverlayProvider>
               <PwaRuntime />
+              <PwaSessionRestore />
               <AccessPresence />
               <LiffAutoLogin />
               {children}

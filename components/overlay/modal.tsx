@@ -1396,13 +1396,11 @@ export default function OverlayModal({
 
     if (item.action === "line") {
       const source_channel = detectAccessChannel()
-      const is_pwa = source_channel === "pwa"
       const is_liff = source_channel === "liff"
 
       send_bridge_debug("line_login_button_clicked", {
         provider: "line",
         source_channel,
-        is_pwa,
         is_liff,
       })
 
@@ -1410,37 +1408,8 @@ export default function OverlayModal({
         return
       }
 
-      if (is_pwa && bridge_uuid && bridge_status === "polling") {
-        return
-      }
-
-      if (!is_pwa) {
-        set_loading_action(item.action)
-        handleLinkOption(item).catch(() => {
-          set_loading_action(null)
-        })
-        return
-      }
-
-      const popup = window.open("about:blank", "_blank")
-
-      if (popup) {
-        write_connecting_popup(popup)
-        send_bridge_debug("pwa_line_popup_opened", {
-          provider: "line",
-          source_channel,
-        })
-      } else {
-        send_bridge_debug("pwa_line_popup_blocked", {
-          provider: "line",
-          source_channel,
-        })
-      }
-
-      start_pwa_line_bridge(popup).catch(() => {
-        popup?.close()
-        stop_bridge_polling()
-        set_bridge_status("failed")
+      set_loading_action(item.action)
+      handleLinkOption(item).catch(() => {
         set_loading_action(null)
       })
       return

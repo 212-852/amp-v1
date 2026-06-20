@@ -7,6 +7,7 @@ import {
   resolveRoleRedirectPath,
 } from "@/core/auth/route"
 import { sendAuthDebug } from "@/core/debug"
+import { SOURCE_CHANNEL_COOKIE_NAME } from "@/core/auth/session"
 import {
   resolve_session_context,
   VISITOR_COOKIE_NAME,
@@ -29,6 +30,7 @@ function resolveBearerToken(authorization: string | null) {
 
 function resolveSourceChannel(request: NextRequest): SourceChannel {
   const channel = request.headers.get("x-amp-channel")
+  const persisted_channel = request.cookies.get(SOURCE_CHANNEL_COOKIE_NAME)?.value
   const sourceChannel = request.nextUrl.searchParams.get("source_channel")
   const userAgent = request.headers.get("user-agent") ?? ""
 
@@ -39,6 +41,15 @@ function resolveSourceChannel(request: NextRequest): SourceChannel {
     channel === "line"
   ) {
     return channel
+  }
+
+  if (
+    persisted_channel === "web" ||
+    persisted_channel === "liff" ||
+    persisted_channel === "pwa" ||
+    persisted_channel === "line"
+  ) {
+    return persisted_channel
   }
 
   if (sourceChannel === "liff") {

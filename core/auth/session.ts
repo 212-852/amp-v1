@@ -14,6 +14,8 @@ import { resolve_profile_display_name } from "@/core/profile/rules"
 
 const VISITOR_COOKIE_NAME = "amp_visitor_uuid"
 const VISITOR_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
+export const SOURCE_CHANNEL_COOKIE_NAME = "amp_source_channel"
+export const SOURCE_CHANNEL_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
 
 type VisitorRecord = {
   visitor_uuid: string
@@ -1148,16 +1150,17 @@ async function resolve_session_context_core(
       request_id,
     )
     const visitor = visitorResolution.visitor
-    const user_uuid = await visitorStore.resolveUserUuidFromAuth(context)
+    const auth_user_uuid = await visitorStore.resolveUserUuidFromAuth(context)
+    const user_uuid = auth_user_uuid ?? visitor?.user_uuid ?? null
 
-    if (visitor && user_uuid && visitor.user_uuid !== user_uuid) {
-      await visitorStore.linkVisitorUser(visitor.visitor_uuid, user_uuid)
+    if (visitor && auth_user_uuid && visitor.user_uuid !== auth_user_uuid) {
+      await visitorStore.linkVisitorUser(visitor.visitor_uuid, auth_user_uuid)
       await send_auth_debug(
         "visitor_user_linked",
         {
           pathname,
           visitor_uuid: visitor.visitor_uuid,
-          user_uuid,
+          user_uuid: auth_user_uuid,
         },
         request_id,
       )
@@ -1165,7 +1168,7 @@ async function resolve_session_context_core(
 
     const session = await withLogoutVisibility({
       visitor_uuid: visitorResolution.visitor_uuid,
-      user_uuid: user_uuid ?? visitor?.user_uuid ?? null,
+      user_uuid,
       source_channel: context.source_channel,
     }, request_id)
 
