@@ -17,11 +17,6 @@ export function dispatch_optimistic_message(input: {
       detail: input,
     }),
   )
-  window.dispatchEvent(
-    new CustomEvent("amp-chat-scroll-bottom", {
-      detail: { reason: "own_send", force: true },
-    }),
-  )
 }
 
 export function dispatch_message_failed(client_message_id: string) {

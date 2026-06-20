@@ -72,17 +72,15 @@ export function scroll_to_latest_message(
   })
 
   window.requestAnimationFrame(() => {
-    window.requestAnimationFrame(() => {
-      target.bottom_anchor?.scrollIntoView({
-        block: "end",
-        behavior: "smooth",
-      })
+    target.bottom_anchor?.scrollIntoView({
+      block: "end",
+      behavior: "smooth",
+    })
 
-      send_chat_realtime_debug("chat_scroll_done", {
-        reason,
-        view: target.view,
-        distance_from_bottom_after: read_distance_from_bottom(container),
-      })
+    send_chat_realtime_debug("chat_scroll_done", {
+      reason,
+      view: target.view,
+      distance_from_bottom_after: read_distance_from_bottom(container),
     })
   })
 }

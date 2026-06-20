@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import ChatMessageBubble from "@/components/chat/message_bubble"
 import {
@@ -330,9 +330,7 @@ export default function ChatRoomPanel({
             ? result.messages.length
             : filterUserVisibleChatMessages(result.messages).length
 
-          if (is_near_bottom_ref.current) {
-            should_scroll_realtime = true
-          }
+          should_scroll_realtime = true
 
           console.log("[chat realtime] append message", {
             room_uuid: next_message.room_uuid,
@@ -549,7 +547,6 @@ export default function ChatRoomPanel({
       const body = detail.body
       const client_message_id = detail.client_message_id
       is_near_bottom_ref.current = true
-      queue_scroll_to_latest("own_send", true)
 
       set_messages((current) => {
         const optimistic_message = buildOptimisticMessage({
@@ -571,6 +568,7 @@ export default function ChatRoomPanel({
             sender_uuid: participant_uuid,
             message_uuid: optimistic_message.message_uuid,
           })
+          queue_scroll_to_latest("optimistic_append", true)
         }
 
         return result.messages
@@ -661,7 +659,7 @@ export default function ChatRoomPanel({
     }
   }, [])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!pending_scroll_ref.current) {
       return
     }

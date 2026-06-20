@@ -1,4 +1,4 @@
-const SW_CACHE_VERSION = "amp-pwa-launch-v3-no-redirect-nav-mqm8m0xl"
+const SW_CACHE_VERSION = "amp-pwa-launch-v3-no-redirect-nav-mqma4imj"
 const CACHE_NAME = `${SW_CACHE_VERSION}-runtime`
 const APP_SHELL_URL = "/app"
 

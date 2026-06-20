@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { flushSync } from "react-dom"
 
 import ChatSendButton from "@/components/chat/send_button"
 import { useComposerHeightReporter } from "@/components/chat/use_composer_height"
@@ -94,7 +95,9 @@ export default function ChatMessageInput({
       return
     }
 
-    set_input_value("")
+    flushSync(() => {
+      set_input_value("")
+    })
 
     const client_message_id = create_client_message_id()
     dispatch_optimistic_message({

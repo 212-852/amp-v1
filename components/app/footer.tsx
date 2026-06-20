@@ -441,9 +441,7 @@ export default function AppFooter({
   const [profile_modal_open, set_profile_modal_open] = useState(false)
   const [input_value, set_input_value] = useState("")
   const [is_sending, set_is_sending] = useState(false)
-  const input_value_ref = useRef("")
   const typing_timer_ref = useRef<number | null>(null)
-  const is_sending_ref = useRef(false)
   const footer_ref = useRef<HTMLElement | null>(null)
 
   useComposerHeightReporter(footer_ref)
@@ -617,14 +615,19 @@ export default function AppFooter({
   }
 
   const handle_send_message = useCallback(() => {
-    const text = input_value_ref.current.trim()
+    const text = input_value.trim()
 
-    if (!text || is_sending_ref.current) {
+    if (!text || is_sending) {
       return
     }
 
     const room_uuid = chat_room_ref.current.room_uuid
     const client_message_id = create_client_message_id()
+
+    flushSync(() => {
+      set_input_value("")
+    })
+    handleTyping(false)
 
     dispatch_optimistic_message({
       room_uuid,
@@ -633,26 +636,12 @@ export default function AppFooter({
       client_message_id,
     })
 
-    flushSync(() => {
-      input_value_ref.current = ""
-      set_input_value("")
-      if (message_input_ref.current) {
-        message_input_ref.current.value = ""
-      }
-      send_chat_realtime_debug("chat_input_cleared", {
-        view: "user",
-        room_uuid,
-      })
-    })
-    handleTyping(false)
-
     send_chat_realtime_debug("chat_send_started", {
       view: "user",
       room_uuid,
       client_message_id,
     })
 
-    is_sending_ref.current = true
     set_is_sending(true)
 
     void (async () => {
@@ -695,14 +684,12 @@ export default function AppFooter({
         })
         dispatch_message_failed(client_message_id)
       } finally {
-        is_sending_ref.current = false
         set_is_sending(false)
       }
     })()
   }, [locale])
 
   function set_chat_input_value(value: string) {
-    input_value_ref.current = value
     set_input_value(value)
   }
 
