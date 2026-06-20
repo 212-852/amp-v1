@@ -2,6 +2,7 @@ import {
   AUTH_SESSION_DEBUG,
   DEBUG_ADMIN_ACCESS,
   DEBUG_CHAT_FLOW,
+  CHAT_REALTIME_DEBUG,
   DEBUG_LINE_WEBHOOK,
 } from "@/core/control"
 
@@ -65,6 +66,17 @@ const chatFlowInfoEvents = new Set([
   "participant_created",
   "quick_menu_locale_used",
   "welcome_message_created",
+])
+
+const chatRealtimeEvents = new Set([
+  "chat_realtime_hook_mounted",
+  "chat_realtime_subscribe_creating",
+  "chat_realtime_subscribed",
+  "chat_realtime_insert_received",
+  "chat_realtime_room_mismatch",
+  "chat_realtime_duplicate_skipped",
+  "chat_realtime_append_done",
+  "chat_realtime_channel_error",
 ])
 
 const identityEvents = new Set([
@@ -238,6 +250,10 @@ export function shouldSendAuthSessionDebug(event: string) {
     return DEBUG_CHAT_FLOW
   }
 
+  if (chatRealtimeEvents.has(event)) {
+    return CHAT_REALTIME_DEBUG
+  }
+
   if (identityEvents.has(event)) {
     if (!AUTH_SESSION_DEBUG) {
       console.warn("[IDENTITY_DEBUG_AUTH_SESSION_DEBUG_FALSE]", {
@@ -268,6 +284,10 @@ export function resolveDebugTitle(event: string) {
         event === "line_signature_verification_failed"))
   ) {
     return "LINE_WEBHOOK"
+  }
+
+  if (chatRealtimeEvents.has(event)) {
+    return "CHAT_REALTIME"
   }
 
   if (chatFlowInfoEvents.has(event)) {

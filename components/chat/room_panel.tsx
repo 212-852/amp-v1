@@ -1,8 +1,9 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import ChatMessageBubble from "@/components/chat/message_bubble"
+import { send_chat_realtime_debug } from "@/components/chat/realtime_debug"
 import ChatScrollButton from "@/components/chat/scroll"
 import { use_room_messages } from "@/components/chat/use_room_messages"
 import { useRoomTyping } from "@/components/chat/use_room_typing"
@@ -63,6 +64,13 @@ function mergeMessage(
   current: ChatMessageRecord[],
   next_message: ChatMessageRecord,
   source = "local",
+  debug_context: {
+    view: "user" | "concierge"
+    current_user_uuid: string | null
+  } = {
+    view: "user",
+    current_user_uuid: null,
+  },
 ) {
   const incoming_message_uuid = next_message.message_uuid || null
   const incoming_client_message_id = getClientMessageId(next_message)
@@ -89,10 +97,27 @@ function mergeMessage(
         incoming_message_uuid,
         existing_client_message_id,
         incoming_client_message_id,
+        sender_uuid: next_message.participant_uuid ?? null,
+        current_user_uuid: debug_context.current_user_uuid,
+        view: debug_context.view,
         reason: matches_message_uuid
           ? "message_uuid"
           : "client_message_id",
         source,
+      })
+      send_chat_realtime_debug("chat_realtime_duplicate_skipped", {
+        view: debug_context.view,
+        room_uuid: next_message.room_uuid,
+        incoming_room_uuid: next_message.room_uuid,
+        message_uuid: incoming_message_uuid,
+        client_message_id: incoming_client_message_id,
+        sender_uuid: next_message.participant_uuid ?? null,
+        current_user_uuid: debug_context.current_user_uuid,
+        existing_message_uuid,
+        existing_client_message_id,
+        reason: matches_message_uuid
+          ? "message_uuid"
+          : "client_message_id",
       })
       return next_message
     }
@@ -105,7 +130,19 @@ function mergeMessage(
       room_uuid: next_message.room_uuid,
       incoming_message_uuid,
       incoming_client_message_id,
+      sender_uuid: next_message.participant_uuid ?? null,
+      current_user_uuid: debug_context.current_user_uuid,
+      view: debug_context.view,
       source,
+    })
+    send_chat_realtime_debug("chat_realtime_append_done", {
+      view: debug_context.view,
+      room_uuid: next_message.room_uuid,
+      incoming_room_uuid: next_message.room_uuid,
+      message_uuid: incoming_message_uuid,
+      client_message_id: incoming_client_message_id,
+      sender_uuid: next_message.participant_uuid ?? null,
+      current_user_uuid: debug_context.current_user_uuid,
     })
     merged.push(next_message)
   }
@@ -222,6 +259,13 @@ export default function ChatRoomPanel({
   const bottom_ref = useRef<HTMLDivElement>(null)
   const scroll_ref = useRef<HTMLDivElement>(null)
   const is_near_bottom_ref = useRef(true)
+  const realtime_debug_context = useMemo(
+    () => ({
+      view: show_presence ? "concierge" as const : "user" as const,
+      current_user_uuid: show_presence ? null : room.user_uuid ?? null,
+    }),
+    [room.user_uuid, show_presence],
+  )
 
   const scroll_to_bottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     window.requestAnimationFrame(() => {
@@ -295,14 +339,18 @@ export default function ChatRoomPanel({
         return
       }
 
-      set_messages((current) => mergeMessage(current, next_message, "realtime"))
+      set_messages((current) =>
+        mergeMessage(current, next_message, "realtime", realtime_debug_context),
+      )
       window.dispatchEvent(new CustomEvent("amp-admin-queue-refresh"))
     },
-    [room.room_uuid],
+    [realtime_debug_context, room.room_uuid],
   )
 
   use_room_messages(room.room_uuid, {
     on_insert: handle_room_message_insert,
+    view: realtime_debug_context.view,
+    current_user_uuid: realtime_debug_context.current_user_uuid,
   })
 
   useEffect(() => {
@@ -446,6 +494,7 @@ export default function ChatRoomPanel({
             locale: (room.locale as Locale) ?? "ja",
           }),
           "optimistic",
+          realtime_debug_context,
         ),
       )
       scroll_to_bottom("smooth")
@@ -464,6 +513,7 @@ export default function ChatRoomPanel({
     participant_uuid,
     room.locale,
     room.room_uuid,
+    realtime_debug_context,
     scroll_to_bottom,
     show_presence,
   ])
@@ -491,6 +541,7 @@ export default function ChatRoomPanel({
           current,
           messageBundleToRecord(detail.message as MessageBundle, participant_uuid),
           "archive_response",
+          realtime_debug_context,
         ),
       )
       scroll_to_bottom("smooth")
@@ -504,7 +555,7 @@ export default function ChatRoomPanel({
         handle_archived_message,
       )
     }
-  }, [participant_uuid, room.room_uuid, scroll_to_bottom])
+  }, [participant_uuid, realtime_debug_context, room.room_uuid, scroll_to_bottom])
 
   useEffect(() => {
     function handle_failed_message(event: Event) {

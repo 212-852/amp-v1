@@ -2,26 +2,50 @@
 
 import { useEffect } from "react"
 
+import { send_chat_realtime_debug } from "@/components/chat/realtime_debug"
 import type { ChatMessageRecord } from "@/core/chat/types"
 import { create_browser_supabase_client } from "@/src/lib/supabase/client"
 
 type RoomMessageSubscriptionOptions = {
   enabled?: boolean
   on_insert: (message: ChatMessageRecord) => void
+  view?: "user" | "concierge"
+  current_user_uuid?: string | null
+}
+
+function getClientMessageId(message: ChatMessageRecord | null) {
+  const meta = message?.payload?.meta
+  const client_message_id = meta?.client_message_id
+
+  return typeof client_message_id === "string" && client_message_id.trim()
+    ? client_message_id.trim()
+    : null
 }
 
 function useRoomMessages(
   room_uuid: string | null | undefined,
   options: RoomMessageSubscriptionOptions,
 ) {
-  const { enabled = true, on_insert } = options
+  const {
+    enabled = true,
+    on_insert,
+    view = "user",
+    current_user_uuid = null,
+  } = options
 
   useEffect(() => {
     console.log("[chat realtime] room_uuid", {
       room_uuid: room_uuid ?? null,
       enabled,
+      view,
+      current_user_uuid,
     })
-  }, [enabled, room_uuid])
+    send_chat_realtime_debug("chat_realtime_hook_mounted", {
+      view,
+      room_uuid: room_uuid ?? null,
+      current_user_uuid,
+    })
+  }, [current_user_uuid, enabled, room_uuid, view])
 
   useEffect(() => {
     if (!room_uuid) {
@@ -52,12 +76,25 @@ function useRoomMessages(
         status: "CHANNEL_ERROR",
         error_message: error instanceof Error ? error.message : String(error),
       })
+      send_chat_realtime_debug("chat_realtime_channel_error", {
+        view,
+        room_uuid,
+        current_user_uuid,
+        reason: error instanceof Error ? error.message : String(error),
+      })
       return
     }
 
     console.log("[chat realtime] creating subscription", {
       room_uuid,
       filter: `room_uuid=eq.${room_uuid}`,
+      view,
+      current_user_uuid,
+    })
+    send_chat_realtime_debug("chat_realtime_subscribe_creating", {
+      view,
+      room_uuid,
+      current_user_uuid,
     })
 
     const channel = supabase
@@ -72,20 +109,25 @@ function useRoomMessages(
         },
         (payload) => {
           const message = payload.new as ChatMessageRecord | null
+          const client_message_id = getClientMessageId(message)
 
           console.log("[chat realtime] insert received", {
             insert_room_uuid: message?.room_uuid ?? null,
             current_room_uuid: room_uuid,
             message_uuid: message?.message_uuid ?? null,
-            client_message_id:
-              typeof message?.payload === "object" &&
-              message.payload &&
-              "meta" in message.payload &&
-              typeof message.payload.meta === "object" &&
-              message.payload.meta &&
-              "client_message_id" in message.payload.meta
-                ? message.payload.meta.client_message_id
-                : null,
+            client_message_id,
+            sender_uuid: message?.participant_uuid ?? null,
+            current_user_uuid,
+            view,
+          })
+          send_chat_realtime_debug("chat_realtime_insert_received", {
+            view,
+            room_uuid,
+            incoming_room_uuid: message?.room_uuid ?? null,
+            message_uuid: message?.message_uuid ?? null,
+            client_message_id,
+            sender_uuid: message?.participant_uuid ?? null,
+            current_user_uuid,
           })
 
           if (!message?.message_uuid) {
@@ -102,6 +144,20 @@ function useRoomMessages(
               insert_room_uuid: message.room_uuid,
               current_room_uuid: room_uuid,
               message_uuid: message.message_uuid,
+              client_message_id,
+              sender_uuid: message.participant_uuid ?? null,
+              current_user_uuid,
+              view,
+            })
+            send_chat_realtime_debug("chat_realtime_room_mismatch", {
+              view,
+              room_uuid,
+              incoming_room_uuid: message.room_uuid,
+              message_uuid: message.message_uuid,
+              client_message_id,
+              sender_uuid: message.participant_uuid ?? null,
+              current_user_uuid,
+              reason: "room_uuid_mismatch",
             })
             return
           }
@@ -116,18 +172,31 @@ function useRoomMessages(
         status === "CHANNEL_ERROR" ||
         status === "TIMED_OUT"
       ) {
-        console.log("[chat realtime] status", {
-          room_uuid,
-          status,
-        })
+          console.log("[chat realtime] status", {
+            room_uuid,
+            status,
+            view,
+            current_user_uuid,
+          })
 
-        if (status === "SUBSCRIBED") {
-          console.log("[chat realtime] subscribed", { room_uuid })
-        }
+          if (status === "SUBSCRIBED") {
+            console.log("[chat realtime] subscribed", { room_uuid })
+            send_chat_realtime_debug("chat_realtime_subscribed", {
+              view,
+              room_uuid,
+              current_user_uuid,
+            })
+          }
 
-        if (status === "CHANNEL_ERROR") {
-          console.log("[chat realtime] channel error", { room_uuid })
-        }
+          if (status === "CHANNEL_ERROR") {
+            console.log("[chat realtime] channel error", { room_uuid })
+            send_chat_realtime_debug("chat_realtime_channel_error", {
+              view,
+              room_uuid,
+              current_user_uuid,
+              reason: "channel_error",
+            })
+          }
 
         if (status === "TIMED_OUT") {
           console.log("[chat realtime] timed out", { room_uuid })
@@ -142,7 +211,7 @@ function useRoomMessages(
       })
       void supabase.removeChannel(channel)
     }
-  }, [enabled, on_insert, room_uuid])
+  }, [current_user_uuid, enabled, on_insert, room_uuid, view])
 }
 
 export const use_room_messages = useRoomMessages
