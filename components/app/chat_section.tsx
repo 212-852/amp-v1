@@ -115,7 +115,7 @@ export default function AppChatSection({
 
   return (
     <ChatRoomPanel
-      key={chat_state.room.room_uuid}
+      key="user-chat-room-panel"
       initial_room={chat_state.room}
       initial_messages={chat_state.messages}
       initial_presence={chat_state.presence}

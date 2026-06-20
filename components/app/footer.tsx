@@ -7,6 +7,14 @@ import type { RefObject } from "react"
 
 import ConciergeMemberModal from "@/components/app/concierge_member_modal"
 import ChatSendButton from "@/components/chat/send_button"
+import {
+  create_client_message_id,
+  dispatch_message_archived,
+  dispatch_message_created,
+  dispatch_message_failed,
+  dispatch_optimistic_message,
+  send_chat_message,
+} from "@/components/chat/send_client_message"
 import { useOverlay, type OverlayType } from "@/components/overlay"
 import { useToast } from "@/components/ui/use_toast"
 import {
@@ -298,36 +306,21 @@ function AssistantToggle({
 
 function MessageInputRow({
   locale,
-  onSend,
+  input_value,
+  on_input_change,
+  on_send_message,
   onTyping,
   input_ref,
+  is_sending,
 }: Readonly<{
   locale: Locale
-  onSend: (message: string) => Promise<void>
+  input_value: string
+  on_input_change: (value: string) => void
+  on_send_message: () => void
   onTyping: (is_typing: boolean) => void
   input_ref?: RefObject<HTMLTextAreaElement | null>
+  is_sending: boolean
 }>) {
-  const [draft, set_draft] = useState("")
-  const [is_sending, set_is_sending] = useState(false)
-
-  async function handleSend() {
-    const text = draft.trim()
-
-    if (!text || is_sending) {
-      return
-    }
-
-    set_draft("")
-    onTyping(false)
-    set_is_sending(true)
-
-    try {
-      await onSend(text)
-    } finally {
-      set_is_sending(false)
-    }
-  }
-
   return (
     <div className="w-full px-4">
       <div className="flex w-full items-center gap-4">
@@ -338,16 +331,20 @@ function MessageInputRow({
           <textarea
             ref={input_ref}
             id="app-message-input"
-            value={draft}
+            value={input_value}
             rows={1}
             onChange={(event) => {
-              set_draft(event.target.value)
+              on_input_change(event.target.value)
               onTyping(event.target.value.trim().length > 0)
             }}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
+              if (event.key === "Enter" && event.shiftKey) {
+                return
+              }
+
+              if (event.key === "Enter") {
                 event.preventDefault()
-                void handleSend()
+                on_send_message()
               }
             }}
             placeholder={content.message_placeholder[locale]}
@@ -357,7 +354,7 @@ function MessageInputRow({
         <ChatSendButton
           locale={locale}
           disabled={is_sending}
-          onClick={() => void handleSend()}
+          onClick={on_send_message}
         />
       </div>
     </div>
@@ -438,7 +435,10 @@ export default function AppFooter({
   )
   const [member_modal_open, set_member_modal_open] = useState(false)
   const [profile_modal_open, set_profile_modal_open] = useState(false)
+  const [input_value, set_input_value] = useState("")
+  const [is_sending, set_is_sending] = useState(false)
   const typing_timer_ref = useRef<number | null>(null)
+  const is_sending_ref = useRef(false)
   const footer_ref = useRef<HTMLElement | null>(null)
   const message_input_ref = useRef<HTMLTextAreaElement | null>(null)
   const pending_input_focus_ref = useRef(false)
@@ -605,62 +605,53 @@ export default function AppFooter({
     return false
   }
 
-  async function handleSendMessage(message: string) {
-    const client_message_id = `client:${crypto.randomUUID()}`
+  async function handle_send_message() {
+    const text = input_value.trim()
 
-    window.dispatchEvent(
-      new CustomEvent("amp-chat-optimistic-message", {
-        detail: {
-          room_uuid: chat_room_ref.current.room_uuid,
-          participant_uuid: chat_room_ref.current.participant_uuid,
-          body: message,
-          client_message_id,
-        },
-      }),
-    )
-
-    try {
-      const response = await fetch("/api/chat/room", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ message, locale, client_message_id }),
-      })
-
-      if (!response.ok) {
-        window.dispatchEvent(
-          new CustomEvent("amp-chat-message-failed", {
-            detail: { client_message_id },
-          }),
-        )
-        return
-      }
-
-      const payload = (await response.json().catch(() => null)) as {
-        message?: unknown
-      } | null
-
-      if (payload?.message) {
-        window.dispatchEvent(
-          new CustomEvent("amp-chat-message-archived", {
-            detail: {
-              room_uuid: chat_room_ref.current.room_uuid,
-              message: payload.message,
-            },
-          }),
-        )
-      }
-    } catch {
-      window.dispatchEvent(
-        new CustomEvent("amp-chat-message-failed", {
-          detail: { client_message_id },
-        }),
-      )
+    if (!text || is_sending_ref.current) {
       return
     }
 
-    window.dispatchEvent(new CustomEvent("amp-chat-message-created"))
+    set_input_value("")
+    handleTyping(false)
+
+    const client_message_id = create_client_message_id()
+    dispatch_optimistic_message({
+      room_uuid: chat_room_ref.current.room_uuid,
+      participant_uuid: chat_room_ref.current.participant_uuid,
+      body: text,
+      client_message_id,
+    })
+
+    is_sending_ref.current = true
+    set_is_sending(true)
+
+    try {
+      const result = await send_chat_message({
+        message: text,
+        locale,
+        client_message_id,
+      })
+
+      if (!result.ok) {
+        dispatch_message_failed(client_message_id)
+        return
+      }
+
+      if (result.payload?.message) {
+        dispatch_message_archived({
+          room_uuid: chat_room_ref.current.room_uuid,
+          message: result.payload.message,
+        })
+      }
+
+      dispatch_message_created()
+    } catch {
+      dispatch_message_failed(client_message_id)
+    } finally {
+      is_sending_ref.current = false
+      set_is_sending(false)
+    }
   }
 
   async function handleQuickMenu() {
@@ -854,9 +845,12 @@ export default function AppFooter({
               >
                 <MessageInputRow
                   locale={locale}
-                  onSend={handleSendMessage}
+                  input_value={input_value}
+                  on_input_change={set_input_value}
+                  on_send_message={() => void handle_send_message()}
                   onTyping={handleTyping}
                   input_ref={message_input_ref}
+                  is_sending={is_sending}
                 />
                 <CopyrightText />
               </div>

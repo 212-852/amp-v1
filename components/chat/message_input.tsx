@@ -3,6 +3,14 @@
 import { useEffect, useRef, useState } from "react"
 
 import ChatSendButton from "@/components/chat/send_button"
+import {
+  create_client_message_id,
+  dispatch_message_archived,
+  dispatch_message_created,
+  dispatch_message_failed,
+  dispatch_optimistic_message,
+  send_chat_message,
+} from "@/components/chat/send_client_message"
 import type { Locale } from "@/src/lib/locale"
 import { ui_layer_class } from "@/src/ui/layers"
 
@@ -27,10 +35,11 @@ export default function ChatMessageInput({
   participant_uuid = null,
   on_sent,
 }: Readonly<ChatMessageInputProps>) {
-  const [value, set_value] = useState("")
+  const [input_value, set_input_value] = useState("")
   const [is_sending, set_is_sending] = useState(false)
   const [profile_modal_open, set_profile_modal_open] = useState(false)
   const typing_timer_ref = useRef<number | null>(null)
+  const is_sending_ref = useRef(false)
 
   useEffect(() => {
     function handle_profile_modal_visibility(event: Event) {
@@ -75,77 +84,53 @@ export default function ChatMessageInput({
     }
   }
 
-  async function send_message() {
-    const text = value.trim()
+  async function handle_send_message() {
+    const text = input_value.trim()
 
-    if (!text || is_sending) {
+    if (!text || is_sending_ref.current) {
       return
     }
 
-    set_value("")
+    set_input_value("")
     send_typing(false)
 
-    const client_message_id = `client:${crypto.randomUUID()}`
+    const client_message_id = create_client_message_id()
+    dispatch_optimistic_message({
+      room_uuid,
+      participant_uuid,
+      body: text,
+      client_message_id,
+    })
 
-    window.dispatchEvent(
-      new CustomEvent("amp-chat-optimistic-message", {
-        detail: {
-          room_uuid,
-          participant_uuid,
-          body: text,
-          client_message_id,
-        },
-      }),
-    )
+    is_sending_ref.current = true
     set_is_sending(true)
 
     try {
-      const response = await fetch("/api/chat/room", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: text,
-          locale,
-          room_uuid,
-          client_message_id,
-        }),
+      const result = await send_chat_message({
+        message: text,
+        locale,
+        room_uuid,
+        client_message_id,
       })
 
-      if (!response.ok) {
-        window.dispatchEvent(
-          new CustomEvent("amp-chat-message-failed", {
-            detail: { client_message_id },
-          }),
-        )
+      if (!result.ok) {
+        dispatch_message_failed(client_message_id)
         return
       }
 
-      const payload = (await response.json().catch(() => null)) as {
-        message?: unknown
-      } | null
-
-      if (payload?.message) {
-        window.dispatchEvent(
-          new CustomEvent("amp-chat-message-archived", {
-            detail: {
-              room_uuid,
-              message: payload.message,
-            },
-          }),
-        )
+      if (result.payload?.message) {
+        dispatch_message_archived({
+          room_uuid,
+          message: result.payload.message,
+        })
       }
 
-      window.dispatchEvent(new CustomEvent("amp-chat-message-created"))
+      dispatch_message_created()
       on_sent?.()
     } catch {
-      window.dispatchEvent(
-        new CustomEvent("amp-chat-message-failed", {
-          detail: { client_message_id },
-        }),
-      )
+      dispatch_message_failed(client_message_id)
     } finally {
+      is_sending_ref.current = false
       set_is_sending(false)
     }
   }
@@ -155,40 +140,40 @@ export default function ChatMessageInput({
   }
 
   return (
-    <form
+    <div
       className={[
         "fixed inset-x-0 bottom-0 border-t border-neutral-200 bg-white px-4 py-3",
         ui_layer_class.chat_composer,
       ].join(" ")}
-      onSubmit={(event) => {
-        event.preventDefault()
-        void send_message()
-      }}
     >
       <div className="mx-auto flex w-full max-w-[430px] items-end gap-2">
         <textarea
-          value={value}
+          value={input_value}
           rows={1}
           placeholder={content.placeholder[locale]}
           onChange={(event) => {
-            set_value(event.target.value)
+            set_input_value(event.target.value)
             send_typing(Boolean(event.target.value.trim()))
           }}
           onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
+            if (event.key === "Enter" && event.shiftKey) {
+              return
+            }
+
+            if (event.key === "Enter") {
               event.preventDefault()
-              void send_message()
+              void handle_send_message()
             }
           }}
           className="min-h-11 flex-1 resize-none rounded-md border border-neutral-300 bg-white px-3 py-2 text-[14px] leading-6 text-neutral-900 outline-none transition focus:border-neutral-500 focus:ring-2 focus:ring-neutral-200"
         />
         <ChatSendButton
-          type="submit"
           locale={locale}
-          disabled={!value.trim() || is_sending}
+          disabled={is_sending}
           variant="compact"
+          onClick={() => void handle_send_message()}
         />
       </div>
-    </form>
+    </div>
   )
 }

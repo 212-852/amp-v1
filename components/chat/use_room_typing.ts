@@ -5,9 +5,7 @@ import { useEffect, useRef, useState } from "react"
 import { TYPING_TIMEOUT_MS, type ChatTypingRecord } from "@/core/chat/types"
 import { create_browser_supabase_client } from "@/src/lib/supabase/client"
 
-function roomChannelName(room_uuid: string) {
-  return `room:${room_uuid}`
-}
+import { roomChannelName } from "@/core/chat/room_channel"
 
 export function useRoomTyping(input: {
   room_uuid: string

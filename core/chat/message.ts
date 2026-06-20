@@ -224,6 +224,9 @@ export async function archivePreparedMessage(input: PreparedMessageInput) {
       type: message.type,
     })
 
+    const { broadcastMessageInserted } = await import("@/core/chat/realtime")
+    await broadcastMessageInserted(message).catch(() => null)
+
     return message
   } catch (error) {
     console.info("[chat_core] message_archive_failed", {
