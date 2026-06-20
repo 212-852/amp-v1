@@ -625,6 +625,20 @@ export default function AppFooter({
         )
         return
       }
+
+      const payload = (await response.json().catch(() => null)) as {
+        message?: unknown
+      } | null
+
+      if (payload?.message) {
+        window.dispatchEvent(
+          new CustomEvent("amp-chat-message-archived", {
+            detail: {
+              message: payload.message,
+            },
+          }),
+        )
+      }
     } catch {
       window.dispatchEvent(
         new CustomEvent("amp-chat-message-failed", {

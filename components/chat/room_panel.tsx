@@ -17,6 +17,7 @@ import { create_browser_supabase_client } from "@/src/lib/supabase/client"
 import { useLocale } from "@/src/components/locale/provider"
 import type {
   ChatMessageRecord,
+  MessageBundle,
   ChatRoomMode,
   ChatRoomRecord,
   PresenceView,
@@ -103,7 +104,7 @@ function buildOptimisticMessage(input: {
     room_uuid: input.room_uuid,
     participant_uuid: input.participant_uuid,
     type: "text",
-    status: "sent",
+    status: "sending",
     body: input.body,
     payload: {
       meta: {
@@ -116,6 +117,22 @@ function buildOptimisticMessage(input: {
       },
     },
     created_at: now,
+  }
+}
+
+function messageBundleToRecord(
+  bundle: MessageBundle,
+  participant_uuid: string,
+): ChatMessageRecord {
+  return {
+    message_uuid: bundle.message_uuid,
+    room_uuid: bundle.room_uuid,
+    participant_uuid,
+    type: bundle.type,
+    status: bundle.status,
+    body: bundle.body,
+    payload: bundle.payload,
+    created_at: bundle.created_at,
   }
 }
 
@@ -236,7 +253,7 @@ export default function ChatRoomPanel({
       .on(
         "postgres_changes",
         {
-          event: "*",
+          event: "UPDATE",
           schema: "public",
           table: "rooms",
           filter: `room_uuid=eq.${room.room_uuid}`,
@@ -251,7 +268,7 @@ export default function ChatRoomPanel({
       .on(
         "postgres_changes",
         {
-          event: "*",
+          event: "INSERT",
           schema: "public",
           table: "messages",
           filter: `room_uuid=eq.${room.room_uuid}`,
@@ -279,7 +296,18 @@ export default function ChatRoomPanel({
       )
     }
 
-    channel.subscribe()
+    channel.subscribe((status) => {
+      if (
+        status === "SUBSCRIBED" ||
+        status === "CHANNEL_ERROR" ||
+        status === "TIMED_OUT"
+      ) {
+        console.info("[chat_realtime] subscription_status", {
+          room_uuid: room.room_uuid,
+          status,
+        })
+      }
+    })
 
     return () => {
       void supabase.removeChannel(channel)
@@ -387,6 +415,42 @@ export default function ChatRoomPanel({
     room.room_uuid,
     show_presence,
   ])
+
+  useEffect(() => {
+    function handle_archived_message(event: Event) {
+      const detail = (event as CustomEvent<{
+        room_uuid?: string | null
+        message?: MessageBundle
+      }>).detail
+
+      if (!detail?.message) {
+        return
+      }
+
+      if (
+        detail.room_uuid &&
+        detail.room_uuid !== room.room_uuid
+      ) {
+        return
+      }
+
+      set_messages((current) =>
+        mergeMessage(
+          current,
+          messageBundleToRecord(detail.message as MessageBundle, participant_uuid),
+        ),
+      )
+    }
+
+    window.addEventListener("amp-chat-message-archived", handle_archived_message)
+
+    return () => {
+      window.removeEventListener(
+        "amp-chat-message-archived",
+        handle_archived_message,
+      )
+    }
+  }, [participant_uuid, room.room_uuid])
 
   useEffect(() => {
     function handle_failed_message(event: Event) {

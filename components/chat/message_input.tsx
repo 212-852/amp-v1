@@ -111,6 +111,21 @@ export default function ChatMessageInput({
         return
       }
 
+      const payload = (await response.json().catch(() => null)) as {
+        message?: unknown
+      } | null
+
+      if (payload?.message) {
+        window.dispatchEvent(
+          new CustomEvent("amp-chat-message-archived", {
+            detail: {
+              room_uuid,
+              message: payload.message,
+            },
+          }),
+        )
+      }
+
       set_value("")
       send_typing(false)
       window.dispatchEvent(new CustomEvent("amp-chat-message-created"))

@@ -39,7 +39,7 @@ export const CHAT_MESSAGE_TYPES: ChatMessageType[] = [
   "typing",
 ]
 
-export type ChatMessageStatus = "sent" | "failed"
+export type ChatMessageStatus = "sending" | "sent" | "failed"
 
 export type ChatLocale = "ja" | "en" | "es"
 
