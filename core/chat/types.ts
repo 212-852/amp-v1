@@ -56,6 +56,7 @@ export type ChatMessageMeta = {
   bot_key?: BotMessageKey
   presence_action?: "enter" | "leave"
   actor_role?: ChatParticipantRole
+  actor_display_name?: string
 }
 
 export type ChatMessagePayload = {

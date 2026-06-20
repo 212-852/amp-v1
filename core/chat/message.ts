@@ -1,5 +1,6 @@
 import { archiveWelcomeMessage, insertMessage } from "@/core/chat/archive"
 import { ensureRoleParticipant } from "@/core/chat/participant"
+import type { PresenceMessageBundle } from "@/core/chat/presence"
 import {
   resolveOutputLocaleDecision,
   type LocaleSource,
@@ -245,6 +246,26 @@ export async function archivePreparedMessage(input: PreparedMessageInput) {
 
     throw error
   }
+}
+
+export async function archivePresenceMessageBundle(input: {
+  bundle: PresenceMessageBundle
+  room: ChatRoomRecord
+  participant: ChatParticipantRecord
+  source_channel: SourceChannel
+  session: Session
+}) {
+  return archivePreparedMessage({
+    room: input.room,
+    participant: input.participant,
+    source_channel: input.source_channel,
+    source_kind: "system",
+    type: "system",
+    body: input.bundle.body,
+    original_locale: input.bundle.original_locale,
+    session: input.session,
+    payload: input.bundle.payload,
+  })
 }
 
 export async function archiveBotMessageBundle(input: {

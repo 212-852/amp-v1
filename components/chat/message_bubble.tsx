@@ -5,6 +5,7 @@ import { useState, useSyncExternalStore } from "react"
 import FlexMessage from "@/components/chat/flex"
 import {
   hasMessageTranslation,
+  readMessageMeta,
   readMessageSourceKind,
   resolveMessageBodyDisplay,
   resolveMessageBodyOriginal,
@@ -53,6 +54,28 @@ function formatMessageTime(created_at: string) {
     minute: "2-digit",
     hour12: false,
   })
+}
+
+function formatPresenceSystemDateTime(created_at: string) {
+  const date = new Date(created_at)
+
+  if (Number.isNaN(date.getTime())) {
+    return ""
+  }
+
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  const hour = String(date.getHours()).padStart(2, "0")
+  const minute = String(date.getMinutes()).padStart(2, "0")
+
+  return `${year}/${month}/${day} ${hour}:${minute}`
+}
+
+function isPresenceSystemMessage(message: ChatMessageRecord) {
+  const meta = readMessageMeta(message.payload)
+
+  return meta.presence_action === "enter" || meta.presence_action === "leave"
 }
 
 function subscribeMounted(listener: () => void) {
@@ -157,6 +180,11 @@ export default function ChatMessageBubble({
 }>) {
   const { locale } = useLocale()
   const active_locale = locale as Locale
+  const is_mounted = useSyncExternalStore(
+    subscribeMounted,
+    getMountedSnapshot,
+    getServerMountedSnapshot,
+  )
   const can_toggle = hasMessageTranslation(message, room_locale)
   const [show_original, set_show_original] = useState(false)
   const source_kind = readMessageSourceKind(message)
@@ -171,10 +199,27 @@ export default function ChatMessageBubble({
     : resolveMessageBodyDisplay(message, room_locale)
 
   if (is_system) {
+    const is_presence = isPresenceSystemMessage(message)
+    const presence_time = is_mounted
+      ? formatPresenceSystemDateTime(message.created_at)
+      : ""
+
     return (
       <div className="flex w-full justify-center">
-        <div className="max-w-[85%] rounded-[22px] bg-[#ead7c3]/70 px-4 py-3 text-center text-[13px] leading-relaxed text-[#8c7358]">
+        <div
+          className={[
+            "max-w-[85%] rounded-[22px] px-4 py-3 text-center text-[13px] leading-relaxed",
+            is_presence
+              ? "bg-neutral-100 text-neutral-600"
+              : "bg-[#ead7c3]/70 text-[#8c7358]",
+          ].join(" ")}
+        >
           <p>{body}</p>
+          {is_presence && presence_time ? (
+            <p className="mt-1 text-[11px] font-medium text-neutral-500">
+              {presence_time}
+            </p>
+          ) : null}
         </div>
       </div>
     )

@@ -1,10 +1,12 @@
 import {
   loadRoomParticipants,
   loadUserDisplayNames,
+  resolveParticipantArchiveDisplayName,
 } from "@/core/chat/archive"
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
 import type {
   ChatLocale,
+  ChatMessagePayload,
   ChatParticipantRole,
   PresenceRecord,
   PresenceStatus,
@@ -215,4 +217,53 @@ export function resolvePresenceSystemMessage(
   }
 
   return resolvePresenceLeaveMessage(display_name)
+}
+
+export type PresenceMessageBundle = {
+  body: string
+  display_name: string
+  action: "enter" | "leave"
+  original_locale: ChatLocale
+  payload: ChatMessagePayload
+}
+
+export function buildPresenceMessageBundle(input: {
+  action: "enter" | "leave"
+  display_name: string
+  room_locale: ChatLocale
+  actor_role: ChatParticipantRole
+}): PresenceMessageBundle {
+  const body = resolvePresenceSystemMessage(
+    input.action,
+    input.display_name,
+    input.room_locale,
+  )
+
+  return {
+    body,
+    display_name: input.display_name,
+    action: input.action,
+    original_locale: input.room_locale,
+    payload: {
+      meta: {
+        source_kind: "system",
+        presence_action: input.action,
+        actor_role: input.actor_role,
+        actor_display_name: input.display_name,
+        original_locale: input.room_locale,
+        display_locale: input.room_locale,
+      },
+    },
+  }
+}
+
+export async function resolvePresenceActorDisplayName(input: {
+  user_uuid?: string | null
+  role?: ChatParticipantRole
+}) {
+  if (input.user_uuid) {
+    return await resolveParticipantArchiveDisplayName(input.user_uuid)
+  }
+
+  return input.role === "guest" ? "Guest" : input.role ?? "Guest"
 }

@@ -4,7 +4,6 @@ import {
   normalizeTypingInput,
   resolveChatLocale,
   resolveOutputLocale,
-  resolveParticipantDisplayName,
   resolveParticipantRole,
   buildChatContext,
 } from "@/core/chat/context"
@@ -15,8 +14,8 @@ import {
   insertParticipant,
   loadConciergeAvailability,
   loadRoomParticipants,
-  loadUserProfiles,
   loadRoomMessages,
+  resolveParticipantArchiveDisplayName,
   setConciergeAvailability,
   updateRoomMode,
   updateRoomThreadState,
@@ -24,15 +23,17 @@ import {
 import {
   archivePreparedMessage,
   archiveBotTriggerMessage,
+  archivePresenceMessageBundle,
   deliverMessageBundle,
   ensureWelcomeMessageArchived,
   toMessageBundle,
 } from "@/core/chat/message"
 import {
+  buildPresenceMessageBundle,
   enrichPresenceViews,
   loadOnlinePresenceViews,
   loadRoomPresence,
-  resolvePresenceSystemMessage,
+  resolvePresenceActorDisplayName,
   updateRoomPresenceLeave,
   upsertRoomPresenceEnter,
 } from "@/core/chat/presence"
@@ -118,12 +119,7 @@ async function resolveConciergeCustomerName(room_uuid: string) {
   }
 
   if (customer.user_uuid) {
-    const profiles = await loadUserProfiles([customer.user_uuid])
-    const profile = profiles.get(customer.user_uuid)
-
-    if (profile?.display_name?.trim()) {
-      return profile.display_name.trim()
-    }
+    return await resolveParticipantArchiveDisplayName(customer.user_uuid)
   }
 
   return customer.role === "guest" ? "Guest" : "Customer"
@@ -133,16 +129,10 @@ async function resolveCurrentParticipantDisplayName(input: {
   session: Session
   participant: ChatParticipantRecord
 }) {
-  if (input.participant.user_uuid) {
-    const profiles = await loadUserProfiles([input.participant.user_uuid])
-    const profile = profiles.get(input.participant.user_uuid)
-
-    if (profile?.display_name?.trim()) {
-      return profile.display_name.trim()
-    }
-  }
-
-  return resolveParticipantDisplayName(input.session, input.participant.role)
+  return await resolvePresenceActorDisplayName({
+    user_uuid: input.participant.user_uuid,
+    role: input.participant.role,
+  })
 }
 
 async function syncConciergeOdinModeChange(input: {
@@ -921,30 +911,25 @@ export async function handleChatRoomPresence(input: ChatRoomPresenceInput) {
       room_uuid: room.room_uuid,
       participant_uuid: participant.participant_uuid,
     })
-    const body = resolvePresenceSystemMessage("enter", display_name, room.locale)
+    const presence_bundle = buildPresenceMessageBundle({
+      action: "enter",
+      display_name,
+      room_locale: room.locale,
+      actor_role: participant.role,
+    })
 
     await syncConciergeOdinAdminPresence({
       room,
       action: "enter",
-      admin_name: display_name,
+      admin_name: presence_bundle.display_name,
     })
 
-    const message = await archivePreparedMessage({
+    const message = await archivePresenceMessageBundle({
+      bundle: presence_bundle,
       room,
       participant,
       source_channel: input.source_channel,
-      source_kind: "system",
-      type: "system",
-      body,
-      original_locale: room.locale,
       session: input.session,
-      payload: {
-        meta: {
-          presence_action: "enter",
-          actor_role: participant.role,
-          actor_display_name: display_name,
-        },
-      },
     })
 
     return {
@@ -959,30 +944,25 @@ export async function handleChatRoomPresence(input: ChatRoomPresenceInput) {
     room_uuid: room.room_uuid,
     participant_uuid: participant.participant_uuid,
   })
-  const body = resolvePresenceSystemMessage("leave", display_name, room.locale)
+  const presence_bundle = buildPresenceMessageBundle({
+    action: "leave",
+    display_name,
+    room_locale: room.locale,
+    actor_role: participant.role,
+  })
 
   await syncConciergeOdinAdminPresence({
     room,
     action: "leave",
-    admin_name: display_name,
+    admin_name: presence_bundle.display_name,
   })
 
-  const message = await archivePreparedMessage({
+  const message = await archivePresenceMessageBundle({
+    bundle: presence_bundle,
     room,
     participant,
     source_channel: input.source_channel,
-    source_kind: "system",
-    type: "system",
-    body,
-    original_locale: room.locale,
     session: input.session,
-    payload: {
-      meta: {
-        presence_action: "leave",
-        actor_role: participant.role,
-        actor_display_name: display_name,
-      },
-    },
   })
 
   return {

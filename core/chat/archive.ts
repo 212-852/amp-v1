@@ -1,6 +1,6 @@
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
 import { sendAuthDebug } from "@/core/debug"
-import { resolve_profile_display_name } from "@/core/profile/rules"
+import { get_display_name } from "@/core/profile/display"
 import type {
   AvailabilityRecord,
   ChatLocale,
@@ -1308,6 +1308,74 @@ type ProfileDisplayRow = {
   last_name: string | null
 }
 
+type LineIdentityRow = {
+  user_uuid: string
+}
+
+function resolveArchiveDisplayName(input: {
+  profile?: ProfileDisplayRow | null
+  account?: AccountDisplayRow | null
+  line_linked?: boolean
+}) {
+  const line_name =
+    input.line_linked
+      ? input.account?.display_name?.trim() || null
+      : null
+
+  return get_display_name(
+    {
+      nickname: input.profile?.nickname,
+    },
+    {
+      line_name,
+      name: input.account?.name,
+      fallback: "Guest",
+    },
+  )
+}
+
+async function loadLineLinkedUserUuids(user_uuids: string[]) {
+  const config = getRestConfig()
+
+  if (!config || user_uuids.length === 0) {
+    return new Set<string>()
+  }
+
+  const encoded_uuids = user_uuids.map((uuid) => encodeURIComponent(uuid)).join(",")
+  const response = await fetch(
+    restUrl(
+      config,
+      "identities",
+      `user_uuid=in.(${encoded_uuids})&provider=eq.line&select=user_uuid`,
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return new Set<string>()
+  }
+
+  const rows = (await response.json()) as LineIdentityRow[]
+  return new Set(rows.map((row) => row.user_uuid))
+}
+
+export async function resolveParticipantArchiveDisplayName(user_uuid: string) {
+  const [accounts, profiles, line_linked_uuids] = await Promise.all([
+    loadUserAccountDisplayRows([user_uuid]),
+    loadProfileDisplayRows([user_uuid]),
+    loadLineLinkedUserUuids([user_uuid]),
+  ])
+
+  return resolveArchiveDisplayName({
+    profile: profiles.get(user_uuid),
+    account: accounts.get(user_uuid),
+    line_linked: line_linked_uuids.has(user_uuid),
+  })
+}
+
 async function loadUserAccountDisplayRows(user_uuids: string[]) {
   const config = getRestConfig()
 
@@ -1370,27 +1438,21 @@ export async function loadUserDisplayNames(user_uuids: string[]) {
     return new Map<string, string>()
   }
 
-  const [accounts, profiles] = await Promise.all([
+  const [accounts, profiles, line_linked_uuids] = await Promise.all([
     loadUserAccountDisplayRows(user_uuids),
     loadProfileDisplayRows(user_uuids),
+    loadLineLinkedUserUuids(user_uuids),
   ])
 
   return new Map(
-    user_uuids.map((user_uuid) => {
-      const account = accounts.get(user_uuid)
-      const profile = profiles.get(user_uuid)
-
-      return [
-        user_uuid,
-        resolve_profile_display_name({
-          nickname: profile?.nickname,
-          first_name: profile?.first_name,
-          last_name: profile?.last_name,
-          users_name: account?.name ?? account?.display_name,
-          fallback: "Guest",
-        }),
-      ]
-    }),
+    user_uuids.map((user_uuid) => [
+      user_uuid,
+      resolveArchiveDisplayName({
+        profile: profiles.get(user_uuid),
+        account: accounts.get(user_uuid),
+        line_linked: line_linked_uuids.has(user_uuid),
+      }),
+    ]),
   )
 }
 
@@ -1402,25 +1464,23 @@ export async function loadUserProfiles(user_uuids: string[]) {
     >()
   }
 
-  const [accounts, profiles] = await Promise.all([
+  const [accounts, profiles, line_linked_uuids] = await Promise.all([
     loadUserAccountDisplayRows(user_uuids),
     loadProfileDisplayRows(user_uuids),
+    loadLineLinkedUserUuids(user_uuids),
   ])
 
   return new Map(
     user_uuids.map((user_uuid) => {
       const account = accounts.get(user_uuid)
-      const profile = profiles.get(user_uuid)
 
       return [
         user_uuid,
         {
-          display_name: resolve_profile_display_name({
-            nickname: profile?.nickname,
-            first_name: profile?.first_name,
-            last_name: profile?.last_name,
-            users_name: account?.name ?? account?.display_name,
-            fallback: "Guest",
+          display_name: resolveArchiveDisplayName({
+            profile: profiles.get(user_uuid),
+            account,
+            line_linked: line_linked_uuids.has(user_uuid),
           }),
           image_url: account?.image_url?.trim() || null,
         },
