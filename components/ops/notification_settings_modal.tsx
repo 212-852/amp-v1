@@ -4,6 +4,7 @@ import { Bell } from "lucide-react"
 import { useEffect, useState } from "react"
 
 import type { NotificationType } from "@/core/chat/types"
+import { useToast } from "@/components/ui/use_toast"
 import { useLocale } from "@/src/components/locale/provider"
 import type { Locale } from "@/src/lib/locale"
 import { is_pwa_display_mode } from "@/src/pwa/display_mode"
@@ -91,10 +92,11 @@ function base64_url_to_uint8_array(value: string) {
   return output
 }
 
-function resolve_push_availability(
-  locale: Locale,
-  public_key: string | null,
-): PushAvailability {
+function push_debug(event: string, payload: Record<string, unknown> = {}) {
+  console.info(event, payload)
+}
+
+function resolve_push_availability(locale: Locale): PushAvailability {
   if (typeof window === "undefined") {
     return {
       selectable: false,
@@ -103,7 +105,17 @@ function resolve_push_availability(
     }
   }
 
-  if (!is_pwa_display_mode()) {
+  const is_pwa = is_pwa_display_mode()
+
+  push_debug("push_mode_detected", {
+    is_pwa_display_mode: is_pwa,
+    has_notification: "Notification" in window,
+    has_service_worker:
+      typeof navigator !== "undefined" && "serviceWorker" in navigator,
+    has_push_manager: "PushManager" in window,
+  })
+
+  if (!is_pwa) {
     return {
       selectable: false,
       reason: content.push_not_pwa[locale] ?? content.push_not_pwa.en,
@@ -122,23 +134,6 @@ function resolve_push_availability(
       selectable: false,
       reason: content.push_unsupported[locale] ?? content.push_unsupported.en,
       permission: "unsupported",
-    }
-  }
-
-  if (window.Notification.permission === "denied") {
-    return {
-      selectable: false,
-      reason: content.push_denied[locale] ?? content.push_denied.en,
-      permission: "denied",
-    }
-  }
-
-  if (!public_key?.trim()) {
-    return {
-      selectable: false,
-      reason:
-        content.push_vapid_missing[locale] ?? content.push_vapid_missing.en,
-      permission: window.Notification.permission,
     }
   }
 
@@ -163,6 +158,7 @@ export default function NotificationSettingsModal({
   onSaved,
 }: Readonly<NotificationSettingsModalProps>) {
   const { locale } = useLocale()
+  const { toast } = useToast()
   const [notification_type, set_notification_type] =
     useState<NotificationType>(initial_notification_type)
   const [is_saving, set_is_saving] = useState(false)
@@ -176,6 +172,7 @@ export default function NotificationSettingsModal({
   const [vapid_public_key, set_vapid_public_key] = useState<string | null>(null)
   const [push_subscription, set_push_subscription] =
     useState<PushSubscriptionJson | null>(null)
+  const [push_key_missing, set_push_key_missing] = useState(false)
 
   useEffect(() => {
     if (!open) {
@@ -218,7 +215,11 @@ export default function NotificationSettingsModal({
           typeof window !== "undefined" ? is_pwa_display_mode() : false
         let public_key: string | null = null
 
+        const availability = resolve_push_availability(locale as Locale)
+        set_push_availability(availability)
+
         if (is_pwa) {
+          push_debug("push_key_fetch_started", { source: "modal_open" })
           const response = await fetch("/api/notify/push/key", {
             credentials: "include",
             cache: "no-store",
@@ -229,15 +230,14 @@ export default function NotificationSettingsModal({
               } | null)
             : null
           public_key = payload?.public_key?.trim() || null
+          push_debug("push_key_fetch_success", {
+            source: "modal_open",
+            has_public_key: Boolean(public_key),
+          })
         }
 
         set_vapid_public_key(public_key)
-
-        const availability = resolve_push_availability(
-          locale as Locale,
-          public_key,
-        )
-        set_push_availability(availability)
+        set_push_key_missing(is_pwa && !public_key)
 
         if (!availability.selectable && notification_type === "pwa_push") {
           set_notification_type("line")
@@ -267,25 +267,42 @@ export default function NotificationSettingsModal({
     }
   }, [locale, notification_type, open])
 
+  async function fetch_vapid_public_key(source: string) {
+    push_debug("push_key_fetch_started", { source })
+
+    const response = await fetch("/api/notify/push/key", {
+      credentials: "include",
+      cache: "no-store",
+    })
+    const payload = (await response.json().catch(() => null)) as {
+      public_key?: string | null
+    } | null
+    const public_key = response.ok ? payload?.public_key?.trim() || null : null
+
+    push_debug("push_key_fetch_success", {
+      source,
+      has_public_key: Boolean(public_key),
+    })
+
+    set_vapid_public_key(public_key)
+    set_push_key_missing(!public_key)
+    return public_key
+  }
+
+  function show_push_error(message: string) {
+    set_error_message(message)
+    toast({
+      tone: "error",
+      placement: "center",
+      duration_ms: 3000,
+      message,
+    })
+  }
+
   async function ensure_push_subscription() {
     let public_key = vapid_public_key
 
-    if (!public_key && is_pwa_display_mode()) {
-      const response = await fetch("/api/notify/push/key", {
-        credentials: "include",
-        cache: "no-store",
-      })
-      const payload = (await response.json().catch(() => null)) as {
-        public_key?: string | null
-      } | null
-      public_key = payload?.public_key?.trim() || null
-      set_vapid_public_key(public_key)
-    }
-
-    const availability = resolve_push_availability(
-      locale as Locale,
-      public_key,
-    )
+    const availability = resolve_push_availability(locale as Locale)
     set_push_availability(availability)
 
     if (!availability.selectable) {
@@ -293,17 +310,33 @@ export default function NotificationSettingsModal({
       throw new Error(availability.reason ?? "pwa_push_unavailable")
     }
 
+    if (window.Notification.permission === "denied") {
+      throw new Error(content.push_denied[locale as Locale] ?? content.push_denied.en)
+    }
+
+    if (!public_key && is_pwa_display_mode()) {
+      public_key = await fetch_vapid_public_key("toggle_on")
+    }
+
+    if (!public_key) {
+      throw new Error(
+        content.push_vapid_missing[locale as Locale] ??
+          content.push_vapid_missing.en,
+      )
+    }
+
     if (window.Notification.permission === "default") {
+      push_debug("push_permission_requested")
       const permission = await window.Notification.requestPermission()
+      push_debug("push_permission_result", { permission })
 
       if (permission !== "granted") {
-        const next_availability = resolve_push_availability(
-          locale as Locale,
-          public_key,
-        )
+        const next_availability = resolve_push_availability(locale as Locale)
         set_push_availability(next_availability)
         set_notification_type("line")
-        throw new Error(next_availability.reason ?? "notification_not_granted")
+        throw new Error(
+          content.push_denied[locale as Locale] ?? content.push_denied.en,
+        )
       }
     }
 
@@ -314,6 +347,7 @@ export default function NotificationSettingsModal({
         updateViaCache: "none",
       }))
 
+    push_debug("push_subscription_started")
     const subscription =
       (await registration.pushManager.getSubscription()) ??
       (await registration.pushManager.subscribe({
@@ -322,6 +356,9 @@ export default function NotificationSettingsModal({
       }))
 
     const json = subscription.toJSON() as PushSubscriptionJson
+    push_debug("push_subscription_success", {
+      endpoint_exists: Boolean(json.endpoint),
+    })
     set_push_subscription(json)
     return json
   }
@@ -350,6 +387,7 @@ export default function NotificationSettingsModal({
         throw new Error(payload?.error ?? "push_subscription_save_failed")
       }
 
+      push_debug("push_method_saved", { notification_type: "pwa_push" })
       return "pwa_push" as const
     }
 
@@ -372,6 +410,10 @@ export default function NotificationSettingsModal({
       throw new Error(payload?.error ?? "notification_save_failed")
     }
 
+    push_debug("push_method_saved", {
+      notification_type:
+        payload.notification_type === "pwa_push" ? "pwa_push" : "line",
+    })
     return payload.notification_type === "pwa_push" ? "pwa_push" : "line"
   }
 
@@ -392,11 +434,12 @@ export default function NotificationSettingsModal({
       set_notification_type("pwa_push")
       onSaved?.(saved_type)
     } catch (error) {
-      set_error_message(
+      const message =
         error instanceof Error
           ? error.message
-          : content.push_disabled[locale as Locale] ?? content.push_disabled.en,
-      )
+          : content.push_disabled[locale as Locale] ?? content.push_disabled.en
+      push_debug("push_subscription_failed", { error_message: message })
+      show_push_error(message)
     } finally {
       set_is_preparing_push(false)
     }
@@ -424,8 +467,12 @@ export default function NotificationSettingsModal({
       })
       onSaved?.(saved_type)
       onClose()
-    } catch {
-      set_error_message(content.error[locale as Locale] ?? content.error.en)
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : content.error[locale as Locale] ?? content.error.en
+      show_push_error(message)
     } finally {
       set_is_saving(false)
     }
@@ -450,11 +497,15 @@ export default function NotificationSettingsModal({
       value: "pwa_push",
       label: content.push[locale as Locale] ?? content.push.en,
       disabled: !push_availability.selectable,
-      helper: !push_availability.selectable
-        ? push_availability.reason ??
-          content.push_disabled[locale as Locale] ??
-          content.push_disabled.en
-        : null,
+      helper:
+        !push_availability.selectable
+          ? push_availability.reason ??
+            content.push_disabled[locale as Locale] ??
+            content.push_disabled.en
+          : push_key_missing
+            ? content.push_vapid_missing[locale as Locale] ??
+              content.push_vapid_missing.en
+            : null,
     },
   ]
 
