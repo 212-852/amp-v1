@@ -7,6 +7,8 @@ export type NotificationContactRow = {
   type?: string | null
   value?: string | null
   endpoint?: string | null
+  p256dh?: string | null
+  auth?: string | null
   channel?: string | null
   state?: string | null
   receive?: boolean | null
@@ -42,7 +44,7 @@ export async function loadIdentityNotificationContacts(
       [
         filter,
         "type=in.(line,push)",
-        "select=contact_uuid,type,value,endpoint,channel,state,receive,updated_at",
+        "select=contact_uuid,type,value,endpoint,p256dh,auth,channel,state,receive,updated_at",
         "order=updated_at.desc",
       ].join("&"),
     ),

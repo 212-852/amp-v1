@@ -47,23 +47,7 @@ export async function upsertLineContactFromEvent(event: LineEvent) {
     return null
   }
 
-  const { resolveUserUuidByIdentityValue } = await import("@/core/auth/identity")
-  const { upsertContact } = await import("@/core/contacts/action")
-  const { normalizeContactContext } = await import("@/core/contacts/context")
-
-  const user_uuid = await resolveUserUuidByIdentityValue(lineUserId)
-
-  if (!user_uuid) {
-    return null
-  }
-
-  return upsertContact(
-    normalizeContactContext({
-      user_uuid,
-      type: "line",
-      value: lineUserId,
-    }),
-  )
+  return null
 }
 
 export async function upsertLineContactsFromEvents(events: LineEvent[]) {

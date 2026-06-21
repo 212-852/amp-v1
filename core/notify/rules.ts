@@ -205,8 +205,12 @@ function isReceiverPresent(contact: ContactRow, now = new Date()) {
   )
 }
 
-function resolveContactValue(contact: ContactRow) {
-  return contact.value?.trim() || contact.endpoint?.trim() || null
+function resolveLineContactValue(contact: ContactRow) {
+  if (contact.type !== "line") {
+    return null
+  }
+
+  return "line"
 }
 
 function resolvePushSubscription(contact: ContactRow): ChatNotifyPushSubscription | null {
@@ -261,7 +265,7 @@ function toSelectedContact(contact: ContactRow): ChatNotifySelectedContact | nul
   const contact_value =
     contact.type === "push"
       ? resolvePushSubscription(contact)?.endpoint ?? null
-      : resolveContactValue(contact)
+      : resolveLineContactValue(contact)
 
   if (!contact_value) {
     return null
@@ -284,7 +288,7 @@ function toFallbackLineContact(contact: ContactRow): ChatNotifySelectedContact |
     return null
   }
 
-  const contact_value = resolveContactValue(contact)
+  const contact_value = resolveLineContactValue(contact)
 
   if (!contact_value) {
     return null
@@ -497,6 +501,44 @@ async function loadReceiverContacts(user_uuid: string) {
   return (await response.json()) as ContactRow[]
 }
 
+async function loadReceiverLineProviderUserId(user_uuid: string) {
+  const { getRestConfig, restHeaders, restUrl } = await import("@/core/db/rest")
+  const config = getRestConfig()
+
+  if (!config) {
+    return null
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "identities",
+      [
+        `user_uuid=eq.${encodeURIComponent(user_uuid)}`,
+        "provider=eq.line",
+        "provider_user_id=not.is.null",
+        "select=provider_user_id",
+        "order=created_at.desc",
+        "limit=1",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return null
+  }
+
+  const rows = (await response.json()) as Array<{
+    provider_user_id?: string | null
+  }>
+
+  return rows[0]?.provider_user_id?.trim() || null
+}
+
 export async function resolveChatNotifyRoutes(input: {
   room_uuid: string
   sender_uuid?: string | null
@@ -547,27 +589,44 @@ export async function resolveChatNotifyRoutes(input: {
           skipped_reason: "receiver_active",
         }
       : selectNotifyContact(contacts)
+    let selected_contact = selected.selected_contact
+    let skipped_reason = selected.skipped_reason ?? null
+
+    if (selected_contact?.contact_type === "line") {
+      const line_provider_user_id =
+        await loadReceiverLineProviderUserId(receiver_user_uuid)
+
+      if (line_provider_user_id) {
+        selected_contact = {
+          ...selected_contact,
+          contact_value: line_provider_user_id,
+        }
+      } else {
+        selected_contact = null
+        skipped_reason = "missing_line_identity"
+      }
+    }
 
     await sendNotifyDebug("notify_contact_selected", {
       room_uuid: input.room_uuid,
       sender_uuid: input.sender_uuid ?? null,
       receiver_uuid: receiver_user_uuid,
-      contact_uuid: selected.selected_contact?.contact_uuid ?? null,
-      contact_type: selected.selected_contact?.contact_type ?? null,
-      receive: selected.selected_contact?.receive ?? null,
-      state: selected.selected_contact?.state ?? null,
-      channel: selected.selected_contact?.channel ?? null,
+      contact_uuid: selected_contact?.contact_uuid ?? null,
+      contact_type: selected_contact?.contact_type ?? null,
+      receive: selected_contact?.receive ?? null,
+      state: selected_contact?.state ?? null,
+      channel: selected_contact?.channel ?? null,
       receiver_active,
-      skipped_reason: selected.skipped_reason ?? null,
+      skipped_reason,
       request_id: input.request_id ?? null,
     })
 
     routes.push({
       receiver_user_uuid,
-      selected_contact: selected.selected_contact,
+      selected_contact,
       fallback_line_contact: selected.fallback_line_contact,
       receiver_active,
-      skipped_reason: selected.skipped_reason ?? null,
+      skipped_reason,
     })
   }
 

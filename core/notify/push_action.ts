@@ -1,8 +1,4 @@
 import type { Session } from "@/core/auth/types"
-import {
-  loadPushContactByEndpoint,
-  upsertPushContact,
-} from "@/core/contacts/action"
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
 import {
   loadIdentityNotificationContacts,
@@ -60,18 +56,196 @@ function serializeContacts(contacts: NotificationContactRow[]) {
 }
 
 function hasReceivingLineContact(contacts: NotificationContactRow[]) {
-  return contacts.some(
-    (contact) => contact.type === "line" && contact.receive === true,
-  )
+  return contacts.length === 1 && contacts[0]?.type === "line" && contacts[0].receive === true
 }
 
 function hasReceivingPushContact(contacts: NotificationContactRow[]) {
-  return contacts.some(
-    (contact) =>
-      contact.type === "push" &&
-      contact.receive === true &&
-      contact.channel === "pwa",
+  const contact = contacts[0]
+
+  return (
+    contacts.length === 1 &&
+    contact?.type === "push" &&
+    contact.receive === true &&
+    contact.channel === "pwa" &&
+    Boolean(contact.endpoint?.trim()) &&
+    Boolean(contact.p256dh?.trim()) &&
+    Boolean(contact.auth?.trim())
   )
+}
+
+function notificationContactValue(session: Pick<Session, "user_uuid" | "visitor_uuid">) {
+  if (session.user_uuid) {
+    return `notification:user:${session.user_uuid}`
+  }
+
+  if (session.visitor_uuid) {
+    return `notification:visitor:${session.visitor_uuid}`
+  }
+
+  throw new Error("notification_contact_identity_required")
+}
+
+async function loadPushContactByEndpointForSettings(endpoint: string) {
+  const config = getRestConfig()
+
+  if (!config || !endpoint.trim()) {
+    return null
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "contacts",
+      [
+        `endpoint=eq.${encodeURIComponent(endpoint)}`,
+        "type=eq.push",
+        "select=contact_uuid,type,receive,channel,state,updated_at",
+        "limit=1",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return null
+  }
+
+  const rows = (await response.json()) as NotificationContactRow[]
+  return rows[0] ?? null
+}
+
+async function deleteOtherNotificationContacts(input: {
+  session: Pick<Session, "user_uuid" | "visitor_uuid">
+  keep_contact_uuid: string | null
+}) {
+  const { config, filter } = requireNotificationContactTarget(input.session)
+  const keep_filter = input.keep_contact_uuid
+    ? `&contact_uuid=neq.${encodeURIComponent(input.keep_contact_uuid)}`
+    : ""
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "contacts",
+      `${filter}&type=in.(line,push)${keep_filter}&select=contact_uuid`,
+    ),
+    {
+      method: "DELETE",
+      headers: {
+        ...restHeaders(config),
+        Prefer: "return=representation",
+      },
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+    throw new Error(error.message ?? "Failed to delete duplicate notification contacts")
+  }
+
+  const rows = (await response.json().catch(() => [])) as unknown[]
+  return rows.length
+}
+
+async function saveSingleNotificationContact(input: {
+  session: Pick<Session, "user_uuid" | "visitor_uuid">
+  contact_uuid?: string | null
+  body: Record<string, unknown>
+}) {
+  const { config } = requireNotificationContactTarget(input.session)
+  const now = new Date().toISOString()
+  const identity =
+    input.session.user_uuid
+      ? { user_uuid: input.session.user_uuid, visitor_uuid: null }
+      : { user_uuid: null, visitor_uuid: input.session.visitor_uuid }
+  const body = {
+    ...identity,
+    value: notificationContactValue(input.session),
+    receive: true,
+    updated_at: now,
+    ...input.body,
+  }
+  const existing_contact_uuid =
+    input.contact_uuid ??
+    (await loadIdentityNotificationContacts(input.session))[0]?.contact_uuid ??
+    null
+
+  if (existing_contact_uuid) {
+    const response = await fetch(
+      restUrl(
+        config,
+        "contacts",
+        `contact_uuid=eq.${encodeURIComponent(existing_contact_uuid)}&select=contact_uuid,type,receive,channel,state,updated_at`,
+      ),
+      {
+        method: "PATCH",
+        headers: {
+          ...restHeaders(config),
+          Prefer: "return=representation",
+        },
+        body: JSON.stringify(body),
+        cache: "no-store",
+      },
+    )
+
+    if (!response.ok) {
+      const error = await readRestError(response)
+      throw new Error(error.message ?? "Failed to update notification contact")
+    }
+
+    const rows = (await response.json()) as NotificationContactRow[]
+    const saved = rows[0] ?? null
+    const deleted_rows = await deleteOtherNotificationContacts({
+      session: input.session,
+      keep_contact_uuid: saved?.contact_uuid ?? existing_contact_uuid,
+    })
+
+    return {
+      contact: saved,
+      affected_rows: rows.length + deleted_rows,
+    }
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "contacts",
+      "select=contact_uuid,type,receive,channel,state,updated_at",
+    ),
+    {
+      method: "POST",
+      headers: {
+        ...restHeaders(config),
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        ...body,
+        created_at: now,
+      }),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+    throw new Error(error.message ?? "Failed to create notification contact")
+  }
+
+  const rows = (await response.json()) as NotificationContactRow[]
+  const saved = rows[0] ?? null
+  const deleted_rows = await deleteOtherNotificationContacts({
+    session: input.session,
+    keep_contact_uuid: saved?.contact_uuid ?? null,
+  })
+
+  return {
+    contact: saved,
+    affected_rows: rows.length + deleted_rows,
+  }
 }
 
 export async function getPushNotificationPublicKey() {
@@ -111,9 +285,23 @@ export async function saveLineNotificationSettings(input: { session: Session }) 
     visitor_uuid: input.session.visitor_uuid,
   })
 
-  const push_affected_rows = await disablePushSubscriptions({ session: input.session })
-  const line_affected_rows = await enableLineSubscriptions({ session: input.session })
-  const affected_rows = push_affected_rows + line_affected_rows
+  const saved = await saveSingleNotificationContact({
+    session: input.session,
+    contact_uuid:
+      before_contacts.find((contact) => contact.type === "line")?.contact_uuid ??
+      null,
+    body: {
+      type: "line",
+      channel: "line",
+      state: "offline",
+      endpoint: null,
+      p256dh: null,
+      auth: null,
+      user_agent: null,
+      last_seen_at: null,
+    },
+  })
+  const affected_rows = saved.affected_rows
   const after_contacts = await loadIdentityNotificationContacts(input.session)
 
   await sendNotifyDebug("notification_setting_contacts_updated", {
@@ -135,10 +323,7 @@ export async function saveLineNotificationSettings(input: { session: Session }) 
   })
 
   if (
-    !hasReceivingLineContact(after_contacts) ||
-    after_contacts.some(
-      (contact) => contact.type === "push" && contact.receive === true,
-    )
+    !hasReceivingLineContact(after_contacts)
   ) {
     throw new Error("line_contact_receive_not_enabled")
   }
@@ -204,36 +389,26 @@ export async function savePushSubscription(input: {
     )
     const now = new Date().toISOString()
 
-    await upsertPushContact({
-      user_uuid: input.session.user_uuid,
-      visitor_uuid: input.session.visitor_uuid,
-      endpoint: subscription.endpoint,
-      value: subscription_value,
-      p256dh: subscription.p256dh,
-      auth: subscription.auth,
-      user_agent: subscription.user_agent,
-      channel: "pwa",
-      state: "active",
-      receive: true,
-      last_seen_at: now,
-      updated_at: now,
-    })
-
-    const saved_contact = await loadPushContactByEndpoint(subscription.endpoint)
-
-    if (
-      saved_contact?.type !== "push" ||
-      saved_contact.receive !== true ||
-      saved_contact.channel !== "pwa" ||
-      saved_contact.value !== subscription_value
-    ) {
-      throw new Error("push_contact_receive_not_enabled")
-    }
-
-    const line_affected_rows = await disableLineSubscriptions({
+    const endpoint_contact = await loadPushContactByEndpointForSettings(
+      subscription.endpoint,
+    )
+    const saved = await saveSingleNotificationContact({
       session: input.session,
+      contact_uuid: endpoint_contact?.contact_uuid ?? null,
+      body: {
+        type: "push",
+        value: subscription_value,
+        channel: "pwa",
+        state: "active",
+        endpoint: subscription.endpoint,
+        p256dh: subscription.p256dh,
+        auth: subscription.auth,
+        user_agent: subscription.user_agent,
+        last_seen_at: now,
+      },
     })
-    const affected_rows = 1 + line_affected_rows
+    const saved_contact = saved.contact
+    const affected_rows = saved.affected_rows
     const after_contacts = await loadIdentityNotificationContacts(input.session)
 
     await sendNotifyDebug("notification_setting_contacts_updated", {
@@ -255,10 +430,7 @@ export async function savePushSubscription(input: {
     })
 
     if (
-      !hasReceivingPushContact(after_contacts) ||
-      after_contacts.some(
-        (contact) => contact.type === "line" && contact.receive === true,
-      )
+      !hasReceivingPushContact(after_contacts)
     ) {
       throw new Error("push_contact_receive_not_enabled")
     }
@@ -271,11 +443,11 @@ export async function savePushSubscription(input: {
     await sendNotifyDebug("push_subscription_save_success", {
       user_uuid: input.session.user_uuid,
       visitor_uuid: input.session.visitor_uuid,
-      contact_uuid: saved_contact.contact_uuid ?? null,
+      contact_uuid: saved_contact?.contact_uuid ?? null,
       selected_channel: "push",
-      receive: saved_contact.receive,
-      state: saved_contact.state,
-      channel: saved_contact.channel,
+      receive: saved_contact?.receive ?? null,
+      state: saved_contact?.state ?? null,
+      channel: saved_contact?.channel ?? null,
       has_value: true,
     })
     await sendNotifyDebug("notification_setting_save_success", {
@@ -301,105 +473,4 @@ export async function savePushSubscription(input: {
 
     throw error
   }
-}
-
-export async function disableLineSubscriptions(input: { session: Session }) {
-  const { config, filter } = requireNotificationContactTarget(input.session)
-  const now = new Date().toISOString()
-
-  const response = await fetch(
-    restUrl(
-      config,
-      "contacts",
-      `${filter}&type=eq.line&select=contact_uuid,type,receive,channel,state,updated_at`,
-    ),
-    {
-      method: "PATCH",
-      headers: {
-        ...restHeaders(config),
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify({
-        receive: false,
-        updated_at: now,
-      }),
-      cache: "no-store",
-    },
-  )
-
-  if (!response.ok) {
-    const error = await readRestError(response)
-    throw new Error(error.message ?? "Failed to disable line subscription")
-  }
-
-  const rows = (await response.json().catch(() => [])) as unknown[]
-  return rows.length
-}
-
-export async function enableLineSubscriptions(input: { session: Session }) {
-  const { config, filter } = requireNotificationContactTarget(input.session)
-  const now = new Date().toISOString()
-
-  const response = await fetch(
-    restUrl(
-      config,
-      "contacts",
-      `${filter}&type=eq.line&select=contact_uuid,type,receive,channel,state,updated_at`,
-    ),
-    {
-      method: "PATCH",
-      headers: {
-        ...restHeaders(config),
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify({
-        receive: true,
-        updated_at: now,
-      }),
-      cache: "no-store",
-    },
-  )
-
-  if (!response.ok) {
-    const error = await readRestError(response)
-    throw new Error(error.message ?? "Failed to enable line subscription")
-  }
-
-  const rows = (await response.json().catch(() => [])) as unknown[]
-  return rows.length
-}
-
-export async function disablePushSubscriptions(input: { session: Session }) {
-  const { config, filter } = requireNotificationContactTarget(input.session)
-
-  const now = new Date().toISOString()
-  const response = await fetch(
-    restUrl(
-      config,
-      "contacts",
-      `${filter}&type=eq.push&select=contact_uuid,type,receive,channel,state,updated_at`,
-    ),
-    {
-      method: "PATCH",
-      headers: {
-        ...restHeaders(config),
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify({
-        receive: false,
-        state: "offline",
-        last_seen_at: now,
-        updated_at: now,
-      }),
-      cache: "no-store",
-    },
-  )
-
-  if (!response.ok) {
-    const error = await readRestError(response)
-    throw new Error(error.message ?? "Failed to disable push subscription")
-  }
-
-  const rows = (await response.json().catch(() => [])) as unknown[]
-  return rows.length
 }

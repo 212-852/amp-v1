@@ -1,7 +1,5 @@
 import type { AppSession } from "@/core/auth/session"
 import { resolveIdentityByProviderUserId } from "@/core/auth/identity"
-import { upsertContact } from "@/core/contacts/action"
-import { normalizeContactContext } from "@/core/contacts/context"
 import {
   findOldestParticipantByUserUuid,
   findVisitorUuidByUser,
@@ -17,11 +15,6 @@ type UserRow = {
   locale?: string | null
 }
 
-type LineContactRow = {
-  visitor_uuid?: string | null
-  user_uuid?: string | null
-}
-
 type VisitorRow = {
   visitor_uuid?: string | null
 }
@@ -33,38 +26,6 @@ export type StableLineIdentity = {
   identity_uuid: string | null
   locale: string | null
   session: AppSession
-}
-
-async function findLineContact(provider_user_id: string) {
-  const config = getRestConfig()
-
-  if (!config) {
-    return null
-  }
-
-  const response = await fetch(
-    restUrl(
-      config,
-      "contacts",
-      [
-        "type=eq.line",
-        `value=eq.${encodeURIComponent(provider_user_id)}`,
-        "select=visitor_uuid,user_uuid",
-        "limit=1",
-      ].join("&"),
-    ),
-    {
-      headers: restHeaders(config),
-      cache: "no-store",
-    },
-  )
-
-  if (!response.ok) {
-    return null
-  }
-
-  const rows = (await response.json()) as LineContactRow[]
-  return rows[0] ?? null
 }
 
 async function createLineVisitor() {
@@ -100,23 +61,6 @@ async function createLineVisitor() {
 
   const rows = (await response.json()) as VisitorRow[]
   return rows[0]?.visitor_uuid ?? visitor_uuid
-}
-
-async function upsertLineContact(input: {
-  provider_user_id: string
-  user_uuid: string | null
-  visitor_uuid: string | null
-}) {
-  return upsertContact(
-    normalizeContactContext({
-      user_uuid: input.user_uuid,
-      visitor_uuid: input.visitor_uuid,
-      type: "line",
-      value: input.provider_user_id,
-      channel: "line",
-      receive: true,
-    }),
-  )
 }
 
 async function loadLineUser(user_uuid: string): Promise<UserRow | null> {
@@ -172,10 +116,9 @@ export async function resolveStableLineIdentity(
     provider: "line",
     provider_user_id,
   })
-  const contact = await findLineContact(provider_user_id)
-  const user_uuid = identity?.user_uuid ?? contact?.user_uuid ?? null
+  const user_uuid = identity?.user_uuid ?? null
 
-  let visitor_uuid = contact?.visitor_uuid ?? null
+  let visitor_uuid: string | null = null
 
   if (user_uuid) {
     visitor_uuid = visitor_uuid ?? (await resolveVisitorUuidForUser(user_uuid))
@@ -183,12 +126,6 @@ export async function resolveStableLineIdentity(
     if (!visitor_uuid) {
       visitor_uuid = await createLineVisitor()
     }
-
-    await upsertLineContact({
-      provider_user_id,
-      user_uuid,
-      visitor_uuid,
-    })
 
     const user = await loadLineUser(user_uuid)
 
@@ -217,12 +154,6 @@ export async function resolveStableLineIdentity(
   if (!visitor_uuid) {
     visitor_uuid = await createLineVisitor()
   }
-
-  await upsertLineContact({
-    provider_user_id,
-    user_uuid: null,
-    visitor_uuid,
-  })
 
   return {
     provider_user_id,

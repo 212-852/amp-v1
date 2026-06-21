@@ -148,13 +148,6 @@ export function contactInputFromIdentity(
     return null
   }
 
-  if (input.provider === "line") {
-    return {
-      type: "line",
-      value,
-    }
-  }
-
   if (input.provider === "email" || (input.provider === "google" && input.email)) {
     return {
       type: "email",
