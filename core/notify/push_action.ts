@@ -32,7 +32,7 @@ export async function savePushSubscription(input: {
 
   if (config) {
     const response = await fetch(
-      restUrl(config, "push_subscriptions", "on_conflict=endpoint&select=*"),
+      restUrl(config, "contacts", "on_conflict=type,value&select=*"),
       {
         method: "POST",
         headers: {
@@ -42,11 +42,16 @@ export async function savePushSubscription(input: {
         body: JSON.stringify({
           user_uuid: input.session.user_uuid,
           visitor_uuid: input.session.visitor_uuid,
+          type: "push",
+          value: subscription.endpoint,
+          channel: "pwa",
+          state: "active",
+          receive: true,
+          last_seen_at: new Date().toISOString(),
           endpoint: subscription.endpoint,
           p256dh: subscription.p256dh,
           auth: subscription.auth,
           user_agent: subscription.user_agent,
-          enabled: true,
         }),
         cache: "no-store",
       },
@@ -66,5 +71,41 @@ export async function savePushSubscription(input: {
   return {
     notification_type: "pwa_push" as const,
     endpoint: subscription.endpoint,
+  }
+}
+
+export async function disablePushSubscriptions(input: { session: Session }) {
+  const config = getRestConfig()
+
+  if (!config) {
+    return
+  }
+
+  const identity_filter = input.session.user_uuid
+    ? `user_uuid=eq.${encodeURIComponent(input.session.user_uuid)}`
+    : input.session.visitor_uuid
+      ? `visitor_uuid=eq.${encodeURIComponent(input.session.visitor_uuid)}`
+      : null
+
+  if (!identity_filter) {
+    return
+  }
+
+  const response = await fetch(
+    restUrl(config, "contacts", `${identity_filter}&type=eq.push`),
+    {
+      method: "PATCH",
+      headers: restHeaders(config),
+      body: JSON.stringify({
+        receive: false,
+        state: "offline",
+      }),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+    throw new Error(error.message ?? "Failed to disable push subscription")
   }
 }

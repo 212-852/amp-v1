@@ -4,7 +4,10 @@ import {
   load_profile_notification_type,
   save_profile_settings,
 } from "@/core/profile/action"
-import { savePushSubscription } from "@/core/notify/push_action"
+import {
+  disablePushSubscriptions,
+  savePushSubscription,
+} from "@/core/notify/push_action"
 
 export type PushSubscriptionInput = {
   endpoint?: unknown
@@ -74,6 +77,10 @@ export async function saveNotificationSettings(input: {
     session: input.session,
     body: { notification_type },
   })
+
+  if (notification_type === "line") {
+    await disablePushSubscriptions({ session: input.session })
+  }
 
   return {
     notification_type:

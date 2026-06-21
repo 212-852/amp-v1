@@ -59,11 +59,12 @@ async function loadAdminContactDestination(input: {
     const response = await fetch(
       restUrl(
         config,
-        "push_subscriptions",
+        "contacts",
         [
           `user_uuid=eq.${encodeURIComponent(input.user_uuid)}`,
-          "enabled=eq.true",
-          "select=endpoint",
+          "type=eq.push",
+          "receive=eq.true",
+          "select=value,endpoint",
           "order=updated_at.desc",
           "limit=1",
         ].join("&"),
@@ -78,8 +79,11 @@ async function loadAdminContactDestination(input: {
       return null
     }
 
-    const rows = (await response.json()) as Array<{ endpoint?: string | null }>
-    return rows[0]?.endpoint?.trim() || null
+    const rows = (await response.json()) as Array<{
+      value?: string | null
+      endpoint?: string | null
+    }>
+    return rows[0]?.endpoint?.trim() || rows[0]?.value?.trim() || null
   }
 
   const contact_type = "line"
