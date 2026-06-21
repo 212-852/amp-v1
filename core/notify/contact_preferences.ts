@@ -10,6 +10,7 @@ export type NotificationContactRow = {
   channel?: string | null
   state?: string | null
   receive?: boolean | null
+  updated_at?: string | null
 }
 
 function identityFilter(session: Pick<Session, "user_uuid" | "visitor_uuid">) {

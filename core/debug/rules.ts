@@ -284,6 +284,10 @@ const notifyEvents = new Set([
   "push_subscription_save_started",
   "push_subscription_save_success",
   "push_subscription_save_failed",
+  "notification_setting_save_start",
+  "notification_setting_contacts_updated",
+  "notification_setting_contacts_reload",
+  "notification_setting_save_success",
 ])
 
 function isUnexpectedEvent(event: string) {
