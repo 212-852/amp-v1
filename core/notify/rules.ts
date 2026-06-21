@@ -155,7 +155,6 @@ export type ChatNotifySelectedContact = {
 export type ChatNotifyContactRoute = {
   receiver_user_uuid: string
   selected_contact: ChatNotifySelectedContact | null
-  fallback_line_contact: ChatNotifySelectedContact | null
   receiver_active: boolean
   skipped_reason?: string | null
 }
@@ -286,7 +285,6 @@ function toSelectedContact(contact: ContactRow): ChatNotifySelectedContact | nul
 
 function selectNotifyContact(contacts: ContactRow[]): {
   selected_contact: ChatNotifySelectedContact | null
-  fallback_line_contact: ChatNotifySelectedContact | null
   skipped_reason?: string | null
 } {
   const receivable = contacts
@@ -300,7 +298,6 @@ function selectNotifyContact(contacts: ContactRow[]): {
   if (push_contact) {
     return {
       selected_contact: push_contact,
-      fallback_line_contact: line_contact,
       skipped_reason: null,
     }
   }
@@ -308,14 +305,12 @@ function selectNotifyContact(contacts: ContactRow[]): {
   if (line_contact) {
     return {
       selected_contact: line_contact,
-      fallback_line_contact: null,
       skipped_reason: null,
     }
   }
 
   return {
     selected_contact: null,
-    fallback_line_contact: null,
     skipped_reason: "missing_contact",
   }
 }
@@ -454,7 +449,6 @@ async function loadReceiverContacts(user_uuid: string) {
         `user_uuid=eq.${encodeURIComponent(user_uuid)}`,
         "type=in.(line,push)",
         "receive=eq.true",
-        "value=not.is.null",
         "select=contact_uuid,type,value,endpoint,p256dh,auth,channel,state,receive,last_seen_at,updated_at",
         "order=updated_at.desc",
       ].join("&"),
@@ -480,13 +474,6 @@ export async function resolveChatNotifyRoutes(input: {
 }): Promise<ChatNotifyContactRoute[]> {
   const { sendNotifyDebug } = await import("@/core/notify/debug")
 
-  await sendNotifyDebug("notify_rules_started", {
-    room_uuid: input.room_uuid,
-    sender_uuid: input.sender_uuid ?? null,
-    sender_role: input.sender_role,
-    request_id: input.request_id ?? null,
-  })
-
   const receiver_user_uuids = await loadRoomReceiverUserUuids({
     room_uuid: input.room_uuid,
     sender_uuid: input.sender_uuid ?? null,
@@ -496,58 +483,35 @@ export async function resolveChatNotifyRoutes(input: {
 
   for (const receiver_user_uuid of receiver_user_uuids) {
     const contacts = await loadReceiverContacts(receiver_user_uuid)
-
-    await sendNotifyDebug("notify_contacts_loaded", {
-      room_uuid: input.room_uuid,
-      sender_uuid: input.sender_uuid ?? null,
-      receiver_uuid: receiver_user_uuid,
-      contacts: contacts.map((contact) => ({
-        contact_uuid: contact.contact_uuid ?? null,
-        type: contact.type ?? null,
-        receive: contact.receive ?? null,
-        state: contact.state ?? null,
-        channel: contact.channel ?? null,
-        has_value: Boolean(resolveContactValue(contact)),
-        has_endpoint: Boolean(resolvePushSubscription(contact)?.endpoint),
-      })),
-      request_id: input.request_id ?? null,
-    })
-
     const receiver_active = contacts.some((contact) => isReceiverPresent(contact))
     const selected = receiver_active
       ? {
           selected_contact: null,
-          fallback_line_contact: null,
           skipped_reason: "receiver_active",
         }
       : selectNotifyContact(contacts)
 
+    await sendNotifyDebug("notify_contact_resolved", {
+      room_uuid: input.room_uuid,
+      sender_uuid: input.sender_uuid ?? null,
+      receiver_uuid: receiver_user_uuid,
+      contact_uuid: selected.selected_contact?.contact_uuid ?? null,
+      contact_type: selected.selected_contact?.contact_type ?? null,
+      receive: selected.selected_contact?.receive ?? null,
+      state: selected.selected_contact?.state ?? null,
+      channel: selected.selected_contact?.channel ?? null,
+      receiver_active,
+      skipped_reason: selected.skipped_reason ?? null,
+      request_id: input.request_id ?? null,
+    })
+
     routes.push({
       receiver_user_uuid,
       selected_contact: selected.selected_contact,
-      fallback_line_contact: selected.fallback_line_contact,
       receiver_active,
       skipped_reason: selected.skipped_reason ?? null,
     })
   }
-
-  await sendNotifyDebug("notify_targets_resolved", {
-    room_uuid: input.room_uuid,
-    sender_uuid: input.sender_uuid ?? null,
-    sender_role: input.sender_role,
-    receiver_count: routes.length,
-    targets: routes.map((route) => ({
-      receiver_uuid: route.receiver_user_uuid,
-      contact_uuid: route.selected_contact?.contact_uuid ?? null,
-      selected_channel: route.selected_contact?.contact_type ?? null,
-      receive: route.selected_contact?.receive ?? null,
-      state: route.selected_contact?.state ?? null,
-      channel: route.selected_contact?.channel ?? null,
-      receiver_active: route.receiver_active,
-      skipped_reason: route.skipped_reason ?? null,
-    })),
-    request_id: input.request_id ?? null,
-  })
 
   return routes
 }

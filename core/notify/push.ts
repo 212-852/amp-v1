@@ -32,7 +32,7 @@ export async function send_push_notification(
   },
 ) {
   if (!input.push_subscription.endpoint) {
-    await sendNotifyDebug("push_send_failed", {
+    await sendNotifyDebug("notify_push_send_failed", {
       room_uuid: input.room_uuid,
       receiver_uuid: input.receiver_user_uuid,
       contact_uuid: input.contact_uuid ?? null,
@@ -47,7 +47,7 @@ export async function send_push_notification(
     return { delivered: false, reason: "missing_push_endpoint" }
   }
 
-  await sendNotifyDebug("push_send_started", {
+  await sendNotifyDebug("notify_push_send_started", {
     room_uuid: input.room_uuid,
     receiver_uuid: input.receiver_user_uuid,
     contact_uuid: input.contact_uuid ?? null,
@@ -63,7 +63,7 @@ export async function send_push_notification(
     const vapid = resolveVapidConfig()
 
     if (!vapid) {
-      await sendNotifyDebug("push_send_failed", {
+      await sendNotifyDebug("notify_push_send_failed", {
         room_uuid: input.room_uuid,
         receiver_uuid: input.receiver_user_uuid,
         contact_uuid: input.contact_uuid ?? null,
@@ -83,7 +83,7 @@ export async function send_push_notification(
     const auth = input.push_subscription.keys?.auth?.trim()
 
     if (!p256dh || !auth) {
-      await sendNotifyDebug("push_send_failed", {
+      await sendNotifyDebug("notify_push_send_failed", {
         room_uuid: input.room_uuid,
         receiver_uuid: input.receiver_user_uuid,
         contact_uuid: input.contact_uuid ?? null,
@@ -116,7 +116,7 @@ export async function send_push_notification(
       },
     }), { TTL: 86400 })
 
-    await sendNotifyDebug("push_send_success", {
+    await sendNotifyDebug("notify_push_send_success", {
       room_uuid: input.room_uuid,
       receiver_uuid: input.receiver_user_uuid,
       contact_uuid: input.contact_uuid ?? null,
@@ -130,7 +130,7 @@ export async function send_push_notification(
 
     return { delivered: true }
   } catch (error) {
-    await sendNotifyDebug("push_send_failed", {
+    await sendNotifyDebug("notify_push_send_failed", {
       room_uuid: input.room_uuid,
       receiver_uuid: input.receiver_user_uuid,
       contact_uuid: input.contact_uuid ?? null,

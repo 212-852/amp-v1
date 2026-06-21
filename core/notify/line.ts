@@ -10,22 +10,10 @@ export async function deliverChatLineNotification(
   const token = process.env.LINE_MESSAGING_CHANNEL_ACCESS_TOKEN?.trim()
 
   if (!token || !input.line_user_id) {
-    await sendNotifyDebug("line_send_failed", {
-      room_uuid: input.room_uuid,
-      receiver_uuid: input.receiver_user_uuid,
-      contact_uuid: input.contact_uuid ?? null,
-      selected_channel: "line",
-      receive: input.contact_receive ?? null,
-      state: input.contact_state ?? null,
-      channel: input.contact_channel ?? null,
-      reason: "missing_line_destination",
-      notification_result: "failed",
-      request_id: input.request_id ?? null,
-    })
     return { delivered: false, reason: "missing_line_destination" }
   }
 
-  await sendNotifyDebug("line_send_started", {
+  await sendNotifyDebug("notify_line_send_started", {
     room_uuid: input.room_uuid,
     receiver_uuid: input.receiver_user_uuid,
     contact_uuid: input.contact_uuid ?? null,
@@ -34,7 +22,6 @@ export async function deliverChatLineNotification(
     state: input.contact_state ?? null,
     channel: input.contact_channel ?? null,
     line_user_id: input.line_user_id,
-    notification_result: "started",
     request_id: input.request_id ?? null,
   })
 
@@ -57,27 +44,10 @@ export async function deliverChatLineNotification(
   })
 
   if (!response.ok) {
-    const error_message = await response.text().catch(() => "")
-
-    await sendNotifyDebug("line_send_failed", {
-      room_uuid: input.room_uuid,
-      receiver_uuid: input.receiver_user_uuid,
-      contact_uuid: input.contact_uuid ?? null,
-      selected_channel: "line",
-      receive: input.contact_receive ?? null,
-      state: input.contact_state ?? null,
-      channel: input.contact_channel ?? null,
-      reason: "line_push_failed",
-      error_message,
-      status: response.status,
-      notification_result: "failed",
-      request_id: input.request_id ?? null,
-    })
-
     return { delivered: false, reason: "line_push_failed" }
   }
 
-  await sendNotifyDebug("line_send_success", {
+  await sendNotifyDebug("notify_line_send_success", {
     room_uuid: input.room_uuid,
     receiver_uuid: input.receiver_user_uuid,
     contact_uuid: input.contact_uuid ?? null,
@@ -86,7 +56,6 @@ export async function deliverChatLineNotification(
     state: input.contact_state ?? null,
     channel: input.contact_channel ?? null,
     line_user_id: input.line_user_id,
-    notification_result: "success",
     request_id: input.request_id ?? null,
   })
 

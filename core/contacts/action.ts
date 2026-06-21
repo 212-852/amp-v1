@@ -28,6 +28,7 @@ export type PushContactUpsertInput = {
   user_uuid: string | null
   visitor_uuid: string | null
   endpoint: string
+  value?: string
   p256dh: string | null
   auth: string | null
   user_agent: string | null
@@ -230,7 +231,7 @@ export async function upsertPushContact(
       user_uuid: input.user_uuid,
       visitor_uuid: input.visitor_uuid,
       type: "push",
-      value: input.endpoint,
+      value: input.value ?? input.endpoint,
       channel,
       state,
       receive,
@@ -242,7 +243,7 @@ export async function upsertPushContact(
     user_uuid: input.user_uuid,
     visitor_uuid: input.visitor_uuid,
     type: "push",
-    value: input.endpoint,
+    value: input.value ?? input.endpoint,
     channel,
     state,
     receive,

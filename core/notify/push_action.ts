@@ -24,11 +24,16 @@ export async function savePushSubscription(input: {
     input.subscription,
     input.user_agent,
   )
+  const subscription_value =
+    input.subscription && typeof input.subscription === "object"
+      ? JSON.stringify(input.subscription)
+      : subscription.endpoint
 
   await upsertPushContact({
     user_uuid: input.session.user_uuid,
     visitor_uuid: input.session.visitor_uuid,
     endpoint: subscription.endpoint,
+    value: subscription_value,
     p256dh: subscription.p256dh,
     auth: subscription.auth,
     user_agent: subscription.user_agent,

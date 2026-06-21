@@ -61,12 +61,18 @@ export async function loadIdentityNotificationContacts(
 export function resolveNotificationTypeFromContacts(
   contacts: NotificationContactRow[],
 ): NotificationType {
-  if (contacts.some((contact) => contact.type === "push" && contact.receive === true)) {
+  const receiving = contacts.filter((contact) => contact.receive === true)
+
+  if (receiving.some((contact) => contact.type === "push")) {
     return "pwa_push"
   }
 
-  if (contacts.some((contact) => contact.type === "line" && contact.receive === true)) {
+  if (receiving.some((contact) => contact.type === "line")) {
     return "line"
+  }
+
+  if (contacts.some((contact) => contact.type === "push")) {
+    return "pwa_push"
   }
 
   if (contacts.some((contact) => contact.type === "line")) {
