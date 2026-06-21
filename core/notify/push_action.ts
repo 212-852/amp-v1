@@ -3,11 +3,16 @@ import type { Session } from "@/core/auth/types"
 import { save_profile_settings } from "@/core/profile/action"
 import {
   normalizePushSubscription,
+  resolvePushPublicKeyConfig,
   resolvePushPublicKey,
 } from "@/core/notify/push_rules"
 
 export async function getPushNotificationPublicKey() {
   return resolvePushPublicKey()
+}
+
+export async function getPushNotificationPublicKeyConfig() {
+  return resolvePushPublicKeyConfig()
 }
 
 export async function savePushSubscription(input: {
@@ -63,4 +68,3 @@ export async function savePushSubscription(input: {
     endpoint: subscription.endpoint,
   }
 }
-

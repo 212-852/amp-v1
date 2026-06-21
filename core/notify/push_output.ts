@@ -7,6 +7,15 @@ export function buildPushKeyOutput(public_key: string) {
   }
 }
 
+export function buildPushKeyMissingOutput(missing_env: string) {
+  return {
+    ok: false,
+    public_key: null,
+    error: "push_public_key_missing",
+    missing_env,
+  }
+}
+
 export function buildPushSubscribeOutput(input: {
   notification_type: NotificationType
   endpoint: string
@@ -17,4 +26,3 @@ export function buildPushSubscribeOutput(input: {
     endpoint: input.endpoint,
   }
 }
-

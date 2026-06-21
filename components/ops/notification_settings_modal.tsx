@@ -225,6 +225,7 @@ export default function NotificationSettingsModal({
         const is_pwa =
           typeof window !== "undefined" ? is_pwa_display_mode() : false
         let public_key: string | null = null
+        let missing_env: string | null = null
 
         const availability = resolve_push_availability(locale as Locale)
         set_push_availability(availability)
@@ -237,18 +238,34 @@ export default function NotificationSettingsModal({
           }).catch(() => null)
           const payload = response?.ok
             ? ((await response.json().catch(() => null)) as {
+                ok?: boolean
                 public_key?: string | null
+                error?: string | null
+                missing_env?: string | null
               } | null)
-            : null
-          public_key = payload?.public_key?.trim() || null
-          push_debug("push_key_fetch_success", {
+            : ((await response?.json().catch(() => null)) as {
+                ok?: boolean
+                public_key?: string | null
+                error?: string | null
+                missing_env?: string | null
+              } | null)
+          public_key =
+            response?.ok && payload?.ok === true
+              ? payload.public_key?.trim() || null
+              : null
+          missing_env = payload?.missing_env ?? null
+          push_debug("push_key_fetch_response", {
             source: "modal_open",
+            ok: response?.ok ?? false,
+            status: response?.status ?? null,
             has_public_key: Boolean(public_key),
+            error: payload?.error ?? null,
+            missing_env: payload?.missing_env ?? null,
           })
         }
 
         set_vapid_public_key(public_key)
-        set_push_key_missing(is_pwa && !public_key)
+        set_push_key_missing(is_pwa && !public_key && Boolean(missing_env))
 
         if (!availability.selectable && notification_type === "pwa_push") {
           set_notification_type("line")
@@ -286,17 +303,37 @@ export default function NotificationSettingsModal({
       cache: "no-store",
     })
     const payload = (await response.json().catch(() => null)) as {
+      ok?: boolean
       public_key?: string | null
+      error?: string | null
+      missing_env?: string | null
     } | null
-    const public_key = response.ok ? payload?.public_key?.trim() || null : null
+    const public_key =
+      response.ok && payload?.ok === true ? payload.public_key?.trim() || null : null
 
-    push_debug("push_key_fetch_success", {
+    push_debug("push_key_fetch_response", {
       source,
+      ok: response.ok,
+      status: response.status,
       has_public_key: Boolean(public_key),
+      error: payload?.error ?? null,
+      missing_env: payload?.missing_env ?? null,
     })
 
     set_vapid_public_key(public_key)
-    set_push_key_missing(!public_key)
+
+    if (!public_key && payload?.missing_env) {
+      set_push_key_missing(true)
+      push_debug("push_key_missing_env", {
+        missing_env: payload.missing_env,
+      })
+      throw new Error(
+        content.push_vapid_missing[locale as Locale] ??
+          content.push_vapid_missing.en,
+      )
+    }
+
+    set_push_key_missing(false)
     return public_key
   }
 
@@ -311,8 +348,6 @@ export default function NotificationSettingsModal({
   }
 
   async function ensure_push_subscription() {
-    let public_key = vapid_public_key
-
     const availability = resolve_push_availability(locale as Locale)
     set_push_availability(availability)
 
@@ -322,12 +357,11 @@ export default function NotificationSettingsModal({
     }
 
     if (window.Notification.permission === "denied") {
+      push_debug("push_permission_result", { permission: "denied" })
       throw new Error(content.push_denied[locale as Locale] ?? content.push_denied.en)
     }
 
-    if (!public_key && is_pwa_display_mode()) {
-      public_key = await fetch_vapid_public_key("toggle_on")
-    }
+    const public_key = await fetch_vapid_public_key("toggle_on")
 
     if (!public_key) {
       throw new Error(
@@ -349,16 +383,22 @@ export default function NotificationSettingsModal({
           content.push_denied[locale as Locale] ?? content.push_denied.en,
         )
       }
+    } else {
+      push_debug("push_permission_result", {
+        permission: window.Notification.permission,
+      })
     }
 
-    const registration =
-      (await navigator.serviceWorker.getRegistration("/")) ??
-      (await navigator.serviceWorker.register("/sw.js", {
+    if (!(await navigator.serviceWorker.getRegistration("/"))) {
+      await navigator.serviceWorker.register("/sw.js", {
         scope: "/",
         updateViaCache: "none",
-      }))
+      })
+    }
 
-    push_debug("push_subscription_started")
+    const registration = await navigator.serviceWorker.ready
+
+    push_debug("push_subscribe_started")
     const subscription =
       (await registration.pushManager.getSubscription()) ??
       (await registration.pushManager.subscribe({
@@ -367,7 +407,7 @@ export default function NotificationSettingsModal({
       }))
 
     const json = subscription.toJSON() as PushSubscriptionJson
-    push_debug("push_subscription_success", {
+    push_debug("push_subscribe_success", {
       endpoint_exists: Boolean(json.endpoint),
     })
     set_push_subscription(json)
@@ -449,7 +489,7 @@ export default function NotificationSettingsModal({
         error instanceof Error
           ? error.message
           : content.push_disabled[locale as Locale] ?? content.push_disabled.en
-      push_debug("push_subscription_failed", { error_message: message })
+      push_debug("push_subscribe_failed", { error_message: message })
       show_push_error(message)
     } finally {
       set_is_preparing_push(false)
