@@ -15,11 +15,9 @@ import {
   visitorCookieOptions,
   type AppSession,
 } from "@/core/auth/session"
-import { resolveAuthRoute } from "@/core/auth/route"
-import type { SessionRole, SessionTier } from "@/core/auth/types"
+import type { SessionRole, SessionTier, SourceChannel } from "@/core/auth/types"
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
 import { sendAuthDebug } from "@/core/debug"
-import { resolveEntranceContext } from "@/core/entrance/context"
 import { sendMail } from "@/core/mail/action"
 
 type OtpChannel = "email" | "line" | "sms"
@@ -52,6 +50,7 @@ const LINE_LOGIN_STATE_COOKIE = "amp_line_oauth_state"
 const LINE_LOGIN_AUTHORIZE_URL = "https://access.line.me/oauth2/v2.1/authorize"
 const LINE_LOGIN_TOKEN_URL = "https://api.line.me/oauth2/v2.1/token"
 const LINE_PROFILE_URL = "https://api.line.me/v2/profile"
+const LINE_OAUTH_STATE_COOKIE_MAX_AGE_SECONDS = 10 * 60
 
 console.warn("[OTP_ENVIRONMENT_LOADED]", {
   has_otp_secret: Boolean(process.env.OTP_SECRET),
@@ -66,6 +65,108 @@ function appBaseUrl(request: Request) {
   }
 
   return (process.env.NEXT_PUBLIC_APP_URL ?? requestUrl.origin).replace(/\/$/, "")
+}
+
+type LineOAuthStateCookiePayload = {
+  state: string
+  visitor_uuid: string | null
+  source_channel: SourceChannel
+  issued_at: string
+}
+
+function lineOAuthStateSecret() {
+  return (
+    process.env.OAUTH_STATE_SECRET ??
+    process.env.OTP_SECRET ??
+    process.env.LINE_LOGIN_CHANNEL_SECRET ??
+    "amp-line-oauth-dev-secret"
+  )
+}
+
+function signLineOAuthStatePayload(value: string) {
+  return createHmac("sha256", lineOAuthStateSecret()).update(value).digest("base64url")
+}
+
+function encodeLineOAuthStateCookie(payload: LineOAuthStateCookiePayload) {
+  const value = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url")
+  return `${value}.${signLineOAuthStatePayload(value)}`
+}
+
+function parseLineOAuthStateCookie(
+  value: string | null,
+): LineOAuthStateCookiePayload | null {
+  if (!value) {
+    return null
+  }
+
+  const [payload_value, signature] = value.split(".")
+
+  if (!payload_value || !signature) {
+    return null
+  }
+
+  const expected_signature = signLineOAuthStatePayload(payload_value)
+  const actual = Buffer.from(signature)
+  const expected = Buffer.from(expected_signature)
+
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
+    return null
+  }
+
+  try {
+    const payload = JSON.parse(
+      Buffer.from(payload_value, "base64url").toString("utf8"),
+    ) as Partial<LineOAuthStateCookiePayload>
+
+    if (
+      typeof payload.state === "string" &&
+      payload.state &&
+      (payload.visitor_uuid === null || typeof payload.visitor_uuid === "string") &&
+      (payload.source_channel === "web" ||
+        payload.source_channel === "pwa" ||
+        payload.source_channel === "liff" ||
+        payload.source_channel === "line") &&
+      typeof payload.issued_at === "string"
+    ) {
+      return {
+        state: payload.state,
+        visitor_uuid: payload.visitor_uuid,
+        source_channel: payload.source_channel,
+        issued_at: payload.issued_at,
+      }
+    }
+  } catch {
+    return null
+  }
+
+  return null
+}
+
+function setLineOAuthStateCookie(
+  response: NextResponse,
+  payload: LineOAuthStateCookiePayload,
+) {
+  response.cookies.set(
+    LINE_LOGIN_STATE_COOKIE,
+    encodeLineOAuthStateCookie(payload),
+    {
+      httpOnly: true,
+      maxAge: LINE_OAUTH_STATE_COOKIE_MAX_AGE_SECONDS,
+      path: "/",
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    },
+  )
+}
+
+function clearLineOAuthStateCookie(response: NextResponse) {
+  response.cookies.set(LINE_LOGIN_STATE_COOKIE, "", {
+    httpOnly: true,
+    maxAge: 0,
+    path: "/",
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  })
 }
 
 function clearRuntimeAuthCookies(request: NextRequest, response: NextResponse) {
@@ -1415,15 +1516,24 @@ export async function startLineLogin(request: NextRequest) {
     })
 
     const response = NextResponse.redirect(url, 303)
-    if (!bridge_state) {
-      response.cookies.set(LINE_LOGIN_STATE_COOKIE, state, {
-        httpOnly: true,
-        maxAge: 10 * 60,
-        path: "/",
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-      })
-    }
+    setLineOAuthStateCookie(response, {
+      state,
+      visitor_uuid: session.visitor_uuid,
+      source_channel: bridge ? "pwa" : context.source_channel,
+      issued_at: new Date().toISOString(),
+    })
+
+    await sendIdentityDebug("oauth_state_saved_cookie", {
+      provider: "line",
+      bridge_uuid: bridge?.otp_uuid ?? null,
+      visitor_uuid: session.visitor_uuid,
+      user_uuid: session.user_uuid,
+      source_channel: bridge ? "pwa" : context.source_channel,
+      path: "/",
+      same_site: "lax",
+      secure: process.env.NODE_ENV === "production",
+      state_exists: Boolean(state),
+    })
 
     await sendIdentityDebug("line_oauth_started", {
       provider: "line",
@@ -1587,10 +1697,27 @@ export async function completeLineLogin(request: NextRequest) {
   const state = requestUrl.searchParams.get("state")
   const error = requestUrl.searchParams.get("error")
   const errorDescription = requestUrl.searchParams.get("error_description")
-  const cookieState = request.cookies.get(LINE_LOGIN_STATE_COOKIE)?.value ?? null
+  const rawCookieState = request.cookies.get(LINE_LOGIN_STATE_COOKIE)?.value ?? null
+  const cookieState = parseLineOAuthStateCookie(rawCookieState)
   const failureUrl = new URL("/", appBaseUrl(request))
   const bridgeStatePayload = parseLineBridgeState(state)
   let callbackBridge: OtpRecord | null = null
+
+  if (cookieState) {
+    await sendIdentityDebug("oauth_state_cookie_found", {
+      provider: "line",
+      visitor_uuid: cookieState.visitor_uuid,
+      source_channel: cookieState.source_channel,
+      issued_at: cookieState.issued_at,
+      state_exists: true,
+    })
+  } else {
+    await sendIdentityDebug("oauth_state_cookie_missing", {
+      provider: "line",
+      raw_cookie_exists: Boolean(rawCookieState),
+      source_channel: context.source_channel,
+    })
+  }
 
   await sendIdentityDebug("line_oauth_callback_received", {
     provider: "line",
@@ -1653,9 +1780,34 @@ export async function completeLineLogin(request: NextRequest) {
       throw new Error("LINE OAuth state mismatch")
     }
 
-    if (!callbackBridge && state !== cookieState) {
+    if (!cookieState) {
+      await sendIdentityDebug("oauth_state_compare_failed", {
+        provider: "line",
+        reason: rawCookieState ? "invalid_cookie" : "missing_cookie",
+        callback_state_exists: Boolean(state),
+        source_channel: context.source_channel,
+      })
       throw new Error("LINE OAuth state mismatch")
     }
+
+    if (state !== cookieState.state) {
+      await sendIdentityDebug("oauth_state_compare_failed", {
+        provider: "line",
+        reason: "state_mismatch",
+        visitor_uuid: cookieState.visitor_uuid,
+        callback_state_exists: Boolean(state),
+        cookie_state_exists: Boolean(cookieState.state),
+        source_channel: cookieState.source_channel,
+      })
+      throw new Error("LINE OAuth state mismatch")
+    }
+
+    await sendIdentityDebug("oauth_state_compare_success", {
+      provider: "line",
+      visitor_uuid: cookieState.visitor_uuid,
+      source_channel: cookieState.source_channel,
+      callback_state_exists: Boolean(state),
+    })
 
     const token = await exchangeLineCode({
       code,
@@ -1687,16 +1839,44 @@ export async function completeLineLogin(request: NextRequest) {
         user_uuid: bridgeResult.user_uuid,
         pathname: "/api/auth/line/callback",
       })
-      response.cookies.delete(LINE_LOGIN_STATE_COOKIE)
+      clearLineOAuthStateCookie(response)
 
       return response
     }
 
-    const result = await linkCurrentVisitorToIdentity({
+    const callbackVisitorUuid = cookieState.visitor_uuid ?? session.visitor_uuid
+
+    if (!callbackVisitorUuid) {
+      throw new Error("LINE OAuth visitor cookie missing")
+    }
+
+    const result = await linkVisitorToIdentity(
+      {
+        provider: "line",
+        provider_user_id: profile.userId,
+        display_name: profile.displayName ?? null,
+        image_url: profile.pictureUrl ?? null,
+      },
+      {
+        visitor_uuid: callbackVisitorUuid,
+        current_user_uuid: session.user_uuid,
+        source_channel: cookieState.source_channel,
+        locale: context.locale,
+        session: {
+          ...session,
+          visitor_uuid: callbackVisitorUuid,
+          source_channel: cookieState.source_channel as AppSession["source_channel"],
+        },
+      },
+    )
+
+    await sendIdentityDebug("line_callback_user_resolved", {
       provider: "line",
+      visitor_uuid: result.visitor_uuid,
+      user_uuid: result.user_uuid,
+      identity_uuid: result.identity_uuid,
       provider_user_id: profile.userId,
-      display_name: profile.displayName ?? null,
-      image_url: profile.pictureUrl ?? null,
+      source_channel: result.source_channel,
     })
 
     await sendIdentityDebug("line_identity_link_success", {
@@ -1724,16 +1904,6 @@ export async function completeLineLogin(request: NextRequest) {
       can_logout: true,
       can_start_line_oauth: false,
     }
-    const route = resolveAuthRoute(
-      { ...context, requested_route: "/" },
-      await resolveEntranceContext(),
-      linkedSession,
-      {
-        user_uuid: result.user_uuid,
-        identity_state: "linked",
-        linked_providers: ["line"],
-      },
-    )
 
     await sendAuthDebug("resolved_user_uuid", {
       provider: "line",
@@ -1756,14 +1926,22 @@ export async function completeLineLogin(request: NextRequest) {
       pathname: "/api/auth/line/callback",
     })
 
-    const response = NextResponse.redirect(new URL(route.path, appBaseUrl(request)), 303)
+    await sendIdentityDebug("line_callback_redirect", {
+      provider: "line",
+      visitor_uuid: result.visitor_uuid,
+      user_uuid: result.user_uuid,
+      source_channel: result.source_channel,
+      redirect_path: "/",
+    })
+
+    const response = NextResponse.redirect(new URL("/", appBaseUrl(request)), 303)
     await writeSessionVisitorCookie({
       response,
       visitor_uuid: result.visitor_uuid,
       user_uuid: result.user_uuid,
       pathname: "/api/auth/line/callback",
     })
-    response.cookies.delete(LINE_LOGIN_STATE_COOKIE)
+    clearLineOAuthStateCookie(response)
 
     return response
   } catch (callbackError) {
@@ -1783,6 +1961,9 @@ export async function completeLineLogin(request: NextRequest) {
       source_channel: context.source_channel,
     })
 
-    return NextResponse.redirect(failureUrl, 303)
+    const response = NextResponse.redirect(failureUrl, 303)
+    clearLineOAuthStateCookie(response)
+
+    return response
   }
 }

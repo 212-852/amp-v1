@@ -13,6 +13,8 @@ const BYPASS_PREFIXES = [
   "/_next/static/",
   "/_next/image",
   "/admin",
+  "/api/auth/",
+  "/api/chat/",
   "/api/",
 ]
 
