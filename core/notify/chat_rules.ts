@@ -68,7 +68,9 @@ export function buildChatNotificationContent(input: {
   user_name: string
   room_uuid: string
 }) {
-  const { liff_url } = buildChatNotificationUrls()
+  const { liff_url } = buildChatNotificationUrls({
+    room_uuid: input.room_uuid,
+  })
 
   return {
     title: "コンシェルジュ対応が必要です",
@@ -78,18 +80,23 @@ export function buildChatNotificationContent(input: {
   }
 }
 
-export const CHAT_NOTIFICATION_LIFF_URL =
-  "https://liff.line.me/2006953406-vj2gYoAb"
-
-export function buildChatNotificationUrls(_input?: { room_uuid?: string }) {
+export function buildChatNotificationUrls(input: { room_uuid: string }) {
   const app_base =
     process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ??
     "https://app.da-nya.com"
+  const liff_id =
+    process.env.LIFF_ID?.trim() ??
+    process.env.NEXT_PUBLIC_LIFF_ID?.trim() ??
+    "2006953406-vj2gYoAb"
+  const room_path = `/admin/list/${encodeURIComponent(input.room_uuid)}`
+  const liff_url = `https://liff.line.me/${encodeURIComponent(
+    liff_id,
+  )}?room_uuid=${encodeURIComponent(input.room_uuid)}&redirect=${room_path}`
 
   return {
-    liff_url: CHAT_NOTIFICATION_LIFF_URL,
-    line_liff_url: CHAT_NOTIFICATION_LIFF_URL,
-    push_url: CHAT_NOTIFICATION_LIFF_URL,
-    app_url: app_base,
+    liff_url,
+    line_liff_url: liff_url,
+    push_url: liff_url,
+    app_url: `${app_base}${room_path}`,
   }
 }

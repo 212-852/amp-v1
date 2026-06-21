@@ -75,42 +75,12 @@ const chatFlowInfoEvents = new Set([
 ])
 
 const chatRealtimeEvents = new Set([
-  "chat_realtime_subscribe_start",
-  "chat_realtime_subscription_details",
-  "chat_realtime_subscribed",
-  "chat_realtime_raw_event_received",
-  "chat_realtime_insert_received",
-  "chat_realtime_filter_pass",
-  "chat_realtime_payload_rejected",
-  "chat_realtime_insert_append_done",
-  "chat_realtime_insert_duplicate_skipped",
-  "chat_realtime_insert_room_mismatch",
-  "chat_realtime_render_done",
-  "chat_optimistic_append_done",
-  "chat_realtime_channel_error",
-  "user_chat_realtime_unsubscribe",
-  "user_chat_realtime_subscribe_creating",
-  "user_chat_realtime_subscribed",
-  "chat_input_cleared",
-  "chat_send_started",
   "chat_send_success",
-  "chat_send_failed",
-  "chat_scroll_called",
-  "chat_scroll_done",
 ])
 
 const userChatLoadEvents = new Set([
-  "user_chat_room_resolve_start",
-  "user_chat_room_resolve_success",
   "user_chat_room_resolve_failed",
-  "user_chat_initial_fetch_start",
-  "user_chat_initial_fetch_success",
   "user_chat_initial_fetch_error",
-  "user_chat_client_state_set",
-  "user_chat_messages_state_set",
-  "user_chat_render_state",
-  "user_chat_timeout_cancelled",
-  "user_chat_resolve_ignored_stale_request",
 ])
 
 const identityEvents = new Set([
@@ -299,17 +269,11 @@ const authSessionEvents = new Set([
 ])
 
 const notifyEvents = new Set([
-  "notification_requested",
-  "notification_skipped_availability_off",
-  "notification_skipped_invalid_sender",
-  "notification_skipped_receiver_active",
-  "notification_skipped_missing_contact",
-  "notification_sent_line",
-  "notification_sent_push",
-  "notification_failed",
   "notify_rules_started",
+  "notify_contacts_loaded",
   "notify_targets_resolved",
   "notify_channel_selected",
+  "notify_skipped",
   "push_send_started",
   "push_send_success",
   "push_send_failed",

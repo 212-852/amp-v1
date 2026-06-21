@@ -173,6 +173,67 @@ self.addEventListener("message", function (event) {
   }
 })
 
+function parsePushPayload(event) {
+  if (!event.data) {
+    return {
+      title: "コンシェルジュ対応が必要です",
+      body: "新しいメッセージが届きました。",
+      data: {},
+    }
+  }
+
+  try {
+    return event.data.json()
+  } catch {
+    return {
+      title: "コンシェルジュ対応が必要です",
+      body: event.data.text(),
+      data: {},
+    }
+  }
+}
+
+self.addEventListener("push", function (event) {
+  const payload = parsePushPayload(event)
+  const title = payload.title || "コンシェルジュ対応が必要です"
+  const options = {
+    body: payload.body || "新しいメッセージが届きました。",
+    data: payload.data || {},
+    icon: "/images/icon_192.png",
+    badge: "/images/icon_192.png",
+  }
+
+  event.waitUntil(self.registration.showNotification(title, options))
+})
+
+self.addEventListener("notificationclick", function (event) {
+  event.notification.close()
+
+  const room_url = event.notification.data && event.notification.data.room_url
+  const target_url = room_url || "/admin"
+
+  event.waitUntil(
+    (async function () {
+      const windows = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      })
+
+      for (const client of windows) {
+        if ("focus" in client) {
+          await client.focus()
+          if ("navigate" in client) {
+            return client.navigate(target_url)
+          }
+          return
+        }
+      }
+
+      return self.clients.openWindow(target_url)
+    })(),
+  )
+})
+
 self.addEventListener("fetch", function (event) {
   const request = event.request
 

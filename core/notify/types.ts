@@ -4,6 +4,11 @@ export type ChatNotificationPayload = {
   room_uuid: string
   room_url: string
   receiver_user_uuid: string
+  contact_uuid?: string | null
+  selected_channel?: "push" | "line" | null
+  contact_receive?: boolean | null
+  contact_state?: string | null
+  contact_channel?: string | null
 }
 
 export type ChatMessageNotifyInput = {
