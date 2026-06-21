@@ -4,6 +4,10 @@ import { Bell } from "lucide-react"
 import { useEffect, useState } from "react"
 
 import type { NotificationType } from "@/core/chat/types"
+import {
+  acquireFreshPushSubscription,
+  type PushSubscriptionJson,
+} from "@/core/notify/push_client"
 import { useToast } from "@/components/ui/use_toast"
 import { useLocale } from "@/src/components/locale/provider"
 import type { Locale } from "@/src/lib/locale"
@@ -71,25 +75,6 @@ type PushAvailability = {
   selectable: boolean
   reason: string | null
   permission: NotificationPermission | "unsupported"
-}
-
-type PushSubscriptionJson = {
-  endpoint?: string
-  expirationTime?: number | null
-  keys?: Record<string, string>
-}
-
-function base64_url_to_uint8_array(value: string) {
-  const padding = "=".repeat((4 - (value.length % 4)) % 4)
-  const base64 = `${value}${padding}`.replace(/-/g, "+").replace(/_/g, "/")
-  const raw = window.atob(base64)
-  const output = new Uint8Array(raw.length)
-
-  for (let index = 0; index < raw.length; index += 1) {
-    output[index] = raw.charCodeAt(index)
-  }
-
-  return output
 }
 
 function push_debug(event: string, payload: Record<string, unknown> = {}) {
@@ -404,24 +389,10 @@ export default function NotificationSettingsModal({
       })
     }
 
-    if (!(await navigator.serviceWorker.getRegistration("/"))) {
-      await navigator.serviceWorker.register("/sw.js", {
-        scope: "/",
-        updateViaCache: "none",
-      })
-    }
-
-    const registration = await navigator.serviceWorker.ready
-
     push_debug("push_subscribe_started")
-    const subscription =
-      (await registration.pushManager.getSubscription()) ??
-      (await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: base64_url_to_uint8_array(public_key ?? ""),
-      }))
-
-    const json = subscription.toJSON() as PushSubscriptionJson
+    const json = await acquireFreshPushSubscription({
+      public_key,
+    })
     push_debug("push_subscribe_success", {
       endpoint_exists: Boolean(json.endpoint),
     })

@@ -5,8 +5,7 @@ import {
   resolveNotificationTypeFromContacts,
 } from "@/core/notify/contact_preferences"
 import {
-  disablePushSubscriptions,
-  enableLineSubscriptions,
+  saveLineNotificationSettings,
   savePushSubscription,
 } from "@/core/notify/push_action"
 
@@ -80,8 +79,5 @@ export async function saveNotificationSettings(input: {
     }
   }
 
-  await disablePushSubscriptions({ session: input.session })
-  await enableLineSubscriptions({ session: input.session })
-
-  return { notification_type: "line" as const }
+  return saveLineNotificationSettings({ session: input.session })
 }

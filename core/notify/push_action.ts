@@ -7,6 +7,19 @@ import {
   resolvePushPublicKeyConfig,
   resolvePushPublicKey,
 } from "@/core/notify/push_rules"
+import { save_profile_settings } from "@/core/profile/action"
+
+function identityFilter(session: Pick<Session, "user_uuid" | "visitor_uuid">) {
+  if (session.user_uuid) {
+    return `user_uuid=eq.${encodeURIComponent(session.user_uuid)}`
+  }
+
+  if (session.visitor_uuid) {
+    return `visitor_uuid=eq.${encodeURIComponent(session.visitor_uuid)}`
+  }
+
+  return null
+}
 
 export async function getPushNotificationPublicKey() {
   const public_key = resolvePushPublicKey()
@@ -29,6 +42,30 @@ export async function getPushNotificationPublicKeyConfig() {
   return config
 }
 
+export async function saveLineNotificationSettings(input: { session: Session }) {
+  await sendNotifyDebug("line_notification_settings_save_started", {
+    user_uuid: input.session.user_uuid,
+    visitor_uuid: input.session.visitor_uuid,
+  })
+
+  await disablePushSubscriptions({ session: input.session })
+  await enableLineSubscriptions({ session: input.session })
+
+  if (input.session.user_uuid) {
+    await save_profile_settings({
+      session: input.session,
+      body: { notification_type: "line" },
+    })
+  }
+
+  await sendNotifyDebug("line_notification_settings_save_success", {
+    user_uuid: input.session.user_uuid,
+    visitor_uuid: input.session.visitor_uuid,
+  })
+
+  return { notification_type: "line" as const }
+}
+
 export async function savePushSubscription(input: {
   session: Session
   subscription: unknown
@@ -45,16 +82,19 @@ export async function savePushSubscription(input: {
       input.subscription,
       input.user_agent,
     )
-    const subscription_value =
+    const subscription_value = JSON.stringify(
       input.subscription && typeof input.subscription === "object"
-        ? JSON.stringify(input.subscription)
-        : JSON.stringify({
+        ? input.subscription
+        : {
             endpoint: subscription.endpoint,
+            expirationTime: null,
             keys: {
               p256dh: subscription.p256dh,
               auth: subscription.auth,
             },
-          })
+          },
+    )
+    const now = new Date().toISOString()
 
     const contact = await upsertPushContact({
       user_uuid: input.session.user_uuid,
@@ -65,10 +105,20 @@ export async function savePushSubscription(input: {
       auth: subscription.auth,
       user_agent: subscription.user_agent,
       channel: "pwa",
+      state: "active",
       receive: true,
+      last_seen_at: now,
+      updated_at: now,
     })
 
     await disableLineSubscriptions({ session: input.session })
+
+    if (input.session.user_uuid) {
+      await save_profile_settings({
+        session: input.session,
+        body: { notification_type: "pwa_push" },
+      })
+    }
 
     await sendNotifyDebug("push_subscription_save_success", {
       user_uuid: input.session.user_uuid,
@@ -76,7 +126,7 @@ export async function savePushSubscription(input: {
       contact_uuid: contact?.contact_uuid ?? null,
       selected_channel: "push",
       receive: contact?.receive ?? true,
-      state: contact?.state ?? null,
+      state: contact?.state ?? "active",
       channel: contact?.channel ?? "pwa",
       has_value: true,
     })
@@ -99,23 +149,14 @@ export async function savePushSubscription(input: {
 
 export async function disableLineSubscriptions(input: { session: Session }) {
   const config = getRestConfig()
+  const filter = identityFilter(input.session)
 
-  if (!config) {
-    return
-  }
-
-  const identity_filter = input.session.user_uuid
-    ? `user_uuid=eq.${encodeURIComponent(input.session.user_uuid)}`
-    : input.session.visitor_uuid
-      ? `visitor_uuid=eq.${encodeURIComponent(input.session.visitor_uuid)}`
-      : null
-
-  if (!identity_filter) {
+  if (!config || !filter) {
     return
   }
 
   const response = await fetch(
-    restUrl(config, "contacts", `${identity_filter}&type=eq.line`),
+    restUrl(config, "contacts", `${filter}&type=eq.line`),
     {
       method: "PATCH",
       headers: restHeaders(config),
@@ -134,23 +175,14 @@ export async function disableLineSubscriptions(input: { session: Session }) {
 
 export async function enableLineSubscriptions(input: { session: Session }) {
   const config = getRestConfig()
+  const filter = identityFilter(input.session)
 
-  if (!config) {
-    return
-  }
-
-  const identity_filter = input.session.user_uuid
-    ? `user_uuid=eq.${encodeURIComponent(input.session.user_uuid)}`
-    : input.session.visitor_uuid
-      ? `visitor_uuid=eq.${encodeURIComponent(input.session.visitor_uuid)}`
-      : null
-
-  if (!identity_filter) {
+  if (!config || !filter) {
     return
   }
 
   const response = await fetch(
-    restUrl(config, "contacts", `${identity_filter}&type=eq.line`),
+    restUrl(config, "contacts", `${filter}&type=eq.line`),
     {
       method: "PATCH",
       headers: restHeaders(config),
@@ -169,29 +201,23 @@ export async function enableLineSubscriptions(input: { session: Session }) {
 
 export async function disablePushSubscriptions(input: { session: Session }) {
   const config = getRestConfig()
+  const filter = identityFilter(input.session)
 
-  if (!config) {
+  if (!config || !filter) {
     return
   }
 
-  const identity_filter = input.session.user_uuid
-    ? `user_uuid=eq.${encodeURIComponent(input.session.user_uuid)}`
-    : input.session.visitor_uuid
-      ? `visitor_uuid=eq.${encodeURIComponent(input.session.visitor_uuid)}`
-      : null
-
-  if (!identity_filter) {
-    return
-  }
-
+  const now = new Date().toISOString()
   const response = await fetch(
-    restUrl(config, "contacts", `${identity_filter}&type=eq.push`),
+    restUrl(config, "contacts", `${filter}&type=eq.push`),
     {
       method: "PATCH",
       headers: restHeaders(config),
       body: JSON.stringify({
         receive: false,
         state: "offline",
+        last_seen_at: now,
+        updated_at: now,
       }),
       cache: "no-store",
     },

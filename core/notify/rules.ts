@@ -155,6 +155,7 @@ export type ChatNotifySelectedContact = {
 export type ChatNotifyContactRoute = {
   receiver_user_uuid: string
   selected_contact: ChatNotifySelectedContact | null
+  fallback_line_contact: ChatNotifySelectedContact | null
   receiver_active: boolean
   skipped_reason?: string | null
 }
@@ -283,8 +284,31 @@ function toSelectedContact(contact: ContactRow): ChatNotifySelectedContact | nul
   }
 }
 
+function toFallbackLineContact(contact: ContactRow): ChatNotifySelectedContact | null {
+  if (contact.type !== "line" || contact.receive === true) {
+    return null
+  }
+
+  const contact_value = resolveContactValue(contact)
+
+  if (!contact_value) {
+    return null
+  }
+
+  return {
+    contact_uuid: contact.contact_uuid ?? null,
+    contact_type: "line",
+    contact_value,
+    receive: contact.receive ?? null,
+    state: contact.state ?? null,
+    channel: contact.channel ?? null,
+    push_subscription: null,
+  }
+}
+
 function selectNotifyContact(contacts: ContactRow[]): {
   selected_contact: ChatNotifySelectedContact | null
+  fallback_line_contact: ChatNotifySelectedContact | null
   skipped_reason?: string | null
 } {
   const receivable = contacts
@@ -294,10 +318,16 @@ function selectNotifyContact(contacts: ContactRow[]): {
     receivable.find((contact) => contact.contact_type === "push") ?? null
   const line_contact =
     receivable.find((contact) => contact.contact_type === "line") ?? null
+  const fallback_line_contact =
+    contacts
+      .map(toFallbackLineContact)
+      .find((contact): contact is ChatNotifySelectedContact => Boolean(contact)) ??
+    null
 
   if (push_contact) {
     return {
       selected_contact: push_contact,
+      fallback_line_contact,
       skipped_reason: null,
     }
   }
@@ -305,12 +335,14 @@ function selectNotifyContact(contacts: ContactRow[]): {
   if (line_contact) {
     return {
       selected_contact: line_contact,
+      fallback_line_contact: null,
       skipped_reason: null,
     }
   }
 
   return {
     selected_contact: null,
+    fallback_line_contact: null,
     skipped_reason: "no_contact",
   }
 }
@@ -453,8 +485,6 @@ async function loadReceiverContacts(user_uuid: string) {
       [
         `user_uuid=eq.${encodeURIComponent(user_uuid)}`,
         "type=in.(line,push)",
-        "receive=eq.true",
-        "value=not.is.null",
         "select=contact_uuid,type,value,endpoint,p256dh,auth,channel,state,receive,last_seen_at,updated_at",
         "order=updated_at.desc",
       ].join("&"),
@@ -509,8 +539,9 @@ export async function resolveChatNotifyRoutes(input: {
     const selected = receiver_active
       ? {
           selected_contact: null,
+          fallback_line_contact: null,
           skipped_reason: "receiver_active",
-      }
+        }
       : selectNotifyContact(contacts)
 
     await sendNotifyDebug("notify_contact_selected", {
@@ -530,6 +561,7 @@ export async function resolveChatNotifyRoutes(input: {
     routes.push({
       receiver_user_uuid,
       selected_contact: selected.selected_contact,
+      fallback_line_contact: selected.fallback_line_contact,
       receiver_active,
       skipped_reason: selected.skipped_reason ?? null,
     })

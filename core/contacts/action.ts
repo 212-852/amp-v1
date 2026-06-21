@@ -18,6 +18,7 @@ type ContactUpsertBody = {
 type PushContactUpsertBody = ContactUpsertBody & {
   state: ContactRecord["state"]
   last_seen_at: string
+  updated_at?: string
   endpoint: string
   p256dh: string | null
   auth: string | null
@@ -35,6 +36,8 @@ export type PushContactUpsertInput = {
   channel?: ContactRecord["channel"]
   state?: ContactRecord["state"]
   receive?: boolean
+  last_seen_at?: string
+  updated_at?: string
 }
 
 type ContactAccessBody = {
@@ -247,7 +250,8 @@ export async function upsertPushContact(
     channel,
     state,
     receive,
-    last_seen_at: now,
+    last_seen_at: input.last_seen_at ?? now,
+    updated_at: input.updated_at ?? now,
     endpoint: input.endpoint,
     p256dh: input.p256dh,
     auth: input.auth,
