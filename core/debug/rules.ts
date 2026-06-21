@@ -221,8 +221,6 @@ const identityEvents = new Set([
   "pwa_popup_close_failed",
   "pwa_session_restored",
   "pwa_session_restore_failed",
-  "pwa_session_restore_started",
-  "pwa_session_restore_success",
   "pwa_session_refresh_failed",
   "pwa_session_refresh_success",
   "pwa_waiting_ui_shown",
