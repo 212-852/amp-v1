@@ -14,7 +14,7 @@ import {
   request_logout,
   send_auth_client_debug,
 } from "@/components/auth/logout"
-import CenterStatusToast from "@/components/ui/center_status_toast"
+import AuthOverlayToast from "@/components/ui/auth_overlay_toast"
 import ProfileSettings from "@/components/profile/settings"
 import NotificationSettingsModal from "@/components/ops/notification_settings_modal"
 import { useToast } from "@/components/ui/use_toast"
@@ -325,7 +325,7 @@ export default function OpsHeader({
 
   return (
     <>
-      <CenterStatusToast message={logout_status_message} />
+      <AuthOverlayToast message={logout_status_message} />
       <header className="fixed inset-x-0 top-0 z-40 border-b border-neutral-200 bg-white px-5 pb-3 pt-[calc(10px+env(safe-area-inset-top,0px))]">
       <div className="mx-auto flex w-full max-w-[430px] items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">

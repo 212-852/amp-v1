@@ -11,7 +11,7 @@ import {
   request_logout,
   send_auth_client_debug,
 } from "@/components/auth/logout"
-import CenterStatusToast from "@/components/ui/center_status_toast"
+import AuthOverlayToast from "@/components/ui/auth_overlay_toast"
 import { detectAccessChannel } from "@/components/access/channel"
 import { getOverlayModalAnimationClass } from "@/components/overlay/animations"
 import type {
@@ -617,7 +617,7 @@ function AccountPanel({
 
   return (
     <div className="grid gap-3">
-      <CenterStatusToast message={logout_status_message} />
+      <AuthOverlayToast message={logout_status_message} />
       <div className="flex items-center gap-3 rounded-[18px] border border-[#e5e5e5] bg-white px-4 py-4">
         <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#fdfaf6] text-[#8f5d28] ring-1 ring-[#dcc7aa]">
           <AccountAvatar rule={rule} />
@@ -1654,7 +1654,7 @@ export default function OverlayModal({
         <h2 id="overlay-title" className="sr-only">
           {display_title}
         </h2>
-        <CenterStatusToast message={bridge_toast_message} />
+        <AuthOverlayToast message={bridge_toast_message} />
       </section>
     )
   }
