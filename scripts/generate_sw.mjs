@@ -34,7 +34,7 @@ const OFFLINE_HTML = [
   '<meta name="viewport" content="width=device-width, initial-scale=1" />',
   "<title>PET TAXI</title>",
   "<style>",
-  "body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f5e8d5;color:#3d2a19;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;padding:24px;}",
+  "body{margin:0;min-height:100dvh;display:flex;align-items:center;justify-content:center;background:#f5e8d5;color:#3d2a19;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;padding:24px;}",
   ".card{max-width:360px;width:100%;padding:28px 24px;border-radius:24px;background:#fffdf9;border:1px solid #eadfce;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.06);}",
   "h1{margin:0 0 12px;font-size:20px;}",
   "p{margin:0;font-size:14px;line-height:1.7;color:#6a5a50;}",

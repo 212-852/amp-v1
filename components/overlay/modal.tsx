@@ -1078,7 +1078,7 @@ export default function OverlayModal({
       '<meta name="viewport" content="width=device-width, initial-scale=1" />',
       `<title>${input.title}</title>`,
       "<style>",
-      "body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f7efe6;color:#3b2f2a;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;}",
+      "body{margin:0;min-height:100dvh;display:flex;align-items:center;justify-content:center;background:#f7efe6;color:#3b2f2a;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;}",
       ".card{width:min(88vw,360px);padding:28px 24px;border-radius:24px;background:#fffdf9;border:1px solid #eadfce;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.06);}",
       ".title{font-size:18px;font-weight:800;margin-bottom:10px;}",
       ".text{font-size:14px;line-height:1.7;color:#6a5a50;}",

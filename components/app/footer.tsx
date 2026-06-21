@@ -849,7 +849,7 @@ export default function AppFooter({
     <footer
       ref={footer_ref}
       className={[
-        "chat_input_footer fixed left-1/2 right-auto bottom-[calc(env(safe-area-inset-bottom,0px)+18px)] w-full max-w-[430px] -translate-x-1/2",
+        "chat_input_footer fixed left-1/2 right-auto bottom-[max(0px,env(safe-area-inset-bottom,0px))] w-full max-w-[430px] -translate-x-1/2",
         ui_layer_class.chat_composer,
       ].join(" ")}
     >
