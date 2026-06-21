@@ -10,6 +10,10 @@ import {
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 
+import {
+  request_logout,
+  send_auth_client_debug,
+} from "@/components/auth/logout"
 import ProfileSettings from "@/components/profile/settings"
 import NotificationSettingsModal from "@/components/ops/notification_settings_modal"
 import { useToast } from "@/components/ui/use_toast"
@@ -264,21 +268,51 @@ export default function OpsHeader({
     }
   }
 
-  function handle_logout() {
+  async function handle_logout() {
     if (is_logging_out) {
       return
     }
 
     set_is_logging_out(true)
     close_menu()
-
-    fetch("/api/auth/logout", {
-      method: "POST",
+    void send_auth_client_debug("logout_clicked", { source: "ops_header" })
+    toast({
+      tone: "info",
+      duration_ms: 2750,
+      message: "ログアウト中...",
     })
-      .catch(() => null)
-      .finally(() => {
-        window.location.href = "/"
+    void send_auth_client_debug("logout_toast_loading_shown", {
+      source: "ops_header",
+    })
+
+    try {
+      await request_logout()
+      toast({
+        tone: "success",
+        duration_ms: 2750,
+        message: "ログアウトしました",
       })
+      void send_auth_client_debug("logout_toast_success_shown", {
+        source: "ops_header",
+      })
+      void send_auth_client_debug("logout_redirect_started", {
+        source: "ops_header",
+        route_path: "/app",
+      })
+      window.location.replace("/app")
+    } catch (error) {
+      console.error("logout failed", error)
+      void send_auth_client_debug("logout_request_failed", {
+        source: "ops_header",
+        error_message: error instanceof Error ? error.message : String(error),
+      })
+      toast({
+        tone: "error",
+        duration_ms: 2750,
+        message: "ログアウトに失敗しました",
+      })
+      set_is_logging_out(false)
+    }
   }
 
   const menu_items: HeaderMenuItem[] = [

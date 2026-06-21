@@ -276,6 +276,12 @@ export async function logoutCurrentVisitor(request: NextRequest) {
   const session = await resolveSession(context)
   const response = NextResponse.redirect(new URL("/", appBaseUrl(request)), 303)
 
+  await sendAuthDebug("logout_request_started", {
+    visitor_uuid: session.visitor_uuid,
+    old_user_uuid: session.user_uuid,
+    source_channel: context.source_channel,
+  })
+
   clearRuntimeAuthCookies(request, response)
 
   if (session.visitor_uuid) {
@@ -300,6 +306,11 @@ export async function logoutCurrentVisitor(request: NextRequest) {
   })
 
   await sendAuthDebug("logout_success", {
+    visitor_uuid: session.visitor_uuid,
+    old_user_uuid: session.user_uuid,
+    source_channel: context.source_channel,
+  })
+  await sendAuthDebug("logout_request_success", {
     visitor_uuid: session.visitor_uuid,
     old_user_uuid: session.user_uuid,
     source_channel: context.source_channel,
@@ -1474,12 +1485,16 @@ export async function sendLoginBridgeDebug(request: NextRequest) {
     event !== "pwa_login_polling_tick" &&
     event !== "pwa_login_polling_timeout" &&
     event !== "pwa_login_polling_user_found" &&
+    event !== "pwa_login_redirect_pending" &&
     event !== "pwa_login_reload_triggered" &&
     event !== "pwa_login_route_resolved" &&
     event !== "pwa_login_redirect_complete" &&
     event !== "pwa_login_redirect_start" &&
+    event !== "pwa_login_location_replace_called" &&
     event !== "pwa_popup_connecting_page_failed" &&
     event !== "pwa_popup_connecting_page_written" &&
+    event !== "pwa_login_redirect_fallback_reload" &&
+    event !== "pwa_login_success_modal_shown" &&
     event !== "pwa_login_success_ui_shown" &&
     event !== "pwa_popup_close_attempted" &&
     event !== "pwa_popup_close_failed" &&

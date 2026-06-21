@@ -7,6 +7,10 @@ import { useRouter } from "next/navigation"
 import { ChevronRight, LogOut, Mail, PawPrint, User } from "lucide-react"
 import { SiGoogle, SiLine } from "react-icons/si"
 
+import {
+  request_logout,
+  send_auth_client_debug,
+} from "@/components/auth/logout"
 import { detectAccessChannel } from "@/components/access/channel"
 import { getOverlayModalAnimationClass } from "@/components/overlay/animations"
 import type {
@@ -25,6 +29,7 @@ import {
   PWA_LOGIN_POLL_INTERVAL_MS,
   PWA_LOGIN_POLL_TIMEOUT_MS,
 } from "@/components/pwa/login_pending"
+import { useToast } from "@/components/ui/use_toast"
 import { useLocale } from "@/src/components/locale/provider"
 import type { Locale } from "@/src/lib/locale"
 
@@ -128,6 +133,21 @@ const content = {
     ja: "ログインしました",
     en: "Logged in",
     es: "Sesion iniciada",
+  },
+  line_bridge_authenticated_title: {
+    ja: "認証しました",
+    en: "Authenticated",
+    es: "Autenticado",
+  },
+  line_bridge_loading: {
+    ja: "ロード中...",
+    en: "Loading...",
+    es: "Cargando...",
+  },
+  line_bridge_refreshing: {
+    ja: "画面を更新しています...",
+    en: "Refreshing screen...",
+    es: "Actualizando pantalla...",
   },
   line_bridge_failed_title: {
     ja: "ログインの確認に失敗しました",
@@ -541,22 +561,56 @@ function AccountPanel({
   onClose: () => void
 }>) {
   const [is_logging_out, set_is_logging_out] = useState(false)
+  const { toast } = useToast()
   const account = rule.account
   const display_name = account?.display_name ?? content.account_guest_name[locale]
 
-  function handle_logout() {
+  async function handle_logout() {
     if (is_logging_out) {
       return
     }
 
     set_is_logging_out(true)
-    fetch("/api/auth/logout", {
-      method: "POST",
+    void send_auth_client_debug("logout_clicked", {
+      source: "account_modal",
     })
-      .catch(() => null)
-      .finally(() => {
-        window.location.href = "/"
+    toast({
+      tone: "info",
+      duration_ms: 2750,
+      message: "ログアウト中...",
+    })
+    void send_auth_client_debug("logout_toast_loading_shown", {
+      source: "account_modal",
+    })
+
+    try {
+      await request_logout()
+      toast({
+        tone: "success",
+        duration_ms: 2750,
+        message: "ログアウトしました",
       })
+      void send_auth_client_debug("logout_toast_success_shown", {
+        source: "account_modal",
+      })
+      void send_auth_client_debug("logout_redirect_started", {
+        source: "account_modal",
+        route_path: "/app",
+      })
+      window.location.replace("/app")
+    } catch (error) {
+      console.error("logout failed", error)
+      void send_auth_client_debug("logout_request_failed", {
+        source: "account_modal",
+        error_message: error instanceof Error ? error.message : String(error),
+      })
+      toast({
+        tone: "error",
+        duration_ms: 2750,
+        message: "ログアウトに失敗しました",
+      })
+      set_is_logging_out(false)
+    }
   }
 
   return (
@@ -1002,10 +1056,13 @@ export default function OverlayModal({
   const [bridge_status, set_bridge_status] = useState<
     "idle" | "polling" | "success" | "failed"
   >("idle")
+  const [bridge_redirect_fallback, set_bridge_redirect_fallback] =
+    useState(false)
   const [bridge_uuid, set_bridge_uuid] = useState<string | null>(null)
   const [bridge_authorize_url, set_bridge_authorize_url] = useState<string | null>(null)
   const bridge_poll_ref = useRef<number | null>(null)
   const bridge_poll_timeout_ref = useRef<number | null>(null)
+  const bridge_redirect_timeout_ref = useRef<number | null>(null)
   const bridge_popup_ref = useRef<Window | null>(null)
   const modal_title = get_modal_title(rule, locale)
   let display_title = modal_title
@@ -1015,7 +1072,7 @@ export default function OverlayModal({
   } else if (rule.type === "link" && bridge_status === "polling") {
     display_title = content.line_bridge_title[locale]
   } else if (rule.type === "link" && bridge_status === "success") {
-    display_title = content.line_bridge_success[locale]
+    display_title = content.line_bridge_authenticated_title[locale]
   } else if (rule.type === "link" && bridge_status === "failed") {
     display_title = content.line_bridge_failed_title[locale]
   }
@@ -1033,7 +1090,16 @@ export default function OverlayModal({
     }
   }, [])
 
-  useEffect(() => stop_bridge_polling, [stop_bridge_polling])
+  useEffect(() => {
+    return () => {
+      stop_bridge_polling()
+
+      if (bridge_redirect_timeout_ref.current) {
+        window.clearTimeout(bridge_redirect_timeout_ref.current)
+        bridge_redirect_timeout_ref.current = null
+      }
+    }
+  }, [stop_bridge_polling])
 
   const complete_pwa_login = useCallback(
     (input: {
@@ -1043,22 +1109,48 @@ export default function OverlayModal({
       source: string
     }) => {
       stop_bridge_polling()
+      if (bridge_redirect_timeout_ref.current) {
+        window.clearTimeout(bridge_redirect_timeout_ref.current)
+        bridge_redirect_timeout_ref.current = null
+      }
+      set_bridge_redirect_fallback(false)
       set_bridge_status("success")
       set_loading_action(null)
+      send_bridge_debug("pwa_login_success_modal_shown", {
+        bridge_uuid: input.bridge_uuid_value,
+        source: input.source,
+      })
+      send_bridge_debug("pwa_login_redirect_pending", {
+        bridge_uuid: input.bridge_uuid_value,
+        source: input.source,
+      })
       send_bridge_debug("pwa_login_success_ui_shown", {
         bridge_uuid: input.bridge_uuid_value,
         source: input.source,
       })
       close_bridge_popup(input.bridge_uuid_value)
-      completePwaLogin({
-        user_uuid: input.user_uuid,
-        route_path: input.route_path,
-        source: input.source,
-        bridge_uuid: input.bridge_uuid_value,
-        on_debug: (event, payload) => {
-          void send_bridge_debug(event, payload)
-        },
-      })
+
+      bridge_redirect_timeout_ref.current = window.setTimeout(() => {
+        set_bridge_redirect_fallback(true)
+        send_bridge_debug("pwa_login_redirect_fallback_reload", {
+          bridge_uuid: input.bridge_uuid_value,
+          source: input.source,
+          route_path: input.route_path,
+        })
+        window.location.reload()
+      }, 5000)
+
+      window.setTimeout(() => {
+        completePwaLogin({
+          user_uuid: input.user_uuid,
+          route_path: input.route_path,
+          source: input.source,
+          bridge_uuid: input.bridge_uuid_value,
+          on_debug: (event, payload) => {
+            void send_bridge_debug(event, payload)
+          },
+        })
+      }, 0)
     },
     [stop_bridge_polling],
   )
@@ -1209,6 +1301,7 @@ export default function OverlayModal({
 
   function start_bridge_polling(bridge_uuid: string) {
     stop_bridge_polling()
+    set_bridge_redirect_fallback(false)
     set_bridge_status("polling")
     send_bridge_debug("bridge_polling_started", { bridge_uuid })
     send_bridge_debug("pwa_login_polling_started", {
@@ -1243,6 +1336,7 @@ export default function OverlayModal({
 
   async function start_pwa_line_bridge(popup: Window | null) {
     set_loading_action("line")
+    set_bridge_redirect_fallback(false)
     set_bridge_status("polling")
     bridge_popup_ref.current = popup
     let failure_logged = false
@@ -1442,6 +1536,7 @@ export default function OverlayModal({
     stop_bridge_polling()
     close_bridge_popup(bridge_uuid)
     clearPwaLoginPending()
+    set_bridge_redirect_fallback(false)
     set_bridge_status("idle")
     set_bridge_uuid(null)
     set_bridge_authorize_url(null)
@@ -1535,14 +1630,16 @@ export default function OverlayModal({
           </h2>
         </div>
 
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-[#e5e5e5] text-[18px] leading-none text-[#777777]"
-          aria-label={content.close_label[locale]}
-        >
-          ×
-        </button>
+        {rule.type === "link" && bridge_status === "success" ? null : (
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-[#e5e5e5] text-[18px] leading-none text-[#777777]"
+            aria-label={content.close_label[locale]}
+          >
+            ×
+          </button>
+        )}
       </div>
 
       {rule.type === "link" && (link_step === "email" || bridge_status !== "idle") ? null : (
@@ -1561,7 +1658,9 @@ export default function OverlayModal({
                 <div className="flex items-center gap-3">
                   <span className="h-4 w-4 rounded-full bg-[#06c755]" />
                   <p className="text-[13px] font-bold leading-6 text-[#111111]">
-                    {content.line_bridge_success[locale]}
+                    {bridge_redirect_fallback
+                      ? content.line_bridge_refreshing[locale]
+                      : content.line_bridge_loading[locale]}
                   </p>
                 </div>
               ) : bridge_status === "failed" ? (

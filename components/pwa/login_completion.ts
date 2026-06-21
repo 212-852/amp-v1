@@ -91,6 +91,12 @@ export function completePwaLogin(input: {
     route_path: destination,
     source: input.source,
   })
+  input.on_debug?.("pwa_login_location_replace_called", {
+    bridge_uuid: input.bridge_uuid ?? null,
+    user_uuid: input.user_uuid,
+    route_path: destination,
+    source: input.source,
+  })
   input.on_debug?.("pwa_login_reload_triggered", {
     bridge_uuid: input.bridge_uuid ?? null,
     user_uuid: input.user_uuid,
