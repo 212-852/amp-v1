@@ -29,6 +29,7 @@ import {
   PWA_LOGIN_POLL_INTERVAL_MS,
   PWA_LOGIN_POLL_TIMEOUT_MS,
 } from "@/components/pwa/login_pending"
+import { ToastView } from "@/components/ui/toast"
 import { useToast } from "@/components/ui/use_toast"
 import { useLocale } from "@/src/components/locale/provider"
 import type { Locale } from "@/src/lib/locale"
@@ -587,6 +588,7 @@ function AccountPanel({
     toast({
       tone: "info",
       placement: "center",
+      compact: true,
       duration_ms: 2750,
       message: "ログアウト中...\nセッションを終了しています",
     })
@@ -599,6 +601,7 @@ function AccountPanel({
       toast({
         tone: "success",
         placement: "center",
+        compact: true,
         duration_ms: 2750,
         message: "ログアウトしました",
       })
@@ -619,6 +622,7 @@ function AccountPanel({
       toast({
         tone: "error",
         placement: "center",
+        compact: true,
         duration_ms: 2750,
         message: "ログアウトに失敗しました",
       })
@@ -1643,6 +1647,47 @@ export default function OverlayModal({
     handleLinkOption(item).catch(() => {
       set_loading_action(null)
     })
+  }
+
+  const bridge_toast_message =
+    bridge_status === "polling"
+      ? content.line_bridge_title[locale]
+      : bridge_status === "success"
+        ? bridge_redirect_fallback
+          ? content.line_bridge_refreshing[locale]
+          : bridge_success_step === "complete"
+            ? content.line_bridge_complete[locale]
+            : bridge_success_step === "session"
+              ? content.line_bridge_session_updating[locale]
+              : content.line_bridge_authenticated_title[locale]
+        : null
+
+  if (rule.type === "link" && bridge_toast_message) {
+    return (
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="overlay-title"
+        className={[
+          "fixed left-1/2 top-1/2 w-[min(86vw,340px)] -translate-x-1/2 -translate-y-1/2",
+          "will-change-transform",
+          getOverlayModalAnimationClass(rule.animation, phase),
+        ].join(" ")}
+      >
+        <h2 id="overlay-title" className="sr-only">
+          {display_title}
+        </h2>
+        <ToastView
+          item={{
+            id: "pwa-line-auth-status",
+            message: bridge_toast_message,
+            tone: "info",
+            placement: "center",
+            compact: true,
+          }}
+        />
+      </section>
+    )
   }
 
   return (

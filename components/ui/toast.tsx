@@ -7,19 +7,19 @@ const tone_styles: Record<
   { container: string; icon: string }
 > = {
   success: {
-    container: "border-0 bg-[rgba(0,0,0,0.72)] text-white",
+    container: "border-0 bg-[rgba(0,0,0,0.82)] text-white",
     icon: "bg-white/85",
   },
   error: {
-    container: "border-0 bg-[rgba(0,0,0,0.72)] text-white",
+    container: "border-0 bg-[rgba(0,0,0,0.82)] text-white",
     icon: "bg-white/85",
   },
   info: {
-    container: "border-0 bg-[rgba(0,0,0,0.72)] text-white",
+    container: "border-0 bg-[rgba(0,0,0,0.82)] text-white",
     icon: "bg-white/85",
   },
   warning: {
-    container: "border-0 bg-[rgba(0,0,0,0.72)] text-white",
+    container: "border-0 bg-[rgba(0,0,0,0.82)] text-white",
     icon: "bg-white/85",
   },
 }
@@ -55,7 +55,7 @@ export function ToastView({
         role="status"
         aria-live="polite"
         className={[
-          "rounded-xl px-3 py-2 text-[12px] font-medium leading-snug shadow-[0_10px_26px_rgba(0,0,0,0.20)] backdrop-blur-[8px]",
+          "rounded-[16px] px-4 py-3 text-center text-[13px] font-semibold leading-snug shadow-[0_10px_26px_rgba(0,0,0,0.20)] backdrop-blur-[12px]",
           styles.container,
         ].join(" ")}
       >
@@ -69,7 +69,7 @@ export function ToastView({
       role="status"
       aria-live="polite"
       className={[
-        "flex items-start gap-2.5 rounded-xl px-4 py-3 shadow-[0_12px_32px_rgba(0,0,0,0.18)] backdrop-blur-[8px]",
+        "flex items-start gap-2.5 rounded-[16px] px-4 py-3 shadow-[0_12px_32px_rgba(0,0,0,0.18)] backdrop-blur-[12px]",
         styles.container,
       ].join(" ")}
     >
@@ -152,7 +152,7 @@ export function ToastStack({ items }: Readonly<{ items: ToastItem[] }>) {
           ].join(" ")}
         >
           {center_items.map((item) => (
-            <ToastView key={item.id} item={item} />
+            <ToastView key={item.id} item={{ ...item, compact: true }} />
           ))}
         </div>
       ) : null}

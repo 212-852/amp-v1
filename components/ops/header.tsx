@@ -279,6 +279,7 @@ export default function OpsHeader({
     toast({
       tone: "info",
       placement: "center",
+      compact: true,
       duration_ms: 2750,
       message: "ログアウト中...\nセッションを終了しています",
     })
@@ -291,6 +292,7 @@ export default function OpsHeader({
       toast({
         tone: "success",
         placement: "center",
+        compact: true,
         duration_ms: 2750,
         message: "ログアウトしました",
       })
@@ -311,6 +313,7 @@ export default function OpsHeader({
       toast({
         tone: "error",
         placement: "center",
+        compact: true,
         duration_ms: 2750,
         message: "ログアウトに失敗しました",
       })
