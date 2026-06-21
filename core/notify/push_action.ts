@@ -1,7 +1,6 @@
 import type { Session } from "@/core/auth/types"
 import { upsertPushContact } from "@/core/contacts/action"
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
-import { save_profile_settings } from "@/core/profile/action"
 import {
   normalizePushSubscription,
   resolvePushPublicKeyConfig,
@@ -36,11 +35,6 @@ export async function savePushSubscription(input: {
   })
 
   await disableLineSubscriptions({ session: input.session })
-
-  await save_profile_settings({
-    session: input.session,
-    body: { notification_type: "pwa_push" },
-  })
 
   return {
     notification_type: "pwa_push" as const,

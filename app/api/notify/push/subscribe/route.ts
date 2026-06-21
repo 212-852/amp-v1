@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server"
 
 import { resolveChatApiSession } from "@/core/chat/api"
-import { savePushSubscription } from "@/core/notify/push_action"
+import {
+  getNotificationSettings,
+  normalizeNotificationType,
+  saveNotificationSettings,
+} from "@/core/notify/preferences"
 import { buildPushSubscribeOutput } from "@/core/notify/push_output"
 
 export async function POST(request: Request) {
@@ -11,11 +15,15 @@ export async function POST(request: Request) {
 
   try {
     const { session } = await resolveChatApiSession()
-    const result = await savePushSubscription({
+    const result = await saveNotificationSettings({
       session,
-      subscription: body.subscription,
-      user_agent: request.headers.get("user-agent"),
+      notification_type: "pwa_push",
+      push_subscription: body.subscription,
     })
+
+    if (result.notification_type !== "pwa_push" || !("endpoint" in result)) {
+      throw new Error("push_subscription_required")
+    }
 
     return NextResponse.json(buildPushSubscribeOutput(result))
   } catch (error) {
@@ -31,4 +39,3 @@ export async function POST(request: Request) {
     )
   }
 }
-

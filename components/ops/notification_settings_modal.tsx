@@ -203,17 +203,36 @@ export default function NotificationSettingsModal({
       return
     }
 
-    const timeout_id = window.setTimeout(() => {
-      set_notification_type(
-        initial_notification_type === "pwa_push" ? "pwa_push" : "line",
-      )
-      set_error_message(null)
-    }, 0)
+    let cancelled = false
+
+    async function load_notification_settings() {
+      const response = await fetch("/api/chat/notifications", {
+        credentials: "include",
+        cache: "no-store",
+      }).catch(() => null)
+
+      if (!response?.ok || cancelled) {
+        return
+      }
+
+      const payload = (await response.json().catch(() => null)) as {
+        notification_type?: NotificationType
+      } | null
+
+      if (!cancelled) {
+        set_notification_type(
+          payload?.notification_type === "pwa_push" ? "pwa_push" : "line",
+        )
+        set_error_message(null)
+      }
+    }
+
+    void load_notification_settings()
 
     return () => {
-      window.clearTimeout(timeout_id)
+      cancelled = true
     }
-  }, [initial_notification_type, open])
+  }, [open])
 
   useEffect(() => {
     if (!open) {
@@ -267,10 +286,6 @@ export default function NotificationSettingsModal({
         set_vapid_public_key(public_key)
         set_push_key_missing(is_pwa && !public_key && Boolean(missing_env))
 
-        if (!availability.selectable && notification_type === "pwa_push") {
-          set_notification_type("line")
-        }
-
         if (!availability.selectable) {
           console.info("[notification settings] pwa push disabled", {
             reason: availability.reason,
@@ -293,7 +308,7 @@ export default function NotificationSettingsModal({
     return () => {
       window.clearTimeout(timeout_id)
     }
-  }, [locale, notification_type, open])
+  }, [locale, open])
 
   async function fetch_vapid_public_key(source: string) {
     push_debug("push_key_fetch_started", { source })
@@ -418,30 +433,6 @@ export default function NotificationSettingsModal({
     notification_type: NotificationType
     push_subscription?: PushSubscriptionJson | null
   }) {
-    if (input.notification_type === "pwa_push") {
-      const response = await fetch("/api/notify/push/subscribe", {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ subscription: input.push_subscription }),
-      })
-
-      const payload = (await response.json().catch(() => null)) as {
-        ok?: boolean
-        notification_type?: NotificationType
-        error?: string
-      } | null
-
-      if (!response.ok || payload?.ok !== true) {
-        throw new Error(payload?.error ?? "push_subscription_save_failed")
-      }
-
-      push_debug("push_method_saved", { notification_type: "pwa_push" })
-      return "pwa_push" as const
-    }
-
     const response = await fetch("/api/chat/notifications", {
       method: "POST",
       credentials: "include",
@@ -465,6 +456,7 @@ export default function NotificationSettingsModal({
       notification_type:
         payload.notification_type === "pwa_push" ? "pwa_push" : "line",
     })
+
     return payload.notification_type === "pwa_push" ? "pwa_push" : "line"
   }
 

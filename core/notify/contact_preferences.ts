@@ -1,0 +1,77 @@
+import type { Session } from "@/core/auth/types"
+import type { NotificationType } from "@/core/chat/types"
+import { getRestConfig, restHeaders, restUrl } from "@/core/db/rest"
+
+export type NotificationContactRow = {
+  contact_uuid?: string | null
+  type?: string | null
+  value?: string | null
+  endpoint?: string | null
+  channel?: string | null
+  state?: string | null
+  receive?: boolean | null
+}
+
+function identityFilter(session: Pick<Session, "user_uuid" | "visitor_uuid">) {
+  if (session.user_uuid) {
+    return `user_uuid=eq.${encodeURIComponent(session.user_uuid)}`
+  }
+
+  if (session.visitor_uuid) {
+    return `visitor_uuid=eq.${encodeURIComponent(session.visitor_uuid)}`
+  }
+
+  return null
+}
+
+export async function loadIdentityNotificationContacts(
+  session: Pick<Session, "user_uuid" | "visitor_uuid">,
+): Promise<NotificationContactRow[]> {
+  const config = getRestConfig()
+  const filter = identityFilter(session)
+
+  if (!config || !filter) {
+    return []
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "contacts",
+      [
+        filter,
+        "type=in.(line,push)",
+        "select=contact_uuid,type,value,endpoint,channel,state,receive,updated_at",
+        "order=updated_at.desc",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return []
+  }
+
+  return (await response.json()) as NotificationContactRow[]
+}
+
+export function resolveNotificationTypeFromContacts(
+  contacts: NotificationContactRow[],
+): NotificationType {
+  if (contacts.some((contact) => contact.type === "push" && contact.receive === true)) {
+    return "pwa_push"
+  }
+
+  if (contacts.some((contact) => contact.type === "line" && contact.receive === true)) {
+    return "line"
+  }
+
+  if (contacts.some((contact) => contact.type === "line")) {
+    return "line"
+  }
+
+  return "line"
+}

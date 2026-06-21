@@ -1,9 +1,9 @@
 import type { Session } from "@/core/auth/types"
 import type { NotificationType } from "@/core/chat/types"
 import {
-  load_profile_notification_type,
-  save_profile_settings,
-} from "@/core/profile/action"
+  loadIdentityNotificationContacts,
+  resolveNotificationTypeFromContacts,
+} from "@/core/notify/contact_preferences"
 import {
   disablePushSubscriptions,
   enableLineSubscriptions,
@@ -37,14 +37,17 @@ function normalizePushEndpoint(value: unknown) {
 }
 
 export async function getNotificationSettings(
-  session?: Pick<Session, "user_uuid"> | null,
+  session?: Pick<Session, "user_uuid" | "visitor_uuid"> | null,
 ) {
-  if (!session?.user_uuid) {
+  if (!session?.user_uuid && !session?.visitor_uuid) {
     return { notification_type: "line" as const }
   }
 
-  const notification_type = await load_profile_notification_type(session.user_uuid)
-  return { notification_type }
+  const contacts = await loadIdentityNotificationContacts(session)
+
+  return {
+    notification_type: resolveNotificationTypeFromContacts(contacts),
+  }
 }
 
 export async function saveNotificationSettings(input: {
@@ -71,21 +74,14 @@ export async function saveNotificationSettings(input: {
       user_agent: null,
     })
 
-    return { notification_type: result.notification_type }
+    return {
+      notification_type: "pwa_push" as const,
+      endpoint: result.endpoint,
+    }
   }
 
-  const profile = await save_profile_settings({
-    session: input.session,
-    body: { notification_type },
-  })
+  await disablePushSubscriptions({ session: input.session })
+  await enableLineSubscriptions({ session: input.session })
 
-  if (notification_type === "line") {
-    await disablePushSubscriptions({ session: input.session })
-    await enableLineSubscriptions({ session: input.session })
-  }
-
-  return {
-    notification_type:
-      profile.notification_type === "pwa_push" ? "pwa_push" : "line",
-  }
+  return { notification_type: "line" as const }
 }
