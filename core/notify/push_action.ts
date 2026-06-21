@@ -21,6 +21,23 @@ function identityFilter(session: Pick<Session, "user_uuid" | "visitor_uuid">) {
   return null
 }
 
+function requireNotificationContactTarget(
+  session: Pick<Session, "user_uuid" | "visitor_uuid">,
+) {
+  const config = getRestConfig()
+  const filter = identityFilter(session)
+
+  if (!config) {
+    throw new Error("notification_contacts_db_unavailable")
+  }
+
+  if (!filter) {
+    throw new Error("notification_contact_identity_required")
+  }
+
+  return { config, filter }
+}
+
 export async function getPushNotificationPublicKey() {
   const public_key = resolvePushPublicKey()
 
@@ -148,12 +165,7 @@ export async function savePushSubscription(input: {
 }
 
 export async function disableLineSubscriptions(input: { session: Session }) {
-  const config = getRestConfig()
-  const filter = identityFilter(input.session)
-
-  if (!config || !filter) {
-    return
-  }
+  const { config, filter } = requireNotificationContactTarget(input.session)
 
   const response = await fetch(
     restUrl(config, "contacts", `${filter}&type=eq.line`),
@@ -174,12 +186,7 @@ export async function disableLineSubscriptions(input: { session: Session }) {
 }
 
 export async function enableLineSubscriptions(input: { session: Session }) {
-  const config = getRestConfig()
-  const filter = identityFilter(input.session)
-
-  if (!config || !filter) {
-    return
-  }
+  const { config, filter } = requireNotificationContactTarget(input.session)
 
   const response = await fetch(
     restUrl(config, "contacts", `${filter}&type=eq.line`),
@@ -200,12 +207,7 @@ export async function enableLineSubscriptions(input: { session: Session }) {
 }
 
 export async function disablePushSubscriptions(input: { session: Session }) {
-  const config = getRestConfig()
-  const filter = identityFilter(input.session)
-
-  if (!config || !filter) {
-    return
-  }
+  const { config, filter } = requireNotificationContactTarget(input.session)
 
   const now = new Date().toISOString()
   const response = await fetch(

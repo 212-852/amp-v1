@@ -7,6 +7,8 @@ import {
   saveNotificationSettings,
 } from "@/core/notify/preferences"
 
+export const runtime = "nodejs"
+
 export async function GET() {
   try {
     const { session } = await resolveChatApiSession()

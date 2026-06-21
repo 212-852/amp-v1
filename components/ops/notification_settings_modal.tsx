@@ -157,6 +157,8 @@ export default function NotificationSettingsModal({
   const { toast } = useToast()
   const [notification_type, set_notification_type] =
     useState<NotificationType>(initial_notification_type)
+  const [saved_notification_type, set_saved_notification_type] =
+    useState<NotificationType>(initial_notification_type)
   const [is_saving, set_is_saving] = useState(false)
   const [is_preparing_push, set_is_preparing_push] = useState(false)
   const [error_message, set_error_message] = useState<string | null>(null)
@@ -165,7 +167,6 @@ export default function NotificationSettingsModal({
     reason: null,
     permission: "unsupported",
   })
-  const [vapid_public_key, set_vapid_public_key] = useState<string | null>(null)
   const [push_subscription, set_push_subscription] =
     useState<PushSubscriptionJson | null>(null)
   const [push_key_missing, set_push_key_missing] = useState(false)
@@ -205,9 +206,10 @@ export default function NotificationSettingsModal({
       } | null
 
       if (!cancelled) {
-        set_notification_type(
-          payload?.notification_type === "pwa_push" ? "pwa_push" : "line",
-        )
+        const resolved_type =
+          payload?.notification_type === "pwa_push" ? "pwa_push" : "line"
+        set_notification_type(resolved_type)
+        set_saved_notification_type(resolved_type)
         set_error_message(null)
       }
     }
@@ -268,7 +270,6 @@ export default function NotificationSettingsModal({
           })
         }
 
-        set_vapid_public_key(public_key)
         set_push_key_missing(is_pwa && !public_key && Boolean(missing_env))
 
         if (!availability.selectable) {
@@ -319,8 +320,6 @@ export default function NotificationSettingsModal({
       error: payload?.error ?? null,
       missing_env: payload?.missing_env ?? null,
     })
-
-    set_vapid_public_key(public_key)
 
     if (!public_key && payload?.missing_env) {
       set_push_key_missing(true)
@@ -446,6 +445,7 @@ export default function NotificationSettingsModal({
         push_subscription: subscription,
       })
       set_notification_type("pwa_push")
+      set_saved_notification_type(saved_type)
       onSaved?.(saved_type)
     } catch (error) {
       const message =
@@ -479,9 +479,12 @@ export default function NotificationSettingsModal({
         notification_type: resolved_notification_type,
         push_subscription: resolved_push_subscription,
       })
+      set_notification_type(saved_type)
+      set_saved_notification_type(saved_type)
       onSaved?.(saved_type)
       onClose()
     } catch (error) {
+      set_notification_type(saved_notification_type)
       const message =
         error instanceof Error
           ? error.message

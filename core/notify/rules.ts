@@ -485,6 +485,7 @@ async function loadReceiverContacts(user_uuid: string) {
       [
         `user_uuid=eq.${encodeURIComponent(user_uuid)}`,
         "type=in.(line,push)",
+        "value=not.is.null",
         "select=contact_uuid,type,value,endpoint,p256dh,auth,channel,state,receive,last_seen_at,updated_at",
         "order=updated_at.desc",
       ].join("&"),
