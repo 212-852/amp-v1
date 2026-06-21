@@ -1,7 +1,7 @@
 import type { Session } from "@/core/auth/types"
 import type { NotificationType } from "@/core/chat/types"
 import {
-  loadIdentityNotificationContacts,
+  loadIdentityNotificationContact,
   resolveNotificationTypeFromContacts,
 } from "@/core/notify/contact_preferences"
 import {
@@ -42,10 +42,12 @@ export async function getNotificationSettings(
     return { notification_type: "line" as const }
   }
 
-  const contacts = await loadIdentityNotificationContacts(session)
+  const contact = await loadIdentityNotificationContact(session)
 
   return {
-    notification_type: resolveNotificationTypeFromContacts(contacts),
+    notification_type: resolveNotificationTypeFromContacts(
+      contact ? [contact] : [],
+    ),
   }
 }
 

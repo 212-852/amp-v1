@@ -1,6 +1,7 @@
 import type { Session } from "@/core/auth/types"
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
 import {
+  loadIdentityNotificationContact,
   loadIdentityNotificationContacts,
   resolveNotificationTypeFromContacts,
   type NotificationContactRow,
@@ -66,55 +67,10 @@ function hasReceivingPushContact(contacts: NotificationContactRow[]) {
     contacts.length === 1 &&
     contact?.type === "push" &&
     contact.receive === true &&
-    contact.channel === "pwa" &&
     Boolean(contact.endpoint?.trim()) &&
     Boolean(contact.p256dh?.trim()) &&
     Boolean(contact.auth?.trim())
   )
-}
-
-function notificationContactValue(session: Pick<Session, "user_uuid" | "visitor_uuid">) {
-  if (session.user_uuid) {
-    return `notification:user:${session.user_uuid}`
-  }
-
-  if (session.visitor_uuid) {
-    return `notification:visitor:${session.visitor_uuid}`
-  }
-
-  throw new Error("notification_contact_identity_required")
-}
-
-async function loadPushContactByEndpointForSettings(endpoint: string) {
-  const config = getRestConfig()
-
-  if (!config || !endpoint.trim()) {
-    return null
-  }
-
-  const response = await fetch(
-    restUrl(
-      config,
-      "contacts",
-      [
-        `endpoint=eq.${encodeURIComponent(endpoint)}`,
-        "type=eq.push",
-        "select=contact_uuid,type,receive,channel,state,updated_at",
-        "limit=1",
-      ].join("&"),
-    ),
-    {
-      headers: restHeaders(config),
-      cache: "no-store",
-    },
-  )
-
-  if (!response.ok) {
-    return null
-  }
-
-  const rows = (await response.json()) as NotificationContactRow[]
-  return rows[0] ?? null
 }
 
 async function deleteOtherNotificationContacts(input: {
@@ -130,7 +86,7 @@ async function deleteOtherNotificationContacts(input: {
     restUrl(
       config,
       "contacts",
-      `${filter}&type=in.(line,push)${keep_filter}&select=contact_uuid`,
+      `${filter}${keep_filter}&select=contact_uuid`,
     ),
     {
       method: "DELETE",
@@ -164,14 +120,14 @@ async function saveSingleNotificationContact(input: {
       : { user_uuid: null, visitor_uuid: input.session.visitor_uuid }
   const body = {
     ...identity,
-    value: notificationContactValue(input.session),
+    value: null,
     receive: true,
     updated_at: now,
     ...input.body,
   }
   const existing_contact_uuid =
     input.contact_uuid ??
-    (await loadIdentityNotificationContacts(input.session))[0]?.contact_uuid ??
+    (await loadIdentityNotificationContact(input.session))?.contact_uuid ??
     null
 
   if (existing_contact_uuid) {
@@ -298,7 +254,6 @@ export async function saveLineNotificationSettings(input: { session: Session }) 
       p256dh: null,
       auth: null,
       user_agent: null,
-      last_seen_at: null,
     },
   })
   const affected_rows = saved.affected_rows
@@ -375,36 +330,16 @@ export async function savePushSubscription(input: {
       input.subscription,
       input.user_agent,
     )
-    const subscription_value = JSON.stringify(
-      input.subscription && typeof input.subscription === "object"
-        ? input.subscription
-        : {
-            endpoint: subscription.endpoint,
-            expirationTime: null,
-            keys: {
-              p256dh: subscription.p256dh,
-              auth: subscription.auth,
-            },
-          },
-    )
-    const now = new Date().toISOString()
-
-    const endpoint_contact = await loadPushContactByEndpointForSettings(
-      subscription.endpoint,
-    )
     const saved = await saveSingleNotificationContact({
       session: input.session,
-      contact_uuid: endpoint_contact?.contact_uuid ?? null,
       body: {
         type: "push",
-        value: subscription_value,
+        value: null,
         channel: "pwa",
         state: "active",
         endpoint: subscription.endpoint,
         p256dh: subscription.p256dh,
         auth: subscription.auth,
-        user_agent: subscription.user_agent,
-        last_seen_at: now,
       },
     })
     const saved_contact = saved.contact

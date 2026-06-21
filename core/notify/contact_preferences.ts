@@ -43,7 +43,6 @@ export async function loadIdentityNotificationContacts(
       "contacts",
       [
         filter,
-        "type=in.(line,push)",
         "select=contact_uuid,type,value,endpoint,p256dh,auth,channel,state,receive,updated_at",
         "order=updated_at.desc",
       ].join("&"),
@@ -59,6 +58,41 @@ export async function loadIdentityNotificationContacts(
   }
 
   return (await response.json()) as NotificationContactRow[]
+}
+
+export async function loadIdentityNotificationContact(
+  session: Pick<Session, "user_uuid" | "visitor_uuid">,
+): Promise<NotificationContactRow | null> {
+  const config = getRestConfig()
+  const filter = identityFilter(session)
+
+  if (!config || !filter) {
+    return null
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "contacts",
+      [
+        filter,
+        "select=contact_uuid,type,value,endpoint,p256dh,auth,channel,state,receive,updated_at",
+        "order=updated_at.desc",
+        "limit=1",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return null
+  }
+
+  const rows = (await response.json()) as NotificationContactRow[]
+  return rows[0] ?? null
 }
 
 export function resolveNotificationTypeFromContacts(
