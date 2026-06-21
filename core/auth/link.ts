@@ -250,6 +250,13 @@ export async function linkVisitorToIdentity(
   try {
     identity = await upsertIdentityLink(input, user_uuid)
     await linkVisitorToUser(visitor_uuid, user_uuid)
+    await sendAuthDebug("session_user_uuid_persisted", {
+      provider: input.provider,
+      visitor_uuid,
+      user_uuid,
+      source_channel: options.source_channel,
+      source: "identity_link",
+    })
     await linkExistingVisitorContacts(visitor_uuid, user_uuid, input)
     await upsertRealContact(input, visitor_uuid, user_uuid, options.source_channel)
     await linkParticipantsToUser(visitor_uuid, user_uuid)

@@ -117,6 +117,7 @@ type VisitorStore = {
     debug: VisitorDebugContext,
   ) => Promise<VisitorRecord>
   resolveUserUuidFromAuth: (context: AuthContext) => Promise<string | null>
+  resolveUserUuidFromConsumedOtp: (visitor_uuid: string) => Promise<string | null>
   linkVisitorUser: (visitor_uuid: string, user_uuid: string) => Promise<void>
 }
 
@@ -372,6 +373,26 @@ async function resolveUserUuidFromIdentities(
   return row?.user_uuid ?? null
 }
 
+async function resolveUserUuidFromConsumedOtp(
+  config: SupabaseConfig,
+  visitor_uuid: string,
+) {
+  const row = await fetchFirstRow<UserUuidRow>(
+    config,
+    "otp",
+    [
+      `visitor_uuid=eq.${encodeURIComponent(visitor_uuid)}`,
+      "user_uuid=not.is.null",
+      "consumed_at=not.is.null",
+      "select=user_uuid",
+      "order=created_at.desc",
+      "limit=1",
+    ].join("&"),
+  )
+
+  return row?.user_uuid ?? null
+}
+
 const supabaseVisitorStore: VisitorStore = {
   async findVisitorByUuid(visitor_uuid) {
     const config = getSupabaseConfig()
@@ -478,6 +499,16 @@ const supabaseVisitorStore: VisitorStore = {
     return resolveUserUuidFromIdentities(config, providerUserIds)
   },
 
+  async resolveUserUuidFromConsumedOtp(visitor_uuid) {
+    const config = getSupabaseConfig()
+
+    if (!config) {
+      return runtimeVisitorStore.resolveUserUuidFromConsumedOtp(visitor_uuid)
+    }
+
+    return resolveUserUuidFromConsumedOtp(config, visitor_uuid)
+  },
+
   async linkVisitorUser(visitor_uuid, user_uuid) {
     const config = getSupabaseConfig()
 
@@ -538,6 +569,10 @@ const runtimeVisitorStore: VisitorStore = {
   },
 
   async resolveUserUuidFromAuth() {
+    return null
+  },
+
+  async resolveUserUuidFromConsumedOtp() {
     return null
   },
 
@@ -1151,16 +1186,105 @@ async function resolve_session_context_core(
     )
     const visitor = visitorResolution.visitor
     const auth_user_uuid = await visitorStore.resolveUserUuidFromAuth(context)
-    const user_uuid = auth_user_uuid ?? visitor?.user_uuid ?? null
+    const visitor_uuid = visitorResolution.visitor_uuid
 
-    if (visitor && auth_user_uuid && visitor.user_uuid !== auth_user_uuid) {
-      await visitorStore.linkVisitorUser(visitor.visitor_uuid, auth_user_uuid)
+    await send_auth_debug(
+      "session_user_resolve_started",
+      {
+        pathname,
+        visitor_uuid,
+        visitor_user_uuid: visitor?.user_uuid ?? null,
+        auth_user_uuid,
+        source_channel: context.source_channel,
+      },
+      request_id,
+    )
+
+    let user_uuid: string | null = null
+    let user_uuid_source:
+      | "identity"
+      | "cookie"
+      | "consumed_otp"
+      | "none" = "none"
+
+    if (auth_user_uuid) {
+      user_uuid = auth_user_uuid
+      user_uuid_source = "identity"
+      await send_auth_debug(
+        "session_user_resolve_from_identity",
+        {
+          pathname,
+          visitor_uuid,
+          user_uuid,
+          source_channel: context.source_channel,
+        },
+        request_id,
+      )
+    } else if (visitor?.user_uuid) {
+      user_uuid = visitor.user_uuid
+      user_uuid_source = "cookie"
+      await send_auth_debug(
+        "session_user_resolve_from_cookie",
+        {
+          pathname,
+          visitor_uuid: visitor.visitor_uuid,
+          user_uuid,
+          source_channel: context.source_channel,
+        },
+        request_id,
+      )
+    } else if (visitor_uuid) {
+      const consumed_otp_user_uuid =
+        await visitorStore.resolveUserUuidFromConsumedOtp(visitor_uuid)
+
+      if (consumed_otp_user_uuid) {
+        user_uuid = consumed_otp_user_uuid
+        user_uuid_source = "consumed_otp"
+        await send_auth_debug(
+          "session_user_resolve_from_consumed_otp",
+          {
+            pathname,
+            visitor_uuid,
+            user_uuid,
+            source_channel: context.source_channel,
+          },
+          request_id,
+        )
+      }
+    }
+
+    if (!user_uuid) {
+      await send_auth_debug(
+        "session_user_resolve_failed",
+        {
+          pathname,
+          visitor_uuid,
+          source_channel: context.source_channel,
+          reason: "no_linked_user_uuid",
+        },
+        request_id,
+      )
+    }
+
+    if (visitor && user_uuid && visitor.user_uuid !== user_uuid) {
+      await visitorStore.linkVisitorUser(visitor.visitor_uuid, user_uuid)
       await send_auth_debug(
         "visitor_user_linked",
         {
           pathname,
           visitor_uuid: visitor.visitor_uuid,
-          user_uuid: auth_user_uuid,
+          user_uuid,
+          source: user_uuid_source,
+        },
+        request_id,
+      )
+      await send_auth_debug(
+        "session_user_uuid_persisted",
+        {
+          pathname,
+          visitor_uuid: visitor.visitor_uuid,
+          user_uuid,
+          source: user_uuid_source,
         },
         request_id,
       )
@@ -1475,9 +1599,24 @@ export async function resolveSession(
 
     if (headerSession) {
       const should_revalidate_header_session =
-        Boolean(context.auth_token) && !headerSession.user_uuid
+        !headerSession.user_uuid &&
+        (Boolean(context.auth_token) ||
+          (context.source_channel === "pwa" && Boolean(headerSession.visitor_uuid)))
 
       if (!should_revalidate_header_session) {
+        if (headerSession.user_uuid) {
+          await send_auth_debug(
+            "session_user_resolve_from_cookie",
+            {
+              pathname: context.requested_route,
+              visitor_uuid: headerSession.visitor_uuid,
+              user_uuid: headerSession.user_uuid,
+              source_channel: headerSession.source_channel,
+              source: "request_header",
+            },
+            request_id,
+          )
+        }
         await send_auth_debug(
           "session_restore_success",
           {
