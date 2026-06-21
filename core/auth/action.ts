@@ -1191,6 +1191,41 @@ async function createLoginBridge(input: {
   }
 }
 
+function bridgeAuthErrorPage() {
+  return new NextResponse(
+    [
+      "<!doctype html>",
+      '<html lang="ja">',
+      "<head>",
+      '<meta charset="utf-8" />',
+      '<meta name="viewport" content="width=device-width,initial-scale=1" />',
+      "<title>認証に失敗しました</title>",
+      "<style>",
+      "body{margin:0;background:#fdfaf6;color:#111;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}",
+      ".wrap{min-height:100dvh;display:grid;place-items:center;padding:28px;box-sizing:border-box;}",
+      ".panel{width:min(100%,420px);border:1px solid #e5e5e5;border-radius:24px;background:#fff;padding:28px 22px;text-align:center;box-shadow:0 18px 50px rgba(0,0,0,.10);}",
+      "h1{margin:0 0 12px;font-size:24px;line-height:1.4;letter-spacing:0;font-weight:800;}",
+      "p{margin:0;color:#555;font-size:15px;line-height:1.8;font-weight:600;}",
+      "</style>",
+      "</head>",
+      "<body>",
+      '<main class="wrap">',
+      '<section class="panel">',
+      "<h1>認証に失敗しました</h1>",
+      "<p>アプリへ戻って再度お試しください</p>",
+      "</section>",
+      "</main>",
+      "</body>",
+      "</html>",
+    ].join(""),
+    {
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+      },
+    },
+  )
+}
+
 function bridgeCompletePage() {
   return new NextResponse(
     [
@@ -1789,19 +1824,173 @@ async function completeLineBridge(input: {
   return result
 }
 
-export async function completeLineLogin(request: NextRequest) {
-  const context = await resolveAuthContext()
+async function completeLineBridgeOAuthCallback(
+  request: NextRequest,
+  bridgeStatePayload: LineBridgeStatePayload,
+  params: {
+    code: string | null
+    state: string | null
+    error: string | null
+    errorDescription: string | null
+  },
+) {
   const config = lineLoginConfig(request)
+  let callbackBridge: OtpRecord | null = null
+
+  await sendIdentityDebug("line_oauth_callback_received", {
+    provider: "line",
+    bridge_uuid: bridgeStatePayload.bridge_uuid,
+    visitor_uuid: null,
+    user_uuid: null,
+    source_channel: bridgeStatePayload.source_channel,
+    code_exists: Boolean(params.code),
+    state_exists: Boolean(params.state),
+    error: params.error,
+    error_description: params.errorDescription,
+  })
+
+  try {
+    callbackBridge = await loadLoginBridge(bridgeStatePayload.bridge_uuid)
+
+    await sendIdentityDebug("browser_bridge_callback_detected", {
+      provider: "line",
+      bridge_uuid: bridgeStatePayload.bridge_uuid,
+      visitor_uuid: callbackBridge?.visitor_uuid ?? null,
+      source_channel: bridgeStatePayload.source_channel,
+    })
+    await sendIdentityDebug("line_callback_bridge_detected", {
+      provider: "line",
+      bridge_uuid: bridgeStatePayload.bridge_uuid,
+      visitor_uuid: callbackBridge?.visitor_uuid ?? null,
+      source_channel: bridgeStatePayload.source_channel,
+    })
+
+    if (!callbackBridge) {
+      throw new Error("Login bridge was not found")
+    }
+
+    if (
+      callbackBridge.channel !== "line" ||
+      callbackBridge.consumed_at ||
+      new Date(callbackBridge.expires_at).getTime() <= Date.now() ||
+      !callbackBridge.visitor_uuid ||
+      hashLineBridgeState({
+        visitor_uuid: callbackBridge.visitor_uuid,
+        oauth_state: bridgeStatePayload.oauth_state,
+      }) !== callbackBridge.code_hash
+    ) {
+      throw new Error("LINE bridge OAuth state mismatch")
+    }
+
+    await sendIdentityDebug("bridge_state_valid", {
+      provider: "line",
+      bridge_uuid: callbackBridge.otp_uuid,
+      visitor_uuid: callbackBridge.visitor_uuid,
+      source_channel: "pwa",
+    })
+
+    if (params.error) {
+      await patchLoginBridge(callbackBridge.otp_uuid, {
+        attempt_count: callbackBridge.attempt_count + 1,
+      })
+      throw new Error(params.errorDescription ?? params.error)
+    }
+
+    if (!params.code || !params.state) {
+      throw new Error("LINE OAuth state mismatch")
+    }
+
+    const token = await exchangeLineCode({
+      code: params.code,
+      redirectUri: config.redirectUri,
+      channelId: config.channelId,
+      channelSecret: config.channelSecret,
+    })
+    const profile = await fetchLineProfile(token.access_token)
+
+    const bridgeResult = await completeLineBridge({
+      bridge: callbackBridge,
+      oauth_state: bridgeStatePayload.oauth_state,
+      profile,
+    })
+
+    await sendIdentityDebug("browser_bridge_completed", {
+      provider: "line",
+      bridge_uuid: callbackBridge.otp_uuid,
+      visitor_uuid: callbackBridge.visitor_uuid,
+      user_uuid: bridgeResult.user_uuid,
+      source_channel: "pwa",
+    })
+    await sendIdentityDebug("bridge_callback_complete_page_shown", {
+      provider: "line",
+      bridge_uuid: callbackBridge.otp_uuid,
+      visitor_uuid: callbackBridge.visitor_uuid,
+      user_uuid: callbackBridge.user_uuid,
+      source_channel: "pwa",
+    })
+    await sendIdentityDebug("callback_return_to_app_screen_rendered", {
+      provider: "line",
+      bridge_uuid: callbackBridge.otp_uuid,
+      visitor_uuid: callbackBridge.visitor_uuid,
+      user_uuid: bridgeResult.user_uuid,
+      source_channel: "pwa",
+    })
+    await sendIdentityDebug("browser_return_to_pwa_message_shown", {
+      provider: "line",
+      bridge_uuid: callbackBridge.otp_uuid,
+      visitor_uuid: callbackBridge.visitor_uuid,
+      user_uuid: bridgeResult.user_uuid,
+      source_channel: "pwa",
+    })
+
+    const response = bridgeCompletePage()
+    clearLineOAuthStateCookie(response)
+    clearAuthLoggedOutCookie(response)
+
+    return response
+  } catch (callbackError) {
+    if (callbackBridge && !callbackBridge.consumed_at) {
+      await patchLoginBridge(callbackBridge.otp_uuid, {
+        attempt_count: callbackBridge.attempt_count + 1,
+      }).catch(() => null)
+    }
+
+    await sendIdentityDebug("identity_link_failed", {
+      provider: "line",
+      bridge_uuid: bridgeStatePayload.bridge_uuid,
+      visitor_uuid: callbackBridge?.visitor_uuid ?? null,
+      user_uuid: callbackBridge?.user_uuid ?? null,
+      reason: "line_bridge_oauth_failed",
+      error: callbackError instanceof Error ? callbackError.message : String(callbackError),
+      source_channel: "pwa",
+    })
+
+    return bridgeAuthErrorPage()
+  }
+}
+
+export async function completeLineLogin(request: NextRequest) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get("code")
   const state = requestUrl.searchParams.get("state")
   const error = requestUrl.searchParams.get("error")
   const errorDescription = requestUrl.searchParams.get("error_description")
+  const bridgeStatePayload = parseLineBridgeState(state)
+
+  if (bridgeStatePayload) {
+    return completeLineBridgeOAuthCallback(request, bridgeStatePayload, {
+      code,
+      state,
+      error,
+      errorDescription,
+    })
+  }
+
+  const context = await resolveAuthContext()
+  const config = lineLoginConfig(request)
   const rawCookieState = request.cookies.get(LINE_LOGIN_STATE_COOKIE)?.value ?? null
   const cookieState = parseLineOAuthStateCookie(rawCookieState)
   const failureUrl = new URL("/", appBaseUrl(request))
-  const bridgeStatePayload = parseLineBridgeState(state)
-  let callbackBridge: OtpRecord | null = null
   let session: AppSession | null = null
 
   if (cookieState) {
@@ -1822,7 +2011,7 @@ export async function completeLineLogin(request: NextRequest) {
 
   await sendIdentityDebug("line_oauth_callback_received", {
     provider: "line",
-    bridge_uuid: bridgeStatePayload?.bridge_uuid ?? null,
+    bridge_uuid: null,
     visitor_uuid: cookieState?.visitor_uuid ?? null,
     user_uuid: null,
     source_channel: context.source_channel,
@@ -1833,53 +2022,7 @@ export async function completeLineLogin(request: NextRequest) {
   })
 
   try {
-    if (bridgeStatePayload) {
-      callbackBridge = await loadLoginBridge(bridgeStatePayload.bridge_uuid)
-
-      await sendIdentityDebug("browser_bridge_callback_detected", {
-        provider: "line",
-        bridge_uuid: bridgeStatePayload.bridge_uuid,
-        visitor_uuid: callbackBridge?.visitor_uuid ?? null,
-        source_channel: bridgeStatePayload.source_channel,
-      })
-      await sendIdentityDebug("line_callback_bridge_detected", {
-        provider: "line",
-        bridge_uuid: bridgeStatePayload.bridge_uuid,
-        visitor_uuid: callbackBridge?.visitor_uuid ?? null,
-        source_channel: bridgeStatePayload.source_channel,
-      })
-
-      if (!callbackBridge) {
-        throw new Error("Login bridge was not found")
-      }
-
-      if (
-        callbackBridge.channel !== "line" ||
-        callbackBridge.consumed_at ||
-        new Date(callbackBridge.expires_at).getTime() <= Date.now() ||
-        !callbackBridge.visitor_uuid ||
-        hashLineBridgeState({
-          visitor_uuid: callbackBridge.visitor_uuid,
-          oauth_state: bridgeStatePayload.oauth_state,
-        }) !== callbackBridge.code_hash
-      ) {
-        throw new Error("LINE bridge OAuth state mismatch")
-      }
-
-      await sendIdentityDebug("bridge_state_valid", {
-        provider: "line",
-        bridge_uuid: callbackBridge.otp_uuid,
-        visitor_uuid: callbackBridge.visitor_uuid,
-        source_channel: "pwa",
-      })
-    }
-
     if (error) {
-      if (callbackBridge && !callbackBridge.consumed_at) {
-        await patchLoginBridge(callbackBridge.otp_uuid, {
-          attempt_count: callbackBridge.attempt_count + 1,
-        })
-      }
       throw new Error(errorDescription ?? error)
     }
 
@@ -1923,49 +2066,6 @@ export async function completeLineLogin(request: NextRequest) {
       channelSecret: config.channelSecret,
     })
     const profile = await fetchLineProfile(token.access_token)
-
-    if (callbackBridge) {
-      const bridgeResult = await completeLineBridge({
-        bridge: callbackBridge,
-        oauth_state: bridgeStatePayload?.oauth_state ?? "",
-        profile,
-      })
-
-      await sendIdentityDebug("browser_bridge_completed", {
-        provider: "line",
-        bridge_uuid: callbackBridge.otp_uuid,
-        visitor_uuid: callbackBridge.visitor_uuid,
-        user_uuid: bridgeResult.user_uuid,
-        source_channel: "pwa",
-      })
-      await sendIdentityDebug("bridge_callback_complete_page_shown", {
-        provider: "line",
-        bridge_uuid: callbackBridge.otp_uuid,
-        visitor_uuid: callbackBridge.visitor_uuid,
-        user_uuid: callbackBridge.user_uuid,
-        source_channel: "pwa",
-      })
-      await sendIdentityDebug("callback_return_to_app_screen_rendered", {
-        provider: "line",
-        bridge_uuid: callbackBridge.otp_uuid,
-        visitor_uuid: callbackBridge.visitor_uuid,
-        user_uuid: bridgeResult.user_uuid,
-        source_channel: "pwa",
-      })
-      await sendIdentityDebug("browser_return_to_pwa_message_shown", {
-        provider: "line",
-        bridge_uuid: callbackBridge.otp_uuid,
-        visitor_uuid: callbackBridge.visitor_uuid,
-        user_uuid: bridgeResult.user_uuid,
-        source_channel: "pwa",
-      })
-
-      const response = bridgeCompletePage()
-      clearLineOAuthStateCookie(response)
-      clearAuthLoggedOutCookie(response)
-
-      return response
-    }
 
     session = await resolveSession(context)
     const callbackVisitorUuid = cookieState.visitor_uuid ?? session.visitor_uuid
@@ -2070,12 +2170,6 @@ export async function completeLineLogin(request: NextRequest) {
 
     return response
   } catch (callbackError) {
-    if (callbackBridge && !callbackBridge.consumed_at) {
-      await patchLoginBridge(callbackBridge.otp_uuid, {
-        attempt_count: callbackBridge.attempt_count + 1,
-      }).catch(() => null)
-    }
-
     failureUrl.searchParams.set("auth_error", "line")
     await sendIdentityDebug("identity_link_failed", {
       provider: "line",
