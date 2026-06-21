@@ -209,13 +209,14 @@ export type MessageBundle = {
   created_at: string
 }
 
-export type NotificationType = "line" | "push"
+export type NotificationType = "line" | "pwa_push"
 
 export type AvailabilityState = "on" | "off"
 
 export type AvailabilityRecord = {
   user_uuid: string
   enabled: boolean
+  notification_type?: NotificationType
   updated_at: string
 }
 

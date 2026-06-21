@@ -25,9 +25,9 @@ const content = {
     es: "Notificacion push PWA",
   },
   push_disabled: {
-    ja: "Push通知（PWAのみ）",
-    en: "Push (PWA only)",
-    es: "Push (solo PWA)",
+    ja: "PWAで通知許可と購読が有効な場合のみ選択できます",
+    en: "Available only when PWA notification permission and subscription are active",
+    es: "Disponible solo con permiso y suscripcion push activos en PWA",
   },
   save: {
     ja: "保存",
@@ -64,26 +64,68 @@ export default function NotificationSettingsModal({
     useState<NotificationType>(initial_notification_type)
   const [is_saving, set_is_saving] = useState(false)
   const [error_message, set_error_message] = useState<string | null>(null)
-  const push_available =
-    isStandalonePwa() &&
-    typeof window !== "undefined" &&
-    "Notification" in window &&
-    Notification.permission === "granted"
+  const [push_available, set_push_available] = useState(false)
 
   useEffect(() => {
     if (!open) {
       return
     }
 
-    set_notification_type(initial_notification_type)
+    set_notification_type(
+      initial_notification_type === "pwa_push" ? "pwa_push" : "line",
+    )
     set_error_message(null)
   }, [initial_notification_type, open])
 
   useEffect(() => {
-    if (!push_available && notification_type === "push") {
+    if (!push_available && notification_type === "pwa_push") {
       set_notification_type("line")
     }
   }, [notification_type, push_available])
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    let cancelled = false
+
+    async function resolve_push_availability() {
+      const has_push =
+        isStandalonePwa() &&
+        typeof window !== "undefined" &&
+        "Notification" in window &&
+        Notification.permission === "granted" &&
+        "serviceWorker" in navigator &&
+        "PushManager" in window
+
+      if (!has_push) {
+        if (!cancelled) {
+          set_push_available(false)
+        }
+        return
+      }
+
+      try {
+        const registration = await navigator.serviceWorker.ready
+        const subscription = await registration.pushManager.getSubscription()
+
+        if (!cancelled) {
+          set_push_available(Boolean(subscription))
+        }
+      } catch {
+        if (!cancelled) {
+          set_push_available(false)
+        }
+      }
+    }
+
+    void resolve_push_availability()
+
+    return () => {
+      cancelled = true
+    }
+  }, [open])
 
   async function save_settings() {
     if (is_saving) {
@@ -94,18 +136,20 @@ export default function NotificationSettingsModal({
     set_error_message(null)
 
     try {
-      const response = await fetch("/api/profile", {
+      const resolved_notification_type =
+        notification_type === "pwa_push" && push_available ? "pwa_push" : "line"
+
+      const response = await fetch("/api/chat/notifications", {
         method: "POST",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ notification_type }),
+        body: JSON.stringify({ notification_type: resolved_notification_type }),
       })
 
       const payload = (await response.json().catch(() => null)) as {
         ok?: boolean
-        profile?: { notification_type?: NotificationType }
         notification_type?: NotificationType
         error?: string
       } | null
@@ -115,9 +159,7 @@ export default function NotificationSettingsModal({
       }
 
       const saved_type =
-        payload.profile?.notification_type ??
-        payload.notification_type ??
-        notification_type
+        payload.notification_type === "pwa_push" ? "pwa_push" : "line"
       onSaved?.(saved_type)
       onClose()
     } catch {
@@ -131,8 +173,32 @@ export default function NotificationSettingsModal({
     return null
   }
 
+  const options: Array<{
+    value: NotificationType
+    label: string
+    disabled: boolean
+    helper?: string | null
+  }> = [
+    {
+      value: "line",
+      label: content.line[locale as Locale] ?? content.line.en,
+      disabled: false,
+    },
+    {
+      value: "pwa_push",
+      label: content.push[locale as Locale] ?? content.push.en,
+      disabled: !push_available,
+      helper: !push_available
+        ? content.push_disabled[locale as Locale] ?? content.push_disabled.en
+        : null,
+    },
+  ]
+
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/30 px-4 pb-[calc(env(safe-area-inset-bottom,0px)+24px)] sm:items-center">
+    <div
+      className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/45 px-4 pb-[calc(env(safe-area-inset-bottom,0px)+24px)] sm:items-center sm:pb-0"
+      role="presentation"
+    >
       <div className="w-full max-w-[430px] rounded-2xl border border-neutral-200 bg-white p-5 shadow-[0_18px_40px_rgba(0,0,0,0.12)]">
         <div className="mb-4 flex items-center gap-2">
           <Bell className="h-5 w-5 text-neutral-700" strokeWidth={1.8} />
@@ -142,47 +208,54 @@ export default function NotificationSettingsModal({
         </div>
 
         <div className="space-y-3">
-          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-neutral-200 px-4 py-3">
-            <input
-              type="radio"
-              name="notification_type"
-              checked={notification_type === "line"}
-              onChange={() => set_notification_type("line")}
-              className="h-4 w-4"
-            />
-            <span className="text-[14px] font-medium text-neutral-900">
-              {content.line[locale as Locale] ?? content.line.en}
-            </span>
-          </label>
+          {options.map((option) => {
+            const selected = notification_type === option.value
 
-          <label
-            className={[
-              "flex items-center gap-3 rounded-xl border px-4 py-3",
-              push_available
-                ? "cursor-pointer border-neutral-200"
-                : "cursor-not-allowed border-neutral-100 bg-neutral-50 opacity-70",
-            ].join(" ")}
-          >
-            <input
-              type="radio"
-              name="notification_type"
-              checked={notification_type === "push"}
-              disabled={!push_available}
-              onChange={() => set_notification_type("push")}
-              className="h-4 w-4"
-            />
-            <div className="min-w-0">
-              <span className="block text-[14px] font-medium text-neutral-900">
-                {content.push[locale as Locale] ?? content.push.en}
-              </span>
-              {!push_available ? (
-                <span className="mt-0.5 block text-[12px] text-neutral-500">
-                  {content.push_disabled[locale as Locale] ??
-                    content.push_disabled.en}
+            return (
+              <button
+                key={option.value}
+                type="button"
+                disabled={option.disabled}
+                aria-pressed={selected}
+                onClick={() => {
+                  if (!option.disabled) {
+                    set_notification_type(option.value)
+                  }
+                }}
+                className={[
+                  "flex w-full items-center justify-between gap-4 rounded-xl border px-4 py-3 text-left",
+                  option.disabled
+                    ? "cursor-not-allowed border-neutral-100 bg-neutral-50 opacity-70"
+                    : "border-neutral-200 bg-white",
+                ].join(" ")}
+              >
+                <span className="min-w-0">
+                  <span className="block text-[14px] font-medium text-neutral-900">
+                    {option.label}
+                  </span>
+                  {option.helper ? (
+                    <span className="mt-0.5 block text-[12px] leading-5 text-neutral-500">
+                      {option.helper}
+                    </span>
+                  ) : null}
                 </span>
-              ) : null}
-            </div>
-          </label>
+                <span
+                  aria-hidden="true"
+                  className={[
+                    "relative h-8 w-[52px] shrink-0 rounded-full transition-colors",
+                    selected ? "bg-[#34c759]" : "bg-neutral-300",
+                  ].join(" ")}
+                >
+                  <span
+                    className={[
+                      "absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-transform",
+                      selected ? "translate-x-[23px]" : "translate-x-1",
+                    ].join(" ")}
+                  />
+                </span>
+              </button>
+            )
+          })}
         </div>
 
         {error_message ? (

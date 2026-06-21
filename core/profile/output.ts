@@ -74,6 +74,7 @@ export function build_profile_output(input: {
     tier: input.session.tier ?? null,
     language: input.locale ?? "ja",
     locale: input.locale ?? "ja",
-    notification_type: input.notification_type === "push" ? "push" : "line",
+    notification_type:
+      input.notification_type === "pwa_push" ? "pwa_push" : "line",
   }
 }

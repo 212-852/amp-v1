@@ -233,7 +233,7 @@ export async function load_profile_notification_type(
     notification_type?: NotificationType | null
   }>
 
-  return rows[0]?.notification_type === "push" ? "push" : "line"
+  return rows[0]?.notification_type === "pwa_push" ? "pwa_push" : "line"
 }
 
 async function upsert_profile_row(input: {

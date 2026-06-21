@@ -114,7 +114,7 @@ export default function OpsHeader({
 
     async function load_notification_settings() {
       try {
-        const response = await fetch("/api/profile", {
+        const response = await fetch("/api/chat/notifications", {
           credentials: "include",
           cache: "no-store",
         })
@@ -124,15 +124,12 @@ export default function OpsHeader({
         }
 
         const payload = (await response.json()) as {
-          profile?: { notification_type?: NotificationType }
           notification_type?: NotificationType
         }
 
         if (!cancelled) {
-          const profile_notification_type =
-            payload.profile?.notification_type ?? payload.notification_type
           set_notification_type(
-            profile_notification_type === "push" ? "push" : "line",
+            payload.notification_type === "pwa_push" ? "pwa_push" : "line",
           )
         }
       } catch {
@@ -190,9 +187,6 @@ export default function OpsHeader({
 
   function handle_profile_saved(profile: ProfileDisplayPayload) {
     set_saved_profile(profile)
-    set_notification_type(
-      profile.notification_type === "push" ? "push" : "line",
-    )
   }
 
   async function toggle_concierge_availability() {

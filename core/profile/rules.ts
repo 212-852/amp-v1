@@ -45,7 +45,11 @@ export function normalize_profile_locale(value: unknown): ProfileLocale | null {
 export function normalize_notification_type(
   value: unknown,
 ): NotificationType | null {
-  return value === "line" || value === "push" ? value : null
+  if (value === "line" || value === "pwa_push") {
+    return value
+  }
+
+  return value === "push" ? "pwa_push" : null
 }
 
 function normalize_optional_string(value: unknown) {

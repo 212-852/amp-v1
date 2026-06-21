@@ -1,17 +1,20 @@
 import { NextResponse } from "next/server"
 
-import { get_profile_settings, save_profile_settings } from "@/core/profile/action"
 import { resolveChatApiSession } from "@/core/chat/api"
-import { normalize_notification_type } from "@/core/profile/rules"
+import {
+  getAvailabilityNotificationSettings,
+  normalizeAvailabilityNotificationType,
+  saveAvailabilityNotificationSettings,
+} from "@/core/chat/action"
 
 export async function GET() {
   try {
     const { session } = await resolveChatApiSession()
-    const profile = await get_profile_settings(session)
+    const settings = await getAvailabilityNotificationSettings(session)
 
     return NextResponse.json({
       ok: true,
-      notification_type: profile.notification_type,
+      notification_type: settings.notification_type,
     })
   } catch (error) {
     return NextResponse.json(
@@ -29,7 +32,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null)
-  const notification_type = normalize_notification_type(
+  const notification_type = normalizeAvailabilityNotificationType(
     (body as { notification_type?: unknown } | null)?.notification_type,
   )
 
@@ -42,14 +45,14 @@ export async function POST(request: Request) {
 
   try {
     const { session } = await resolveChatApiSession()
-    const profile = await save_profile_settings({
+    const settings = await saveAvailabilityNotificationSettings({
       session,
-      body: { notification_type },
+      notification_type,
     })
 
     return NextResponse.json({
       ok: true,
-      notification_type: profile.notification_type,
+      notification_type: settings.notification_type,
     })
   } catch (error) {
     return NextResponse.json(

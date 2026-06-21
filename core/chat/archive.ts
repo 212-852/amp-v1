@@ -76,8 +76,40 @@ export async function loadConciergeAvailability(user_uuid?: string | null) {
   return rows.length > 0
 }
 
+export async function loadAvailabilityNotificationType(
+  user_uuid?: string | null,
+) {
+  const config = getRestConfig()
+
+  if (!config || !user_uuid) {
+    return "line" as const
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "availability",
+      `user_uuid=eq.${encodeURIComponent(user_uuid)}&select=notification_type&limit=1`,
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return "line" as const
+  }
+
+  const rows = (await response.json()) as Array<{
+    notification_type?: string | null
+  }>
+
+  return rows[0]?.notification_type === "pwa_push" ? "pwa_push" : "line"
+}
+
 export async function loadEnabledAvailabilityRecipients(): Promise<
-  Array<Pick<AvailabilityRecord, "user_uuid">>
+  Array<Pick<AvailabilityRecord, "user_uuid" | "notification_type">>
 > {
   const config = getRestConfig()
 
@@ -86,7 +118,11 @@ export async function loadEnabledAvailabilityRecipients(): Promise<
   }
 
   const response = await fetch(
-    restUrl(config, "availability", "enabled=eq.true&select=user_uuid"),
+    restUrl(
+      config,
+      "availability",
+      "enabled=eq.true&select=user_uuid,notification_type",
+    ),
     {
       headers: restHeaders(config),
       cache: "no-store",
@@ -97,7 +133,9 @@ export async function loadEnabledAvailabilityRecipients(): Promise<
     return []
   }
 
-  return (await response.json()) as Array<Pick<AvailabilityRecord, "user_uuid">>
+  return (await response.json()) as Array<
+    Pick<AvailabilityRecord, "user_uuid" | "notification_type">
+  >
 }
 
 export async function setConciergeAvailability(input: {
@@ -144,6 +182,52 @@ export async function setConciergeAvailability(input: {
   const enabled = rows[0]?.enabled ?? input.available
 
   return { enabled }
+}
+
+export async function setAvailabilityNotificationType(input: {
+  user_uuid: string | null
+  notification_type: "line" | "pwa_push"
+}) {
+  const config = getRestConfig()
+
+  if (!config) {
+    return { notification_type: input.notification_type }
+  }
+
+  if (!input.user_uuid) {
+    throw new Error("user_uuid is required")
+  }
+
+  const response = await fetch(
+    restUrl(config, "availability", "on_conflict=user_uuid"),
+    {
+      method: "POST",
+      headers: {
+        ...restHeaders(config),
+        Prefer: "resolution=merge-duplicates,return=representation",
+      },
+      body: JSON.stringify({
+        user_uuid: input.user_uuid,
+        notification_type: input.notification_type,
+        updated_at: new Date().toISOString(),
+      }),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+    throw new Error(
+      `Failed to update notification type: ${error.message ?? "unknown"}`,
+    )
+  }
+
+  const rows = (await response.json()) as AvailabilityRecord[]
+
+  return {
+    notification_type:
+      rows[0]?.notification_type === "pwa_push" ? "pwa_push" : "line",
+  }
 }
 
 async function findParticipantRow(filter: string) {

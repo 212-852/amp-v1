@@ -46,7 +46,7 @@ async function logNotifyDebug(
 
 async function loadAdminContactDestination(input: {
   user_uuid: string
-  notification_type: "line" | "push"
+  notification_type: "line" | "pwa_push"
 }) {
   const { getRestConfig, restHeaders, restUrl } = await import("@/core/db/rest")
   const config = getRestConfig()
@@ -55,9 +55,10 @@ async function loadAdminContactDestination(input: {
     return null
   }
 
+  const contact_type = input.notification_type === "pwa_push" ? "push" : "line"
   const filter = [
     `user_uuid=eq.${encodeURIComponent(input.user_uuid)}`,
-    `type=eq.${encodeURIComponent(input.notification_type)}`,
+    `type=eq.${encodeURIComponent(contact_type)}`,
     "select=value",
     "limit=1",
   ].join("&")
@@ -93,7 +94,6 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
   } = await import("@/core/chat/archive")
 
   const recipients = await loadEnabledAvailabilityRecipients()
-  const { load_profile_notification_type } = await import("@/core/profile/action")
   const content = buildChatNotificationContent({
     user_name: input.user_name,
     room_uuid: input.room_uuid,
@@ -105,9 +105,8 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
   let delivered_count = 0
 
   for (const recipient of recipients) {
-    const notification_type = await load_profile_notification_type(
-      recipient.user_uuid,
-    )
+    const notification_type =
+      recipient.notification_type === "pwa_push" ? "pwa_push" : "line"
     const decision = resolveChatNotifyDecision({
       availability: "on",
       notification_type,
@@ -166,7 +165,7 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
 
     const push_endpoint = await loadAdminContactDestination({
       user_uuid: recipient.user_uuid,
-      notification_type: "push",
+      notification_type: "pwa_push",
     })
 
     if (!push_endpoint) {
