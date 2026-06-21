@@ -68,15 +68,15 @@ export function buildChatNotificationContent(input: {
   user_name: string
   room_uuid: string
 }) {
-  const { push_url } = buildChatNotificationUrls({
+  const { liff_url } = buildChatNotificationUrls({
     room_uuid: input.room_uuid,
   })
 
   return {
-    title: "New Message",
-    body: `${input.user_name} sent a message.`,
+    title: "コンシェルジュ対応が必要です",
+    body: `${input.user_name} から新しいメッセージが届きました。`,
     room_uuid: input.room_uuid,
-    room_url: push_url,
+    room_url: liff_url,
   }
 }
 
@@ -89,17 +89,14 @@ export function buildChatNotificationUrls(input: { room_uuid: string }) {
     process.env.NEXT_PUBLIC_LIFF_ID?.trim() ??
     "2006953406-vj2gYoAb"
   const room_path = `/admin/list/${encodeURIComponent(input.room_uuid)}`
-  const push_url = `${app_base}${room_path}`
-  const query = new URLSearchParams({
-    room_uuid: input.room_uuid,
-    redirect: room_path,
-  })
-  const line_liff_url = `https://liff.line.me/${encodeURIComponent(
+  const liff_url = `https://liff.line.me/${encodeURIComponent(
     liff_id,
-  )}?${query.toString()}`
+  )}?room_uuid=${encodeURIComponent(input.room_uuid)}&redirect=${room_path}`
 
   return {
-    line_liff_url,
-    push_url,
+    liff_url,
+    line_liff_url: liff_url,
+    push_url: liff_url,
+    app_url: `${app_base}${room_path}`,
   }
 }

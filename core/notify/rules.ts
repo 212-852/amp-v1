@@ -139,6 +139,7 @@ export type ChatNotifyContactRoute = {
   contact_type: ChatNotificationContactType | null
   contact_value: string | null
   receiver_active: boolean
+  push_preferred: boolean
   skipped_reason?: string | null
 }
 
@@ -149,6 +150,11 @@ type ParticipantRow = {
 
 type AvailabilityRow = {
   user_uuid?: string | null
+}
+
+type UserRow = {
+  user_uuid?: string | null
+  role?: string | null
 }
 
 type ContactRow = {
@@ -163,16 +169,12 @@ type ContactRow = {
 }
 
 function isActiveAppContact(contact: ContactRow, now = new Date()) {
-  if (
-    contact.channel !== "web" &&
-    contact.channel !== "pwa" &&
-    contact.channel !== "liff"
-  ) {
+  if (contact.receive !== true || contact.state !== "active") {
     return false
   }
 
-  if (contact.state !== "active" || !contact.last_seen_at) {
-    return false
+  if (!contact.last_seen_at) {
+    return true
   }
 
   const last_seen_time = Date.parse(contact.last_seen_at)
@@ -219,6 +221,7 @@ function selectNotifyContact(contacts: ContactRow[]): {
   contact_type: ChatNotificationContactType | null
   contact_value: string | null
   skipped_reason?: string | null
+  push_preferred: boolean
 } {
   const receivable = contacts.filter(
     (contact) =>
@@ -237,6 +240,7 @@ function selectNotifyContact(contacts: ContactRow[]): {
         contact_type: null,
         contact_value: null,
         skipped_reason: "push_not_sendable_no_line_fallback",
+        push_preferred: true,
       }
     }
 
@@ -244,6 +248,7 @@ function selectNotifyContact(contacts: ContactRow[]): {
       contact_type: "push",
       contact_value: resolveContactValue(push_contact),
       skipped_reason: null,
+      push_preferred: true,
     }
   }
 
@@ -256,6 +261,7 @@ function selectNotifyContact(contacts: ContactRow[]): {
       contact_type: null,
       contact_value: null,
       skipped_reason: "missing_contact",
+      push_preferred: false,
     }
   }
 
@@ -263,7 +269,52 @@ function selectNotifyContact(contacts: ContactRow[]): {
     contact_type: "line",
     contact_value: resolveContactValue(line_contact),
     skipped_reason: null,
+    push_preferred: false,
   }
+}
+
+async function loadAdminConciergeUserUuids(user_uuids: string[]) {
+  const unique_user_uuids = [...new Set(user_uuids)].filter(Boolean)
+
+  if (unique_user_uuids.length === 0) {
+    return new Set<string>()
+  }
+
+  const { getRestConfig, restHeaders, restUrl } = await import("@/core/db/rest")
+  const config = getRestConfig()
+
+  if (!config) {
+    return new Set<string>()
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "users",
+      [
+        `user_uuid=in.(${unique_user_uuids.map(encodeURIComponent).join(",")})`,
+        "role=in.(admin,concierge)",
+        "select=user_uuid,role",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return new Set<string>()
+  }
+
+  const users = (await response.json()) as UserRow[]
+
+  return new Set(
+    users
+      .filter((user) => user.role === "admin" || user.role === "concierge")
+      .map((user) => user.user_uuid)
+      .filter((user_uuid): user_uuid is string => Boolean(user_uuid)),
+  )
 }
 
 async function loadRoomReceiverUserUuids(input: {
@@ -299,6 +350,10 @@ async function loadRoomReceiverUserUuids(input: {
     ? ((await response.json()) as ParticipantRow[])
     : []
   const room_user_uuids = participants
+    .filter(
+      (participant) =>
+        participant.role === "admin" || participant.role === "concierge",
+    )
     .map((participant) => participant.user_uuid)
     .filter((user_uuid): user_uuid is string => Boolean(user_uuid))
 
@@ -325,8 +380,14 @@ async function loadRoomReceiverUserUuids(input: {
     }
   }
 
+  const admin_concierge_user_uuids = await loadAdminConciergeUserUuids(
+    room_user_uuids,
+  )
+
   return [...new Set(room_user_uuids)].filter(
     (user_uuid) => user_uuid !== input.sender_uuid,
+  ).filter(
+    (user_uuid) => admin_concierge_user_uuids.has(user_uuid),
   )
 }
 
@@ -382,6 +443,7 @@ export async function resolveChatNotifyRoutes(input: {
           contact_type: null,
           contact_value: null,
           skipped_reason: "receiver_active",
+          push_preferred: false,
         }
       : selectNotifyContact(contacts)
 
@@ -390,6 +452,7 @@ export async function resolveChatNotifyRoutes(input: {
       contact_type: selected.contact_type,
       contact_value: selected.contact_value,
       receiver_active,
+      push_preferred: selected.push_preferred,
       skipped_reason: selected.skipped_reason ?? null,
     })
   }
