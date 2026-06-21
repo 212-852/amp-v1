@@ -71,6 +71,19 @@ export default function NotificationSettingsModal({
       return
     }
 
+    const previous_overflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+
+    return () => {
+      document.body.style.overflow = previous_overflow
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
     set_notification_type(
       initial_notification_type === "pwa_push" ? "pwa_push" : "line",
     )
@@ -196,10 +209,26 @@ export default function NotificationSettingsModal({
 
   return (
     <div
-      className="fixed inset-0 z-[99999] flex items-end justify-center bg-black/45 px-4 pb-[calc(env(safe-area-inset-bottom,0px)+24px)] sm:items-center sm:pb-0"
+      className="fixed inset-0 z-[9998] flex items-center justify-center bg-[rgba(0,0,0,0.35)] px-4 py-[calc(env(safe-area-inset-top,0px)+24px)] backdrop-blur-[6px]"
       role="presentation"
+      onClick={(event) => {
+        event.stopPropagation()
+      }}
+      onMouseDown={(event) => {
+        event.stopPropagation()
+      }}
     >
-      <div className="w-full max-w-[430px] rounded-2xl border border-neutral-200 bg-white p-5 shadow-[0_18px_40px_rgba(0,0,0,0.12)]">
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="relative z-[9999] max-h-[calc(100dvh-48px-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] w-full max-w-[430px] overflow-y-auto rounded-2xl border border-neutral-200 bg-white p-5 shadow-[0_18px_40px_rgba(0,0,0,0.18)]"
+        onClick={(event) => {
+          event.stopPropagation()
+        }}
+        onMouseDown={(event) => {
+          event.stopPropagation()
+        }}
+      >
         <div className="mb-4 flex items-center gap-2">
           <Bell className="h-5 w-5 text-neutral-700" strokeWidth={1.8} />
           <h2 className="text-[16px] font-semibold text-neutral-950">
