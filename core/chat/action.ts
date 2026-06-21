@@ -636,16 +636,18 @@ export async function handleIncomingChatMessageArchive(
     source_channel: input.source_channel,
   })
 
-  if (participant.role === "user" || participant.role === "guest") {
-    const { notifyChatMessageReceived } = await import("@/core/notify")
-    await notifyChatMessageReceived({
-      room_uuid: room.room_uuid,
-      sender_role: participant.role,
-      receiver_role: "concierge",
-      user_name: actor_display_name,
-      request_id: message.message_uuid,
-    }).catch(() => null)
-  }
+  const { notifyChatMessageReceived } = await import("@/core/notify")
+  await notifyChatMessageReceived({
+    room_uuid: room.room_uuid,
+    sender_uuid: participant.user_uuid,
+    sender_role: participant.role,
+    receiver_role:
+      participant.role === "user" || participant.role === "guest"
+        ? "concierge"
+        : "user",
+    user_name: actor_display_name,
+    request_id: message.message_uuid,
+  }).catch(() => null)
 
   if (
     (participant.role === "admin" || participant.role === "concierge") &&

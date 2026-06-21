@@ -8,6 +8,7 @@ export type ChatNotificationPayload = {
 
 export type ChatMessageNotifyInput = {
   room_uuid: string
+  sender_uuid?: string | null
   sender_role: string
   receiver_role?: string
   user_name: string

@@ -8,6 +8,7 @@ import {
   notifyDiscord,
 } from "@/core/notify/discord"
 import {
+  resolveChatNotifyRoutes,
   resolveNotifyDelivery,
   type NotifyEventInput,
 } from "@/core/notify/rules"
@@ -15,7 +16,6 @@ import {
   buildChatNotificationContent,
   buildChatNotificationUrls,
   resolveChatNotifyDecision,
-  type ChatNotificationContactType,
   type ChatNotifyReceiverRole,
   type ChatNotifySenderRole,
 } from "@/core/notify/chat_rules"
@@ -46,130 +46,6 @@ async function logNotifyDebug(
   await sendNotifyDebug(event, payload, payload.request_id as string | null)
 }
 
-type NotifyContactRow = {
-  type?: string | null
-  value?: string | null
-  endpoint?: string | null
-  channel?: string | null
-  state?: string | null
-  receive?: boolean | null
-  last_seen_at?: string | null
-  updated_at?: string | null
-}
-
-type ResolvedNotifyContact = {
-  type: ChatNotificationContactType
-  value: string
-}
-
-function isReceiverActive(contact: NotifyContactRow, now = new Date()) {
-  if (
-    contact.channel !== "web" &&
-    contact.channel !== "pwa" &&
-    contact.channel !== "liff"
-  ) {
-    return false
-  }
-
-  if (contact.state !== "active" || !contact.last_seen_at) {
-    return false
-  }
-
-  const last_seen_time = Date.parse(contact.last_seen_at)
-
-  return (
-    Number.isFinite(last_seen_time) &&
-    now.getTime() - last_seen_time <= 60 * 1000
-  )
-}
-
-function resolveContactValue(contact: NotifyContactRow) {
-  if (contact.type === "push") {
-    const raw_value = contact.endpoint?.trim() || contact.value?.trim() || ""
-
-    if (!raw_value) {
-      return null
-    }
-
-    try {
-      const parsed = JSON.parse(raw_value) as { endpoint?: unknown }
-
-      if (typeof parsed.endpoint === "string" && parsed.endpoint.trim()) {
-        return parsed.endpoint.trim()
-      }
-    } catch {
-      // contacts.value can be either endpoint text or subscription JSON.
-    }
-
-    return raw_value
-  }
-
-  return contact.value?.trim() || null
-}
-
-function selectDeliveryContact(
-  contacts: NotifyContactRow[],
-): ResolvedNotifyContact | null {
-  const contact = contacts.find(
-    (row) =>
-      row.receive === true &&
-      (row.type === "line" || row.type === "push") &&
-      Boolean(resolveContactValue(row)),
-  )
-
-  if (!contact || (contact.type !== "line" && contact.type !== "push")) {
-    return null
-  }
-
-  const value = resolveContactValue(contact)
-
-  if (!value) {
-    return null
-  }
-
-  return {
-    type: contact.type,
-    value,
-  }
-}
-
-async function loadReceiverNotificationState(input: {
-  user_uuid: string
-}): Promise<{
-  receiver_active: boolean
-  contact: ResolvedNotifyContact | null
-}> {
-  const { getRestConfig, restHeaders, restUrl } = await import("@/core/db/rest")
-  const config = getRestConfig()
-
-  if (!config) {
-    return { receiver_active: false, contact: null }
-  }
-
-  const filter = [
-    `user_uuid=eq.${encodeURIComponent(input.user_uuid)}`,
-    "type=in.(line,push)",
-    "select=type,value,endpoint,channel,state,receive,last_seen_at,updated_at",
-    "order=updated_at.desc",
-  ].join("&")
-
-  const response = await fetch(restUrl(config, "contacts", filter), {
-    headers: restHeaders(config),
-    cache: "no-store",
-  })
-
-  if (!response.ok) {
-    return { receiver_active: false, contact: null }
-  }
-
-  const contacts = (await response.json()) as NotifyContactRow[]
-
-  return {
-    receiver_active: contacts.some((contact) => isReceiverActive(contact)),
-    contact: selectDeliveryContact(contacts),
-  }
-}
-
 export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
   const request_id =
     input.request_id ?? `chat_notify:${input.room_uuid}:${Date.now()}`
@@ -181,11 +57,6 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
     request_id,
   })
 
-  const {
-    loadEnabledAvailabilityRecipients,
-  } = await import("@/core/chat/archive")
-
-  const recipients = await loadEnabledAvailabilityRecipients()
   const content = buildChatNotificationContent({
     user_name: input.user_name,
     room_uuid: input.room_uuid,
@@ -197,17 +68,28 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
   const receiver_role = (input.receiver_role ?? "concierge") as ChatNotifyReceiverRole
 
   let delivered_count = 0
+  const routes = await resolveChatNotifyRoutes({
+    room_uuid: input.room_uuid,
+    sender_uuid: input.sender_uuid ?? null,
+    sender_role,
+  })
 
-  for (const recipient of recipients) {
-    const receiver_state = await loadReceiverNotificationState({
-      user_uuid: recipient.user_uuid,
-    })
+  for (const route of routes) {
     const decision = resolveChatNotifyDecision({
       availability: "on",
       sender_role,
       receiver_role,
-      receiver_active: receiver_state.receiver_active,
-      contact_type: receiver_state.contact?.type ?? null,
+      receiver_active: route.receiver_active,
+      contact_type: route.contact_type,
+    })
+
+    await sendNotifyDebug("notify_route_decided", {
+      room_uuid: input.room_uuid,
+      receiver_user_uuid: route.receiver_user_uuid,
+      contact_type: route.contact_type,
+      receiver_active: route.receiver_active,
+      skipped_reason: route.skipped_reason ?? decision.skip_reason,
+      request_id,
     })
 
     if (!decision.should_notify) {
@@ -222,24 +104,40 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
 
       await sendNotifyDebug(debug_event, {
         room_uuid: input.room_uuid,
-        receiver_user_uuid: recipient.user_uuid,
+        receiver_user_uuid: route.receiver_user_uuid,
         sender_role,
         receiver_role,
+        reason: route.skipped_reason ?? decision.skip_reason,
         request_id,
       })
+      if (route.skipped_reason === "push_not_sendable_no_line_fallback") {
+        await sendNotifyDebug("notify_line_skipped_reason", {
+          room_uuid: input.room_uuid,
+          receiver_user_uuid: route.receiver_user_uuid,
+          reason: route.skipped_reason,
+          request_id,
+        })
+      }
       continue
     }
 
     const payload = {
       ...content,
-      receiver_user_uuid: recipient.user_uuid,
+      receiver_user_uuid: route.receiver_user_uuid,
     }
 
-    if (receiver_state.contact?.type === "line") {
+    await sendNotifyDebug("notify_contact_selected", {
+      room_uuid: input.room_uuid,
+      receiver_user_uuid: route.receiver_user_uuid,
+      contact_type: route.contact_type,
+      request_id,
+    })
+
+    if (route.contact_type === "line" && route.contact_value) {
       const result = await deliverChatLineNotification({
         ...payload,
         room_url: notification_urls.line_liff_url,
-        line_user_id: receiver_state.contact.value,
+        line_user_id: route.contact_value,
       })
 
       if (result.delivered) {
@@ -249,18 +147,51 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
       continue
     }
 
-    if (!receiver_state.contact) {
+    if (route.contact_type === "line") {
+      await sendNotifyDebug("notify_line_skipped_reason", {
+        room_uuid: input.room_uuid,
+        receiver_user_uuid: route.receiver_user_uuid,
+        reason: "missing_line_contact_value",
+        request_id,
+      })
       continue
     }
 
+    if (!route.contact_value) {
+      continue
+    }
+
+    await sendNotifyDebug("notify_line_skipped_reason", {
+      room_uuid: input.room_uuid,
+      receiver_user_uuid: route.receiver_user_uuid,
+      reason: "push_contact_selected",
+      request_id,
+    })
+    await sendNotifyDebug("notify_push_send_started", {
+      room_uuid: input.room_uuid,
+      receiver_user_uuid: route.receiver_user_uuid,
+      request_id,
+    })
     const result = await deliverChatPushNotification({
       ...payload,
       room_url: notification_urls.push_url,
-      push_endpoint: receiver_state.contact.value,
+      push_endpoint: route.contact_value,
     })
 
     if (result.delivered) {
+      await sendNotifyDebug("notify_push_send_success", {
+        room_uuid: input.room_uuid,
+        receiver_user_uuid: route.receiver_user_uuid,
+        request_id,
+      })
       delivered_count += 1
+    } else {
+      await sendNotifyDebug("notify_push_send_failed", {
+        room_uuid: input.room_uuid,
+        receiver_user_uuid: route.receiver_user_uuid,
+        reason: result.reason ?? "push_send_failed",
+        request_id,
+      })
     }
   }
 
