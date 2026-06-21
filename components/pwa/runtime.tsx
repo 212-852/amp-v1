@@ -3,6 +3,11 @@
 import { useEffect } from "react"
 
 import {
+  completePwaLogin,
+  isPwaLoginPending,
+  pollPwaAuthSession,
+} from "@/components/pwa/login_completion"
+import {
   PWA_LOGIN_PENDING_KEY,
   PWA_LOGIN_POLL_INTERVAL_MS,
   PWA_LOGIN_POLL_TIMEOUT_MS,
@@ -137,10 +142,6 @@ function redirectOldPwaAppBootUrl() {
   return true
 }
 
-function isPwaLoginPending() {
-  return localStorage.getItem(PWA_LOGIN_PENDING_KEY) === "true"
-}
-
 export function PwaRuntime() {
   useEffect(() => {
     sessionStorage.removeItem(CHUNK_RELOAD_KEY)
@@ -202,36 +203,23 @@ export function PwaRuntime() {
 
       void sendPwaDebug("pwa_login_polling_tick", { bridge_uuid, source })
 
-      void fetch("/api/auth/status", { cache: "no-store" })
-        .then((response) => response.json())
-        .then(
-          (result: {
-            authenticated?: boolean
-            user_uuid?: string | null
-            role?: string | null
-          }) => {
-            if (result.authenticated !== true || !result.user_uuid) {
-              return
-            }
+      void pollPwaAuthSession()
+        .then((result) => {
+          if (!result.user_uuid) {
+            return
+          }
 
-            stop_login_polling()
-            localStorage.removeItem(PWA_LOGIN_PENDING_KEY)
-            localStorage.removeItem("amp_line_bridge_uuid")
-            void sendPwaDebug("pwa_login_polling_user_found", {
-              bridge_uuid,
-              user_uuid: result.user_uuid,
-              role: result.role ?? null,
-              source,
-            })
-            void sendPwaDebug("pwa_login_reload_triggered", {
-              bridge_uuid,
-              user_uuid: result.user_uuid,
-              source,
-            }).finally(() => {
-              window.location.reload()
-            })
-          },
-        )
+          stop_login_polling()
+          completePwaLogin({
+            user_uuid: result.user_uuid,
+            route_path: result.route_path,
+            source,
+            bridge_uuid,
+            on_debug: (event, payload) => {
+              void sendPwaDebug(event, payload)
+            },
+          })
+        })
         .catch(() => null)
     }
 
@@ -253,9 +241,11 @@ export function PwaRuntime() {
         timeout_ms: PWA_LOGIN_POLL_TIMEOUT_MS,
         source,
       })
+
       login_poll_interval = window.setInterval(() => {
         check_login_status("runtime_interval")
       }, PWA_LOGIN_POLL_INTERVAL_MS)
+
       login_poll_timeout = window.setTimeout(() => {
         stop_login_polling()
         localStorage.removeItem(PWA_LOGIN_PENDING_KEY)

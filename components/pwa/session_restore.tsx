@@ -7,19 +7,17 @@ import { useOverlay } from "@/components/overlay"
 import {
   dispatchPwaOffline,
   dispatchPwaOnline,
+  PWA_OFFLINE_EVENT,
   PWA_ONLINE_EVENT,
 } from "@/components/pwa/events"
+import {
+  clearPwaLoginPending,
+  completePwaLogin,
+  isPwaLoginPending,
+  pollPwaAuthSession,
+  resolvePwaLoginDestination,
+} from "@/components/pwa/login_completion"
 import { isStandalonePwa } from "@/components/pwa/runtime"
-
-type SessionRestorePayload = {
-  ok?: boolean
-  restored?: boolean
-  session?: {
-    user_uuid?: string | null
-    visitor_uuid?: string | null
-  }
-  error?: string | null
-}
 
 function isNetworkFailure(error: unknown) {
   return (
@@ -50,40 +48,45 @@ export function PwaSessionRestore() {
     restoring_ref.current = true
 
     try {
-      const response = await fetch("/api/auth/session", {
-        method: "GET",
-        credentials: "include",
-        headers: {
-          "x-amp-channel": "pwa",
-        },
-        cache: "no-store",
-      })
-
-      const payload = (await response.json().catch(() => null)) as
-        | SessionRestorePayload
-        | null
+      const result = await pollPwaAuthSession()
 
       dispatchPwaOnline()
 
-      if (!response.ok || payload?.ok !== true || payload.restored !== true) {
+      if (result.user_uuid) {
+        clearPwaLoginPending()
+        const destination = resolvePwaLoginDestination(result.route_path)
+
+        if (window.location.pathname !== destination) {
+          window.location.replace(destination)
+          return
+        }
+
+        router.refresh()
+        return
+      }
+
+      if (isPwaLoginPending()) {
+        return
+      }
+
+      if (!result.ok || !result.restored) {
         openOverlay({
           type: "link",
           source: "user",
         })
-        return
       }
-
-      router.refresh()
     } catch (error) {
       if (isNetworkFailure(error)) {
         dispatchPwaOffline()
         return
       }
 
-      openOverlay({
-        type: "link",
-        source: "user",
-      })
+      if (!isPwaLoginPending()) {
+        openOverlay({
+          type: "link",
+          source: "user",
+        })
+      }
     } finally {
       restoring_ref.current = false
     }
