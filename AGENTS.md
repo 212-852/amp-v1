@@ -378,3 +378,60 @@ Allowed without explicit UI/chat change request:
 - bug fixes that do not change visual layout
 - small internal refactors that keep the same behavior
 - changes explicitly requested in the task
+
+#########################
+NOTIFICATION RULE
+#########################
+
+Purpose:
+- PWA launch may enable PWA Push notification selection.
+- Notifications are sent only when chat availability is ON and the receiver is away from the app.
+
+Notification method:
+- Exactly one notification method must be selected: LINE notification or PWA Push notification.
+- Both OFF is forbidden.
+- Both ON is forbidden.
+- Turning one method ON must turn the other method OFF.
+- Notification method UI must use an iPhone-style green toggle.
+
+PWA Push notification:
+- PWA Push notification can be selected only when the app is launched as PWA.
+- When PWA Push is enabled for the first time, obtain a Push subscription ID.
+- Save the Push subscription to DB.
+- Do not duplicate an existing Push subscription.
+- If Push permission is denied, PWA Push must be disabled and unselectable.
+
+Notification send conditions:
+- Send notification only when all conditions are true:
+  - header chat availability is ON.
+  - a new user message is received.
+  - receiver presence is away, offline, hidden, or inactive.
+  - notification method is configured as LINE or PWA Push.
+
+Presence rule:
+- Presence is the source of truth for notification eligibility.
+- Do not notify when receiver presence is active or online.
+- Notify only when receiver presence is away, offline, hidden, or inactive.
+
+Responsibility separation:
+- Chat must not send LINE or Push directly.
+- Chat only creates the message event.
+- notify/rules.ts decides notification eligibility, notification method, and destination.
+- notify/index.ts is the single notification entry point.
+- notify/line.ts handles LINE delivery only.
+- notify/push.ts handles Push delivery only.
+
+DB rule:
+- Add storage for notification preference and Push subscription if needed.
+- Existing availability is ON/OFF only.
+- Do not mix notification method into availability.
+
+UI rule:
+- Notification settings modal must be centered on screen.
+- Notification settings modal must be above the AI assistant layer.
+- Notification settings modal must use the highest modal z-index.
+- Outside PWA, the PWA Push toggle must be disabled.
+
+Architecture:
+- Keep the existing single core / unified flow.
+- Do not split notification logic per channel or UI entry point.
