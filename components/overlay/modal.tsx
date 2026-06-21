@@ -15,6 +15,11 @@ import type {
   OverlayPhase,
   OverlayRule,
 } from "@/components/overlay/types"
+import {
+  PWA_LOGIN_PENDING_KEY,
+  PWA_LOGIN_POLL_INTERVAL_MS,
+  PWA_LOGIN_POLL_TIMEOUT_MS,
+} from "@/components/pwa/login_pending"
 import { useLocale } from "@/src/components/locale/provider"
 import type { Locale } from "@/src/lib/locale"
 
@@ -1025,6 +1030,115 @@ export default function OverlayModal({
 
   useEffect(() => stop_bridge_polling, [stop_bridge_polling])
 
+  const complete_pwa_login = useCallback(
+    (input: {
+      bridge_uuid_value: string | null
+      user_uuid: string
+      role: string | null
+      source: string
+    }) => {
+      stop_bridge_polling()
+      localStorage.removeItem("amp_line_bridge_uuid")
+      localStorage.removeItem(PWA_LOGIN_PENDING_KEY)
+      set_bridge_status("success")
+      set_loading_action(null)
+      send_bridge_debug("pwa_login_success_ui_shown", {
+        bridge_uuid: input.bridge_uuid_value,
+        source: input.source,
+      })
+      send_bridge_debug("pwa_login_polling_user_found", {
+        bridge_uuid: input.bridge_uuid_value,
+        user_uuid: input.user_uuid,
+        role: input.role,
+        source: input.source,
+      })
+      close_bridge_popup(input.bridge_uuid_value)
+      send_bridge_debug("pwa_login_reload_triggered", {
+        bridge_uuid: input.bridge_uuid_value,
+        user_uuid: input.user_uuid,
+        source: input.source,
+      }).finally(() => {
+        window.location.reload()
+      })
+    },
+    [stop_bridge_polling],
+  )
+
+  const check_pwa_login_session = useCallback(
+    (input: { bridge_uuid_value: string | null; source: string }) => {
+      send_bridge_debug("pwa_login_polling_tick", {
+        bridge_uuid: input.bridge_uuid_value,
+        source: input.source,
+      })
+      fetch("/api/auth/status", {
+        cache: "no-store",
+      })
+        .then((response) => response.json())
+        .then(
+          (result: {
+            authenticated?: boolean
+            user_uuid?: string | null
+            role?: string | null
+          }) => {
+            if (result.authenticated === true && result.user_uuid) {
+              complete_pwa_login({
+                bridge_uuid_value: input.bridge_uuid_value,
+                user_uuid: result.user_uuid,
+                role: result.role ?? null,
+                source: input.source,
+              })
+            }
+          },
+        )
+        .catch(() => null)
+    },
+    [complete_pwa_login],
+  )
+
+  useEffect(() => {
+    const check_pending_login = (source: string) => {
+      if (localStorage.getItem(PWA_LOGIN_PENDING_KEY) !== "true") {
+        return
+      }
+
+      const pending_bridge_uuid = localStorage.getItem("amp_line_bridge_uuid")
+
+      if (source === "focus") {
+        send_bridge_debug("pwa_login_focus_check", {
+          bridge_uuid: pending_bridge_uuid,
+        })
+      } else if (source === "pageshow") {
+        send_bridge_debug("pwa_login_pageshow_check", {
+          bridge_uuid: pending_bridge_uuid,
+        })
+      }
+
+      check_pwa_login_session({
+        bridge_uuid_value: pending_bridge_uuid,
+        source,
+      })
+    }
+
+    const on_visibility_change = () => {
+      if (document.visibilityState === "visible") {
+        check_pending_login("visibilitychange")
+      }
+    }
+    const on_focus = () => check_pending_login("focus")
+    const on_pageshow = () => check_pending_login("pageshow")
+
+    window.addEventListener("focus", on_focus)
+    window.addEventListener("pageshow", on_pageshow)
+    document.addEventListener("visibilitychange", on_visibility_change)
+    check_pending_login("mount")
+
+    return () => {
+      window.removeEventListener("focus", on_focus)
+      window.removeEventListener("pageshow", on_pageshow)
+      document.removeEventListener("visibilitychange", on_visibility_change)
+    }
+  }, [check_pwa_login_session])
+
   async function close_bridge_popup(bridge_uuid_value: string | null) {
     const popup = bridge_popup_ref.current
 
@@ -1150,57 +1264,32 @@ export default function OverlayModal({
     send_bridge_debug("bridge_polling_started", { bridge_uuid })
     send_bridge_debug("pwa_login_polling_started", {
       bridge_uuid,
-      interval_ms: 2000,
-      timeout_ms: 120000,
+      interval_ms: PWA_LOGIN_POLL_INTERVAL_MS,
+      timeout_ms: PWA_LOGIN_POLL_TIMEOUT_MS,
     })
 
     const poll_auth_status = () => {
-      send_bridge_debug("pwa_login_polling_tick", { bridge_uuid })
-      fetch("/api/auth/status", {
-        cache: "no-store",
+      check_pwa_login_session({
+        bridge_uuid_value: bridge_uuid,
+        source: "interval",
       })
-        .then((response) => response.json())
-        .then(
-          (result: {
-            authenticated?: boolean
-            user_uuid?: string | null
-            role?: string | null
-          }) => {
-          if (result.authenticated === true && result.user_uuid) {
-            stop_bridge_polling()
-            localStorage.removeItem("amp_line_bridge_uuid")
-            set_bridge_status("success")
-            set_loading_action(null)
-            send_bridge_debug("pwa_login_success_ui_shown", { bridge_uuid })
-            send_bridge_debug("pwa_login_polling_authenticated", {
-              bridge_uuid,
-              user_uuid: result.user_uuid,
-              role: result.role ?? null,
-            })
-            close_bridge_popup(bridge_uuid)
-            send_bridge_debug("pwa_login_reload_triggered", {
-              bridge_uuid,
-              user_uuid: result.user_uuid,
-            }).finally(() => {
-              window.location.reload()
-            })
-            return
-          }
-        })
-        .catch(() => null)
     }
 
     poll_auth_status()
-    bridge_poll_ref.current = window.setInterval(poll_auth_status, 2000)
+    bridge_poll_ref.current = window.setInterval(
+      poll_auth_status,
+      PWA_LOGIN_POLL_INTERVAL_MS,
+    )
     bridge_poll_timeout_ref.current = window.setTimeout(() => {
       stop_bridge_polling()
+      localStorage.removeItem(PWA_LOGIN_PENDING_KEY)
       set_bridge_status("failed")
       set_loading_action(null)
       send_bridge_debug("pwa_login_polling_timeout", {
         bridge_uuid,
-        timeout_ms: 120000,
+        timeout_ms: PWA_LOGIN_POLL_TIMEOUT_MS,
       })
-    }, 120000)
+    }, PWA_LOGIN_POLL_TIMEOUT_MS)
   }
 
   async function start_pwa_line_bridge(popup: Window | null) {
@@ -1294,7 +1383,13 @@ export default function OverlayModal({
       }
 
       localStorage.setItem("amp_line_bridge_uuid", result.bridge_uuid)
+      localStorage.setItem(PWA_LOGIN_PENDING_KEY, "true")
       set_bridge_uuid(result.bridge_uuid)
+      await send_bridge_debug("pwa_login_pending_set", {
+        provider: "line",
+        bridge_uuid: result.bridge_uuid,
+        source_channel: "pwa",
+      })
       await send_bridge_debug("pwa_bridge_start_success", {
         provider: "line",
         bridge_uuid: result.bridge_uuid,
@@ -1396,6 +1491,7 @@ export default function OverlayModal({
   function cancel_pwa_line_bridge() {
     stop_bridge_polling()
     close_bridge_popup(bridge_uuid)
+    localStorage.removeItem(PWA_LOGIN_PENDING_KEY)
     set_bridge_status("idle")
     set_bridge_uuid(null)
     set_bridge_authorize_url(null)

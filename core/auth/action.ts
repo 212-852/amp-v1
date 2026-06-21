@@ -1203,13 +1203,13 @@ function bridgeCompletePage() {
       "<body>",
       '<main class="wrap">',
       '<section class="panel">',
-      "<h1>ログインが完了しました</h1>",
-      "<p>アプリに戻ってください。</p>",
-      '<p class="sub">この画面は閉じても大丈夫です。</p>',
-      `<a href="${appUrl.replace(/"/g, "&quot;")}">アプリに戻る</a>`,
+      "<h1>Login complete.</h1>",
+      "<p>Please return to the app.</p>",
+      '<p class="sub">You can close this browser page.</p>',
+      `<a href="${appUrl.replace(/"/g, "&quot;")}">Return to app</a>`,
       "</section>",
       "</main>",
-      "<script>window.setTimeout(function(){try{window.close()}catch(e){}},800)</script>",
+      '<script>window.setTimeout(function(){try{window.close()}catch(e){};try{window.location.href="/"}catch(e){}},1200)</script>',
       "</body>",
       "</html>",
     ].join(""),
@@ -1454,6 +1454,9 @@ export async function sendLoginBridgeDebug(request: NextRequest) {
 
   if (
     event !== "bridge_polling_started" &&
+    event !== "pwa_login_focus_check" &&
+    event !== "pwa_login_pageshow_check" &&
+    event !== "pwa_login_pending_set" &&
     event !== "line_login_button_clicked" &&
     event !== "pwa_bridge_fetch_failed" &&
     event !== "pwa_bridge_fetch_response" &&
@@ -1470,6 +1473,7 @@ export async function sendLoginBridgeDebug(request: NextRequest) {
     event !== "pwa_login_polling_started" &&
     event !== "pwa_login_polling_tick" &&
     event !== "pwa_login_polling_timeout" &&
+    event !== "pwa_login_polling_user_found" &&
     event !== "pwa_login_reload_triggered" &&
     event !== "pwa_popup_connecting_page_failed" &&
     event !== "pwa_popup_connecting_page_written" &&
@@ -1885,6 +1889,13 @@ export async function completeLineLogin(request: NextRequest) {
         bridge_uuid: callbackBridge.otp_uuid,
         visitor_uuid: callbackBridge.visitor_uuid,
         user_uuid: callbackBridge.user_uuid,
+        source_channel: "pwa",
+      })
+      await sendIdentityDebug("callback_return_to_app_screen_rendered", {
+        provider: "line",
+        bridge_uuid: callbackBridge.otp_uuid,
+        visitor_uuid: callbackBridge.visitor_uuid,
+        user_uuid: bridgeResult.user_uuid,
         source_channel: "pwa",
       })
 

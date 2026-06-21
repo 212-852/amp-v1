@@ -2,6 +2,12 @@
 
 import { useEffect } from "react"
 
+import {
+  PWA_LOGIN_PENDING_KEY,
+  PWA_LOGIN_POLL_INTERVAL_MS,
+  PWA_LOGIN_POLL_TIMEOUT_MS,
+} from "@/components/pwa/login_pending"
+
 const CHUNK_RELOAD_KEY = "amp_chunk_reload_done"
 const SW_RELOAD_KEY = "amp_sw_update_reload_done"
 const PWA_APP_BOOT_REDIRECT_KEY = "amp_pwa_app_boot_redirected"
@@ -56,7 +62,7 @@ async function sendPwaDebug(event: string, payload: Record<string, unknown>) {
     },
     body: JSON.stringify({
       event,
-      payload,
+      ...payload,
     }),
   }).catch(() => null)
 }
@@ -131,6 +137,10 @@ function redirectOldPwaAppBootUrl() {
   return true
 }
 
+function isPwaLoginPending() {
+  return localStorage.getItem(PWA_LOGIN_PENDING_KEY) === "true"
+}
+
 export function PwaRuntime() {
   useEffect(() => {
     sessionStorage.removeItem(CHUNK_RELOAD_KEY)
@@ -161,16 +171,128 @@ export function PwaRuntime() {
       }
     }
 
+    let login_poll_interval: number | null = null
+    let login_poll_timeout: number | null = null
+
+    const stop_login_polling = () => {
+      if (login_poll_interval) {
+        window.clearInterval(login_poll_interval)
+        login_poll_interval = null
+      }
+
+      if (login_poll_timeout) {
+        window.clearTimeout(login_poll_timeout)
+        login_poll_timeout = null
+      }
+    }
+
+    const check_login_status = (source: string) => {
+      if (!isPwaLoginPending()) {
+        stop_login_polling()
+        return
+      }
+
+      const bridge_uuid = localStorage.getItem("amp_line_bridge_uuid")
+
+      if (source === "focus") {
+        void sendPwaDebug("pwa_login_focus_check", { bridge_uuid })
+      } else if (source === "pageshow") {
+        void sendPwaDebug("pwa_login_pageshow_check", { bridge_uuid })
+      }
+
+      void sendPwaDebug("pwa_login_polling_tick", { bridge_uuid, source })
+
+      void fetch("/api/auth/status", { cache: "no-store" })
+        .then((response) => response.json())
+        .then(
+          (result: {
+            authenticated?: boolean
+            user_uuid?: string | null
+            role?: string | null
+          }) => {
+            if (result.authenticated !== true || !result.user_uuid) {
+              return
+            }
+
+            stop_login_polling()
+            localStorage.removeItem(PWA_LOGIN_PENDING_KEY)
+            localStorage.removeItem("amp_line_bridge_uuid")
+            void sendPwaDebug("pwa_login_polling_user_found", {
+              bridge_uuid,
+              user_uuid: result.user_uuid,
+              role: result.role ?? null,
+              source,
+            })
+            void sendPwaDebug("pwa_login_reload_triggered", {
+              bridge_uuid,
+              user_uuid: result.user_uuid,
+              source,
+            }).finally(() => {
+              window.location.reload()
+            })
+          },
+        )
+        .catch(() => null)
+    }
+
+    const start_login_polling_if_pending = (source: string) => {
+      if (!isPwaLoginPending()) {
+        return
+      }
+
+      const bridge_uuid = localStorage.getItem("amp_line_bridge_uuid")
+      check_login_status(source)
+
+      if (login_poll_interval) {
+        return
+      }
+
+      void sendPwaDebug("pwa_login_polling_started", {
+        bridge_uuid,
+        interval_ms: PWA_LOGIN_POLL_INTERVAL_MS,
+        timeout_ms: PWA_LOGIN_POLL_TIMEOUT_MS,
+        source,
+      })
+      login_poll_interval = window.setInterval(() => {
+        check_login_status("runtime_interval")
+      }, PWA_LOGIN_POLL_INTERVAL_MS)
+      login_poll_timeout = window.setTimeout(() => {
+        stop_login_polling()
+        localStorage.removeItem(PWA_LOGIN_PENDING_KEY)
+        void sendPwaDebug("pwa_login_polling_timeout", {
+          bridge_uuid,
+          timeout_ms: PWA_LOGIN_POLL_TIMEOUT_MS,
+          source,
+        })
+      }, PWA_LOGIN_POLL_TIMEOUT_MS)
+    }
+
+    const onFocus = () => start_login_polling_if_pending("focus")
+    const onPageShow = () => start_login_polling_if_pending("pageshow")
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        start_login_polling_if_pending("visibilitychange")
+      }
+    }
+
     window.addEventListener("error", onError)
     window.addEventListener("unhandledrejection", onRejection)
+    window.addEventListener("focus", onFocus)
+    window.addEventListener("pageshow", onPageShow)
+    document.addEventListener("visibilitychange", onVisibilityChange)
+    start_login_polling_if_pending("mount")
 
     if (process.env.NODE_ENV === "production") {
       registerServiceWorker()
     }
 
     return () => {
+      stop_login_polling()
       window.removeEventListener("error", onError)
       window.removeEventListener("unhandledrejection", onRejection)
+      window.removeEventListener("focus", onFocus)
+      window.removeEventListener("pageshow", onPageShow)
+      document.removeEventListener("visibilitychange", onVisibilityChange)
     }
   }, [])
 
