@@ -4,17 +4,26 @@ import type { ChatNotificationPayload } from "@/core/notify/types"
 export async function deliverChatPushNotification(
   input: ChatNotificationPayload & {
     push_endpoint: string
+    request_id?: string | null
   },
 ) {
   if (!input.push_endpoint) {
-    await sendNotifyDebug("notification_failed", {
+    await sendNotifyDebug("push_send_failed", {
       channel: "push",
       room_uuid: input.room_uuid,
       receiver_user_uuid: input.receiver_user_uuid,
       reason: "missing_push_endpoint",
+      request_id: input.request_id ?? null,
     })
     return { delivered: false, reason: "missing_push_endpoint" }
   }
+
+  await sendNotifyDebug("push_send_started", {
+    channel: "push",
+    room_uuid: input.room_uuid,
+    receiver_user_uuid: input.receiver_user_uuid,
+    request_id: input.request_id ?? null,
+  })
 
   try {
     const response = await fetch(input.push_endpoint, {
@@ -37,30 +46,34 @@ export async function deliverChatPushNotification(
     if (!response.ok) {
       const error_message = await response.text().catch(() => "")
 
-      await sendNotifyDebug("notification_failed", {
+      await sendNotifyDebug("push_send_failed", {
         channel: "push",
         room_uuid: input.room_uuid,
         receiver_user_uuid: input.receiver_user_uuid,
         reason: "push_delivery_failed",
         error_message,
         status: response.status,
+        request_id: input.request_id ?? null,
       })
 
       return { delivered: false, reason: "push_delivery_failed" }
     }
 
-    await sendNotifyDebug("notification_sent_push", {
+    await sendNotifyDebug("push_send_success", {
+      channel: "push",
       room_uuid: input.room_uuid,
       receiver_user_uuid: input.receiver_user_uuid,
+      request_id: input.request_id ?? null,
     })
 
     return { delivered: true }
   } catch (error) {
-    await sendNotifyDebug("notification_failed", {
+    await sendNotifyDebug("push_send_failed", {
       channel: "push",
       room_uuid: input.room_uuid,
       receiver_user_uuid: input.receiver_user_uuid,
       reason: error instanceof Error ? error.message : String(error),
+      request_id: input.request_id ?? null,
     })
 
     return {

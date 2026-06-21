@@ -136,10 +136,10 @@ export type ChatNotificationContactType = "line" | "push"
 
 export type ChatNotifyContactRoute = {
   receiver_user_uuid: string
+  notification_type: "line" | "pwa_push"
   contact_type: ChatNotificationContactType | null
   contact_value: string | null
   receiver_active: boolean
-  push_preferred: boolean
   skipped_reason?: string | null
 }
 
@@ -168,13 +168,13 @@ type ContactRow = {
   updated_at?: string | null
 }
 
-function isActiveAppContact(contact: ContactRow, now = new Date()) {
+function isReceiverPresent(contact: ContactRow, now = new Date()) {
   if (contact.receive !== true || contact.state !== "active") {
     return false
   }
 
   if (!contact.last_seen_at) {
-    return true
+    return false
   }
 
   const last_seen_time = Date.parse(contact.last_seen_at)
@@ -209,38 +209,37 @@ function resolveContactValue(contact: ContactRow) {
   return contact.value?.trim() || null
 }
 
-function isPushSendState(contact: ContactRow) {
-  return (
-    contact.state === "background" ||
-    contact.state === "hidden" ||
-    contact.state === "offline"
-  )
+async function loadReceiverNotificationType(user_uuid: string) {
+  const { load_profile_notification_type } = await import("@/core/profile/action")
+  const notification_type = await load_profile_notification_type(user_uuid)
+
+  return notification_type === "pwa_push" ? "pwa_push" : "line"
 }
 
-function selectNotifyContact(contacts: ContactRow[]): {
+function selectNotifyContact(
+  contacts: ContactRow[],
+  notification_type: "line" | "pwa_push",
+): {
   contact_type: ChatNotificationContactType | null
   contact_value: string | null
   skipped_reason?: string | null
-  push_preferred: boolean
 } {
   const receivable = contacts.filter(
     (contact) =>
       contact.receive === true &&
       (contact.type === "line" || contact.type === "push"),
   )
-  const push_contacts = receivable.filter((contact) => contact.type === "push")
 
-  if (push_contacts.length > 0) {
-    const push_contact = push_contacts.find(
-      (contact) => isPushSendState(contact) && Boolean(resolveContactValue(contact)),
+  if (notification_type === "pwa_push") {
+    const push_contact = receivable.find(
+      (contact) => contact.type === "push" && Boolean(resolveContactValue(contact)),
     )
 
     if (!push_contact) {
       return {
         contact_type: null,
         contact_value: null,
-        skipped_reason: "push_not_sendable_no_line_fallback",
-        push_preferred: true,
+        skipped_reason: "missing_contact",
       }
     }
 
@@ -248,7 +247,6 @@ function selectNotifyContact(contacts: ContactRow[]): {
       contact_type: "push",
       contact_value: resolveContactValue(push_contact),
       skipped_reason: null,
-      push_preferred: true,
     }
   }
 
@@ -261,7 +259,6 @@ function selectNotifyContact(contacts: ContactRow[]): {
       contact_type: null,
       contact_value: null,
       skipped_reason: "missing_contact",
-      push_preferred: false,
     }
   }
 
@@ -269,7 +266,6 @@ function selectNotifyContact(contacts: ContactRow[]): {
     contact_type: "line",
     contact_value: resolveContactValue(line_contact),
     skipped_reason: null,
-    push_preferred: false,
   }
 }
 
@@ -427,7 +423,17 @@ export async function resolveChatNotifyRoutes(input: {
   room_uuid: string
   sender_uuid?: string | null
   sender_role: string
+  request_id?: string | null
 }): Promise<ChatNotifyContactRoute[]> {
+  const { sendNotifyDebug } = await import("@/core/notify/debug")
+
+  await sendNotifyDebug("notify_rules_started", {
+    room_uuid: input.room_uuid,
+    sender_uuid: input.sender_uuid ?? null,
+    sender_role: input.sender_role,
+    request_id: input.request_id ?? null,
+  })
+
   const receiver_user_uuids = await loadRoomReceiverUserUuids({
     room_uuid: input.room_uuid,
     sender_uuid: input.sender_uuid ?? null,
@@ -436,26 +442,42 @@ export async function resolveChatNotifyRoutes(input: {
   const routes: ChatNotifyContactRoute[] = []
 
   for (const receiver_user_uuid of receiver_user_uuids) {
-    const contacts = await loadReceiverContacts(receiver_user_uuid)
-    const receiver_active = contacts.some((contact) => isActiveAppContact(contact))
+    const [contacts, notification_type] = await Promise.all([
+      loadReceiverContacts(receiver_user_uuid),
+      loadReceiverNotificationType(receiver_user_uuid),
+    ])
+    const receiver_active = contacts.some((contact) => isReceiverPresent(contact))
     const selected = receiver_active
       ? {
           contact_type: null,
           contact_value: null,
           skipped_reason: "receiver_active",
-          push_preferred: false,
         }
-      : selectNotifyContact(contacts)
+      : selectNotifyContact(contacts, notification_type)
 
     routes.push({
       receiver_user_uuid,
+      notification_type,
       contact_type: selected.contact_type,
       contact_value: selected.contact_value,
       receiver_active,
-      push_preferred: selected.push_preferred,
       skipped_reason: selected.skipped_reason ?? null,
     })
   }
+
+  await sendNotifyDebug("notify_targets_resolved", {
+    room_uuid: input.room_uuid,
+    sender_role: input.sender_role,
+    receiver_count: routes.length,
+    targets: routes.map((route) => ({
+      receiver_user_uuid: route.receiver_user_uuid,
+      notification_type: route.notification_type,
+      contact_type: route.contact_type,
+      receiver_active: route.receiver_active,
+      skipped_reason: route.skipped_reason ?? null,
+    })),
+    request_id: input.request_id ?? null,
+  })
 
   return routes
 }

@@ -302,9 +302,20 @@ const notifyEvents = new Set([
   "notification_requested",
   "notification_skipped_availability_off",
   "notification_skipped_invalid_sender",
+  "notification_skipped_receiver_active",
+  "notification_skipped_missing_contact",
   "notification_sent_line",
   "notification_sent_push",
   "notification_failed",
+  "notify_rules_started",
+  "notify_targets_resolved",
+  "notify_channel_selected",
+  "push_send_started",
+  "push_send_success",
+  "push_send_failed",
+  "line_send_started",
+  "line_send_success",
+  "line_send_failed",
 ])
 
 function isUnexpectedEvent(event: string) {

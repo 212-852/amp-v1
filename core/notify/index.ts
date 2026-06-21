@@ -68,12 +68,6 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
     room_uuid: input.room_uuid,
     sender_uuid: input.sender_uuid ?? null,
     sender_role,
-  })
-
-  await sendNotifyDebug("notify_receiver_resolved", {
-    room_uuid: input.room_uuid,
-    receiver_count: routes.length,
-    receiver_user_uuids: routes.map((route) => route.receiver_user_uuid),
     request_id,
   })
 
@@ -85,25 +79,6 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
       receiver_active: route.receiver_active,
       contact_type: route.contact_type,
     })
-
-    await sendNotifyDebug("notify_route_decided", {
-      room_uuid: input.room_uuid,
-      receiver_user_uuid: route.receiver_user_uuid,
-      contact_type: route.contact_type,
-      receiver_active: route.receiver_active,
-      skipped_reason: route.skipped_reason ?? decision.skip_reason,
-      request_id,
-    })
-
-    if (route.push_preferred) {
-      await sendNotifyDebug("notify_push_preferred", {
-        room_uuid: input.room_uuid,
-        receiver_user_uuid: route.receiver_user_uuid,
-        contact_type: route.contact_type,
-        skipped_reason: route.skipped_reason ?? null,
-        request_id,
-      })
-    }
 
     if (!decision.should_notify) {
       const debug_event =
@@ -118,40 +93,30 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
       await sendNotifyDebug(debug_event, {
         room_uuid: input.room_uuid,
         receiver_user_uuid: route.receiver_user_uuid,
+        notification_type: route.notification_type,
         sender_role,
         receiver_role,
         reason: route.skipped_reason ?? decision.skip_reason,
         request_id,
       })
-      if (route.skipped_reason === "push_not_sendable_no_line_fallback") {
-        await sendNotifyDebug("notify_line_skipped_push_preferred", {
-          room_uuid: input.room_uuid,
-          receiver_user_uuid: route.receiver_user_uuid,
-          reason: route.skipped_reason,
-          request_id,
-        })
-      }
       continue
     }
 
-    const payload = {
-      ...content,
-      receiver_user_uuid: route.receiver_user_uuid,
-    }
-
-    await sendNotifyDebug("notify_contact_selected", {
+    await sendNotifyDebug("notify_channel_selected", {
       room_uuid: input.room_uuid,
       receiver_user_uuid: route.receiver_user_uuid,
+      notification_type: route.notification_type,
       contact_type: route.contact_type,
       request_id,
     })
 
+    const payload = {
+      ...content,
+      receiver_user_uuid: route.receiver_user_uuid,
+      request_id,
+    }
+
     if (route.contact_type === "line" && route.contact_value) {
-      await sendNotifyDebug("notify_line_send_started", {
-        room_uuid: input.room_uuid,
-        receiver_user_uuid: route.receiver_user_uuid,
-        request_id,
-      })
       const result = await deliverChatLineNotification({
         ...payload,
         line_user_id: route.contact_value,
@@ -164,56 +129,15 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
       continue
     }
 
-    if (route.contact_type === "line") {
-      await sendNotifyDebug("notify_line_skipped_reason", {
-        room_uuid: input.room_uuid,
-        receiver_user_uuid: route.receiver_user_uuid,
-        reason: "missing_line_contact_value",
-        request_id,
+    if (route.contact_type === "push" && route.contact_value) {
+      const result = await deliverChatPushNotification({
+        ...payload,
+        push_endpoint: route.contact_value,
       })
-      continue
-    }
 
-    if (!route.contact_value) {
-      continue
-    }
-
-    await sendNotifyDebug("notify_line_skipped_reason", {
-      room_uuid: input.room_uuid,
-      receiver_user_uuid: route.receiver_user_uuid,
-      reason: "push_contact_selected",
-      request_id,
-    })
-    await sendNotifyDebug("notify_line_skipped_push_preferred", {
-      room_uuid: input.room_uuid,
-      receiver_user_uuid: route.receiver_user_uuid,
-      reason: "push_contact_selected",
-      request_id,
-    })
-    await sendNotifyDebug("notify_push_send_started", {
-      room_uuid: input.room_uuid,
-      receiver_user_uuid: route.receiver_user_uuid,
-      request_id,
-    })
-    const result = await deliverChatPushNotification({
-      ...payload,
-      push_endpoint: route.contact_value,
-    })
-
-    if (result.delivered) {
-      await sendNotifyDebug("notify_push_send_success", {
-        room_uuid: input.room_uuid,
-        receiver_user_uuid: route.receiver_user_uuid,
-        request_id,
-      })
-      delivered_count += 1
-    } else {
-      await sendNotifyDebug("notify_push_send_failed", {
-        room_uuid: input.room_uuid,
-        receiver_user_uuid: route.receiver_user_uuid,
-        reason: result.reason ?? "push_send_failed",
-        request_id,
-      })
+      if (result.delivered) {
+        delivered_count += 1
+      }
     }
   }
 
