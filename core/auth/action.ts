@@ -1475,6 +1475,9 @@ export async function sendLoginBridgeDebug(request: NextRequest) {
     event !== "pwa_login_polling_timeout" &&
     event !== "pwa_login_polling_user_found" &&
     event !== "pwa_login_reload_triggered" &&
+    event !== "pwa_login_route_resolved" &&
+    event !== "pwa_login_redirect_complete" &&
+    event !== "pwa_login_redirect_start" &&
     event !== "pwa_popup_connecting_page_failed" &&
     event !== "pwa_popup_connecting_page_written" &&
     event !== "pwa_login_success_ui_shown" &&

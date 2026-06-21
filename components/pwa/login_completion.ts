@@ -54,7 +54,11 @@ export async function pollPwaAuthSession(): Promise<PwaAuthSessionPollResult> {
 }
 
 export function resolvePwaLoginDestination(route_path: string | null) {
-  return route_path?.startsWith("/") ? route_path : "/"
+  if (!route_path?.startsWith("/") || route_path.startsWith("/api/")) {
+    return "/app"
+  }
+
+  return route_path
 }
 
 export function completePwaLogin(input: {
@@ -74,7 +78,27 @@ export function completePwaLogin(input: {
     route_path: destination,
     source: input.source,
   })
+  input.on_debug?.("pwa_login_route_resolved", {
+    bridge_uuid: input.bridge_uuid ?? null,
+    user_uuid: input.user_uuid,
+    route_path: destination,
+    raw_route_path: input.route_path,
+    source: input.source,
+  })
+  input.on_debug?.("pwa_login_redirect_start", {
+    bridge_uuid: input.bridge_uuid ?? null,
+    user_uuid: input.user_uuid,
+    route_path: destination,
+    source: input.source,
+  })
   input.on_debug?.("pwa_login_reload_triggered", {
+    bridge_uuid: input.bridge_uuid ?? null,
+    user_uuid: input.user_uuid,
+    route_path: destination,
+    source: input.source,
+  })
+
+  input.on_debug?.("pwa_login_redirect_complete", {
     bridge_uuid: input.bridge_uuid ?? null,
     user_uuid: input.user_uuid,
     route_path: destination,

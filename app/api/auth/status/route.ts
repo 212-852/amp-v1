@@ -9,13 +9,14 @@ import {
 export async function GET(request: NextRequest) {
   const result = await restoreAuthSession({
     request,
-    requested_route: request.nextUrl.pathname,
+    requested_route: "/",
   })
   const authenticated = Boolean(result.session.user_uuid)
   const response = NextResponse.json({
     authenticated,
     user_uuid: result.session.user_uuid,
     role: authenticated ? result.session.role : null,
+    route: result.route,
   })
 
   applySessionCookies(response, result.cookies)

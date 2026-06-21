@@ -9,7 +9,7 @@ import {
 export async function GET(request: NextRequest) {
   const result = await restoreAuthSession({
     request,
-    requested_route: request.nextUrl.pathname,
+    requested_route: "/",
   })
 
   const response = NextResponse.json({
