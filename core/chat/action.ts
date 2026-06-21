@@ -28,6 +28,7 @@ import {
   ensureWelcomeMessageArchived,
   toMessageBundle,
 } from "@/core/chat/message"
+import { dispatchIncomingChatNotification } from "@/core/chat/notify_dispatch"
 import {
   buildPresenceMessageBundle,
   enrichPresenceViews,
@@ -636,18 +637,13 @@ export async function handleIncomingChatMessageArchive(
     source_channel: input.source_channel,
   })
 
-  const { notifyChatMessageReceived } = await import("@/core/notify")
-  await notifyChatMessageReceived({
+  await dispatchIncomingChatNotification({
     room_uuid: room.room_uuid,
+    message_uuid: message.message_uuid,
     sender_uuid: participant.user_uuid,
     sender_role: participant.role,
-    receiver_role:
-      participant.role === "user" || participant.role === "guest"
-        ? "concierge"
-        : "user",
     user_name: actor_display_name,
-    request_id: message.message_uuid,
-  }).catch(() => null)
+  })
 
   if (
     (participant.role === "admin" || participant.role === "concierge") &&

@@ -44,9 +44,30 @@ async function logNotifyDebug(
   await sendNotifyDebug(event, payload, payload.request_id as string | null)
 }
 
+function resolveSkipReason(input: {
+  route_reason?: string | null
+  decision_reason?: string | null
+}) {
+  const reason = input.route_reason ?? input.decision_reason ?? "unknown"
+
+  if (reason === "missing_contact") {
+    return "no_contact"
+  }
+
+  return reason
+}
+
 export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
   const request_id =
     input.request_id ?? `chat_notify:${input.room_uuid}:${Date.now()}`
+
+  await sendNotifyDebug("notify_flow_started", {
+    room_uuid: input.room_uuid,
+    sender_uuid: input.sender_uuid ?? null,
+    sender_role: input.sender_role,
+    receiver_role: input.receiver_role ?? "concierge",
+    request_id,
+  })
 
   const content = buildChatNotificationContent({
     user_name: input.user_name,
@@ -63,6 +84,17 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
     request_id,
   })
 
+  if (routes.length === 0) {
+    await sendNotifyDebug("notify_delivery_skipped", {
+      room_uuid: input.room_uuid,
+      sender_uuid: input.sender_uuid ?? null,
+      reason: "no_receiver",
+      request_id,
+    })
+
+    return { delivered_count }
+  }
+
   for (const route of routes) {
     const decision = resolveChatNotifyDecision({
       availability: "on",
@@ -73,12 +105,31 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
     })
 
     if (!decision.should_notify) {
+      await sendNotifyDebug("notify_delivery_skipped", {
+        room_uuid: input.room_uuid,
+        sender_uuid: input.sender_uuid ?? null,
+        receiver_uuid: route.receiver_user_uuid,
+        contact_uuid: route.selected_contact?.contact_uuid ?? null,
+        contact_type: route.selected_contact?.contact_type ?? null,
+        reason: resolveSkipReason({
+          route_reason: route.skipped_reason,
+          decision_reason: decision.skip_reason,
+        }),
+        request_id,
+      })
       continue
     }
 
     const selected_contact = route.selected_contact
 
     if (!selected_contact) {
+      await sendNotifyDebug("notify_delivery_skipped", {
+        room_uuid: input.room_uuid,
+        sender_uuid: input.sender_uuid ?? null,
+        receiver_uuid: route.receiver_user_uuid,
+        reason: "no_contact",
+        request_id,
+      })
       continue
     }
 

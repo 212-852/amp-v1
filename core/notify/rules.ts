@@ -311,7 +311,7 @@ function selectNotifyContact(contacts: ContactRow[]): {
 
   return {
     selected_contact: null,
-    skipped_reason: "missing_contact",
+    skipped_reason: "no_contact",
   }
 }
 
@@ -335,7 +335,7 @@ async function loadAdminConciergeUserUuids(user_uuids: string[]) {
       "users",
       [
         `user_uuid=in.(${unique_user_uuids.map(encodeURIComponent).join(",")})`,
-        "role=in.(admin,concierge)",
+        "role=in.(admin,concierge,owner)",
         "select=user_uuid,role",
       ].join("&"),
     ),
@@ -353,7 +353,12 @@ async function loadAdminConciergeUserUuids(user_uuids: string[]) {
 
   return new Set(
     users
-      .filter((user) => user.role === "admin" || user.role === "concierge")
+      .filter(
+        (user) =>
+          user.role === "admin" ||
+          user.role === "concierge" ||
+          user.role === "owner",
+      )
       .map((user) => user.user_uuid)
       .filter((user_uuid): user_uuid is string => Boolean(user_uuid)),
   )
