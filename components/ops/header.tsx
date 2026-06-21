@@ -278,8 +278,9 @@ export default function OpsHeader({
     void send_auth_client_debug("logout_clicked", { source: "ops_header" })
     toast({
       tone: "info",
+      placement: "center",
       duration_ms: 2750,
-      message: "ログアウト中...",
+      message: "ログアウト中...\nセッションを終了しています",
     })
     void send_auth_client_debug("logout_toast_loading_shown", {
       source: "ops_header",
@@ -289,6 +290,7 @@ export default function OpsHeader({
       await request_logout()
       toast({
         tone: "success",
+        placement: "center",
         duration_ms: 2750,
         message: "ログアウトしました",
       })
@@ -308,6 +310,7 @@ export default function OpsHeader({
       })
       toast({
         tone: "error",
+        placement: "center",
         duration_ms: 2750,
         message: "ログアウトに失敗しました",
       })

@@ -38,6 +38,7 @@ export type ToastItem = {
   message: string
   tone: ToastTone
   anchor_rect?: ToastAnchorRect | null
+  placement?: "default" | "center"
   compact?: boolean
 }
 
@@ -76,7 +77,9 @@ export function ToastView({
         aria-hidden="true"
         className={["mt-1.5 h-2 w-2 shrink-0 rounded-full", styles.icon].join(" ")}
       />
-      <p className="text-[13px] font-medium leading-snug">{item.message}</p>
+      <p className="whitespace-pre-line text-[13px] font-medium leading-snug">
+        {item.message}
+      </p>
     </div>
   )
 }
@@ -116,7 +119,12 @@ export function ToastStack({ items }: Readonly<{ items: ToastItem[] }>) {
     return null
   }
 
-  const default_items = items.filter((item) => !item.anchor_rect)
+  const center_items = items.filter(
+    (item) => !item.anchor_rect && item.placement === "center",
+  )
+  const default_items = items.filter(
+    (item) => !item.anchor_rect && item.placement !== "center",
+  )
   const anchored_items = items.filter((item) => item.anchor_rect)
 
   return (
@@ -137,6 +145,17 @@ export function ToastStack({ items }: Readonly<{ items: ToastItem[] }>) {
       {anchored_items.map((item) => (
         <AnchoredToastView key={item.id} item={item} />
       ))}
+      {center_items.length > 0 ? (
+        <div
+          className={[
+            "pointer-events-none fixed left-1/2 top-1/2 z-[220] flex w-[min(86vw,340px)] -translate-x-1/2 -translate-y-1/2 flex-col gap-2",
+          ].join(" ")}
+        >
+          {center_items.map((item) => (
+            <ToastView key={item.id} item={item} />
+          ))}
+        </div>
+      ) : null}
     </>
   )
 }

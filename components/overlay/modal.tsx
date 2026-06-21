@@ -105,7 +105,7 @@ const content = {
     es: "No se pudo confirmar el inicio de sesion de LINE. Intentalo otra vez.",
   },
   line_bridge_title: {
-    ja: "LINEログインを確認しています",
+    ja: "LINE認証中...",
     en: "Checking LINE login",
     es: "Verificando inicio de sesion de LINE",
   },
@@ -148,6 +148,16 @@ const content = {
     ja: "画面を更新しています...",
     en: "Refreshing screen...",
     es: "Actualizando pantalla...",
+  },
+  line_bridge_session_updating: {
+    ja: "セッション更新中...",
+    en: "Updating session...",
+    es: "Actualizando sesion...",
+  },
+  line_bridge_complete: {
+    ja: "ログイン完了",
+    en: "Login complete",
+    es: "Inicio de sesion completado",
   },
   line_bridge_failed_title: {
     ja: "ログインの確認に失敗しました",
@@ -576,8 +586,9 @@ function AccountPanel({
     })
     toast({
       tone: "info",
+      placement: "center",
       duration_ms: 2750,
-      message: "ログアウト中...",
+      message: "ログアウト中...\nセッションを終了しています",
     })
     void send_auth_client_debug("logout_toast_loading_shown", {
       source: "account_modal",
@@ -587,6 +598,7 @@ function AccountPanel({
       await request_logout()
       toast({
         tone: "success",
+        placement: "center",
         duration_ms: 2750,
         message: "ログアウトしました",
       })
@@ -606,6 +618,7 @@ function AccountPanel({
       })
       toast({
         tone: "error",
+        placement: "center",
         duration_ms: 2750,
         message: "ログアウトに失敗しました",
       })
@@ -1050,12 +1063,16 @@ export default function OverlayModal({
   phase: OverlayPhase
   onClose: () => void
 }>) {
+  const router = useRouter()
   const { locale, set_locale } = useLocale()
   const [loading_action, set_loading_action] = useState<OverlayItem["action"] | null>(null)
   const [link_step, set_link_step] = useState<"options" | "email">("options")
   const [bridge_status, set_bridge_status] = useState<
     "idle" | "polling" | "success" | "failed"
   >("idle")
+  const [bridge_success_step, set_bridge_success_step] = useState<
+    "authenticated" | "session" | "complete"
+  >("authenticated")
   const [bridge_redirect_fallback, set_bridge_redirect_fallback] =
     useState(false)
   const [bridge_uuid, set_bridge_uuid] = useState<string | null>(null)
@@ -1072,7 +1089,12 @@ export default function OverlayModal({
   } else if (rule.type === "link" && bridge_status === "polling") {
     display_title = content.line_bridge_title[locale]
   } else if (rule.type === "link" && bridge_status === "success") {
-    display_title = content.line_bridge_authenticated_title[locale]
+    display_title =
+      bridge_success_step === "complete"
+        ? content.line_bridge_complete[locale]
+        : bridge_success_step === "session"
+          ? content.line_bridge_session_updating[locale]
+          : content.line_bridge_authenticated_title[locale]
   } else if (rule.type === "link" && bridge_status === "failed") {
     display_title = content.line_bridge_failed_title[locale]
   }
@@ -1114,6 +1136,7 @@ export default function OverlayModal({
         bridge_redirect_timeout_ref.current = null
       }
       set_bridge_redirect_fallback(false)
+      set_bridge_success_step("authenticated")
       set_bridge_status("success")
       set_loading_action(null)
       send_bridge_debug("pwa_login_success_modal_shown", {
@@ -1141,18 +1164,30 @@ export default function OverlayModal({
       }, 5000)
 
       window.setTimeout(() => {
+        set_bridge_success_step("session")
+      }, 650)
+
+      window.setTimeout(() => {
+        set_bridge_success_step("complete")
+      }, 1300)
+
+      window.setTimeout(() => {
         completePwaLogin({
           user_uuid: input.user_uuid,
           route_path: input.route_path,
           source: input.source,
           bridge_uuid: input.bridge_uuid_value,
+          navigate: (destination) => {
+            router.refresh()
+            router.replace(destination)
+          },
           on_debug: (event, payload) => {
             void send_bridge_debug(event, payload)
           },
         })
-      }, 0)
+      }, 1700)
     },
-    [stop_bridge_polling],
+    [router, stop_bridge_polling],
   )
 
   const check_pwa_login_session = useCallback(
@@ -1302,6 +1337,7 @@ export default function OverlayModal({
   function start_bridge_polling(bridge_uuid: string) {
     stop_bridge_polling()
     set_bridge_redirect_fallback(false)
+    set_bridge_success_step("authenticated")
     set_bridge_status("polling")
     send_bridge_debug("bridge_polling_started", { bridge_uuid })
     send_bridge_debug("pwa_login_polling_started", {
@@ -1337,6 +1373,7 @@ export default function OverlayModal({
   async function start_pwa_line_bridge(popup: Window | null) {
     set_loading_action("line")
     set_bridge_redirect_fallback(false)
+    set_bridge_success_step("authenticated")
     set_bridge_status("polling")
     bridge_popup_ref.current = popup
     let failure_logged = false
@@ -1537,6 +1574,7 @@ export default function OverlayModal({
     close_bridge_popup(bridge_uuid)
     clearPwaLoginPending()
     set_bridge_redirect_fallback(false)
+    set_bridge_success_step("authenticated")
     set_bridge_status("idle")
     set_bridge_uuid(null)
     set_bridge_authorize_url(null)
@@ -1660,7 +1698,11 @@ export default function OverlayModal({
                   <p className="text-[13px] font-bold leading-6 text-[#111111]">
                     {bridge_redirect_fallback
                       ? content.line_bridge_refreshing[locale]
-                      : content.line_bridge_loading[locale]}
+                      : bridge_success_step === "complete"
+                        ? content.line_bridge_complete[locale]
+                        : bridge_success_step === "session"
+                          ? content.line_bridge_session_updating[locale]
+                          : content.line_bridge_authenticated_title[locale]}
                   </p>
                 </div>
               ) : bridge_status === "failed" ? (

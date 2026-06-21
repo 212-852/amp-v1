@@ -101,6 +101,7 @@ export function completePwaLogin(input: {
   route_path: string | null
   source: string
   bridge_uuid?: string | null
+  navigate?: (destination: string) => void
   on_debug?: (event: string, payload: Record<string, unknown>) => void
 }) {
   clearPwaLoginPending()
@@ -167,6 +168,11 @@ export function completePwaLogin(input: {
       },
     }),
   )
+
+  if (input.navigate) {
+    input.navigate(destination)
+    return
+  }
 
   window.location.replace(destination)
 }

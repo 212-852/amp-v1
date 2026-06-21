@@ -97,6 +97,7 @@ export function ToastProvider({
           message: input.message,
           tone,
           anchor_rect,
+          placement: input.placement === "center" ? "center" : "default",
           compact: input.compact,
         },
       ])

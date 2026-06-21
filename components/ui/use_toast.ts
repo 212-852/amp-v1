@@ -7,7 +7,7 @@ import { ToastContext } from "@/components/ui/toast_provider"
 
 export type ToastTone = "success" | "error" | "info" | "warning"
 
-export type ToastPlacement = "default" | "anchor"
+export type ToastPlacement = "default" | "anchor" | "center"
 
 export type ToastInput = {
   message: string
