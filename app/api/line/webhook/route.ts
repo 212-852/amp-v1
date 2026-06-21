@@ -7,6 +7,8 @@ import { handleLineWebhook } from "@/core/line/action"
 import { normalizeLineWebhookRequest } from "@/core/line/context"
 import { is_allowed_line_user } from "@/core/line/rules"
 
+export const runtime = "nodejs"
+
 function verifyLineSignature(body: string, signature: string | null) {
   const secret = process.env.LINE_MESSAGING_CHANNEL_SECRET
 

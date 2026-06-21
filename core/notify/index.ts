@@ -19,7 +19,6 @@ import {
   type ChatNotifySenderRole,
 } from "@/core/notify/chat_rules"
 import { deliverChatLineNotification } from "@/core/notify/line"
-import { deliverChatPushNotification } from "@/core/notify/push"
 import type { ChatMessageNotifyInput } from "@/core/notify/types"
 
 export type NotifyMessage = {
@@ -157,7 +156,8 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
     }
 
     if (selected_contact.contact_type === "push") {
-      const result = await deliverChatPushNotification({
+      const { send_push_notification } = await import("./push")
+      const result = await send_push_notification({
         ...payload,
         push_subscription: selected_contact.push_subscription ?? {
           endpoint: selected_contact.contact_value,

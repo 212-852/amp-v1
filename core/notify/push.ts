@@ -1,3 +1,5 @@
+import "server-only"
+
 import { sendNotifyDebug } from "@/core/notify/debug"
 import type { ChatNotificationPayload } from "@/core/notify/types"
 import webpush from "web-push"
@@ -17,7 +19,7 @@ function resolveVapidConfig() {
   return { public_key, private_key, subject }
 }
 
-export async function deliverChatPushNotification(
+export async function send_push_notification(
   input: ChatNotificationPayload & {
     push_subscription: {
       endpoint: string

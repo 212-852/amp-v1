@@ -10,6 +10,8 @@ import { resolveOutputLocaleDecision } from "@/core/chat/context"
 import { filterUserVisibleChatMessages } from "@/core/chat/rules"
 import { sendAuthDebug } from "@/core/debug"
 
+export const runtime = "nodejs"
+
 function logChatRoomGetNoRoom(data: Record<string, unknown>) {
   console.info("[chat_bootstrap] chat_room_get_no_room", data)
 }
