@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server"
 
 import { resolveChatApiSession } from "@/core/chat/api"
-import {
-  getNotificationSettings,
-  normalizeNotificationType,
-  saveNotificationSettings,
-} from "@/core/notify/preferences"
+import { saveNotificationSettings } from "@/core/notify/preferences"
 import { buildPushSubscribeOutput } from "@/core/notify/push_output"
+
+export const runtime = "nodejs"
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as {

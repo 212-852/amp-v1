@@ -85,7 +85,7 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
   })
 
   if (routes.length === 0) {
-    await sendNotifyDebug("notify_delivery_skipped", {
+    await sendNotifyDebug("notify_flow_skipped", {
       room_uuid: input.room_uuid,
       sender_uuid: input.sender_uuid ?? null,
       reason: "no_receiver",
@@ -105,7 +105,7 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
     })
 
     if (!decision.should_notify) {
-      await sendNotifyDebug("notify_delivery_skipped", {
+      await sendNotifyDebug("notify_flow_skipped", {
         room_uuid: input.room_uuid,
         sender_uuid: input.sender_uuid ?? null,
         receiver_uuid: route.receiver_user_uuid,
@@ -123,7 +123,7 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
     const selected_contact = route.selected_contact
 
     if (!selected_contact) {
-      await sendNotifyDebug("notify_delivery_skipped", {
+      await sendNotifyDebug("notify_flow_skipped", {
         room_uuid: input.room_uuid,
         sender_uuid: input.sender_uuid ?? null,
         receiver_uuid: route.receiver_user_uuid,

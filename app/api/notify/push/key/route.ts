@@ -6,6 +6,8 @@ import {
   buildPushKeyOutput,
 } from "@/core/notify/push_output"
 
+export const runtime = "nodejs"
+
 export async function GET() {
   const { public_key, missing_env } = await getPushNotificationPublicKeyConfig()
 

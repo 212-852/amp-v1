@@ -270,13 +270,20 @@ const authSessionEvents = new Set([
 
 const notifyEvents = new Set([
   "notify_flow_started",
-  "notify_contact_resolved",
+  "notify_flow_skipped",
+  "notify_contacts_resolved",
+  "notify_contact_selected",
   "notify_delivery_skipped",
   "notify_push_send_started",
   "notify_push_send_success",
   "notify_push_send_failed",
   "notify_line_send_started",
   "notify_line_send_success",
+  "notify_line_send_failed",
+  "push_public_key_resolved",
+  "push_subscription_save_started",
+  "push_subscription_save_success",
+  "push_subscription_save_failed",
 ])
 
 function isUnexpectedEvent(event: string) {

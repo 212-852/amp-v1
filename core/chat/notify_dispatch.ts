@@ -10,6 +10,15 @@ export async function dispatchIncomingChatNotification(input: {
   user_name: string
 }) {
   if (input.sender_role !== "user" && input.sender_role !== "guest") {
+    const { sendNotifyDebug } = await import("@/core/notify/debug")
+    await sendNotifyDebug("notify_flow_skipped", {
+      room_uuid: input.room_uuid,
+      sender_uuid: input.sender_uuid,
+      sender_role: input.sender_role,
+      reason: "sender_not_user_or_guest",
+      request_id: input.message_uuid,
+    })
+
     return { delivered_count: 0 }
   }
 
