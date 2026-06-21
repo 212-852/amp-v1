@@ -15,6 +15,27 @@ type ContactUpsertBody = {
   receive: boolean
 }
 
+type PushContactUpsertBody = ContactUpsertBody & {
+  state: ContactRecord["state"]
+  last_seen_at: string
+  endpoint: string
+  p256dh: string | null
+  auth: string | null
+  user_agent: string | null
+}
+
+export type PushContactUpsertInput = {
+  user_uuid: string | null
+  visitor_uuid: string | null
+  endpoint: string
+  p256dh: string | null
+  auth: string | null
+  user_agent: string | null
+  channel?: ContactRecord["channel"]
+  state?: ContactRecord["state"]
+  receive?: boolean
+}
+
 type ContactAccessBody = {
   channel?: ContactRecord["channel"]
   state?: ContactRecord["state"]
@@ -68,6 +89,35 @@ function contactUpsertIdentity(context: ContactContext) {
   }
 }
 
+async function findContactByEndpoint(
+  config: NonNullable<ReturnType<typeof getRestConfig>>,
+  endpoint: string,
+) {
+  const response = await fetch(
+    restUrl(
+      config,
+      "contacts",
+      [
+        `endpoint=eq.${encodeURIComponent(endpoint)}`,
+        "type=eq.push",
+        `select=${CONTACT_SELECT}`,
+        "limit=1",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return null
+  }
+
+  const rows = (await response.json()) as ContactRecord[]
+  return rows[0] ?? null
+}
+
 async function findContactByTypeValue(
   config: NonNullable<ReturnType<typeof getRestConfig>>,
   input: { type: ContactRecord["type"]; value: string },
@@ -100,7 +150,7 @@ async function findContactByTypeValue(
 async function patchContactRecord(
   config: NonNullable<ReturnType<typeof getRestConfig>>,
   contact_uuid: string,
-  body: ContactUpsertBody,
+  body: ContactUpsertBody | PushContactUpsertBody,
 ) {
   const response = await fetch(
     restUrl(config, "contacts", `contact_uuid=eq.${encodeURIComponent(contact_uuid)}`),
@@ -155,6 +205,89 @@ async function insertContactWithoutConflict(
   }
 
   const rows = (await response.json()) as ContactRecord[]
+  return rows[0] ?? null
+}
+
+export async function upsertPushContact(
+  input: PushContactUpsertInput,
+): Promise<ContactRecord | null> {
+  if (!input.user_uuid && !input.visitor_uuid) {
+    throw new Error("push_contact_requires_identity")
+  }
+
+  if (!input.endpoint.trim()) {
+    throw new Error("push_subscription_endpoint_required")
+  }
+
+  const config = getRestConfig()
+  const now = new Date().toISOString()
+  const channel = input.channel ?? "pwa"
+  const state = input.state ?? "active"
+  const receive = input.receive !== false
+
+  if (!config) {
+    return {
+      user_uuid: input.user_uuid,
+      visitor_uuid: input.visitor_uuid,
+      type: "push",
+      value: input.endpoint,
+      channel,
+      state,
+      receive,
+      last_seen_at: now,
+    }
+  }
+
+  const body: PushContactUpsertBody = {
+    user_uuid: input.user_uuid,
+    visitor_uuid: input.visitor_uuid,
+    type: "push",
+    value: input.endpoint,
+    channel,
+    state,
+    receive,
+    last_seen_at: now,
+    endpoint: input.endpoint,
+    p256dh: input.p256dh,
+    auth: input.auth,
+    user_agent: input.user_agent,
+  }
+
+  const response = await fetch(
+    restUrl(config, "contacts", `on_conflict=endpoint&select=${CONTACT_SELECT}`),
+    {
+      method: "POST",
+      headers: {
+        ...restHeaders(config),
+        Prefer: "resolution=merge-duplicates,return=representation",
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+
+    if (error.code === "42P10" || error.message?.includes("ON CONFLICT")) {
+      const existing = await findContactByEndpoint(config, input.endpoint)
+
+      if (existing?.contact_uuid) {
+        return patchContactRecord(config, existing.contact_uuid, body)
+      }
+
+      return insertContactWithoutConflict(config, body)
+    }
+
+    throw new Error(
+      `Failed to upsert push contact: ${error.code ?? "unknown"} ${
+        error.message ?? "No PostgREST error returned"
+      }`,
+    )
+  }
+
+  const rows = (await response.json()) as ContactRecord[]
+
   return rows[0] ?? null
 }
 
