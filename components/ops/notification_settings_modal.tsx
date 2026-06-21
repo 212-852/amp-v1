@@ -96,6 +96,17 @@ function push_debug(event: string, payload: Record<string, unknown> = {}) {
   console.info(event, payload)
 }
 
+function can_start_pwa_push_setup() {
+  return (
+    typeof window !== "undefined" &&
+    is_pwa_display_mode() &&
+    "Notification" in window &&
+    typeof navigator !== "undefined" &&
+    "serviceWorker" in navigator &&
+    "PushManager" in window
+  )
+}
+
 function resolve_push_availability(locale: Locale): PushAvailability {
   if (typeof window === "undefined") {
     return {
@@ -482,6 +493,9 @@ export default function NotificationSettingsModal({
     return null
   }
 
+  const can_start_push_setup = can_start_pwa_push_setup()
+  const push_option_disabled = !can_start_push_setup
+
   const options: Array<{
     value: NotificationType
     label: string
@@ -496,9 +510,9 @@ export default function NotificationSettingsModal({
     {
       value: "pwa_push",
       label: content.push[locale as Locale] ?? content.push.en,
-      disabled: !push_availability.selectable,
+      disabled: push_option_disabled,
       helper:
-        !push_availability.selectable
+        push_option_disabled
           ? push_availability.reason ??
             content.push_disabled[locale as Locale] ??
             content.push_disabled.en
