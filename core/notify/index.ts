@@ -98,6 +98,7 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
     user_name: input.user_name,
     room_uuid: input.room_uuid,
   })
+  const { loadNotificationTypeForUser } = await import("@/core/notify/preferences")
 
   const sender_role = input.sender_role as ChatNotifySenderRole
   const receiver_role = (input.receiver_role ?? "concierge") as ChatNotifyReceiverRole
@@ -105,8 +106,9 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
   let delivered_count = 0
 
   for (const recipient of recipients) {
-    const notification_type =
-      recipient.notification_type === "pwa_push" ? "pwa_push" : "line"
+    const notification_type = await loadNotificationTypeForUser(
+      recipient.user_uuid,
+    )
     const decision = resolveChatNotifyDecision({
       availability: "on",
       notification_type,

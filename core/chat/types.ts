@@ -216,7 +216,6 @@ export type AvailabilityState = "on" | "off"
 export type AvailabilityRecord = {
   user_uuid: string
   enabled: boolean
-  notification_type?: NotificationType
   updated_at: string
 }
 

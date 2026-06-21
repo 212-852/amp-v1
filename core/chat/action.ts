@@ -1216,30 +1216,3 @@ export async function getConciergeAvailabilityState(
     availability: enabled ? ("on" as const) : ("off" as const),
   }
 }
-
-export function normalizeAvailabilityNotificationType(value: unknown) {
-  return value === "pwa_push" ? "pwa_push" : value === "line" ? "line" : null
-}
-
-export async function getAvailabilityNotificationSettings(
-  session?: { user_uuid?: string | null } | null,
-) {
-  const { loadAvailabilityNotificationType } = await import("@/core/chat/archive")
-  const notification_type = await loadAvailabilityNotificationType(
-    session?.user_uuid ?? null,
-  )
-
-  return { notification_type }
-}
-
-export async function saveAvailabilityNotificationSettings(input: {
-  session: { user_uuid?: string | null }
-  notification_type: "line" | "pwa_push"
-}) {
-  const { setAvailabilityNotificationType } = await import("@/core/chat/archive")
-
-  return setAvailabilityNotificationType({
-    user_uuid: input.session.user_uuid ?? null,
-    notification_type: input.notification_type,
-  })
-}

@@ -12,6 +12,7 @@ import {
   PWA_LOGIN_POLL_INTERVAL_MS,
   PWA_LOGIN_POLL_TIMEOUT_MS,
 } from "@/components/pwa/login_pending"
+import { is_pwa_display_mode } from "@/src/pwa/display_mode"
 
 const CHUNK_RELOAD_KEY = "amp_chunk_reload_done"
 const SW_RELOAD_KEY = "amp_sw_update_reload_done"
@@ -45,18 +46,7 @@ function reloadOnce(storage_key: string) {
 }
 
 export function isStandalonePwa() {
-  if (typeof window === "undefined") {
-    return false
-  }
-
-  const standaloneNavigator = navigator as Navigator & {
-    standalone?: boolean
-  }
-
-  return (
-    window.matchMedia("(display-mode: standalone)").matches ||
-    standaloneNavigator.standalone === true
-  )
+  return is_pwa_display_mode()
 }
 
 async function sendPwaDebug(event: string, payload: Record<string, unknown>) {

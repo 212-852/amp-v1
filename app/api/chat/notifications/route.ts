@@ -2,15 +2,15 @@ import { NextResponse } from "next/server"
 
 import { resolveChatApiSession } from "@/core/chat/api"
 import {
-  getAvailabilityNotificationSettings,
-  normalizeAvailabilityNotificationType,
-  saveAvailabilityNotificationSettings,
-} from "@/core/chat/action"
+  getNotificationSettings,
+  normalizeNotificationType,
+  saveNotificationSettings,
+} from "@/core/notify/preferences"
 
 export async function GET() {
   try {
     const { session } = await resolveChatApiSession()
-    const settings = await getAvailabilityNotificationSettings(session)
+    const settings = await getNotificationSettings(session)
 
     return NextResponse.json({
       ok: true,
@@ -32,7 +32,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null)
-  const notification_type = normalizeAvailabilityNotificationType(
+  const notification_type = normalizeNotificationType(
     (body as { notification_type?: unknown } | null)?.notification_type,
   )
 
@@ -45,9 +45,11 @@ export async function POST(request: Request) {
 
   try {
     const { session } = await resolveChatApiSession()
-    const settings = await saveAvailabilityNotificationSettings({
+    const settings = await saveNotificationSettings({
       session,
       notification_type,
+      push_subscription: (body as { push_subscription?: unknown } | null)
+        ?.push_subscription,
     })
 
     return NextResponse.json({

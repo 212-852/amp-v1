@@ -230,10 +230,13 @@ export async function load_profile_notification_type(
   }
 
   const rows = (await response.json()) as Array<{
-    notification_type?: NotificationType | null
+    notification_type?: string | null
   }>
 
-  return rows[0]?.notification_type === "pwa_push" ? "pwa_push" : "line"
+  return rows[0]?.notification_type === "pwa_push" ||
+    rows[0]?.notification_type === "push"
+    ? "pwa_push"
+    : "line"
 }
 
 async function upsert_profile_row(input: {
