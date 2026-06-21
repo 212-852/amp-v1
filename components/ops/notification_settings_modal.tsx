@@ -78,14 +78,6 @@ type PushSubscriptionJson = {
   keys?: Record<string, string>
 }
 
-function get_vapid_public_key() {
-  return (
-    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ??
-    process.env.NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY ??
-    ""
-  ).trim()
-}
-
 function base64_url_to_uint8_array(value: string) {
   const padding = "=".repeat((4 - (value.length % 4)) % 4)
   const base64 = `${value}${padding}`.replace(/-/g, "+").replace(/_/g, "/")
@@ -99,7 +91,10 @@ function base64_url_to_uint8_array(value: string) {
   return output
 }
 
-function resolve_push_availability(locale: Locale): PushAvailability {
+function resolve_push_availability(
+  locale: Locale,
+  public_key: string | null,
+): PushAvailability {
   if (typeof window === "undefined") {
     return {
       selectable: false,
@@ -138,7 +133,7 @@ function resolve_push_availability(locale: Locale): PushAvailability {
     }
   }
 
-  if (!get_vapid_public_key()) {
+  if (!public_key?.trim()) {
     return {
       selectable: false,
       reason:
@@ -178,6 +173,7 @@ export default function NotificationSettingsModal({
     reason: null,
     permission: "unsupported",
   })
+  const [vapid_public_key, set_vapid_public_key] = useState<string | null>(null)
   const [push_subscription, set_push_subscription] =
     useState<PushSubscriptionJson | null>(null)
 
@@ -217,28 +213,53 @@ export default function NotificationSettingsModal({
     }
 
     const timeout_id = window.setTimeout(() => {
-      const availability = resolve_push_availability(locale as Locale)
-      set_push_availability(availability)
+      async function resolve_key_and_availability() {
+        const is_pwa =
+          typeof window !== "undefined" ? is_pwa_display_mode() : false
+        let public_key: string | null = null
 
-      if (!availability.selectable && notification_type === "pwa_push") {
-        set_notification_type("line")
+        if (is_pwa) {
+          const response = await fetch("/api/notify/push/key", {
+            credentials: "include",
+            cache: "no-store",
+          }).catch(() => null)
+          const payload = response?.ok
+            ? ((await response.json().catch(() => null)) as {
+                public_key?: string | null
+              } | null)
+            : null
+          public_key = payload?.public_key?.trim() || null
+        }
+
+        set_vapid_public_key(public_key)
+
+        const availability = resolve_push_availability(
+          locale as Locale,
+          public_key,
+        )
+        set_push_availability(availability)
+
+        if (!availability.selectable && notification_type === "pwa_push") {
+          set_notification_type("line")
+        }
+
+        if (!availability.selectable) {
+          console.info("[notification settings] pwa push disabled", {
+            reason: availability.reason,
+            permission: availability.permission,
+            is_pwa_display_mode: is_pwa,
+            has_notification:
+              typeof window !== "undefined" && "Notification" in window,
+            has_service_worker:
+              typeof navigator !== "undefined" && "serviceWorker" in navigator,
+            has_push_manager:
+              typeof window !== "undefined" && "PushManager" in window,
+            vapid_public_key_exists: Boolean(public_key),
+          })
+        }
       }
 
-      if (!availability.selectable) {
-        console.info("[notification settings] pwa push disabled", {
-          reason: availability.reason,
-          permission: availability.permission,
-          is_pwa_display_mode:
-            typeof window !== "undefined" ? is_pwa_display_mode() : false,
-          has_notification:
-            typeof window !== "undefined" && "Notification" in window,
-          has_service_worker:
-            typeof navigator !== "undefined" && "serviceWorker" in navigator,
-          has_push_manager:
-            typeof window !== "undefined" && "PushManager" in window,
-          vapid_public_key_exists: Boolean(get_vapid_public_key()),
-        })
-      }
+      void resolve_key_and_availability()
     }, 0)
 
     return () => {
@@ -247,7 +268,24 @@ export default function NotificationSettingsModal({
   }, [locale, notification_type, open])
 
   async function ensure_push_subscription() {
-    const availability = resolve_push_availability(locale as Locale)
+    let public_key = vapid_public_key
+
+    if (!public_key && is_pwa_display_mode()) {
+      const response = await fetch("/api/notify/push/key", {
+        credentials: "include",
+        cache: "no-store",
+      })
+      const payload = (await response.json().catch(() => null)) as {
+        public_key?: string | null
+      } | null
+      public_key = payload?.public_key?.trim() || null
+      set_vapid_public_key(public_key)
+    }
+
+    const availability = resolve_push_availability(
+      locale as Locale,
+      public_key,
+    )
     set_push_availability(availability)
 
     if (!availability.selectable) {
@@ -259,7 +297,10 @@ export default function NotificationSettingsModal({
       const permission = await window.Notification.requestPermission()
 
       if (permission !== "granted") {
-        const next_availability = resolve_push_availability(locale as Locale)
+        const next_availability = resolve_push_availability(
+          locale as Locale,
+          public_key,
+        )
         set_push_availability(next_availability)
         set_notification_type("line")
         throw new Error(next_availability.reason ?? "notification_not_granted")
@@ -277,7 +318,7 @@ export default function NotificationSettingsModal({
       (await registration.pushManager.getSubscription()) ??
       (await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: base64_url_to_uint8_array(get_vapid_public_key()),
+        applicationServerKey: base64_url_to_uint8_array(public_key ?? ""),
       }))
 
     const json = subscription.toJSON() as PushSubscriptionJson
@@ -289,6 +330,29 @@ export default function NotificationSettingsModal({
     notification_type: NotificationType
     push_subscription?: PushSubscriptionJson | null
   }) {
+    if (input.notification_type === "pwa_push") {
+      const response = await fetch("/api/notify/push/subscribe", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ subscription: input.push_subscription }),
+      })
+
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean
+        notification_type?: NotificationType
+        error?: string
+      } | null
+
+      if (!response.ok || payload?.ok !== true) {
+        throw new Error(payload?.error ?? "push_subscription_save_failed")
+      }
+
+      return "pwa_push" as const
+    }
+
     const response = await fetch("/api/chat/notifications", {
       method: "POST",
       credentials: "include",

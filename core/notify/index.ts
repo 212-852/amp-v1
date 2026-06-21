@@ -55,7 +55,34 @@ async function loadAdminContactDestination(input: {
     return null
   }
 
-  const contact_type = input.notification_type === "pwa_push" ? "push" : "line"
+  if (input.notification_type === "pwa_push") {
+    const response = await fetch(
+      restUrl(
+        config,
+        "push_subscriptions",
+        [
+          `user_uuid=eq.${encodeURIComponent(input.user_uuid)}`,
+          "enabled=eq.true",
+          "select=endpoint",
+          "order=updated_at.desc",
+          "limit=1",
+        ].join("&"),
+      ),
+      {
+        headers: restHeaders(config),
+        cache: "no-store",
+      },
+    )
+
+    if (!response.ok) {
+      return null
+    }
+
+    const rows = (await response.json()) as Array<{ endpoint?: string | null }>
+    return rows[0]?.endpoint?.trim() || null
+  }
+
+  const contact_type = "line"
   const filter = [
     `user_uuid=eq.${encodeURIComponent(input.user_uuid)}`,
     `type=eq.${encodeURIComponent(contact_type)}`,

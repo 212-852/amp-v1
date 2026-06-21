@@ -1,10 +1,10 @@
-import { upsertContact } from "@/core/contacts/action"
 import type { Session } from "@/core/auth/types"
 import type { NotificationType } from "@/core/chat/types"
 import {
   load_profile_notification_type,
   save_profile_settings,
 } from "@/core/profile/action"
+import { savePushSubscription } from "@/core/notify/push_action"
 
 export type PushSubscriptionInput = {
   endpoint?: unknown
@@ -54,11 +54,6 @@ export async function saveNotificationSettings(input: {
     throw new Error("notification_type_required")
   }
 
-  const profile = await save_profile_settings({
-    session: input.session,
-    body: { notification_type },
-  })
-
   if (notification_type === "pwa_push") {
     const push_endpoint = normalizePushEndpoint(input.push_subscription)
 
@@ -66,15 +61,19 @@ export async function saveNotificationSettings(input: {
       throw new Error("push_subscription_required")
     }
 
-    await upsertContact({
-      user_uuid: input.session.user_uuid,
-      visitor_uuid: input.session.visitor_uuid,
-      type: "push",
-      value: push_endpoint,
-      channel: "pwa",
-      receive: true,
+    const result = await savePushSubscription({
+      session: input.session,
+      subscription: input.push_subscription,
+      user_agent: null,
     })
+
+    return { notification_type: result.notification_type }
   }
+
+  const profile = await save_profile_settings({
+    session: input.session,
+    body: { notification_type },
+  })
 
   return {
     notification_type:
@@ -89,4 +88,3 @@ export async function loadNotificationTypeForUser(user_uuid: string | null) {
 
   return load_profile_notification_type(user_uuid)
 }
-
