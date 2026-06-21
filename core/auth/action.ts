@@ -21,6 +21,7 @@ import type { SessionRole, SessionTier, SourceChannel } from "@/core/auth/types"
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
 import { sendAuthDebug } from "@/core/debug"
 import { sendMail } from "@/core/mail/action"
+import { homePathForRole } from "@/core/auth/route"
 
 type OtpChannel = "email" | "line" | "sms"
 
@@ -1191,8 +1192,6 @@ async function createLoginBridge(input: {
 }
 
 function bridgeCompletePage() {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.da-nya.com"
-
   return new NextResponse(
     [
       "<!doctype html>",
@@ -1200,7 +1199,7 @@ function bridgeCompletePage() {
       "<head>",
       '<meta charset="utf-8" />',
       '<meta name="viewport" content="width=device-width,initial-scale=1" />',
-      "<title>LINE Login Complete</title>",
+      "<title>認証しました</title>",
       "<style>",
       "body{margin:0;background:#fdfaf6;color:#111;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}",
       ".wrap{min-height:100dvh;display:grid;place-items:center;padding:28px;box-sizing:border-box;}",
@@ -1208,19 +1207,21 @@ function bridgeCompletePage() {
       "h1{margin:0 0 12px;font-size:24px;line-height:1.4;letter-spacing:0;font-weight:800;}",
       "p{margin:0;color:#555;font-size:15px;line-height:1.8;font-weight:600;}",
       ".sub{margin-top:8px;color:#777;font-size:13px;}",
-      "a{margin-top:22px;display:inline-flex;min-height:48px;align-items:center;justify-content:center;border-radius:16px;background:#8f5d28;color:#fff;padding:0 20px;text-decoration:none;font-size:14px;font-weight:800;}",
+      "button{margin-top:22px;display:inline-flex;min-height:48px;align-items:center;justify-content:center;border:0;border-radius:16px;background:#8f5d28;color:#fff;padding:0 20px;text-decoration:none;font-size:14px;font-weight:800;}",
       "</style>",
       "</head>",
       "<body>",
       '<main class="wrap">',
       '<section class="panel">',
-      "<h1>Login complete.</h1>",
-      "<p>Please return to the app.</p>",
-      '<p class="sub">You can close this browser page.</p>',
-      `<a href="${appUrl.replace(/"/g, "&quot;")}">Return to app</a>`,
+      "<h1>認証しました</h1>",
+      "<p>アプリへ戻ってください</p>",
+      '<p id="bridge-return-message" class="sub"></p>',
+      '<button id="bridge-return-button" type="button">アプリに戻る</button>',
       "</section>",
       "</main>",
-      '<script>window.setTimeout(function(){try{window.close()}catch(e){};try{window.location.href="/"}catch(e){}},1200)</script>',
+      "<script>",
+      "document.getElementById('bridge-return-button').addEventListener('click',function(){try{window.close()}catch(e){};window.setTimeout(function(){document.getElementById('bridge-return-message').textContent='アプリを開いてください'},300)})",
+      "</script>",
       "</body>",
       "</html>",
     ].join(""),
@@ -1395,7 +1396,7 @@ export async function getLoginBridgeStatus(request: NextRequest) {
 
     const bridge = await loadLoginBridge(bridge_uuid)
 
-    if (!bridge || bridge.visitor_uuid !== session.visitor_uuid) {
+    if (!bridge || !bridge.visitor_uuid || bridge.visitor_uuid !== session.visitor_uuid) {
       return NextResponse.json({ ok: false, status: "failed" }, { status: 404 })
     }
 
@@ -1417,6 +1418,7 @@ export async function getLoginBridgeStatus(request: NextRequest) {
 
     if (bridge.consumed_at && bridge.user_uuid) {
       const profile = await resolveAuthUserProfile(bridge.user_uuid)
+      const route_path = homePathForRole(normalizeLinkedRole(profile.role))
 
       await sendIdentityDebug("bridge_poll_success", {
         provider: "line",
@@ -1432,11 +1434,22 @@ export async function getLoginBridgeStatus(request: NextRequest) {
         user_uuid: bridge.user_uuid,
         source_channel: "pwa",
       })
+      await sendIdentityDebug("pwa_bridge_poll_success", {
+        provider: "line",
+        bridge_uuid: bridge.otp_uuid,
+        visitor_uuid: bridge.visitor_uuid,
+        user_uuid: bridge.user_uuid,
+        route_path,
+        source_channel: "pwa",
+      })
 
-      return NextResponse.json({
+      const response = NextResponse.json({
         ok: true,
         success: true,
         status: "success",
+        route: {
+          path: route_path,
+        },
         session: {
           visitor_uuid: bridge.visitor_uuid,
           user_uuid: bridge.user_uuid,
@@ -1448,6 +1461,14 @@ export async function getLoginBridgeStatus(request: NextRequest) {
           source_channel: "pwa",
         },
       })
+      await writeSessionVisitorCookie({
+        response,
+        visitor_uuid: bridge.visitor_uuid,
+        user_uuid: bridge.user_uuid,
+        pathname: "/api/auth/bridge/status",
+      })
+
+      return response
     }
 
     return NextResponse.json({
@@ -1477,6 +1498,8 @@ export async function sendLoginBridgeDebug(request: NextRequest) {
     event !== "pwa_launch_entered" &&
     event !== "pwa_bridge_start_failed" &&
     event !== "pwa_bridge_start_success" &&
+    event !== "pwa_bridge_location_replace_called" &&
+    event !== "pwa_bridge_redirect_route_resolved" &&
     event !== "pwa_line_popup_blocked" &&
     event !== "pwa_line_popup_opened" &&
     event !== "pwa_line_popup_redirected" &&
@@ -1768,7 +1791,6 @@ async function completeLineBridge(input: {
 
 export async function completeLineLogin(request: NextRequest) {
   const context = await resolveAuthContext()
-  const session = await resolveSession(context)
   const config = lineLoginConfig(request)
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get("code")
@@ -1780,6 +1802,7 @@ export async function completeLineLogin(request: NextRequest) {
   const failureUrl = new URL("/", appBaseUrl(request))
   const bridgeStatePayload = parseLineBridgeState(state)
   let callbackBridge: OtpRecord | null = null
+  let session: AppSession | null = null
 
   if (cookieState) {
     await sendIdentityDebug("oauth_state_cookie_found", {
@@ -1800,8 +1823,8 @@ export async function completeLineLogin(request: NextRequest) {
   await sendIdentityDebug("line_oauth_callback_received", {
     provider: "line",
     bridge_uuid: bridgeStatePayload?.bridge_uuid ?? null,
-    visitor_uuid: session.visitor_uuid,
-    user_uuid: session.user_uuid,
+    visitor_uuid: cookieState?.visitor_uuid ?? null,
+    user_uuid: null,
     source_channel: context.source_channel,
     code_exists: Boolean(code),
     state_exists: Boolean(state),
@@ -1813,6 +1836,12 @@ export async function completeLineLogin(request: NextRequest) {
     if (bridgeStatePayload) {
       callbackBridge = await loadLoginBridge(bridgeStatePayload.bridge_uuid)
 
+      await sendIdentityDebug("browser_bridge_callback_detected", {
+        provider: "line",
+        bridge_uuid: bridgeStatePayload.bridge_uuid,
+        visitor_uuid: callbackBridge?.visitor_uuid ?? null,
+        source_channel: bridgeStatePayload.source_channel,
+      })
       await sendIdentityDebug("line_callback_bridge_detected", {
         provider: "line",
         bridge_uuid: bridgeStatePayload.bridge_uuid,
@@ -1902,6 +1931,13 @@ export async function completeLineLogin(request: NextRequest) {
         profile,
       })
 
+      await sendIdentityDebug("browser_bridge_completed", {
+        provider: "line",
+        bridge_uuid: callbackBridge.otp_uuid,
+        visitor_uuid: callbackBridge.visitor_uuid,
+        user_uuid: bridgeResult.user_uuid,
+        source_channel: "pwa",
+      })
       await sendIdentityDebug("bridge_callback_complete_page_shown", {
         provider: "line",
         bridge_uuid: callbackBridge.otp_uuid,
@@ -1916,20 +1952,22 @@ export async function completeLineLogin(request: NextRequest) {
         user_uuid: bridgeResult.user_uuid,
         source_channel: "pwa",
       })
+      await sendIdentityDebug("browser_return_to_pwa_message_shown", {
+        provider: "line",
+        bridge_uuid: callbackBridge.otp_uuid,
+        visitor_uuid: callbackBridge.visitor_uuid,
+        user_uuid: bridgeResult.user_uuid,
+        source_channel: "pwa",
+      })
 
       const response = bridgeCompletePage()
-      await writeSessionVisitorCookie({
-        response,
-        visitor_uuid: bridgeResult.visitor_uuid,
-        user_uuid: bridgeResult.user_uuid,
-        pathname: "/api/auth/line/callback",
-      })
       clearLineOAuthStateCookie(response)
       clearAuthLoggedOutCookie(response)
 
       return response
     }
 
+    session = await resolveSession(context)
     const callbackVisitorUuid = cookieState.visitor_uuid ?? session.visitor_uuid
 
     if (!callbackVisitorUuid) {
@@ -2041,8 +2079,8 @@ export async function completeLineLogin(request: NextRequest) {
     failureUrl.searchParams.set("auth_error", "line")
     await sendIdentityDebug("identity_link_failed", {
       provider: "line",
-      visitor_uuid: session.visitor_uuid,
-      user_uuid: session.user_uuid,
+      visitor_uuid: session?.visitor_uuid ?? cookieState?.visitor_uuid ?? null,
+      user_uuid: session?.user_uuid ?? null,
       reason: "line_oauth_failed",
       error: callbackError instanceof Error ? callbackError.message : String(callbackError),
       source_channel: context.source_channel,

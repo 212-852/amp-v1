@@ -29,6 +29,41 @@ export function clearPwaLoginPending() {
 }
 
 export async function pollPwaAuthSession(): Promise<PwaAuthSessionPollResult> {
+  const bridge_uuid =
+    typeof window === "undefined"
+      ? null
+      : localStorage.getItem("amp_line_bridge_uuid")
+
+  if (bridge_uuid) {
+    const bridge_response = await fetch(
+      `/api/auth/bridge/status?bridge_uuid=${encodeURIComponent(bridge_uuid)}`,
+      {
+        method: "GET",
+        credentials: "include",
+        headers: {
+          "x-amp-channel": "pwa",
+        },
+        cache: "no-store",
+      },
+    )
+
+    const bridge_payload = (await bridge_response.json().catch(() => null)) as {
+      ok?: boolean
+      success?: boolean
+      session?: { user_uuid?: string | null }
+      route?: { path?: string | null }
+    } | null
+
+    if (bridge_payload?.success === true && bridge_payload.session?.user_uuid) {
+      return {
+        ok: bridge_response.ok && bridge_payload.ok === true,
+        restored: true,
+        user_uuid: bridge_payload.session.user_uuid,
+        route_path: bridge_payload.route?.path ?? null,
+      }
+    }
+  }
+
   const response = await fetch("/api/auth/session", {
     method: "GET",
     credentials: "include",
@@ -85,6 +120,13 @@ export function completePwaLogin(input: {
     raw_route_path: input.route_path,
     source: input.source,
   })
+  input.on_debug?.("pwa_bridge_redirect_route_resolved", {
+    bridge_uuid: input.bridge_uuid ?? null,
+    user_uuid: input.user_uuid,
+    route_path: destination,
+    raw_route_path: input.route_path,
+    source: input.source,
+  })
   input.on_debug?.("pwa_login_redirect_start", {
     bridge_uuid: input.bridge_uuid ?? null,
     user_uuid: input.user_uuid,
@@ -92,6 +134,12 @@ export function completePwaLogin(input: {
     source: input.source,
   })
   input.on_debug?.("pwa_login_location_replace_called", {
+    bridge_uuid: input.bridge_uuid ?? null,
+    user_uuid: input.user_uuid,
+    route_path: destination,
+    source: input.source,
+  })
+  input.on_debug?.("pwa_bridge_location_replace_called", {
     bridge_uuid: input.bridge_uuid ?? null,
     user_uuid: input.user_uuid,
     route_path: destination,
