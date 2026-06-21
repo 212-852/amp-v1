@@ -14,6 +14,7 @@ import {
   request_logout,
   send_auth_client_debug,
 } from "@/components/auth/logout"
+import CenterStatusToast from "@/components/ui/center_status_toast"
 import ProfileSettings from "@/components/profile/settings"
 import NotificationSettingsModal from "@/components/ops/notification_settings_modal"
 import { useToast } from "@/components/ui/use_toast"
@@ -92,6 +93,9 @@ export default function OpsHeader({
   const [notification_type, set_notification_type] =
     useState<NotificationType>("line")
   const [is_logging_out, set_is_logging_out] = useState(false)
+  const [logout_status_message, set_logout_status_message] = useState<string | null>(
+    null,
+  )
   const [concierge_available_state, set_concierge_available_state] = useState(
     enabled,
   )
@@ -274,28 +278,16 @@ export default function OpsHeader({
     }
 
     set_is_logging_out(true)
+    set_logout_status_message("ログアウト中...\nセッションを終了しています")
     close_menu()
     void send_auth_client_debug("logout_clicked", { source: "ops_header" })
-    toast({
-      tone: "info",
-      placement: "center",
-      compact: true,
-      duration_ms: 2750,
-      message: "ログアウト中...\nセッションを終了しています",
-    })
     void send_auth_client_debug("logout_toast_loading_shown", {
       source: "ops_header",
     })
 
     try {
       await request_logout()
-      toast({
-        tone: "success",
-        placement: "center",
-        compact: true,
-        duration_ms: 2750,
-        message: "ログアウトしました",
-      })
+      set_logout_status_message("ログアウトしました")
       void send_auth_client_debug("logout_toast_success_shown", {
         source: "ops_header",
       })
@@ -303,20 +295,16 @@ export default function OpsHeader({
         source: "ops_header",
         route_path: "/app",
       })
-      window.location.replace("/app")
+      window.setTimeout(() => {
+        window.location.replace("/app")
+      }, 650)
     } catch (error) {
       console.error("logout failed", error)
       void send_auth_client_debug("logout_request_failed", {
         source: "ops_header",
         error_message: error instanceof Error ? error.message : String(error),
       })
-      toast({
-        tone: "error",
-        placement: "center",
-        compact: true,
-        duration_ms: 2750,
-        message: "ログアウトに失敗しました",
-      })
+      set_logout_status_message("ログアウトに失敗しました")
       set_is_logging_out(false)
     }
   }
@@ -336,7 +324,9 @@ export default function OpsHeader({
   }
 
   return (
-    <header className="fixed inset-x-0 top-0 z-40 border-b border-neutral-200 bg-white px-5 pb-3 pt-[calc(10px+env(safe-area-inset-top,0px))]">
+    <>
+      <CenterStatusToast message={logout_status_message} />
+      <header className="fixed inset-x-0 top-0 z-40 border-b border-neutral-200 bg-white px-5 pb-3 pt-[calc(10px+env(safe-area-inset-top,0px))]">
       <div className="mx-auto flex w-full max-w-[430px] items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <div className="relative h-[52px] w-[52px] shrink-0 overflow-hidden rounded-full border border-neutral-200 bg-neutral-50">
@@ -559,6 +549,7 @@ export default function OpsHeader({
         onClose={() => set_profile_settings_open(false)}
         onSaved={handle_profile_saved}
       />
-    </header>
+      </header>
+    </>
   )
 }

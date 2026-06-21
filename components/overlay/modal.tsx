@@ -11,6 +11,7 @@ import {
   request_logout,
   send_auth_client_debug,
 } from "@/components/auth/logout"
+import CenterStatusToast from "@/components/ui/center_status_toast"
 import { detectAccessChannel } from "@/components/access/channel"
 import { getOverlayModalAnimationClass } from "@/components/overlay/animations"
 import type {
@@ -29,8 +30,6 @@ import {
   PWA_LOGIN_POLL_INTERVAL_MS,
   PWA_LOGIN_POLL_TIMEOUT_MS,
 } from "@/components/pwa/login_pending"
-import { ToastView } from "@/components/ui/toast"
-import { useToast } from "@/components/ui/use_toast"
 import { useLocale } from "@/src/components/locale/provider"
 import type { Locale } from "@/src/lib/locale"
 
@@ -572,7 +571,9 @@ function AccountPanel({
   onClose: () => void
 }>) {
   const [is_logging_out, set_is_logging_out] = useState(false)
-  const { toast } = useToast()
+  const [logout_status_message, set_logout_status_message] = useState<string | null>(
+    null,
+  )
   const account = rule.account
   const display_name = account?.display_name ?? content.account_guest_name[locale]
 
@@ -582,15 +583,9 @@ function AccountPanel({
     }
 
     set_is_logging_out(true)
+    set_logout_status_message("ログアウト中...\nセッションを終了しています")
     void send_auth_client_debug("logout_clicked", {
       source: "account_modal",
-    })
-    toast({
-      tone: "info",
-      placement: "center",
-      compact: true,
-      duration_ms: 2750,
-      message: "ログアウト中...\nセッションを終了しています",
     })
     void send_auth_client_debug("logout_toast_loading_shown", {
       source: "account_modal",
@@ -598,13 +593,7 @@ function AccountPanel({
 
     try {
       await request_logout()
-      toast({
-        tone: "success",
-        placement: "center",
-        compact: true,
-        duration_ms: 2750,
-        message: "ログアウトしました",
-      })
+      set_logout_status_message("ログアウトしました")
       void send_auth_client_debug("logout_toast_success_shown", {
         source: "account_modal",
       })
@@ -612,26 +601,23 @@ function AccountPanel({
         source: "account_modal",
         route_path: "/app",
       })
-      window.location.replace("/app")
+      window.setTimeout(() => {
+        window.location.replace("/app")
+      }, 650)
     } catch (error) {
       console.error("logout failed", error)
       void send_auth_client_debug("logout_request_failed", {
         source: "account_modal",
         error_message: error instanceof Error ? error.message : String(error),
       })
-      toast({
-        tone: "error",
-        placement: "center",
-        compact: true,
-        duration_ms: 2750,
-        message: "ログアウトに失敗しました",
-      })
+      set_logout_status_message("ログアウトに失敗しました")
       set_is_logging_out(false)
     }
   }
 
   return (
     <div className="grid gap-3">
+      <CenterStatusToast message={logout_status_message} />
       <div className="flex items-center gap-3 rounded-[18px] border border-[#e5e5e5] bg-white px-4 py-4">
         <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#fdfaf6] text-[#8f5d28] ring-1 ring-[#dcc7aa]">
           <AccountAvatar rule={rule} />
@@ -1664,28 +1650,11 @@ export default function OverlayModal({
 
   if (rule.type === "link" && bridge_toast_message) {
     return (
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="overlay-title"
-        className={[
-          "fixed left-1/2 top-1/2 w-[min(86vw,340px)] -translate-x-1/2 -translate-y-1/2",
-          "will-change-transform",
-          getOverlayModalAnimationClass(rule.animation, phase),
-        ].join(" ")}
-      >
+      <section role="dialog" aria-modal="true" aria-labelledby="overlay-title">
         <h2 id="overlay-title" className="sr-only">
           {display_title}
         </h2>
-        <ToastView
-          item={{
-            id: "pwa-line-auth-status",
-            message: bridge_toast_message,
-            tone: "info",
-            placement: "center",
-            compact: true,
-          }}
-        />
+        <CenterStatusToast message={bridge_toast_message} />
       </section>
     )
   }
