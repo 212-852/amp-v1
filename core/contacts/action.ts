@@ -122,6 +122,16 @@ async function findContactByEndpoint(
   return rows[0] ?? null
 }
 
+export async function loadPushContactByEndpoint(endpoint: string) {
+  const config = getRestConfig()
+
+  if (!config || !endpoint.trim()) {
+    return null
+  }
+
+  return findContactByEndpoint(config, endpoint)
+}
+
 async function findContactByTypeValue(
   config: NonNullable<ReturnType<typeof getRestConfig>>,
   input: { type: ContactRecord["type"]; value: string },
@@ -228,11 +238,13 @@ export async function upsertPushContact(
   const channel = input.channel ?? "pwa"
   const state = input.state ?? "active"
   const receive = input.receive !== false
+  const user_uuid = input.user_uuid
+  const visitor_uuid = user_uuid ? null : input.visitor_uuid
 
   if (!config) {
     return {
-      user_uuid: input.user_uuid,
-      visitor_uuid: input.visitor_uuid,
+      user_uuid,
+      visitor_uuid,
       type: "push",
       value: input.value ?? input.endpoint,
       channel,
@@ -243,8 +255,8 @@ export async function upsertPushContact(
   }
 
   const body: PushContactUpsertBody = {
-    user_uuid: input.user_uuid,
-    visitor_uuid: input.visitor_uuid,
+    user_uuid,
+    visitor_uuid,
     type: "push",
     value: input.value ?? input.endpoint,
     channel,
@@ -258,42 +270,13 @@ export async function upsertPushContact(
     user_agent: input.user_agent,
   }
 
-  const response = await fetch(
-    restUrl(config, "contacts", `on_conflict=endpoint&select=${CONTACT_SELECT}`),
-    {
-      method: "POST",
-      headers: {
-        ...restHeaders(config),
-        Prefer: "resolution=merge-duplicates,return=representation",
-      },
-      body: JSON.stringify(body),
-      cache: "no-store",
-    },
-  )
+  const existing = await findContactByEndpoint(config, input.endpoint)
 
-  if (!response.ok) {
-    const error = await readRestError(response)
-
-    if (error.code === "42P10" || error.message?.includes("ON CONFLICT")) {
-      const existing = await findContactByEndpoint(config, input.endpoint)
-
-      if (existing?.contact_uuid) {
-        return patchContactRecord(config, existing.contact_uuid, body)
-      }
-
-      return insertContactWithoutConflict(config, body)
-    }
-
-    throw new Error(
-      `Failed to upsert push contact: ${error.code ?? "unknown"} ${
-        error.message ?? "No PostgREST error returned"
-      }`,
-    )
+  if (existing?.contact_uuid) {
+    return patchContactRecord(config, existing.contact_uuid, body)
   }
 
-  const rows = (await response.json()) as ContactRecord[]
-
-  return rows[0] ?? null
+  return insertContactWithoutConflict(config, body)
 }
 
 export async function upsertContact(context: ContactContext): Promise<ContactRecord | null> {

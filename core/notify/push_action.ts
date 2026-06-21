@@ -1,5 +1,8 @@
 import type { Session } from "@/core/auth/types"
-import { upsertPushContact } from "@/core/contacts/action"
+import {
+  loadPushContactByEndpoint,
+  upsertPushContact,
+} from "@/core/contacts/action"
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
 import { sendNotifyDebug } from "@/core/notify/debug"
 import {
@@ -128,6 +131,17 @@ export async function savePushSubscription(input: {
       updated_at: now,
     })
 
+    const saved_contact = await loadPushContactByEndpoint(subscription.endpoint)
+
+    if (
+      saved_contact?.type !== "push" ||
+      saved_contact.receive !== true ||
+      saved_contact.channel !== "pwa" ||
+      saved_contact.value !== subscription_value
+    ) {
+      throw new Error("push_contact_receive_not_enabled")
+    }
+
     await disableLineSubscriptions({ session: input.session })
 
     if (input.session.user_uuid) {
@@ -140,11 +154,11 @@ export async function savePushSubscription(input: {
     await sendNotifyDebug("push_subscription_save_success", {
       user_uuid: input.session.user_uuid,
       visitor_uuid: input.session.visitor_uuid,
-      contact_uuid: contact?.contact_uuid ?? null,
+      contact_uuid: saved_contact.contact_uuid ?? contact?.contact_uuid ?? null,
       selected_channel: "push",
-      receive: contact?.receive ?? true,
-      state: contact?.state ?? "active",
-      channel: contact?.channel ?? "pwa",
+      receive: saved_contact.receive,
+      state: saved_contact.state,
+      channel: saved_contact.channel,
       has_value: true,
     })
 
