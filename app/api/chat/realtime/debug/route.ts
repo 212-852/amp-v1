@@ -14,6 +14,7 @@ const realtime_events = new Set([
   "chat_realtime_render_done",
   "chat_optimistic_append_done",
   "chat_realtime_channel_error",
+  "user_chat_realtime_unsubscribe",
   "user_chat_realtime_subscribe_creating",
   "user_chat_realtime_subscribed",
   "user_chat_room_resolve_start",

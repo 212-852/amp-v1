@@ -158,6 +158,29 @@ export default function ChatRoomPanel({
     useState(viewer_display_name)
 
   useEffect(() => {
+    function handle_auth_session_switch() {
+      set_messages([])
+      set_presence([])
+      set_show_latest_button(false)
+      set_has_older_messages(false)
+      set_is_loading_older(false)
+      is_loading_older_ref.current = false
+      oldest_loaded_message_ref.current = null
+      pending_prepend_scroll_ref.current = null
+      pending_scroll_ref.current = null
+    }
+
+    window.addEventListener("amp-auth-session-switch", handle_auth_session_switch)
+
+    return () => {
+      window.removeEventListener(
+        "amp-auth-session-switch",
+        handle_auth_session_switch,
+      )
+    }
+  }, [])
+
+  useEffect(() => {
     function handle_profile_updated(event: Event) {
       const profile = (event as CustomEvent<ProfileDisplayPayload>).detail
       set_current_viewer_display_name(

@@ -1,6 +1,8 @@
 import {
   PWA_LOGIN_PENDING_KEY,
 } from "@/components/pwa/login_pending"
+import { send_chat_realtime_debug } from "@/components/chat/realtime_debug"
+import { create_browser_supabase_client } from "@/src/lib/supabase/client"
 
 export const PWA_LOGIN_COMPLETE_EVENT = "amp-pwa-login-complete"
 
@@ -96,6 +98,49 @@ export function resolvePwaLoginDestination(route_path: string | null) {
   return route_path
 }
 
+function cleanupChatRealtimeBeforeLoginComplete(input: {
+  user_uuid: string
+  route_path: string
+  source: string
+  bridge_uuid?: string | null
+}) {
+  let channel_count: number | null = null
+  let error_message: string | null = null
+
+  try {
+    const supabase = create_browser_supabase_client()
+    channel_count = supabase.getChannels().length
+    void supabase.removeAllChannels()
+  } catch (error) {
+    error_message = error instanceof Error ? error.message : String(error)
+  }
+
+  window.dispatchEvent(
+    new CustomEvent("amp-auth-session-switch", {
+      detail: {
+        reason: "pwa_login_polling_user_found",
+        user_uuid: input.user_uuid,
+        route_path: input.route_path,
+        source: input.source,
+        bridge_uuid: input.bridge_uuid ?? null,
+      },
+    }),
+  )
+
+  send_chat_realtime_debug("user_chat_realtime_unsubscribe", {
+    view: "user",
+    reason: "pwa_login_polling_user_found",
+    current_user_uuid: input.user_uuid,
+    room_uuid: null,
+    visitor_uuid: null,
+    route_path: input.route_path,
+    source: input.source,
+    bridge_uuid: input.bridge_uuid ?? null,
+    channel_count,
+    error_message,
+  })
+}
+
 export function completePwaLogin(input: {
   user_uuid: string
   route_path: string | null
@@ -107,6 +152,13 @@ export function completePwaLogin(input: {
   clearPwaLoginPending()
 
   const destination = resolvePwaLoginDestination(input.route_path)
+
+  cleanupChatRealtimeBeforeLoginComplete({
+    user_uuid: input.user_uuid,
+    route_path: destination,
+    source: input.source,
+    bridge_uuid: input.bridge_uuid ?? null,
+  })
 
   input.on_debug?.("pwa_login_polling_user_found", {
     bridge_uuid: input.bridge_uuid ?? null,

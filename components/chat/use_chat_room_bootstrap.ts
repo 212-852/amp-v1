@@ -26,6 +26,13 @@ let bootstrap_session_room_uuid: string | null = null
 let bootstrap_session_in_flight = false
 const CHAT_BOOTSTRAP_TIMEOUT_MS = 3000
 
+function resetBootstrapSessionState() {
+  bootstrap_promise = null
+  bootstrap_promise_locale = null
+  bootstrap_session_room_uuid = null
+  bootstrap_session_in_flight = false
+}
+
 export type ChatRoomBootstrapViewState = {
   chat_state: ChatRoomState | null
   timed_out: boolean
@@ -167,6 +174,25 @@ export function useChatRoomBootstrap(
     },
     [clearBootstrapTimeout],
   )
+
+  useEffect(() => {
+    function handle_auth_session_switch() {
+      resetBootstrapSessionState()
+      resolved_room_uuid_ref.current = null
+      set_chat_state(null)
+      set_timed_out(false)
+      set_loading(false)
+    }
+
+    window.addEventListener("amp-auth-session-switch", handle_auth_session_switch)
+
+    return () => {
+      window.removeEventListener(
+        "amp-auth-session-switch",
+        handle_auth_session_switch,
+      )
+    }
+  }, [])
 
   useEffect(() => {
     if (initial_state?.room?.room_uuid) {

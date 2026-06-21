@@ -122,6 +122,7 @@ function useRoomMessages(
     const channel_name = `room_messages:${room_uuid}:${debug_context.view}`
     const broadcast_channel_name = roomChannelName(room_uuid)
     const current_room_uuid = room_uuid
+    let session_switching = false
 
     send_chat_realtime_debug("chat_realtime_subscribe_start", {
       receiver_view: debug_context.view,
@@ -314,6 +315,10 @@ function useRoomMessages(
           }
 
           if (status === "CHANNEL_ERROR") {
+            if (session_switching) {
+              return
+            }
+
             rejectPayload("channel_error", debug_ref.current, current_room_uuid, {
               channel_name,
               delivery_source: "postgres",
@@ -354,7 +359,19 @@ function useRoomMessages(
         }
       })
 
+    function handle_auth_session_switch() {
+      session_switching = true
+      void supabase.removeChannel(postgres_channel)
+      void supabase.removeChannel(broadcast_channel)
+    }
+
+    window.addEventListener("amp-auth-session-switch", handle_auth_session_switch)
+
     return () => {
+      window.removeEventListener(
+        "amp-auth-session-switch",
+        handle_auth_session_switch,
+      )
       void supabase.removeChannel(postgres_channel)
       void supabase.removeChannel(broadcast_channel)
     }
