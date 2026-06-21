@@ -13,7 +13,9 @@ import {
 } from "@/core/notify/rules"
 import {
   buildChatNotificationContent,
+  buildChatNotificationUrls,
   resolveChatNotifyDecision,
+  type ChatNotificationContactType,
   type ChatNotifyReceiverRole,
   type ChatNotifySenderRole,
 } from "@/core/notify/chat_rules"
@@ -44,54 +46,111 @@ async function logNotifyDebug(
   await sendNotifyDebug(event, payload, payload.request_id as string | null)
 }
 
-async function loadAdminContactDestination(input: {
+type NotifyContactRow = {
+  type?: string | null
+  value?: string | null
+  endpoint?: string | null
+  channel?: string | null
+  state?: string | null
+  receive?: boolean | null
+  last_seen_at?: string | null
+  updated_at?: string | null
+}
+
+type ResolvedNotifyContact = {
+  type: ChatNotificationContactType
+  value: string
+}
+
+function isReceiverActive(contact: NotifyContactRow, now = new Date()) {
+  if (
+    contact.channel !== "web" &&
+    contact.channel !== "pwa" &&
+    contact.channel !== "liff"
+  ) {
+    return false
+  }
+
+  if (contact.state !== "active" || !contact.last_seen_at) {
+    return false
+  }
+
+  const last_seen_time = Date.parse(contact.last_seen_at)
+
+  return (
+    Number.isFinite(last_seen_time) &&
+    now.getTime() - last_seen_time <= 60 * 1000
+  )
+}
+
+function resolveContactValue(contact: NotifyContactRow) {
+  if (contact.type === "push") {
+    const raw_value = contact.endpoint?.trim() || contact.value?.trim() || ""
+
+    if (!raw_value) {
+      return null
+    }
+
+    try {
+      const parsed = JSON.parse(raw_value) as { endpoint?: unknown }
+
+      if (typeof parsed.endpoint === "string" && parsed.endpoint.trim()) {
+        return parsed.endpoint.trim()
+      }
+    } catch {
+      // contacts.value can be either endpoint text or subscription JSON.
+    }
+
+    return raw_value
+  }
+
+  return contact.value?.trim() || null
+}
+
+function selectDeliveryContact(
+  contacts: NotifyContactRow[],
+): ResolvedNotifyContact | null {
+  const contact = contacts.find(
+    (row) =>
+      row.receive === true &&
+      (row.type === "line" || row.type === "push") &&
+      Boolean(resolveContactValue(row)),
+  )
+
+  if (!contact || (contact.type !== "line" && contact.type !== "push")) {
+    return null
+  }
+
+  const value = resolveContactValue(contact)
+
+  if (!value) {
+    return null
+  }
+
+  return {
+    type: contact.type,
+    value,
+  }
+}
+
+async function loadReceiverNotificationState(input: {
   user_uuid: string
-  notification_type: "line" | "pwa_push"
-}) {
+}): Promise<{
+  receiver_active: boolean
+  contact: ResolvedNotifyContact | null
+}> {
   const { getRestConfig, restHeaders, restUrl } = await import("@/core/db/rest")
   const config = getRestConfig()
 
   if (!config) {
-    return null
+    return { receiver_active: false, contact: null }
   }
 
-  if (input.notification_type === "pwa_push") {
-    const response = await fetch(
-      restUrl(
-        config,
-        "contacts",
-        [
-          `user_uuid=eq.${encodeURIComponent(input.user_uuid)}`,
-          "type=eq.push",
-          "receive=eq.true",
-          "select=value,endpoint",
-          "order=updated_at.desc",
-          "limit=1",
-        ].join("&"),
-      ),
-      {
-        headers: restHeaders(config),
-        cache: "no-store",
-      },
-    )
-
-    if (!response.ok) {
-      return null
-    }
-
-    const rows = (await response.json()) as Array<{
-      value?: string | null
-      endpoint?: string | null
-    }>
-    return rows[0]?.endpoint?.trim() || rows[0]?.value?.trim() || null
-  }
-
-  const contact_type = "line"
   const filter = [
     `user_uuid=eq.${encodeURIComponent(input.user_uuid)}`,
-    `type=eq.${encodeURIComponent(contact_type)}`,
-    "select=value",
-    "limit=1",
+    "type=in.(line,push)",
+    "select=type,value,endpoint,channel,state,receive,last_seen_at,updated_at",
+    "order=updated_at.desc",
   ].join("&")
 
   const response = await fetch(restUrl(config, "contacts", filter), {
@@ -100,13 +159,15 @@ async function loadAdminContactDestination(input: {
   })
 
   if (!response.ok) {
-    return null
+    return { receiver_active: false, contact: null }
   }
 
-  const rows = (await response.json()) as Array<{ value?: string | null }>
-  const value = rows[0]?.value?.trim()
+  const contacts = (await response.json()) as NotifyContactRow[]
 
-  return value || null
+  return {
+    receiver_active: contacts.some((contact) => isReceiverActive(contact)),
+    contact: selectDeliveryContact(contacts),
+  }
 }
 
 export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
@@ -129,29 +190,35 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
     user_name: input.user_name,
     room_uuid: input.room_uuid,
   })
-  const { loadNotificationTypeForUser } = await import("@/core/notify/preferences")
-
+  const notification_urls = buildChatNotificationUrls({
+    room_uuid: input.room_uuid,
+  })
   const sender_role = input.sender_role as ChatNotifySenderRole
   const receiver_role = (input.receiver_role ?? "concierge") as ChatNotifyReceiverRole
 
   let delivered_count = 0
 
   for (const recipient of recipients) {
-    const notification_type = await loadNotificationTypeForUser(
-      recipient.user_uuid,
-    )
+    const receiver_state = await loadReceiverNotificationState({
+      user_uuid: recipient.user_uuid,
+    })
     const decision = resolveChatNotifyDecision({
       availability: "on",
-      notification_type,
       sender_role,
       receiver_role,
+      receiver_active: receiver_state.receiver_active,
+      contact_type: receiver_state.contact?.type ?? null,
     })
 
     if (!decision.should_notify) {
       const debug_event =
         decision.skip_reason === "availability_off"
           ? "notification_skipped_availability_off"
-          : "notification_skipped_invalid_sender"
+          : decision.skip_reason === "receiver_active"
+            ? "notification_skipped_receiver_active"
+            : decision.skip_reason === "missing_contact"
+              ? "notification_skipped_missing_contact"
+              : "notification_skipped_invalid_sender"
 
       await sendNotifyDebug(debug_event, {
         room_uuid: input.room_uuid,
@@ -168,25 +235,11 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
       receiver_user_uuid: recipient.user_uuid,
     }
 
-    if (notification_type === "line") {
-      const line_user_id = await loadAdminContactDestination({
-        user_uuid: recipient.user_uuid,
-        notification_type: "line",
-      })
-
-      if (!line_user_id) {
-        await sendNotifyDebug("notification_failed", {
-          room_uuid: input.room_uuid,
-          receiver_user_uuid: recipient.user_uuid,
-          reason: "missing_line_contact",
-          request_id,
-        })
-        continue
-      }
-
+    if (receiver_state.contact?.type === "line") {
       const result = await deliverChatLineNotification({
         ...payload,
-        line_user_id,
+        room_url: notification_urls.line_liff_url,
+        line_user_id: receiver_state.contact.value,
       })
 
       if (result.delivered) {
@@ -196,24 +249,14 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
       continue
     }
 
-    const push_endpoint = await loadAdminContactDestination({
-      user_uuid: recipient.user_uuid,
-      notification_type: "pwa_push",
-    })
-
-    if (!push_endpoint) {
-      await sendNotifyDebug("notification_failed", {
-        room_uuid: input.room_uuid,
-        receiver_user_uuid: recipient.user_uuid,
-        reason: "missing_push_contact",
-        request_id,
-      })
+    if (!receiver_state.contact) {
       continue
     }
 
     const result = await deliverChatPushNotification({
       ...payload,
-      push_endpoint,
+      room_url: notification_urls.push_url,
+      push_endpoint: receiver_state.contact.value,
     })
 
     if (result.delivered) {

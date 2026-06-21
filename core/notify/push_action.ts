@@ -35,6 +35,8 @@ export async function savePushSubscription(input: {
     user_agent: subscription.user_agent,
   })
 
+  await disableLineSubscriptions({ session: input.session })
+
   await save_profile_settings({
     session: input.session,
     body: { notification_type: "pwa_push" },
@@ -43,6 +45,76 @@ export async function savePushSubscription(input: {
   return {
     notification_type: "pwa_push" as const,
     endpoint: subscription.endpoint,
+  }
+}
+
+export async function disableLineSubscriptions(input: { session: Session }) {
+  const config = getRestConfig()
+
+  if (!config) {
+    return
+  }
+
+  const identity_filter = input.session.user_uuid
+    ? `user_uuid=eq.${encodeURIComponent(input.session.user_uuid)}`
+    : input.session.visitor_uuid
+      ? `visitor_uuid=eq.${encodeURIComponent(input.session.visitor_uuid)}`
+      : null
+
+  if (!identity_filter) {
+    return
+  }
+
+  const response = await fetch(
+    restUrl(config, "contacts", `${identity_filter}&type=eq.line`),
+    {
+      method: "PATCH",
+      headers: restHeaders(config),
+      body: JSON.stringify({
+        receive: false,
+      }),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+    throw new Error(error.message ?? "Failed to disable line subscription")
+  }
+}
+
+export async function enableLineSubscriptions(input: { session: Session }) {
+  const config = getRestConfig()
+
+  if (!config) {
+    return
+  }
+
+  const identity_filter = input.session.user_uuid
+    ? `user_uuid=eq.${encodeURIComponent(input.session.user_uuid)}`
+    : input.session.visitor_uuid
+      ? `visitor_uuid=eq.${encodeURIComponent(input.session.visitor_uuid)}`
+      : null
+
+  if (!identity_filter) {
+    return
+  }
+
+  const response = await fetch(
+    restUrl(config, "contacts", `${identity_filter}&type=eq.line`),
+    {
+      method: "PATCH",
+      headers: restHeaders(config),
+      body: JSON.stringify({
+        receive: true,
+      }),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    const error = await readRestError(response)
+    throw new Error(error.message ?? "Failed to enable line subscription")
   }
 }
 

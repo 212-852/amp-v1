@@ -6,6 +6,7 @@ import {
 } from "@/core/profile/action"
 import {
   disablePushSubscriptions,
+  enableLineSubscriptions,
   savePushSubscription,
 } from "@/core/notify/push_action"
 
@@ -80,18 +81,11 @@ export async function saveNotificationSettings(input: {
 
   if (notification_type === "line") {
     await disablePushSubscriptions({ session: input.session })
+    await enableLineSubscriptions({ session: input.session })
   }
 
   return {
     notification_type:
       profile.notification_type === "pwa_push" ? "pwa_push" : "line",
   }
-}
-
-export async function loadNotificationTypeForUser(user_uuid: string | null) {
-  if (!user_uuid) {
-    return "line" as const
-  }
-
-  return load_profile_notification_type(user_uuid)
 }
