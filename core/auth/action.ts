@@ -10,6 +10,8 @@ import {
 } from "@/core/auth/identity"
 import { linkCurrentVisitorToIdentity, linkVisitorToIdentity } from "@/core/auth/link"
 import {
+  AUTH_LOGGED_OUT_COOKIE_NAME,
+  authLoggedOutCookieOptions,
   resolveSession,
   VISITOR_COOKIE_NAME,
   visitorCookieOptions,
@@ -169,6 +171,17 @@ function clearLineOAuthStateCookie(response: NextResponse) {
   })
 }
 
+function setAuthLoggedOutCookie(response: NextResponse) {
+  response.cookies.set(AUTH_LOGGED_OUT_COOKIE_NAME, "true", authLoggedOutCookieOptions)
+}
+
+function clearAuthLoggedOutCookie(response: NextResponse) {
+  response.cookies.set(AUTH_LOGGED_OUT_COOKIE_NAME, "", {
+    ...authLoggedOutCookieOptions,
+    maxAge: 0,
+  })
+}
+
 function clearRuntimeAuthCookies(request: NextRequest, response: NextResponse) {
   for (const cookie of request.cookies.getAll()) {
     if (cookie.name === VISITOR_COOKIE_NAME) {
@@ -267,7 +280,24 @@ export async function logoutCurrentVisitor(request: NextRequest) {
 
   if (session.visitor_uuid) {
     await unlinkVisitorUser(session.visitor_uuid)
+    await sendAuthDebug("logout_session_user_cleared", {
+      visitor_uuid: session.visitor_uuid,
+      old_user_uuid: session.user_uuid,
+      source_channel: context.source_channel,
+    })
   }
+
+  setAuthLoggedOutCookie(response)
+  await sendAuthDebug("logout_auto_restore_block_enabled", {
+    visitor_uuid: session.visitor_uuid,
+    old_user_uuid: session.user_uuid,
+    source_channel: context.source_channel,
+    cookie_name: AUTH_LOGGED_OUT_COOKIE_NAME,
+    path: authLoggedOutCookieOptions.path,
+    max_age: authLoggedOutCookieOptions.maxAge,
+    secure: authLoggedOutCookieOptions.secure,
+    same_site: authLoggedOutCookieOptions.sameSite,
+  })
 
   await sendAuthDebug("logout_success", {
     visitor_uuid: session.visitor_uuid,
@@ -1516,6 +1546,16 @@ export async function startLineLogin(request: NextRequest) {
     })
 
     const response = NextResponse.redirect(url, 303)
+    clearAuthLoggedOutCookie(response)
+    await sendAuthDebug("login_cleared_logout_block", {
+      provider: "line",
+      bridge_uuid: bridge?.otp_uuid ?? null,
+      visitor_uuid: session.visitor_uuid,
+      user_uuid: session.user_uuid,
+      source_channel: bridge ? "pwa" : context.source_channel,
+      cookie_name: AUTH_LOGGED_OUT_COOKIE_NAME,
+    })
+
     setLineOAuthStateCookie(response, {
       state,
       visitor_uuid: session.visitor_uuid,
@@ -1840,6 +1880,7 @@ export async function completeLineLogin(request: NextRequest) {
         pathname: "/api/auth/line/callback",
       })
       clearLineOAuthStateCookie(response)
+      clearAuthLoggedOutCookie(response)
 
       return response
     }
@@ -1942,6 +1983,7 @@ export async function completeLineLogin(request: NextRequest) {
       pathname: "/api/auth/line/callback",
     })
     clearLineOAuthStateCookie(response)
+    clearAuthLoggedOutCookie(response)
 
     return response
   } catch (callbackError) {

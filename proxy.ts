@@ -9,6 +9,7 @@ import {
 import { sendAuthDebug } from "@/core/debug"
 import { SOURCE_CHANNEL_COOKIE_NAME } from "@/core/auth/session"
 import {
+  AUTH_LOGGED_OUT_COOKIE_NAME,
   resolve_session_context,
   VISITOR_COOKIE_NAME,
   type CookieOptions,
@@ -104,6 +105,8 @@ async function runProxy(request: NextRequest) {
   const context = resolveAuthContext(request)
   const requestVisitorUuid =
     request.cookies.get(VISITOR_COOKIE_NAME)?.value ?? null
+  const authLoggedOut =
+    request.cookies.get(AUTH_LOGGED_OUT_COOKIE_NAME)?.value === "true"
   const requestCacheKey = crypto.randomUUID()
   const requestId = crypto.randomUUID()
   const userAgentContainsLine = (
@@ -117,6 +120,7 @@ async function runProxy(request: NextRequest) {
     pathname: request.nextUrl.pathname,
     search: request.nextUrl.search,
     user_agent_contains_line: userAgentContainsLine,
+    auth_logged_out: authLoggedOut,
     set_cookie(name, value, options) {
       pendingCookie = { name, value, options }
     },

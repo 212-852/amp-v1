@@ -4,6 +4,7 @@ import { resolveAuthContext } from "@/core/auth/context"
 import { resolveIdentity } from "@/core/auth/identity"
 import { resolveAuthRoute, type AmpRouteResult } from "@/core/auth/route"
 import {
+  AUTH_LOGGED_OUT_COOKIE_NAME,
   resolve_session_context,
   SOURCE_CHANNEL_COOKIE_MAX_AGE,
   SOURCE_CHANNEL_COOKIE_NAME,
@@ -105,6 +106,8 @@ export async function restoreAuthSession(input?: {
   const channel = resolveChannelFromRequest(request)
   const pendingCookies: PendingSessionCookie[] = []
   const visitorCookieValue = request?.cookies.get(VISITOR_COOKIE_NAME)?.value ?? null
+  const authLoggedOut =
+    request?.cookies.get(AUTH_LOGGED_OUT_COOKIE_NAME)?.value === "true"
 
   let context = withChannelContext(
     await resolveAuthContext(requested_route),
@@ -122,6 +125,7 @@ export async function restoreAuthSession(input?: {
     const session = await resolve_session_context(context, undefined, {
       cookie_value: visitorCookieValue,
       cookie_was_found: Boolean(visitorCookieValue),
+      auth_logged_out: authLoggedOut,
       pathname: requested_route,
       request_cache_key: request ? crypto.randomUUID() : undefined,
       set_cookie(name, value, options) {

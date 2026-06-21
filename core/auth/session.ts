@@ -14,6 +14,7 @@ import { resolve_profile_display_name } from "@/core/profile/rules"
 
 const VISITOR_COOKIE_NAME = "amp_visitor_uuid"
 const VISITOR_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
+export const AUTH_LOGGED_OUT_COOKIE_NAME = "amp_auth_logged_out"
 export const SOURCE_CHANNEL_COOKIE_NAME = "amp_source_channel"
 export const SOURCE_CHANNEL_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
 
@@ -62,6 +63,7 @@ type SessionRuntime = {
   request_cache_key?: string | null
   search?: string | null
   user_agent_contains_line?: boolean
+  auth_logged_out?: boolean
   cookie_set_done?: boolean
   set_cookie?: (
     name: string,
@@ -159,6 +161,10 @@ const visitorCookieOptions: CookieOptions = {
   path: "/",
   sameSite: "lax",
   secure: process.env.NODE_ENV === "production",
+}
+
+const authLoggedOutCookieOptions: CookieOptions = {
+  ...visitorCookieOptions,
 }
 
 async function resolveRequestId(runtime?: SessionRuntime): Promise<string> {
@@ -609,6 +615,21 @@ async function getRequestVisitorCookie(runtime?: SessionRuntime) {
     )
   } catch {
     return null
+  }
+}
+
+async function getRequestAuthLoggedOut(runtime?: SessionRuntime) {
+  if (runtime && "auth_logged_out" in runtime) {
+    return runtime.auth_logged_out === true
+  }
+
+  try {
+    const { cookies } = await import("next/headers")
+    const cookieStore = await cookies()
+
+    return cookieStore.get(AUTH_LOGGED_OUT_COOKIE_NAME)?.value === "true"
+  } catch {
+    return false
   }
 }
 
@@ -1185,8 +1206,68 @@ async function resolve_session_context_core(
       request_id,
     )
     const visitor = visitorResolution.visitor
-    const auth_user_uuid = await visitorStore.resolveUserUuidFromAuth(context)
     const visitor_uuid = visitorResolution.visitor_uuid
+    const auth_logged_out = await getRequestAuthLoggedOut(runtime)
+
+    if (auth_logged_out) {
+      await send_auth_debug(
+        "session_restore_blocked_by_logout",
+        {
+          pathname,
+          visitor_uuid,
+          visitor_user_uuid: visitor?.user_uuid ?? null,
+          source_channel: context.source_channel,
+        },
+        request_id,
+      )
+      await send_auth_debug(
+        "session_user_restore_skipped_after_logout",
+        {
+          pathname,
+          visitor_uuid,
+          skipped_sources: ["identity", "visitor", "consumed_otp"],
+          source_channel: context.source_channel,
+        },
+        request_id,
+      )
+
+      const session = await withLogoutVisibility({
+        visitor_uuid,
+        user_uuid: null,
+        source_channel: context.source_channel,
+      }, request_id)
+
+      await send_auth_debug(
+        "session_built",
+        {
+          pathname,
+          visitor_uuid: session.visitor_uuid,
+          user_uuid: session.user_uuid,
+          source_channel: session.source_channel,
+          auth_logged_out: true,
+        },
+        request_id,
+      )
+
+      await send_auth_debug(
+        "request_summary",
+        {
+          ...buildRequestSummary(session, visitorResolution, runtime, context),
+          auth_logged_out: true,
+        },
+        request_id,
+      )
+
+      return {
+        session,
+        visitor_action: visitorResolution.action,
+        created_new_visitor: visitorResolution.created_new_visitor,
+        cookie_found: visitorResolution.cookie_found,
+        cookie_value: visitorResolution.cookie_value,
+      }
+    }
+
+    const auth_user_uuid = await visitorStore.resolveUserUuidFromAuth(context)
 
     await send_auth_debug(
       "session_user_resolve_started",
@@ -1783,7 +1864,11 @@ async function getResolvedSessionFromRequestHeaders(): Promise<AppSession | null
   }
 }
 
-export { VISITOR_COOKIE_NAME, visitorCookieOptions }
+export {
+  VISITOR_COOKIE_NAME,
+  authLoggedOutCookieOptions,
+  visitorCookieOptions,
+}
 export type { AppSession, CookieOptions, SessionRuntime, VisitorStore }
 export type { Session } from "@/core/auth/types"
 
