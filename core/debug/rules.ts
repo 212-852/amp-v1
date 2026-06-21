@@ -271,6 +271,7 @@ const authSessionEvents = new Set([
 const notifyEvents = new Set([
   "notify_flow_started",
   "notify_flow_skipped",
+  "notify_contact_candidates",
   "notify_contacts_resolved",
   "notify_contact_selected",
   "notify_delivery_skipped",
@@ -280,6 +281,7 @@ const notifyEvents = new Set([
   "notify_line_send_started",
   "notify_line_send_success",
   "notify_line_send_failed",
+  "notify_line_fallback_used",
   "push_public_key_resolved",
   "push_subscription_save_started",
   "push_subscription_save_success",

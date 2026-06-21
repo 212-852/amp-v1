@@ -211,7 +211,7 @@ function resolveContactValue(contact: ContactRow) {
 
 function resolvePushSubscription(contact: ContactRow): ChatNotifyPushSubscription | null {
   const raw_value = contact.value?.trim() || ""
-  let endpoint = contact.endpoint?.trim() || ""
+  const endpoint = contact.endpoint?.trim() || ""
   let p256dh = contact.p256dh?.trim() || null
   let auth = contact.auth?.trim() || null
 
@@ -225,9 +225,6 @@ function resolvePushSubscription(contact: ContactRow): ChatNotifyPushSubscriptio
         }
       }
 
-      if (typeof parsed.endpoint === "string") {
-        endpoint = parsed.endpoint.trim()
-      }
       if (typeof parsed.keys?.p256dh === "string") {
         p256dh = parsed.keys.p256dh.trim() || p256dh
       }
@@ -239,9 +236,7 @@ function resolvePushSubscription(contact: ContactRow): ChatNotifyPushSubscriptio
     }
   }
 
-  endpoint = endpoint || raw_value
-
-  if (!endpoint) {
+  if (!endpoint || !p256dh || !auth) {
     return null
   }
 
@@ -285,7 +280,7 @@ function toSelectedContact(contact: ContactRow): ChatNotifySelectedContact | nul
 }
 
 function toFallbackLineContact(contact: ContactRow): ChatNotifySelectedContact | null {
-  if (contact.type !== "line" || contact.receive === true) {
+  if (contact.type !== "line" || contact.receive !== true) {
     return null
   }
 
@@ -485,7 +480,6 @@ async function loadReceiverContacts(user_uuid: string) {
       [
         `user_uuid=eq.${encodeURIComponent(user_uuid)}`,
         "type=in.(line,push)",
-        "value=not.is.null",
         "select=contact_uuid,type,value,endpoint,p256dh,auth,channel,state,receive,last_seen_at,updated_at",
         "order=updated_at.desc",
       ].join("&"),
@@ -520,19 +514,28 @@ export async function resolveChatNotifyRoutes(input: {
 
   for (const receiver_user_uuid of receiver_user_uuids) {
     const contacts = await loadReceiverContacts(receiver_user_uuid)
-    await sendNotifyDebug("notify_contacts_resolved", {
+    const contact_candidates = contacts.map((contact) => ({
+      contact_uuid: contact.contact_uuid ?? null,
+      contact_type: contact.type ?? null,
+      receive: contact.receive ?? null,
+      state: contact.state ?? null,
+      channel: contact.channel ?? null,
+      has_value: Boolean(contact.value?.trim()),
+      has_endpoint: Boolean(contact.endpoint?.trim()),
+      has_p256dh: Boolean(contact.p256dh?.trim()),
+      has_auth: Boolean(contact.auth?.trim()),
+      valid_push:
+        contact.type === "push" &&
+        contact.receive === true &&
+        Boolean(resolvePushSubscription(contact)),
+    }))
+
+    await sendNotifyDebug("notify_contact_candidates", {
       room_uuid: input.room_uuid,
       sender_uuid: input.sender_uuid ?? null,
       receiver_uuid: receiver_user_uuid,
       contact_count: contacts.length,
-      contacts: contacts.map((contact) => ({
-        contact_uuid: contact.contact_uuid ?? null,
-        contact_type: contact.type ?? null,
-        receive: contact.receive ?? null,
-        state: contact.state ?? null,
-        channel: contact.channel ?? null,
-        has_value: Boolean(contact.value?.trim()),
-      })),
+      contacts: contact_candidates,
       request_id: input.request_id ?? null,
     })
 

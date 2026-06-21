@@ -58,6 +58,13 @@ export function send_chat_realtime_debug(
   event: ChatRealtimeDebugEvent,
   payload: ChatRealtimeDebugPayload,
 ) {
+  if (
+    event !== "chat_send_success" &&
+    process.env.NEXT_PUBLIC_CHAT_REALTIME_DEBUG !== "true"
+  ) {
+    return
+  }
+
   void fetch("/api/chat/realtime/debug", {
     method: "POST",
     headers: {

@@ -72,7 +72,7 @@ export function buildChatNotificationContent(input: {
 
   return {
     title: "コンシェルジュ対応が必要です",
-    body: `${input.user_name} から新しいメッセージが届きました`,
+    body: `${input.user_name} から新しいメッセージが届きました。`,
     room_uuid: input.room_uuid,
     room_url: liff_url,
   }

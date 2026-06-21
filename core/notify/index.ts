@@ -145,6 +145,16 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
     }
 
     if (selected_contact.contact_type === "line") {
+      await sendNotifyDebug("notify_line_fallback_used", {
+        room_uuid: input.room_uuid,
+        sender_uuid: input.sender_uuid ?? null,
+        receiver_uuid: route.receiver_user_uuid,
+        contact_uuid: selected_contact.contact_uuid,
+        selected_channel: "line",
+        reason: "no_valid_push_contact",
+        request_id,
+      })
+
       const result = await deliverChatLineNotification({
         ...payload,
         line_user_id: selected_contact.contact_value,
@@ -168,25 +178,6 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
 
       if (result.delivered) {
         delivered_count += 1
-        continue
-      }
-
-      const fallback = route.fallback_line_contact
-
-      if (fallback) {
-        const fallback_result = await deliverChatLineNotification({
-          ...payload,
-          contact_uuid: fallback.contact_uuid,
-          selected_channel: "line",
-          contact_receive: fallback.receive,
-          contact_state: fallback.state,
-          contact_channel: fallback.channel,
-          line_user_id: fallback.contact_value,
-        })
-
-        if (fallback_result.delivered) {
-          delivered_count += 1
-        }
       }
     }
   }
