@@ -1345,11 +1345,22 @@ export async function startLoginBridge(request: NextRequest) {
       authorize_url: authorizeUrl.toString(),
     })
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       ok: true,
       bridge_uuid: bridge.bridge_uuid,
       authorize_url: authorizeUrl.toString(),
     })
+    clearAuthLoggedOutCookie(response)
+    await sendAuthDebug("login_cleared_logout_block", {
+      provider: "line",
+      bridge_uuid: bridge.bridge_uuid,
+      visitor_uuid: bridge.visitor_uuid,
+      user_uuid: bridge.user_uuid,
+      source_channel: bridge.source_channel,
+      cookie_name: AUTH_LOGGED_OUT_COOKIE_NAME,
+    })
+
+    return response
   } catch (error) {
     await sendIdentityDebug("bridge_start_api_failed", {
       provider: "line",
@@ -1455,6 +1466,11 @@ export async function sendLoginBridgeDebug(request: NextRequest) {
     event !== "pwa_line_popup_blocked" &&
     event !== "pwa_line_popup_opened" &&
     event !== "pwa_line_popup_redirected" &&
+    event !== "pwa_login_polling_authenticated" &&
+    event !== "pwa_login_polling_started" &&
+    event !== "pwa_login_polling_tick" &&
+    event !== "pwa_login_polling_timeout" &&
+    event !== "pwa_login_reload_triggered" &&
     event !== "pwa_popup_connecting_page_failed" &&
     event !== "pwa_popup_connecting_page_written" &&
     event !== "pwa_login_success_ui_shown" &&

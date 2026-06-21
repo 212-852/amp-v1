@@ -986,7 +986,6 @@ export default function OverlayModal({
   phase: OverlayPhase
   onClose: () => void
 }>) {
-  const router = useRouter()
   const { locale, set_locale } = useLocale()
   const [loading_action, set_loading_action] = useState<OverlayItem["action"] | null>(null)
   const [link_step, set_link_step] = useState<"options" | "email">("options")
@@ -996,6 +995,7 @@ export default function OverlayModal({
   const [bridge_uuid, set_bridge_uuid] = useState<string | null>(null)
   const [bridge_authorize_url, set_bridge_authorize_url] = useState<string | null>(null)
   const bridge_poll_ref = useRef<number | null>(null)
+  const bridge_poll_timeout_ref = useRef<number | null>(null)
   const bridge_popup_ref = useRef<Window | null>(null)
   const modal_title = get_modal_title(rule, locale)
   let display_title = modal_title
@@ -1015,6 +1015,11 @@ export default function OverlayModal({
     if (bridge_poll_ref.current) {
       window.clearInterval(bridge_poll_ref.current)
       bridge_poll_ref.current = null
+    }
+
+    if (bridge_poll_timeout_ref.current) {
+      window.clearTimeout(bridge_poll_timeout_ref.current)
+      bridge_poll_timeout_ref.current = null
     }
   }, [])
 
@@ -1143,46 +1148,59 @@ export default function OverlayModal({
     stop_bridge_polling()
     set_bridge_status("polling")
     send_bridge_debug("bridge_polling_started", { bridge_uuid })
+    send_bridge_debug("pwa_login_polling_started", {
+      bridge_uuid,
+      interval_ms: 2000,
+      timeout_ms: 120000,
+    })
 
-    bridge_poll_ref.current = window.setInterval(() => {
-      fetch(`/api/auth/bridge/status?bridge_uuid=${encodeURIComponent(bridge_uuid)}`, {
+    const poll_auth_status = () => {
+      send_bridge_debug("pwa_login_polling_tick", { bridge_uuid })
+      fetch("/api/auth/status", {
         cache: "no-store",
       })
         .then((response) => response.json())
-        .then((result: { status?: string; ok?: boolean; success?: boolean }) => {
-          if (result.status === "success" && result.ok !== false) {
+        .then(
+          (result: {
+            authenticated?: boolean
+            user_uuid?: string | null
+            role?: string | null
+          }) => {
+          if (result.authenticated === true && result.user_uuid) {
             stop_bridge_polling()
             localStorage.removeItem("amp_line_bridge_uuid")
             set_bridge_status("success")
             set_loading_action(null)
             send_bridge_debug("pwa_login_success_ui_shown", { bridge_uuid })
+            send_bridge_debug("pwa_login_polling_authenticated", {
+              bridge_uuid,
+              user_uuid: result.user_uuid,
+              role: result.role ?? null,
+            })
             close_bridge_popup(bridge_uuid)
-            try {
-              router.refresh()
-              send_bridge_debug("pwa_session_refresh_success", { bridge_uuid })
-              window.setTimeout(() => {
-                onClose()
-              }, 900)
-            } catch (error) {
-              send_bridge_debug("pwa_session_refresh_failed", {
-                bridge_uuid,
-                error_message: error instanceof Error ? error.message : String(error),
-              }).finally(() => {
-                send_bridge_debug("pwa_reload_after_bridge", { bridge_uuid })
-                window.location.reload()
-              })
-            }
+            send_bridge_debug("pwa_login_reload_triggered", {
+              bridge_uuid,
+              user_uuid: result.user_uuid,
+            }).finally(() => {
+              window.location.reload()
+            })
             return
-          }
-
-          if (result.status === "failed" || result.status === "expired") {
-            stop_bridge_polling()
-            set_bridge_status("failed")
-            set_loading_action(null)
           }
         })
         .catch(() => null)
-    }, 2000)
+    }
+
+    poll_auth_status()
+    bridge_poll_ref.current = window.setInterval(poll_auth_status, 2000)
+    bridge_poll_timeout_ref.current = window.setTimeout(() => {
+      stop_bridge_polling()
+      set_bridge_status("failed")
+      set_loading_action(null)
+      send_bridge_debug("pwa_login_polling_timeout", {
+        bridge_uuid,
+        timeout_ms: 120000,
+      })
+    }, 120000)
   }
 
   async function start_pwa_line_bridge(popup: Window | null) {
