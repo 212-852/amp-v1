@@ -9,9 +9,12 @@ export type ContactInput = {
   type?: unknown
   value?: unknown
   channel?: unknown
+  source_channel?: unknown
   state?: unknown
   receive?: unknown
   heartbeat?: unknown
+  event_name?: unknown
+  visibility_state?: unknown
 }
 
 export type ContactContext = {
@@ -30,6 +33,8 @@ export type ContactAccessContext = {
   state: ContactState
   receive: boolean
   heartbeat: boolean
+  event_name: string | null
+  visibility_state: string | null
 }
 
 function normalizeString(value: unknown) {
@@ -63,6 +68,44 @@ function normalizeState(value: unknown): ContactState {
     : "active"
 }
 
+function normalizeLifecycleEventName(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null
+}
+
+function normalizeVisibilityState(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null
+}
+
+function resolveLifecycleState(input: ContactInput): ContactState {
+  const event_name = normalizeLifecycleEventName(input.event_name)
+  const visibility_state = normalizeVisibilityState(input.visibility_state)
+
+  if (input.heartbeat === true) {
+    return "active"
+  }
+
+  if (
+    event_name === "hidden" ||
+    event_name === "blur" ||
+    event_name === "pagehide" ||
+    event_name === "beforeunload" ||
+    visibility_state === "hidden"
+  ) {
+    return "hidden"
+  }
+
+  if (
+    event_name === "visible" ||
+    event_name === "focus" ||
+    event_name === "pageshow" ||
+    visibility_state === "visible"
+  ) {
+    return "active"
+  }
+
+  return normalizeState(input.state)
+}
+
 export function normalizeContactContext(input: ContactInput): ContactContext {
   const user_uuid = normalizeString(input.user_uuid)
   const visitor_uuid = normalizeString(input.visitor_uuid)
@@ -82,7 +125,7 @@ export function normalizeContactContext(input: ContactInput): ContactContext {
     visitor_uuid,
     type,
     value,
-    channel: normalizeChannel(input.channel, type),
+    channel: normalizeChannel(input.channel ?? input.source_channel, type),
     receive: input.receive === false ? false : true,
   }
 }
@@ -93,9 +136,11 @@ export function normalizeContactAccessContext(
   return {
     user_uuid: normalizeString(input.user_uuid),
     visitor_uuid: normalizeString(input.visitor_uuid),
-    channel: normalizeChannel(input.channel),
-    state: normalizeState(input.state),
+    channel: normalizeChannel(input.channel ?? input.source_channel),
+    state: resolveLifecycleState(input),
     receive: input.receive === false ? false : true,
     heartbeat: input.heartbeat === true,
+    event_name: normalizeLifecycleEventName(input.event_name),
+    visibility_state: normalizeVisibilityState(input.visibility_state),
   }
 }

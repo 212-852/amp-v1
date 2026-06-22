@@ -1,4 +1,5 @@
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
+import { sendAuthDebug } from "@/core/debug"
 import type { ContactAccessContext, ContactContext } from "@/core/contacts/context"
 import {
   assertContactAccessContext,
@@ -53,6 +54,11 @@ type ContactLinkRow = {
   visitor_uuid: string | null
   type: ContactRecord["type"]
   value: string
+}
+
+type ContactAccessRow = {
+  contact_uuid?: string | null
+  state?: ContactRecord["state"] | null
 }
 
 const CONTACT_SELECT =
@@ -363,18 +369,78 @@ function contactAccessFilter(context: ContactAccessContext) {
   return `visitor_uuid=eq.${encodeURIComponent(context.visitor_uuid ?? "")}`
 }
 
+async function loadContactAccessRows(
+  config: NonNullable<ReturnType<typeof getRestConfig>>,
+  context: ContactAccessContext,
+) {
+  const response = await fetch(
+    restUrl(
+      config,
+      "contacts",
+      `${contactAccessFilter(context)}&select=contact_uuid,state`,
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return []
+  }
+
+  return (await response.json()) as ContactAccessRow[]
+}
+
 export async function updateContactAccess(
   context: ContactAccessContext,
-): Promise<void> {
+): Promise<{
+  updated_contact_uuid: string | null
+  affected_rows: number
+  previous_state: string | null
+  next_state: ContactRecord["state"]
+}> {
   assertContactAccessContext(context)
 
   const config = getRestConfig()
 
   if (!config) {
-    return
+    return {
+      updated_contact_uuid: null,
+      affected_rows: 0,
+      previous_state: null,
+      next_state: context.state,
+    }
   }
 
   const now = new Date().toISOString()
+  const previous_rows = await loadContactAccessRows(config, context)
+  const previous_state = previous_rows[0]?.state ?? null
+
+  await sendAuthDebug("contact_presence_event_received", {
+    user_uuid: context.user_uuid,
+    visitor_uuid: context.visitor_uuid,
+    channel: context.channel,
+    previous_state,
+    next_state: context.state,
+    visibility_state: context.visibility_state,
+    event_name: context.event_name,
+    updated_contact_uuid: previous_rows[0]?.contact_uuid ?? null,
+    affected_rows: previous_rows.length,
+  })
+
+  await sendAuthDebug("contact_presence_state_decided", {
+    user_uuid: context.user_uuid,
+    visitor_uuid: context.visitor_uuid,
+    channel: context.channel,
+    previous_state,
+    next_state: context.state,
+    visibility_state: context.visibility_state,
+    event_name: context.event_name,
+    updated_contact_uuid: previous_rows[0]?.contact_uuid ?? null,
+    affected_rows: previous_rows.length,
+  })
+
   const body: ContactAccessBody = context.heartbeat
     ? {
         last_seen_at: now,
@@ -388,11 +454,26 @@ export async function updateContactAccess(
         updated_at: now,
       }
 
+  await sendAuthDebug("contact_presence_update_started", {
+    user_uuid: context.user_uuid,
+    visitor_uuid: context.visitor_uuid,
+    channel: context.channel,
+    previous_state,
+    next_state: context.state,
+    visibility_state: context.visibility_state,
+    event_name: context.event_name,
+    updated_contact_uuid: previous_rows[0]?.contact_uuid ?? null,
+    affected_rows: previous_rows.length,
+  })
+
   const response = await fetch(
     restUrl(config, "contacts", contactAccessFilter(context)),
     {
       method: "PATCH",
-      headers: restHeaders(config),
+      headers: {
+        ...restHeaders(config),
+        Prefer: "return=representation",
+      },
       body: JSON.stringify(body),
       cache: "no-store",
     },
@@ -400,12 +481,47 @@ export async function updateContactAccess(
 
   if (!response.ok) {
     const error = await readRestError(response)
+    await sendAuthDebug("contact_presence_update_failed", {
+      user_uuid: context.user_uuid,
+      visitor_uuid: context.visitor_uuid,
+      channel: context.channel,
+      previous_state,
+      next_state: context.state,
+      visibility_state: context.visibility_state,
+      event_name: context.event_name,
+      updated_contact_uuid: previous_rows[0]?.contact_uuid ?? null,
+      affected_rows: 0,
+      error_message: error.message ?? "No PostgREST error returned",
+      error_code: error.code ?? null,
+    })
     throw new Error(
       `Failed to update contact access: ${error.code ?? "unknown"} ${
         error.message ?? "No PostgREST error returned"
       }`,
     )
   }
+
+  const updated_rows = (await response.json()) as ContactAccessRow[]
+  const result = {
+    updated_contact_uuid: updated_rows[0]?.contact_uuid ?? null,
+    affected_rows: updated_rows.length,
+    previous_state,
+    next_state: context.state,
+  }
+
+  await sendAuthDebug("contact_presence_update_success", {
+    user_uuid: context.user_uuid,
+    visitor_uuid: context.visitor_uuid,
+    channel: context.channel,
+    previous_state,
+    next_state: context.state,
+    visibility_state: context.visibility_state,
+    event_name: context.event_name,
+    updated_contact_uuid: result.updated_contact_uuid,
+    affected_rows: result.affected_rows,
+  })
+
+  return result
 }
 
 export async function linkVisitorContactsToUser(

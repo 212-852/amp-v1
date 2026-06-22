@@ -228,6 +228,25 @@ function isContactAway(state: string | null | undefined) {
   )
 }
 
+function resolveEffectiveContactState(contact: ContactRow | null) {
+  const state = contact?.state ?? null
+
+  if (state !== "active" && state !== "online") {
+    return state
+  }
+
+  const last_seen_age_seconds = calculateLastSeenAgeSeconds(contact?.last_seen_at)
+
+  if (
+    last_seen_age_seconds === null ||
+    last_seen_age_seconds > ROOM_PRESENCE_STALE_THRESHOLD_SECONDS
+  ) {
+    return "offline"
+  }
+
+  return state
+}
+
 function isStaffRole(role: string | null | undefined) {
   return role === "admin" || role === "concierge" || role === "owner"
 }
@@ -387,7 +406,7 @@ function resolveReceiverNotifyDelivery(input: {
   }
 
   const contact = input.contact
-  const state = contact?.state ?? null
+  const state = resolveEffectiveContactState(contact)
   const is_admin_receiver = isAdminReceiverRole(input.receiver_role)
   const line_user_id = is_admin_receiver
     ? input.line_provider_user_id

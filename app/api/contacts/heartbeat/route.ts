@@ -8,7 +8,7 @@ export async function POST(request: Request) {
   const authContext = await resolveAuthContext()
   const session = await resolveSession(authContext)
 
-  await updateContactAccess(
+  const result = await updateContactAccess(
     normalizeContactAccessContext({
       ...body,
       heartbeat: true,
@@ -17,5 +17,5 @@ export async function POST(request: Request) {
     }),
   )
 
-  return Response.json({ ok: true })
+  return Response.json({ ok: true, ...result })
 }

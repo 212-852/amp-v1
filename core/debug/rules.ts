@@ -73,6 +73,14 @@ const chatFlowInfoEvents = new Set([
   "welcome_message_created",
 ])
 
+const contactPresenceEvents = new Set([
+  "contact_presence_event_received",
+  "contact_presence_state_decided",
+  "contact_presence_update_started",
+  "contact_presence_update_success",
+  "contact_presence_update_failed",
+])
+
 const chatRealtimeEvents = new Set([
   "chat_send_success",
   "chat_message_rendered",
@@ -337,6 +345,10 @@ export function shouldSendAuthSessionDebug(event: string) {
     return DEBUG_CHAT_FLOW
   }
 
+  if (contactPresenceEvents.has(event)) {
+    return true
+  }
+
   if (chatRealtimeEvents.has(event)) {
     return CHAT_REALTIME_DEBUG
   }
@@ -395,6 +407,10 @@ export function resolveDebugTitle(event: string) {
 
   if (chatFlowInfoEvents.has(event)) {
     return "CHAT_FLOW"
+  }
+
+  if (contactPresenceEvents.has(event)) {
+    return "CONTACT_PRESENCE"
   }
 
   if (identityEvents.has(event)) {
