@@ -45,7 +45,7 @@ export default function ConciergeMemberModal({
   return (
     <div
       className={[
-        "fixed inset-0 flex items-center justify-center px-5",
+        "fixed inset-0 flex items-center justify-center",
         ui_layer_class.overlay,
       ].join(" ")}
       onMouseDown={(event) => {
@@ -65,7 +65,7 @@ export default function ConciergeMemberModal({
         aria-modal="true"
         aria-labelledby="concierge-member-modal-title"
         className={[
-          "relative w-full max-w-[340px] rounded-[28px] border border-[#dcc7aa] bg-[#fdfaf6] px-5 py-5 text-[#3d2a19] shadow-[0_18px_48px_rgba(61,42,25,0.18)]",
+          "relative w-[calc(100%-32px)] max-w-[420px] rounded-[28px] border border-[#dcc7aa] bg-[#fdfaf6] px-5 py-5 text-[#3d2a19] shadow-[0_18px_48px_rgba(61,42,25,0.18)]",
           ui_layer_class.modal,
         ].join(" ")}
       >
