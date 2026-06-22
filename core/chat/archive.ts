@@ -1,6 +1,7 @@
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
 import { sendAuthDebug } from "@/core/debug"
 import { get_display_name } from "@/core/profile/display"
+import { load_profile_rows_for_users, type ProfileNameRow } from "@/core/profile/action"
 import type {
   AvailabilityRecord,
   ChatLocale,
@@ -1432,20 +1433,13 @@ type AccountDisplayRow = {
   image_url?: string | null
 }
 
-type ProfileDisplayRow = {
-  user_uuid: string
-  nickname: string | null
-  first_name: string | null
-  last_name: string | null
-}
-
 type LineIdentityRow = {
   user_uuid: string
 }
 
 function resolveArchiveDisplayName(input: {
   user_uuid: string
-  profile?: ProfileDisplayRow | null
+  profile?: ProfileNameRow | null
   account?: AccountDisplayRow | null
   line_linked?: boolean
 }) {
@@ -1457,6 +1451,8 @@ function resolveArchiveDisplayName(input: {
   return get_display_name(
     {
       nickname: input.profile?.nickname,
+      first_name: input.profile?.first_name,
+      last_name: input.profile?.last_name,
     },
     {
       line_name,
@@ -1497,7 +1493,7 @@ async function loadLineLinkedUserUuids(user_uuids: string[]) {
 export async function resolveParticipantArchiveDisplayName(user_uuid: string) {
   const [accounts, profiles, line_linked_uuids] = await Promise.all([
     loadUserAccountDisplayRows([user_uuid]),
-    loadProfileDisplayRows([user_uuid]),
+    load_profile_rows_for_users([user_uuid]),
     loadLineLinkedUserUuids([user_uuid]),
   ])
 
@@ -1558,33 +1554,6 @@ async function loadUserAccountDisplayRows(user_uuids: string[]) {
   return merged
 }
 
-async function loadProfileDisplayRows(user_uuids: string[]) {
-  const config = getRestConfig()
-
-  if (!config || user_uuids.length === 0) {
-    return new Map<string, ProfileDisplayRow>()
-  }
-
-  const response = await fetch(
-    restUrl(
-      config,
-      "profiles",
-      `user_uuid=in.(${user_uuids.map((uuid) => encodeURIComponent(uuid)).join(",")})&select=user_uuid,nickname,first_name,last_name`,
-    ),
-    {
-      headers: restHeaders(config),
-      cache: "no-store",
-    },
-  )
-
-  if (!response.ok) {
-    return new Map()
-  }
-
-  const rows = (await response.json()) as ProfileDisplayRow[]
-  return new Map(rows.map((row) => [row.user_uuid, row]))
-}
-
 export async function loadUserDisplayNames(user_uuids: string[]) {
   if (user_uuids.length === 0) {
     return new Map<string, string>()
@@ -1592,7 +1561,7 @@ export async function loadUserDisplayNames(user_uuids: string[]) {
 
   const [accounts, profiles, line_linked_uuids] = await Promise.all([
     loadUserAccountDisplayRows(user_uuids),
-    loadProfileDisplayRows(user_uuids),
+    load_profile_rows_for_users(user_uuids),
     loadLineLinkedUserUuids(user_uuids),
   ])
 
@@ -1619,7 +1588,7 @@ export async function loadUserProfiles(user_uuids: string[]) {
 
   const [accounts, profiles, line_linked_uuids] = await Promise.all([
     loadUserAccountDisplayRows(user_uuids),
-    loadProfileDisplayRows(user_uuids),
+    load_profile_rows_for_users(user_uuids),
     loadLineLinkedUserUuids(user_uuids),
   ])
 

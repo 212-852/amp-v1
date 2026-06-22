@@ -3,7 +3,9 @@ import {
   DEBUG_ADMIN_ACCESS,
   DEBUG_CHAT_FLOW,
   CHAT_REALTIME_DEBUG,
+  DEBUG_CONTACT_PRESENCE,
   DEBUG_LINE_WEBHOOK,
+  DEBUG_NOTIFY,
 } from "@/core/control"
 
 const alwaysReportEvents = new Set([
@@ -348,7 +350,7 @@ export function shouldSendAuthSessionDebug(event: string) {
   }
 
   if (contactPresenceEvents.has(event)) {
-    return true
+    return DEBUG_CONTACT_PRESENCE
   }
 
   if (chatRealtimeEvents.has(event)) {
@@ -356,7 +358,7 @@ export function shouldSendAuthSessionDebug(event: string) {
   }
 
   if (notifyEvents.has(event)) {
-    return true
+    return DEBUG_NOTIFY
   }
 
   if (userChatLoadEvents.has(event)) {

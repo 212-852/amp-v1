@@ -1,3 +1,4 @@
+import { CHAT_REALTIME_DEBUG } from "@/core/control"
 import { sendAuthDebug } from "@/core/debug"
 
 const realtime_events = new Set([
@@ -6,6 +7,10 @@ const realtime_events = new Set([
 ])
 
 export async function POST(request: Request) {
+  if (!CHAT_REALTIME_DEBUG) {
+    return new Response(null, { status: 204 })
+  }
+
   const body = (await request.json().catch(() => ({}))) as {
     event?: string
     payload?: Record<string, unknown>

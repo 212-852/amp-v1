@@ -10,7 +10,7 @@ import type {
   SourceChannel,
 } from "@/core/auth/types"
 import { sendAuthDebug as send_auth_debug } from "@/core/debug"
-import { resolve_profile_display_name } from "@/core/profile/rules"
+import { resolve_profile_name } from "@/core/profile/rules"
 
 const VISITOR_COOKIE_NAME = "amp_visitor_uuid"
 const VISITOR_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
@@ -854,7 +854,7 @@ async function resolveSessionProfile(user_uuid: string | null): Promise<SessionP
   return {
     role: normalizeSessionRole(user?.role ?? "user"),
     tier: normalizeSessionTier(user?.tier ?? "member"),
-    display_name: resolve_profile_display_name({
+    display_name: resolve_profile_name({
       nickname: profile?.nickname,
       first_name: profile?.first_name,
       last_name: profile?.last_name,

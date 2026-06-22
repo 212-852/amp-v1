@@ -59,11 +59,7 @@ export function send_chat_realtime_debug(
   event: ChatRealtimeDebugEvent,
   payload: ChatRealtimeDebugPayload,
 ) {
-  if (
-    event !== "chat_send_success" &&
-    event !== "chat_message_rendered" &&
-    process.env.NEXT_PUBLIC_CHAT_REALTIME_DEBUG !== "true"
-  ) {
+  if (process.env.NEXT_PUBLIC_CHAT_REALTIME_DEBUG !== "true") {
     return
   }
 

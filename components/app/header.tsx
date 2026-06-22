@@ -8,7 +8,7 @@ import NotificationPanel from "@/components/notification/panel"
 import { useOverlay } from "@/components/overlay"
 import ProfileSettings from "@/components/profile/settings"
 import { get_display_name } from "@/core/profile/display"
-import type { ProfileDisplayPayload } from "@/core/profile/output"
+import type { ProfilePayload } from "@/core/profile/output"
 import { useLocale } from "@/src/components/locale/provider"
 
 export type AppHeaderAuth = {
@@ -190,7 +190,7 @@ export default function AppHeader({ auth }: { auth: AppHeaderAuth }) {
   const [settings_open, set_settings_open] = useState(false)
   const [notification_panel_open, set_notification_panel_open] = useState(false)
   const [saved_profile, set_saved_profile] =
-    useState<ProfileDisplayPayload | null>(null)
+    useState<ProfilePayload | null>(null)
   const display_name = get_display_name(saved_profile, {
     name: auth.display_name,
     email: auth.email,

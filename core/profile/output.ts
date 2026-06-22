@@ -1,11 +1,11 @@
 import type { Session } from "@/core/auth/types"
 import type { NotificationType } from "@/core/chat/types"
 import {
-  resolve_profile_display_name,
+  resolve_profile_name,
   type ProfileLocale,
 } from "@/core/profile/rules"
 
-export type ProfileDisplayPayload = {
+export type ProfilePayload = {
   user_uuid: string | null
   visitor_uuid: string | null
   nickname: string | null
@@ -45,8 +45,8 @@ export function build_profile_output(input: {
   image_url?: string | null
   locale?: ProfileLocale | null
   notification_type?: NotificationType | null
-}): ProfileDisplayPayload {
-  const display_name = resolve_profile_display_name({
+}): ProfilePayload {
+  const display_name = resolve_profile_name({
     nickname: input.nickname,
     first_name: input.first_name,
     last_name: input.last_name,

@@ -26,7 +26,7 @@ import {
   resolveTypingLabel,
 } from "@/core/chat/rules"
 import { get_display_name } from "@/core/profile/display"
-import type { ProfileDisplayPayload } from "@/core/profile/output"
+import type { ProfilePayload } from "@/core/profile/output"
 import { create_browser_supabase_client } from "@/src/lib/supabase/client"
 import { useLocale } from "@/src/components/locale/provider"
 import type {
@@ -182,7 +182,7 @@ export default function ChatRoomPanel({
 
   useEffect(() => {
     function handle_profile_updated(event: Event) {
-      const profile = (event as CustomEvent<ProfileDisplayPayload>).detail
+      const profile = (event as CustomEvent<ProfilePayload>).detail
       set_current_viewer_display_name(
         get_display_name(profile, {
           name: viewer_display_name,

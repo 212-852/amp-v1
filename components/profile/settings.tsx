@@ -5,7 +5,7 @@ import { useEffect, useState } from "react"
 import { createPortal } from "react-dom"
 
 import { useToast } from "@/components/ui/use_toast"
-import type { ProfileDisplayPayload } from "@/core/profile/output"
+import type { ProfilePayload } from "@/core/profile/output"
 import ProfileAddressSelector, {
   useProfileAddressOptions,
 } from "@/src/address/profile_selector"
@@ -127,9 +127,9 @@ export default function ProfileSettings({
   onSaved,
 }: Readonly<{
   open: boolean
-  initial_profile: ProfileDisplayPayload
+  initial_profile: ProfilePayload
   onClose: () => void
-  onSaved: (profile: ProfileDisplayPayload) => void
+  onSaved: (profile: ProfilePayload) => void
 }>) {
   const { locale, set_locale } = useLocale()
   const { toast } = useToast()
@@ -189,7 +189,7 @@ export default function ProfileSettings({
 
       const payload = (await profile_response.json().catch(() => null)) as {
         ok?: boolean
-        profile?: ProfileDisplayPayload
+        profile?: ProfilePayload
       } | null
 
       if (cancelled || payload?.ok !== true || !payload.profile) {
@@ -264,7 +264,7 @@ export default function ProfileSettings({
       })
       const response_payload = (await response.json().catch(() => null)) as {
         ok?: boolean
-        profile?: ProfileDisplayPayload
+        profile?: ProfilePayload
         error?: string
       } | null
 

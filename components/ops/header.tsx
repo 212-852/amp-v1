@@ -25,7 +25,7 @@ import {
 } from "@/core/ops/header_session"
 import { concierge_toggle_content } from "@/core/ops/concierge_toggle_content"
 import { get_display_name } from "@/core/profile/display"
-import type { ProfileDisplayPayload } from "@/core/profile/output"
+import type { ProfilePayload } from "@/core/profile/output"
 import { useLocale } from "@/src/components/locale/provider"
 
 export type { HeaderSessionLike, OpsHeaderSession } from "@/core/ops/header_session"
@@ -74,7 +74,7 @@ export default function OpsHeader({
   const { toast } = useToast()
   const is_logged_in = Boolean(safe_session.user_uuid)
   const [saved_profile, set_saved_profile] =
-    useState<ProfileDisplayPayload | null>(null)
+    useState<ProfilePayload | null>(null)
   const displayName = get_display_name(saved_profile, {
     name: safe_session.display_name,
     role: safe_session.role,
@@ -147,7 +147,7 @@ export default function OpsHeader({
     close_menu()
   }
 
-  function handle_profile_saved(profile: ProfileDisplayPayload) {
+  function handle_profile_saved(profile: ProfilePayload) {
     set_saved_profile(profile)
   }
 

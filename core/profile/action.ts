@@ -9,6 +9,13 @@ import type { NotificationType } from "@/core/chat/types"
 import type { Session } from "@/core/auth/types"
 import { assert_valid_address_selection } from "@/src/address/action"
 
+export type ProfileNameRow = {
+  user_uuid: string
+  nickname: string | null
+  first_name: string | null
+  last_name: string | null
+}
+
 type ProfileRow = {
   profile_uuid?: string | null
   user_uuid?: string | null
@@ -202,6 +209,33 @@ async function load_profile_row(session: Session) {
 
   const rows = (await response.json()) as ProfileRow[]
   return rows[0] ?? null
+}
+
+export async function load_profile_rows_for_users(user_uuids: string[]) {
+  const config = getRestConfig()
+
+  if (!config || user_uuids.length === 0) {
+    return new Map<string, ProfileNameRow>()
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "profiles",
+      `user_uuid=in.(${user_uuids.map((uuid) => encodeURIComponent(uuid)).join(",")})&select=user_uuid,nickname,first_name,last_name`,
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return new Map<string, ProfileNameRow>()
+  }
+
+  const rows = (await response.json()) as ProfileNameRow[]
+  return new Map(rows.map((row) => [row.user_uuid, row]))
 }
 
 export async function load_profile_notification_type(

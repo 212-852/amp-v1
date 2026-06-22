@@ -75,7 +75,7 @@ function normalize_birth_date(value: unknown) {
   return normalized
 }
 
-export function resolve_profile_display_name(input: {
+export function resolve_profile_name(input: {
   nickname?: string | null
   first_name?: string | null
   last_name?: string | null
