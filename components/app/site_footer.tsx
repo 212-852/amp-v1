@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 
+import AppCopyrightText from "@/components/app/copyright_text"
 import { useLocale } from "@/src/components/locale/provider"
 
 const content = {
@@ -35,11 +36,6 @@ const content = {
     en: "Privacy Policy",
     es: "Privacy Policy",
   },
-  copyright: {
-    ja: "© PET TAXI",
-    en: "© PET TAXI",
-    es: "© PET TAXI",
-  },
 }
 
 export default function AppSiteFooter() {
@@ -50,12 +46,12 @@ export default function AppSiteFooter() {
       <div className="mx-auto flex w-full max-w-[430px] flex-col gap-6 px-4 py-8">
         <p className="text-lg font-semibold">{content.brand[locale]}</p>
 
-        <div className="grid gap-6 sm:grid-cols-2">
+        <div className="space-y-5">
           <div className="space-y-3">
             <p className="text-sm font-semibold text-[#8f5d28]">
               {content.site_map[locale]}
             </p>
-            <ul className="space-y-2 text-sm leading-6 text-[#6f5842]">
+            <ul className="flex flex-row flex-wrap items-center gap-x-5 gap-y-2 text-sm leading-6 text-[#6f5842]">
               <li>
                 <Link href="/app" className="transition hover:text-[#3d2a19]">
                   {content.home[locale]}
@@ -69,15 +65,13 @@ export default function AppSiteFooter() {
             </ul>
           </div>
 
-          <div className="space-y-3">
-            <ul className="space-y-2 text-sm leading-6 text-[#6f5842]">
-              <li>{content.terms[locale]}</li>
-              <li>{content.privacy_policy[locale]}</li>
-            </ul>
-          </div>
+          <ul className="flex flex-row flex-wrap items-center gap-x-5 gap-y-2 text-sm leading-6 text-[#6f5842]">
+            <li>{content.terms[locale]}</li>
+            <li>{content.privacy_policy[locale]}</li>
+          </ul>
         </div>
 
-        <p className="text-xs text-[#8c7358]">{content.copyright[locale]}</p>
+        <AppCopyrightText className="text-xs text-[#8c7358]" />
       </div>
     </footer>
   )

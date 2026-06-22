@@ -7,6 +7,7 @@ import { flushSync } from "react-dom"
 import type { RefObject } from "react"
 
 import ConciergeMemberModal from "@/components/app/concierge_member_modal"
+import AppCopyrightText from "@/components/app/copyright_text"
 import { prepare_chat_send_text } from "@/components/chat/input_send_core"
 import ChatSendButton from "@/components/chat/send_button"
 import { send_chat_realtime_debug } from "@/components/chat/realtime_debug"
@@ -416,14 +417,6 @@ function BottomMenuRow({
         )
       })}
     </nav>
-  )
-}
-
-function CopyrightText() {
-  return (
-    <p className="mt-3 translate-y-[7px] text-center text-[11px] font-normal leading-none text-[#8c7358] opacity-[0.45]">
-      © 2026 Wan Da Nya Inc.
-    </p>
   )
 }
 
@@ -911,7 +904,7 @@ export default function AppFooter({
                   input_ref={message_input_ref}
                   is_sending={is_sending}
                 />
-                <CopyrightText />
+                <AppCopyrightText className="mt-3 translate-y-[7px] text-center text-[11px] font-normal leading-none text-[#8c7358] opacity-[0.45]" />
               </div>
             </div>
           </div>
