@@ -13,17 +13,16 @@ import {
   type LineFlexCarouselPayload,
 } from "@/core/bot/rules"
 import {
-  PARTNER_DRIVER_LIFF_URL,
   PARTNER_DRIVER_RECRUIT_ALT_TEXT,
   PARTNER_DRIVER_RECRUIT_BODY,
   PARTNER_DRIVER_RECRUIT_BUTTON_LABEL,
   PARTNER_DRIVER_RECRUIT_DESCRIPTION,
   PARTNER_DRIVER_RECRUIT_IMAGE,
   PARTNER_DRIVER_RECRUIT_TITLE,
-  PARTNER_DRIVER_TRIGGER_TEXT,
 } from "@/core/partner/recruitment"
 import { build_line_messages_from_payload } from "@/core/output/line"
 import {
+  type ChatResponseRoute,
   buildMessagePayload,
   readMessageSourceKind,
   resolveArchivedMessageType,
@@ -147,7 +146,7 @@ function build_partner_recruit_uri_footer() {
         action: {
           type: "uri",
           label: PARTNER_DRIVER_RECRUIT_BUTTON_LABEL,
-          uri: PARTNER_DRIVER_LIFF_URL,
+          uri: "/driver/register",
         },
       },
     ],
@@ -190,63 +189,19 @@ function build_partner_recruit_bubble() {
   }
 }
 
-function build_partner_line_guidance_bubble() {
-  return {
-    type: "bubble",
-    body: {
-      type: "box",
-      layout: "vertical",
-      spacing: "sm",
-      paddingAll: "16px",
-      contents: [
-        {
-          type: "text",
-          text: "パートナードライバー登録はLINE連携が必要です。",
-          wrap: true,
-          size: "sm",
-          color: "#8C7358",
-        },
-        {
-          type: "text",
-          text: [
-            "LINE連携後、",
-            `「${PARTNER_DRIVER_TRIGGER_TEXT}」`,
-            "と送信してください。",
-          ].join("\n"),
-          wrap: true,
-          size: "sm",
-          color: "#8C7358",
-        },
-      ],
-    },
-  }
-}
-
-export function build_partner_driver_recruitment_carousel(input: {
-  line_identity_linked: boolean
-}): LineFlexCarouselPayload {
-  const contents: Record<string, unknown>[] = []
-
-  if (!input.line_identity_linked) {
-    contents.push(build_partner_line_guidance_bubble())
-  }
-
-  contents.push(build_partner_recruit_bubble())
-
+export function build_partner_driver_recruitment_carousel(): LineFlexCarouselPayload {
   return {
     type: "carousel",
-    contents,
+    contents: [build_partner_recruit_bubble()],
   }
 }
 
-export function build_partner_driver_recruitment_bundle(input: {
-  line_identity_linked: boolean
-}) {
+export function build_partner_driver_recruitment_bundle() {
   return {
     type: "flex" as const,
     body: PARTNER_DRIVER_RECRUIT_BODY,
     alt_text: PARTNER_DRIVER_RECRUIT_ALT_TEXT,
-    payload: build_partner_driver_recruitment_carousel(input),
+    payload: build_partner_driver_recruitment_carousel(),
   }
 }
 
@@ -255,6 +210,24 @@ export function build_line_link_guidance_bundle() {
     type: "text" as const,
     body: "LINE連携にはログインが必要です。LINEでログイン後、もう一度この画面を開いてください。",
   }
+}
+
+export function build_chat_response_message_bundle(route: ChatResponseRoute) {
+  if (
+    route.selected_action === "line_link_guidance" ||
+    route.selected_action === "line_link_required"
+  ) {
+    return build_line_link_guidance_bundle()
+  }
+
+  if (
+    route.selected_action === "show_driver_registration" &&
+    route.can_show_registration_card
+  ) {
+    return build_partner_driver_recruitment_bundle()
+  }
+
+  return null
 }
 
 export function toMessageBundle(

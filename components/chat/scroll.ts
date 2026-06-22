@@ -10,12 +10,18 @@ export type ChatScrollReason =
   | "initial_load"
   | "optimistic_append"
   | "realtime_receive"
+  | "archive_loaded"
+  | "room_change"
+  | "mode_change"
+  | "composer_resize"
+  | "content_resize"
   | "manual_latest"
 
 export type ChatScrollView = "user" | "concierge"
 
 export type ChatScrollTarget = {
   scroll_container: HTMLElement | null
+  bottom_anchor: HTMLElement | null
   view: ChatScrollView
 }
 
@@ -42,8 +48,9 @@ export function scroll_to_latest(
   reason: ChatScrollReason,
 ) {
   const scroll_container = target.scroll_container
+  const bottom_anchor = target.bottom_anchor
 
-  if (!scroll_container) {
+  if (!scroll_container || !bottom_anchor) {
     return
   }
 
@@ -57,17 +64,9 @@ export function scroll_to_latest(
     client_height: container.clientHeight,
   })
 
-  function scroll() {
-    container.scrollTop = Math.max(
-      0,
-      container.scrollHeight - container.clientHeight,
-    )
-  }
-
   window.requestAnimationFrame(() => {
-    scroll()
     window.requestAnimationFrame(() => {
-      scroll()
+      bottom_anchor.scrollIntoView({ block: "end" })
 
       send_chat_realtime_debug("chat_scroll_done", {
         reason,
@@ -94,10 +93,12 @@ export function read_chat_scroll_bottom_detail(
 
 export function build_chat_scroll_target(input: {
   scroll_container: HTMLElement | null
+  bottom_anchor: HTMLElement | null
   view: ChatScrollView
 }): ChatScrollTarget {
   return {
     scroll_container: input.scroll_container,
+    bottom_anchor: input.bottom_anchor,
     view: input.view,
   }
 }

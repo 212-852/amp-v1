@@ -32,8 +32,7 @@ import {
   archivePreparedMessage,
   archiveBotTriggerMessage,
   archivePresenceMessageBundle,
-  build_line_link_guidance_bundle,
-  build_partner_driver_recruitment_bundle,
+  build_chat_response_message_bundle,
   deliverMessageBundle,
   ensureWelcomeMessageArchived,
   toMessageBundle,
@@ -654,24 +653,25 @@ export async function handleIncomingChatMessageArchive(
     source_channel: input.source_channel,
   })
 
-  const response_route = resolve_chat_response_route(body)
+  const line_linked =
+    input.line_identity_linked === true
+      ? true
+      : input.line_identity_linked === false
+        ? false
+        : await resolve_user_has_line_identity(input.session.user_uuid)
+  const response_route = resolve_chat_response_route(body, { line_linked })
 
   if (response_route.selected_action !== "none") {
     const output_locale = resolveOutputLocale({
       preferred: input.locale,
       room_locale: room.locale,
     })
-    const response_bundle =
-      response_route.selected_action === "line_link_guidance"
-        ? build_line_link_guidance_bundle()
-        : build_partner_driver_recruitment_bundle({
-            line_identity_linked:
-              input.line_identity_linked === true
-                ? true
-                : input.line_identity_linked === false
-                  ? false
-                  : await resolve_user_has_line_identity(input.session.user_uuid),
-          })
+    const response_bundle = build_chat_response_message_bundle(response_route)
+
+    if (!response_bundle) {
+      throw new Error(`Unsupported chat response action: ${response_route.selected_action}`)
+    }
+
     const response_payload =
       "payload" in response_bundle ? response_bundle.payload : {}
     const reply_message = await archivePreparedMessage({
@@ -690,6 +690,8 @@ export async function handleIncomingChatMessageArchive(
           actor_display_name: "Bot",
           detected_intent: response_route.detected_intent,
           selected_action: response_route.selected_action,
+          can_show_registration_card:
+            response_route.can_show_registration_card,
         },
       },
     })
@@ -697,10 +699,16 @@ export async function handleIncomingChatMessageArchive(
     await sendAuthDebug("chat_response_route_resolved", {
       room_uuid: room.room_uuid,
       message_uuid: reply_message.message_uuid,
+      user_uuid: input.session.user_uuid,
+      visitor_uuid: input.session.visitor_uuid,
       channel: input.source_channel,
+      line_linked,
       normalized_text: response_route.normalized_text,
       detected_intent: response_route.detected_intent,
       selected_action: response_route.selected_action,
+      can_show_registration_card:
+        response_route.can_show_registration_card,
+      message_bundle_type: response_bundle.type,
     })
 
     if (options.deliver_mode_reply ?? options.deliver !== false) {
@@ -720,7 +728,7 @@ export async function handleIncomingChatMessageArchive(
       mode_command_handled: false,
       chat_response_handled: true,
       driver_partner_handled:
-        response_route.selected_action === "partner_driver_recruitment",
+        response_route.selected_action === "show_driver_registration",
     }
   }
 

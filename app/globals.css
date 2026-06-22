@@ -40,12 +40,18 @@ select {
 }
 
 .chat-bottom-spacer {
-  height: calc(var(--chat-composer-height, var(--chat-input-height, 88px)) + env(safe-area-inset-bottom, 0px) + 48px);
+  height: var(
+    --chat-message-bottom-padding,
+    calc(var(--chat-composer-height, var(--chat-input-height, 88px)) + env(safe-area-inset-bottom, 0px) + 48px)
+  );
 }
 
 @media (max-width: 768px) {
   .chat-bottom-spacer {
-    height: calc(var(--chat-composer-height, var(--chat-input-height, 88px)) + env(safe-area-inset-bottom, 0px) + 48px);
+    height: var(
+      --chat-message-bottom-padding,
+      calc(var(--chat-composer-height, var(--chat-input-height, 88px)) + env(safe-area-inset-bottom, 0px) + 48px)
+    );
   }
 }
 

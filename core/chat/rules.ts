@@ -42,13 +42,16 @@ export type ChatDetectedIntent = "line_link" | "driver_recruitment" | "none"
 
 export type ChatSelectedAction =
   | "line_link_guidance"
-  | "partner_driver_recruitment"
+  | "line_link_required"
+  | "show_driver_registration"
   | "none"
 
 export type ChatResponseRoute = {
   normalized_text: string
   detected_intent: ChatDetectedIntent
+  requires_line_link: boolean
   selected_action: ChatSelectedAction
+  can_show_registration_card: boolean
 }
 
 const line_link_intent_terms = [
@@ -77,14 +80,20 @@ function includes_any_intent_term(text: string, terms: string[]) {
   )
 }
 
-export function resolve_chat_response_route(text: string): ChatResponseRoute {
+export function resolve_chat_response_route(
+  text: string,
+  input: { line_linked?: boolean } = {},
+): ChatResponseRoute {
   const normalized_text = normalize_chat_intent_text(text)
+  const line_linked = input.line_linked === true
 
   if (includes_any_intent_term(normalized_text, line_link_intent_terms)) {
     return {
       normalized_text,
       detected_intent: "line_link",
+      requires_line_link: true,
       selected_action: "line_link_guidance",
+      can_show_registration_card: false,
     }
   }
 
@@ -92,14 +101,20 @@ export function resolve_chat_response_route(text: string): ChatResponseRoute {
     return {
       normalized_text,
       detected_intent: "driver_recruitment",
-      selected_action: "partner_driver_recruitment",
+      requires_line_link: true,
+      selected_action: line_linked
+        ? "show_driver_registration"
+        : "line_link_required",
+      can_show_registration_card: line_linked,
     }
   }
 
   return {
     normalized_text,
     detected_intent: "none",
+    requires_line_link: false,
     selected_action: "none",
+    can_show_registration_card: false,
   }
 }
 

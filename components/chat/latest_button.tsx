@@ -20,6 +20,7 @@ const content = {
 
 type ChatLatestButtonProps = {
   container_ref: RefObject<HTMLElement | null>
+  bottom_anchor_ref: RefObject<HTMLElement | null>
   placement?: "panel" | "above_input"
   view: ChatScrollView
   locale: Locale
@@ -29,6 +30,7 @@ type ChatLatestButtonProps = {
 
 export default function ChatLatestButton({
   container_ref,
+  bottom_anchor_ref,
   placement = "panel",
   view,
   locale,
@@ -39,6 +41,7 @@ export default function ChatLatestButton({
     scroll_to_latest(
       {
         scroll_container: container_ref.current,
+        bottom_anchor: bottom_anchor_ref.current,
         view,
       },
       "manual_latest",
