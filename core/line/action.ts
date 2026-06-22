@@ -154,7 +154,7 @@ async function processAllowedLineEvent(
 
   if (
     archive_result.mode_command_handled ||
-    archive_result.driver_recruitment_handled
+    archive_result.driver_partner_handled
   ) {
     return {
       provider_user_id: event.provider_user_id,

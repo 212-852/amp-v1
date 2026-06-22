@@ -109,6 +109,39 @@ async function resolveVisitorUuidForUser(user_uuid: string) {
   return participant?.visitor_uuid ?? null
 }
 
+export async function resolve_user_has_line_identity(
+  user_uuid: string | null | undefined,
+): Promise<boolean> {
+  if (!user_uuid) {
+    return false
+  }
+
+  const config = getRestConfig()
+
+  if (!config) {
+    return false
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "identities",
+      `user_uuid=eq.${encodeURIComponent(user_uuid)}&provider=eq.line&select=identity_uuid&limit=1`,
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return false
+  }
+
+  const rows = (await response.json()) as Array<{ identity_uuid?: string | null }>
+  return rows.length > 0
+}
+
 export async function resolveStableLineIdentity(
   provider_user_id: string,
 ): Promise<StableLineIdentity> {

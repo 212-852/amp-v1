@@ -56,11 +56,12 @@ import type {
 import {
   assertMessageBody,
   assertRoomMode,
-  resolve_driver_recruitment_rule,
+  resolve_driver_partner_rule,
   resolve_concierge_thread_rule,
   resolve_room_mode_trigger,
   resolveRoomModeCommandReply,
 } from "@/core/chat/rules"
+import { resolve_user_has_line_identity } from "@/core/line/identity"
 import { recordSecurityAccessEvent } from "@/core/access"
 import type { Session } from "@/core/auth/types"
 import { sendAuthDebug } from "@/core/debug"
@@ -518,7 +519,7 @@ export async function handleIncomingChatMessage(
 export type IncomingChatArchiveResult = {
   bundle: MessageBundle
   mode_command_handled: boolean
-  driver_recruitment_handled: boolean
+  driver_partner_handled: boolean
 }
 
 export async function handleIncomingChatMessageArchive(
@@ -612,7 +613,7 @@ export async function handleIncomingChatMessageArchive(
     return {
       bundle,
       mode_command_handled: true,
-      driver_recruitment_handled: false,
+      driver_partner_handled: false,
     }
   }
 
@@ -647,13 +648,19 @@ export async function handleIncomingChatMessageArchive(
     source_channel: input.source_channel,
   })
 
-  const driver_recruitment_rule = resolve_driver_recruitment_rule({
+  const line_identity_linked =
+    input.line_identity_linked === true
+      ? true
+      : input.line_identity_linked === false
+        ? false
+        : await resolve_user_has_line_identity(input.session.user_uuid)
+
+  const driver_partner_rule = resolve_driver_partner_rule({
     text: body,
-    source_channel: input.source_channel,
-    line_identity_linked: input.line_identity_linked === true,
+    line_identity_linked,
   })
 
-  if (driver_recruitment_rule?.should_handle) {
+  if (driver_partner_rule?.should_handle) {
     const output_locale = resolveOutputLocale({
       preferred: input.locale,
       room_locale: room.locale,
@@ -664,7 +671,7 @@ export async function handleIncomingChatMessageArchive(
       source_channel: input.source_channel,
       source_kind: "bot",
       type: "text",
-      body: driver_recruitment_rule.response_text,
+      body: driver_partner_rule.response_text,
       original_locale: output_locale,
       session: input.session,
       payload: {
@@ -675,11 +682,11 @@ export async function handleIncomingChatMessageArchive(
       },
     })
 
-    await sendAuthDebug("chat_driver_recruitment_resolved", {
+    await sendAuthDebug("chat_driver_partner_resolved", {
       room_uuid: room.room_uuid,
       message_uuid: reply_message.message_uuid,
       source_channel: input.source_channel,
-      reason: driver_recruitment_rule.reason,
+      reason: driver_partner_rule.reason,
     })
 
     if (options.deliver_mode_reply ?? options.deliver !== false) {
@@ -697,7 +704,7 @@ export async function handleIncomingChatMessageArchive(
     return {
       bundle: toMessageBundle(reply_message, room.locale),
       mode_command_handled: false,
-      driver_recruitment_handled: true,
+      driver_partner_handled: true,
     }
   }
 
@@ -746,7 +753,7 @@ export async function handleIncomingChatMessageArchive(
   return {
     bundle: toMessageBundle(message, room.locale),
     mode_command_handled: false,
-    driver_recruitment_handled: false,
+    driver_partner_handled: false,
   }
 }
 

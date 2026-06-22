@@ -5,12 +5,17 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/募集",
-        destination: "/recruit",
+        destination: "/partner",
       },
     ];
   },
   async redirects() {
     return [
+      {
+        source: "/recruit",
+        destination: "/partner",
+        permanent: true,
+      },
       {
         source: "/admin/concierge",
         destination: "/admin",

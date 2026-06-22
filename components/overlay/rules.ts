@@ -46,7 +46,7 @@ const contentByType: Record<
     items: [
       { id: "dashboard" },
       { id: "support" },
-      { id: "driver_sign_up", href: "/driver" },
+      { id: "partner_drivers", href: "/partner" },
       { id: "settings" },
     ],
   },
