@@ -294,10 +294,10 @@ const content = {
     en: "Support",
     es: "Soporte",
   },
-  driver_recruitment: {
-    ja: "Driver recruitment",
-    en: "Driver recruitment",
-    es: "Driver recruitment",
+  driver_sign_up: {
+    ja: "Driver sign up",
+    en: "Driver sign up",
+    es: "Driver sign up",
   },
   settings: {
     ja: "設定",
@@ -468,8 +468,8 @@ function get_default_label(item: OverlayItem, locale: Locale) {
     return content.support[locale]
   }
 
-  if (item.id === "driver_recruitment") {
-    return content.driver_recruitment[locale]
+  if (item.id === "driver_sign_up") {
+    return content.driver_sign_up[locale]
   }
 
   if (item.id === "settings") {
