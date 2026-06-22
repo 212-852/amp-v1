@@ -32,7 +32,7 @@ export default async function PartnerDriverPage() {
             href={PARTNER_DRIVER_REGISTER_PATH}
             className="inline-flex h-12 min-w-[220px] items-center justify-center rounded-full bg-[#06c755] px-8 text-sm font-bold text-white shadow-[0_8px_18px_rgba(6,199,85,0.24)]"
           >
-            LINEで登録する
+            登録フォームへ
           </a>
 
           <p className="whitespace-pre-line text-center text-sm leading-7 text-[#6f5842]">

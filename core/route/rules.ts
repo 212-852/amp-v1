@@ -6,7 +6,6 @@ import { resolveIdentity } from "@/core/auth/identity"
 import { resolveAuthRoute } from "@/core/auth/route"
 import { resolveSession } from "@/core/auth/session"
 import { resolveEntranceContext } from "@/core/entrance/context"
-import { resolve_public_app_url } from "@/core/output/uri"
 
 export type { AmpRouteKey, AmpRouteResult } from "@/core/auth/route"
 
@@ -36,17 +35,26 @@ export async function enforceAuthRouteRedirect(requested_route: string) {
 }
 
 export async function enforce_entry_line_access() {
+  const entrance = await resolveEntranceContext()
   const context = await resolveAuthContext("/entry")
   const session = await resolveSession(context)
+  const identity = await resolveIdentity(context, session)
+  const route = resolveAuthRoute(context, entrance, session, identity)
+
+  if (!session.user_uuid) {
+    redirect(ENTRY_HOME_URL)
+  }
+
   const line_user_id = await resolve_line_user_id(session.user_uuid)
 
   if (!line_user_id) {
-    const app_url = resolve_public_app_url() || ENTRY_HOME_URL.replace(/\/$/, "")
-    redirect(`${app_url}/`)
+    redirect(ENTRY_HOME_URL)
   }
 
   return {
     context,
+    identity,
+    route,
     session,
     line_user_id,
   }
