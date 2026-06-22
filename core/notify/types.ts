@@ -15,8 +15,8 @@ export type ChatMessageNotifyInput = {
   room_uuid: string
   message_uuid?: string | null
   sender_uuid?: string | null
+  sender_participant_uuid?: string | null
   sender_role: string
-  receiver_role?: string
   user_name: string
   message_body?: string | null
   message_type?: string | null

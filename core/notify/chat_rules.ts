@@ -48,16 +48,7 @@ export function resolveChatNotifyDecision(
     return { should_deliver: false, skip_reason: "availability_off" }
   }
 
-  if (
-    input.sender_role === "concierge" ||
-    input.sender_role === "admin" ||
-    input.sender_role === "bot" ||
-    input.sender_role === "system"
-  ) {
-    return { should_deliver: false, skip_reason: "invalid_sender" }
-  }
-
-  if (input.sender_role !== "user" && input.sender_role !== "guest") {
+  if (input.sender_role === "bot" || input.sender_role === "system") {
     return { should_deliver: false, skip_reason: "invalid_sender" }
   }
 

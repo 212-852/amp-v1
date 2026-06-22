@@ -39,6 +39,7 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
   const routes = await resolveChatNotifyRoutes({
     room_uuid: input.room_uuid,
     sender_uuid: input.sender_uuid ?? null,
+    sender_participant_uuid: input.sender_participant_uuid ?? null,
     sender_role,
     message_uuid: input.message_uuid ?? null,
     message_text: input.message_body ?? null,
@@ -80,7 +81,10 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
         message_uuid: input.message_uuid ?? null,
         room_uuid: input.room_uuid,
         sender_uuid: input.sender_uuid ?? null,
-        receiver_uuid: route.receiver_user_uuid,
+        receiver_uuid:
+          route.receiver_participant_uuid ??
+          route.receiver_user_uuid ??
+          route.receiver_visitor_uuid,
         should_notify: false,
         delivery_channel: null,
         is_in_room: route.in_room,
@@ -104,7 +108,10 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
         message_uuid: input.message_uuid ?? null,
         room_uuid: input.room_uuid,
         sender_uuid: input.sender_uuid ?? null,
-        receiver_uuid: route.receiver_user_uuid,
+        receiver_uuid:
+          route.receiver_participant_uuid ??
+          route.receiver_user_uuid ??
+          route.receiver_visitor_uuid,
         should_notify: false,
         delivery_channel: route.delivery,
         reason: resolveSkipReason({
@@ -118,7 +125,8 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
 
     const payload = {
       ...content,
-      receiver_user_uuid: route.receiver_user_uuid,
+      receiver_user_uuid:
+        route.receiver_user_uuid ?? route.receiver_visitor_uuid ?? "",
       contact_uuid: route.selected_contact?.contact_uuid ?? null,
       selected_channel: route.selected_contact?.contact_type ?? null,
       contact_receive: route.selected_contact?.receive ?? null,
@@ -143,7 +151,10 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
         await sendNotifyDebug("notify_line_fallback_used", {
           room_uuid: input.room_uuid,
           sender_uuid: input.sender_uuid ?? null,
-          receiver_uuid: route.receiver_user_uuid,
+          receiver_uuid:
+            route.receiver_participant_uuid ??
+            route.receiver_user_uuid ??
+            route.receiver_visitor_uuid,
           contact_uuid: route.selected_contact?.contact_uuid ?? null,
           selected_channel: "line",
           reason: "push_failed",

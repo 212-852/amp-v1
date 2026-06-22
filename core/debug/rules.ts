@@ -270,6 +270,9 @@ const authSessionEvents = new Set([
 
 const notifyEvents = new Set([
   "notification_trigger_created",
+  "notification_receiver_resolve_started",
+  "notification_receiver_resolve_success",
+  "notification_receiver_resolve_failed",
   "notification_rule_started",
   "notification_availability_checked",
   "notification_presence_checked",
