@@ -93,6 +93,15 @@ const userChatLoadEvents = new Set([
   "user_chat_initial_fetch_error",
 ])
 
+const identityAllowedEvents = new Set([
+  "identity_lookup_failed",
+  "identity_upsert_failed",
+  "visitor_update_failed",
+  "session_update_failed",
+  "user_create_success",
+  "identity_upsert_success",
+])
+
 const identityEvents = new Set([
   "auth_callback_received",
   "bridge_authorize_url_created",
@@ -131,10 +140,10 @@ const identityEvents = new Set([
   "identity_link_failed",
   "identity_link_started",
   "identity_link_success",
-  "identity_lookup_result",
-  "identity_lookup_start",
+  "identity_lookup_failed",
   "identity_email_lookup_result",
   "identity_email_lookup_start",
+  "identity_upsert_failed",
   "identity_upsert_payload",
   "identity_upsert_start",
   "identity_upsert_success",
@@ -204,16 +213,12 @@ const identityEvents = new Set([
   "pwa_session_refresh_failed",
   "pwa_session_refresh_success",
   "pwa_waiting_ui_shown",
-  "session_update",
+  "session_update_failed",
   "session_updated",
   "session_after_identity_link",
-  "user_create_start",
   "user_create_success",
   "user_profile_sync_failed",
-  "user_profile_sync_start",
-  "user_profile_sync_success",
-  "visitor_update_start",
-  "visitor_update_success",
+  "visitor_update_failed",
 ])
 
 const authSessionEvents = new Set([
@@ -366,14 +371,15 @@ export function shouldSendAuthSessionDebug(event: string) {
   }
 
   if (identityEvents.has(event)) {
-    if (!AUTH_SESSION_DEBUG) {
-      console.warn("[IDENTITY_DEBUG_AUTH_SESSION_DEBUG_FALSE]", {
-        event,
-        reason: "IDENTITY debug is allowed while AUTH_SESSION_DEBUG is false",
-      })
+    if (identityAllowedEvents.has(event)) {
+      return true
     }
 
-    return true
+    if (isUnexpectedEvent(event)) {
+      return true
+    }
+
+    return false
   }
 
   return AUTH_SESSION_DEBUG && (authSessionEvents.has(event) || isUnexpectedEvent(event))

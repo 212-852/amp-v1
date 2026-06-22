@@ -57,11 +57,6 @@ async function linkVisitorToUser(visitor_uuid: string, user_uuid: string) {
     return
   }
 
-  await sendIdentityDebug("visitor_update_start", {
-    visitor_uuid,
-    user_uuid,
-  })
-
   const response = await fetch(
     restUrl(config, "visitors", `visitor_uuid=eq.${encodeURIComponent(visitor_uuid)}`),
     {
@@ -80,6 +75,13 @@ async function linkVisitorToUser(visitor_uuid: string, user_uuid: string) {
 
   if (!response.ok) {
     const error = await readRestError(response)
+
+    await sendIdentityDebug("visitor_update_failed", {
+      visitor_uuid,
+      user_uuid,
+      error_code: error.code ?? null,
+      error_message: error.message ?? null,
+    })
     throw new Error(
       `Failed to link visitor to user: ${error.code ?? "unknown"} ${
         error.message ?? "No PostgREST error returned"
@@ -96,11 +98,6 @@ async function linkVisitorToUser(visitor_uuid: string, user_uuid: string) {
     })
     throw new Error("Visitor was not found while linking user")
   }
-
-  await sendIdentityDebug("visitor_update_success", {
-    visitor_uuid: rows[0].visitor_uuid,
-    user_uuid: rows[0].user_uuid ?? user_uuid,
-  })
 }
 
 async function linkParticipantsToUser(visitor_uuid: string, user_uuid: string) {
@@ -243,12 +240,17 @@ export async function linkVisitorToIdentity(
         ? (rawInput.contact as ContactInput)
         : null,
   }
-  const user_uuid = await resolveOrCreateIdentityUser(input, options.current_user_uuid)
+  const { user_uuid, created_new_user } = await resolveOrCreateIdentityUser(
+    input,
+    options.current_user_uuid,
+  )
   await syncUserProfileFromIdentityLink(user_uuid, input)
   let identity: Awaited<ReturnType<typeof upsertIdentityLink>> = null
 
   try {
-    identity = await upsertIdentityLink(input, user_uuid)
+    identity = await upsertIdentityLink(input, user_uuid, {
+      notify_success: created_new_user,
+    })
     await linkVisitorToUser(visitor_uuid, user_uuid)
     await sendAuthDebug("session_user_uuid_persisted", {
       provider: input.provider,
@@ -260,12 +262,6 @@ export async function linkVisitorToIdentity(
     await linkExistingVisitorContacts(visitor_uuid, user_uuid, input)
     await upsertRealContact(input, visitor_uuid, user_uuid, options.source_channel)
     await linkParticipantsToUser(visitor_uuid, user_uuid)
-    await sendIdentityDebug("session_update", {
-      provider: input.provider,
-      visitor_uuid,
-      user_uuid,
-      source_channel: options.source_channel,
-    })
   } catch (error) {
     const error_message = error instanceof Error ? error.message : String(error)
 
@@ -277,16 +273,24 @@ export async function linkVisitorToIdentity(
       })
     }
 
-    await sendIdentityDebug("identity_link_failed", {
-      provider: input.provider,
-      visitor_uuid,
-      user_uuid,
-      reason: error_message.includes("already linked")
-        ? "identity_conflict"
-        : "identity_link_failed",
-      error: error_message,
-      source_channel: options.source_channel,
-    })
+    if (error_message.includes("already linked")) {
+      await sendIdentityDebug("identity_link_failed", {
+        provider: input.provider,
+        visitor_uuid,
+        user_uuid,
+        reason: "identity_conflict",
+        error: error_message,
+        source_channel: options.source_channel,
+      })
+    } else {
+      await sendIdentityDebug("session_update_failed", {
+        provider: input.provider,
+        visitor_uuid,
+        user_uuid,
+        error_message,
+        source_channel: options.source_channel,
+      })
+    }
     throw error
   }
 

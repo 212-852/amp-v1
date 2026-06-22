@@ -663,15 +663,6 @@ export async function resolve_user(identity: Awaited<ReturnType<typeof resolve_i
   const result = await linkCurrentVisitorToIdentity(identity)
   const profile = await resolveAuthUserProfile(result.user_uuid)
 
-  await sendIdentityDebug("identity_resolved", {
-    provider: identity.provider,
-    visitor_uuid: result.visitor_uuid,
-    user_uuid: result.user_uuid,
-    identity_uuid: result.identity_uuid,
-    email: identity.email,
-    source_channel: result.source_channel,
-  })
-
   return {
     result,
     profile,
@@ -692,9 +683,6 @@ export async function update_session(input: {
     email: input.identity.email,
     source_channel: input.linked.result.source_channel,
   }
-
-  await sendIdentityDebug("session_updated", session)
-  await sendIdentityDebug("session_after_identity_link", session)
 
   return session
 }

@@ -217,12 +217,14 @@ export async function sendIdentityDebug(
     | "identity_link_failed"
     | "identity_link_started"
     | "identity_link_success"
+    | "identity_lookup_failed"
     | "identity_lookup_result"
     | "identity_lookup_start"
     | "identity_email_lookup_result"
     | "identity_email_lookup_start"
     | "identity_resolved"
     | "identity_unlinked"
+    | "identity_upsert_failed"
     | "identity_upsert_start"
     | "identity_upsert_success"
     | "identity_user_resolve_result"
@@ -294,6 +296,7 @@ export async function sendIdentityDebug(
     | "pwa_session_refresh_failed"
     | "pwa_session_refresh_success"
     | "pwa_waiting_ui_shown"
+    | "session_update_failed"
     | "session_update"
     | "session_updated"
     | "session_after_identity_link"
@@ -302,6 +305,7 @@ export async function sendIdentityDebug(
     | "user_profile_sync_failed"
     | "user_profile_sync_start"
     | "user_profile_sync_success"
+    | "visitor_update_failed"
     | "visitor_update_start"
     | "visitor_update_success",
   payload: Record<string, unknown>,
@@ -362,12 +366,6 @@ async function findIdentityUserUuidByProviderUserId(input: IdentityLinkInput) {
     return null
   }
 
-  await sendIdentityDebug("identity_lookup_start", {
-    provider: input.provider,
-    provider_user_id: identityValue(input),
-    email: input.email ?? null,
-  })
-
   const response = await fetch(
     restUrl(config, "identities", identityProviderUserIdQuery(input)),
     {
@@ -378,6 +376,14 @@ async function findIdentityUserUuidByProviderUserId(input: IdentityLinkInput) {
 
   if (!response.ok) {
     const error = await readRestError(response)
+
+    await sendIdentityDebug("identity_lookup_failed", {
+      provider: input.provider,
+      provider_user_id: identityValue(input),
+      email: input.email ?? null,
+      error_code: error.code ?? null,
+      error_message: error.message ?? null,
+    })
     throw new Error(
       `Failed to lookup identity: ${error.code ?? "unknown"} ${
         error.message ?? "No PostgREST error returned"
@@ -386,17 +392,8 @@ async function findIdentityUserUuidByProviderUserId(input: IdentityLinkInput) {
   }
 
   const rows = (await response.json()) as IdentityRow[]
-  const user_uuid = rows[0]?.user_uuid ?? null
 
-  await sendIdentityDebug("identity_lookup_result", {
-    provider: input.provider,
-    provider_user_id: identityValue(input),
-    email: input.email ?? null,
-    found: !!user_uuid,
-    user_uuid,
-  })
-
-  return user_uuid
+  return rows[0]?.user_uuid ?? null
 }
 
 async function findUserUuidByIdentityEmail(email: string | null) {
@@ -405,11 +402,6 @@ async function findUserUuidByIdentityEmail(email: string | null) {
   if (!config || !email) {
     return null
   }
-
-  await sendIdentityDebug("identity_email_lookup_start", {
-    provider: "email",
-    email,
-  })
 
   const response = await fetch(
     restUrl(
@@ -428,26 +420,12 @@ async function findUserUuidByIdentityEmail(email: string | null) {
   )
 
   if (!response.ok) {
-    await sendIdentityDebug("identity_email_lookup_result", {
-      provider: "email",
-      email,
-      found: false,
-      error: "identity_email_lookup_failed",
-    })
     return null
   }
 
   const rows = (await response.json()) as IdentityRow[]
-  const user_uuid = rows[0]?.user_uuid ?? null
 
-  await sendIdentityDebug("identity_email_lookup_result", {
-    provider: "email",
-    email,
-    found: !!user_uuid,
-    user_uuid,
-  })
-
-  return user_uuid
+  return rows[0]?.user_uuid ?? null
 }
 
 async function createUser(input: IdentityLinkInput) {
@@ -456,12 +434,6 @@ async function createUser(input: IdentityLinkInput) {
   if (!config) {
     return crypto.randomUUID()
   }
-
-  await sendIdentityDebug("user_create_start", {
-    provider: input.provider,
-    provider_user_id: identityValue(input),
-    email: input.email ?? null,
-  })
 
   const response = await fetch(restUrl(config, "users", "select=user_uuid"), {
     method: "POST",
@@ -505,63 +477,54 @@ async function createUser(input: IdentityLinkInput) {
   return user_uuid
 }
 
+export type IdentityUserResolveResult = {
+  user_uuid: string
+  created_new_user: boolean
+}
+
 export async function resolveOrCreateIdentityUser(
   input: IdentityLinkInput,
   current_user_uuid?: string | null,
-) {
+): Promise<IdentityUserResolveResult> {
   const identityUserUuid = await findIdentityUserUuidByProviderUserId(input)
 
   if (identityUserUuid) {
-    await sendIdentityDebug("identity_user_resolve_result", {
-      provider: input.provider,
-      provider_user_id: identityValue(input),
-      email: input.email ?? null,
+    return {
       user_uuid: identityUserUuid,
-      source: "identity",
-    })
-    return identityUserUuid
+      created_new_user: false,
+    }
   }
 
   if (current_user_uuid) {
-    await sendIdentityDebug("identity_user_resolve_result", {
-      provider: input.provider,
-      provider_user_id: identityValue(input),
-      email: input.email ?? null,
+    return {
       user_uuid: current_user_uuid,
-      source: "current_user",
-    })
-    return current_user_uuid
+      created_new_user: false,
+    }
   }
 
   const emailUserUuid = await findUserUuidByIdentityEmail(input.email ?? null)
 
   if (emailUserUuid) {
-    await sendIdentityDebug("identity_user_resolve_result", {
-      provider: input.provider,
-      provider_user_id: identityValue(input),
-      email: input.email ?? null,
+    return {
       user_uuid: emailUserUuid,
-      source: "email_identity",
-    })
-    return emailUserUuid
+      created_new_user: false,
+    }
   }
 
   const createdUserUuid = await createUser(input)
 
-  await sendIdentityDebug("identity_user_resolve_result", {
-    provider: input.provider,
-    provider_user_id: identityValue(input),
-    email: input.email ?? null,
+  return {
     user_uuid: createdUserUuid,
-    source: "created_user",
-  })
-
-  return createdUserUuid
+    created_new_user: true,
+  }
 }
 
 export async function upsertIdentityLink(
   input: IdentityLinkInput,
   user_uuid: string,
+  options: {
+    notify_success?: boolean
+  } = {},
 ): Promise<IdentityLinkRecord | null> {
   const config = getRestConfig()
   const value = identityValue(input)
@@ -575,19 +538,6 @@ export async function upsertIdentityLink(
   if (existingUserUuid && existingUserUuid !== user_uuid) {
     throw new Error("Identity is already linked to another user")
   }
-
-  await sendIdentityDebug("identity_upsert_payload", {
-    provider: input.provider,
-    user_uuid,
-    provider_user_id: value,
-    email: input.email ?? null,
-  })
-  await sendIdentityDebug("identity_upsert_start", {
-    provider: input.provider,
-    user_uuid,
-    provider_user_id: value,
-    email: input.email ?? null,
-  })
 
   const response = await fetch(
     restUrl(
@@ -613,6 +563,15 @@ export async function upsertIdentityLink(
 
   if (!response.ok) {
     const error = await readRestError(response)
+
+    await sendIdentityDebug("identity_upsert_failed", {
+      provider: input.provider,
+      user_uuid,
+      provider_user_id: value,
+      email: input.email ?? null,
+      error_code: error.code ?? null,
+      error_message: error.message ?? null,
+    })
     throw new Error(
       `Failed to upsert identity: ${error.code ?? "unknown"} ${
         error.message ?? "No PostgREST error returned"
@@ -627,13 +586,15 @@ export async function upsertIdentityLink(
     return null
   }
 
-  await sendIdentityDebug("identity_upsert_success", {
-    provider: input.provider,
-    user_uuid: row.user_uuid,
-    identity_uuid: row.identity_uuid ?? null,
-    provider_user_id: value,
-    email: input.email ?? null,
-  })
+  if (options.notify_success) {
+    await sendIdentityDebug("identity_upsert_success", {
+      provider: input.provider,
+      user_uuid: row.user_uuid,
+      identity_uuid: row.identity_uuid ?? null,
+      provider_user_id: value,
+      email: input.email ?? null,
+    })
+  }
 
   return {
     identity_uuid: row.identity_uuid ?? null,
@@ -665,13 +626,6 @@ export async function syncUserProfileFromIdentityLink(
     return
   }
 
-  await sendIdentityDebug("user_profile_sync_start", {
-    provider: input.provider,
-    user_uuid,
-    has_display_name: Boolean(input.display_name),
-    has_image_url: Boolean(input.image_url),
-  })
-
   const response = await fetch(
     restUrl(config, "users", `user_uuid=eq.${encodeURIComponent(user_uuid)}`),
     {
@@ -693,11 +647,6 @@ export async function syncUserProfileFromIdentityLink(
     })
     return
   }
-
-  await sendIdentityDebug("user_profile_sync_success", {
-    provider: input.provider,
-    user_uuid,
-  })
 }
 
 export async function sendIdentityUnlinkedDebug(input: {

@@ -3,7 +3,10 @@ import PartnerHero from "@/components/app/partner_hero"
 import { resolveAuthContext } from "@/core/auth/context"
 import { resolveSession } from "@/core/auth/session"
 import { build_breadcrumb_output } from "@/core/breadcrumb/output"
-import { DRIVER_PARTNER_LIFF_URL } from "@/core/chat/rules"
+import {
+  build_partner_liff_guidance_text,
+  PARTNER_DRIVER_LIFF_URL,
+} from "@/core/partner/recruitment"
 
 export default async function PartnerDriverPage() {
   const context = await resolveAuthContext("/partner")
@@ -24,13 +27,17 @@ export default async function PartnerDriverPage() {
           </p>
         </div>
 
-        <div className="flex justify-center pb-4">
+        <div className="flex flex-col items-center gap-6 pb-4">
           <a
-            href={DRIVER_PARTNER_LIFF_URL}
+            href={PARTNER_DRIVER_LIFF_URL}
             className="inline-flex h-12 min-w-[220px] items-center justify-center rounded-full bg-[#06c755] px-8 text-sm font-bold text-white shadow-[0_8px_18px_rgba(6,199,85,0.24)]"
           >
             LINEで登録する
           </a>
+
+          <p className="whitespace-pre-line text-center text-sm leading-7 text-[#6f5842]">
+            {build_partner_liff_guidance_text()}
+          </p>
         </div>
       </section>
     </AppPageShell>

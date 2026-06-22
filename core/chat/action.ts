@@ -56,11 +56,11 @@ import type {
 import {
   assertMessageBody,
   assertRoomMode,
-  resolve_driver_partner_rule,
   resolve_concierge_thread_rule,
   resolve_room_mode_trigger,
   resolveRoomModeCommandReply,
 } from "@/core/chat/rules"
+import { resolve_partner_driver_recruitment } from "@/core/partner/recruitment"
 import { resolve_user_has_line_identity } from "@/core/line/identity"
 import { recordSecurityAccessEvent } from "@/core/access"
 import type { Session } from "@/core/auth/types"
@@ -655,12 +655,12 @@ export async function handleIncomingChatMessageArchive(
         ? false
         : await resolve_user_has_line_identity(input.session.user_uuid)
 
-  const driver_partner_rule = resolve_driver_partner_rule({
+  const partner_recruitment = resolve_partner_driver_recruitment({
     text: body,
     line_identity_linked,
   })
 
-  if (driver_partner_rule?.should_handle) {
+  if (partner_recruitment?.should_handle) {
     const output_locale = resolveOutputLocale({
       preferred: input.locale,
       room_locale: room.locale,
@@ -671,7 +671,7 @@ export async function handleIncomingChatMessageArchive(
       source_channel: input.source_channel,
       source_kind: "bot",
       type: "text",
-      body: driver_partner_rule.response_text,
+      body: partner_recruitment.message_body,
       original_locale: output_locale,
       session: input.session,
       payload: {
@@ -686,7 +686,7 @@ export async function handleIncomingChatMessageArchive(
       room_uuid: room.room_uuid,
       message_uuid: reply_message.message_uuid,
       source_channel: input.source_channel,
-      reason: driver_partner_rule.reason,
+      reason: partner_recruitment.reason,
     })
 
     if (options.deliver_mode_reply ?? options.deliver !== false) {
