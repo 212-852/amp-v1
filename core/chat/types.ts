@@ -58,6 +58,12 @@ export type ChatMessageMeta = {
   actor_role?: ChatParticipantRole
   actor_display_name?: string
   client_message_id?: string
+  detected_intent?: string
+  selected_action?: string
+  can_show_registration_card?: boolean
+  trigger_message_uuid?: string
+  room_uuid?: string
+  message_bundle_type?: string
 }
 
 export type ChatMessagePayload = {

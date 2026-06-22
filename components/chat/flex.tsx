@@ -5,6 +5,8 @@ import type { ChatMessagePayload } from "@/core/chat/types"
 import {
   read_web_carousel_payload,
   resolve_web_flex_action,
+  resolve_web_flex_button_style,
+  resolve_web_flex_hero_class_name,
   type WebFlexAction,
 } from "@/core/output/web"
 
@@ -165,7 +167,7 @@ function FlexHero({ node }: Readonly<{ node: FlexRecord }>) {
     <img
       src={url}
       alt=""
-      className="block h-auto w-full rounded-t-[18px]"
+      className={resolve_web_flex_hero_class_name(node)}
     />
   )
 }
@@ -216,16 +218,24 @@ function readCornerRadius(value: unknown) {
 }
 
 function readFlexActionColors(node: FlexRecord) {
+  const line_primary_style = resolve_web_flex_button_style(node)
+
+  if (line_primary_style) {
+    return line_primary_style
+  }
+
   if (node.style === "secondary") {
     return {
       backgroundColor: "#F4E8D8",
       color: "#3D2A19",
+      border: "none",
     }
   }
 
   return {
-    backgroundColor: readText(node.color) || "#8F5D28",
+    backgroundColor: "#8F5D28",
     color: "#FFFFFF",
+    border: "none",
   }
 }
 

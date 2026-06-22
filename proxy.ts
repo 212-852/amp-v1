@@ -30,6 +30,17 @@ function resolveBearerToken(authorization: string | null) {
 }
 
 function resolveSourceChannel(request: NextRequest): SourceChannel {
+  const pathname = request.nextUrl.pathname
+
+  if (
+    pathname === "/app" ||
+    pathname.startsWith("/app/") ||
+    pathname === "/partner" ||
+    pathname.startsWith("/partner/")
+  ) {
+    return "web"
+  }
+
   const channel = request.headers.get("x-amp-channel")
   const persisted_channel = request.cookies.get(SOURCE_CHANNEL_COOKIE_NAME)?.value
   const sourceChannel = request.nextUrl.searchParams.get("source_channel")
@@ -135,7 +146,8 @@ async function runProxy(request: NextRequest) {
   if (session.visitor_uuid) {
     requestHeaders.set("x-amp-session-visitor-uuid", session.visitor_uuid)
   }
-  requestHeaders.set("x-amp-source-channel", session.source_channel)
+  const route_channel = resolveSourceChannel(request)
+  requestHeaders.set("x-amp-source-channel", route_channel)
   requestHeaders.set("x-amp-pathname", request.nextUrl.pathname)
   requestHeaders.set("x-amp-search", request.nextUrl.search)
   requestHeaders.set(

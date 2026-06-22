@@ -13,6 +13,10 @@ import {
   type LineFlexCarouselPayload,
 } from "@/core/bot/rules"
 import {
+  build_card_hero,
+  build_card_primary_button,
+} from "@/core/output/rules"
+import {
   PARTNER_DRIVER_RECRUIT_ALT_TEXT,
   PARTNER_DRIVER_RECRUIT_BODY,
   PARTNER_DRIVER_RECRUIT_BUTTON_LABEL,
@@ -139,17 +143,13 @@ function build_partner_recruit_uri_footer() {
     spacing: "sm",
     paddingAll: "12px",
     contents: [
-      {
-        type: "button",
-        style: "primary",
-        color: "#8F5D28",
-        height: "sm",
+      build_card_primary_button({
+        label: PARTNER_DRIVER_RECRUIT_BUTTON_LABEL,
         action: {
           type: "uri",
-          label: PARTNER_DRIVER_RECRUIT_BUTTON_LABEL,
           uri: PARTNER_DRIVER_REGISTER_PATH,
         },
-      },
+      }),
     ],
   }
 }
@@ -157,13 +157,7 @@ function build_partner_recruit_uri_footer() {
 function build_partner_recruit_bubble(input: { include_registration_button: boolean }) {
   const bubble: Record<string, unknown> = {
     type: "bubble",
-    hero: {
-      type: "image",
-      url: PARTNER_DRIVER_RECRUIT_IMAGE,
-      size: "full",
-      aspectRatio: "20:13",
-      aspectMode: "cover",
-    },
+    hero: build_card_hero({ url: PARTNER_DRIVER_RECRUIT_IMAGE }),
     body: {
       type: "box",
       layout: "vertical",
@@ -449,6 +443,8 @@ export async function deliverMessageBundle(input: {
   room: ChatRoomRecord
   session: Session
   source_channel: SourceChannel
+  source_message_uuid?: string | null
+  selected_action?: string | null
   line_reply_token?: string | null
   line_provider_user_id?: string | null
   line_reply_allowed?: boolean
@@ -465,35 +461,59 @@ export async function deliverMessageBundle(input: {
   const payload = input.message.payload
   const alt_text = resolveFlexAltText(input.message.body, input.room.locale)
   const payload_record = payload as Record<string, unknown> | null
+  const message_meta = readMessageMeta(payload)
+  const selected_action =
+    input.selected_action ??
+    (typeof message_meta.selected_action === "string"
+      ? message_meta.selected_action
+      : null)
+  const source_message_uuid =
+    input.source_message_uuid ??
+    (typeof message_meta.trigger_message_uuid === "string"
+      ? message_meta.trigger_message_uuid
+      : input.message.message_uuid)
   const output_data = isLineFlexCarouselPayload(payload_record)
     ? {
         ...payload_record,
+        source_message_uuid,
+        selected_action,
         meta: {
-          ...readMessageMeta(payload),
+          ...message_meta,
           room_uuid: input.room.room_uuid,
           message_bundle_type: input.message.body,
+          trigger_message_uuid: source_message_uuid,
+          selected_action,
         },
       }
     : payload_record ?? undefined
+
+  const allow_line_reply =
+    input.source_channel === "line" && input.line_reply_allowed === true
 
   await sendAuthDebug("chat_output_bundle_built", {
     room_uuid: input.room.room_uuid,
     message_count: 1,
     destination: input.source_channel,
+    source_channel: input.source_channel,
+    has_reply_token: Boolean(input.line_reply_token),
+    line_reply_allowed: allow_line_reply,
   })
 
   return deliverOutput(
     {
       user_uuid: input.session.user_uuid,
       visitor_uuid: input.session.visitor_uuid,
+      room_uuid: input.room.room_uuid,
       channel: input.source_channel,
-      line_reply_token: input.line_reply_token,
+      line_reply_token: allow_line_reply ? input.line_reply_token ?? null : null,
       line_provider_user_id: input.line_provider_user_id,
-      line_reply_allowed: input.line_reply_allowed,
+      line_reply_allowed: allow_line_reply,
     },
     {
       text: alt_text,
       data: output_data,
+      source_message_uuid,
+      selected_action,
     },
   )
 }

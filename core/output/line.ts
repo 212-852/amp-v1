@@ -10,9 +10,17 @@ import {
   resolve_public_app_url,
   type LineUriNormalizeResult,
 } from "@/core/output/uri"
-import type { OutputMessage } from "@/core/output/rules"
+import type { OutputDestination, OutputMessage, OutputTarget } from "@/core/output/rules"
+import {
+  apply_line_card_button,
+  apply_line_card_hero,
+  should_apply_card_hero_fit,
+} from "@/core/output/rules"
 import { sendAuthDebug } from "@/core/debug"
-import { consumeLineReplyToken } from "@/core/line/reply_token"
+import {
+  mark_line_reply_token_used,
+  validate_line_webhook_reply_token,
+} from "@/core/line/reply_token"
 
 type LineFlexNormalizeContext = {
   room_uuid?: string | null
@@ -160,21 +168,27 @@ function normalize_line_flex_node(
       return null
     }
 
-    return {
+    return apply_line_card_button({
       ...record,
       action: normalized_action,
-    }
+    })
   }
 
   if (record.type === "image" && typeof record.url === "string") {
-    const normalized = resolve_line_image_url(record.url, context)
+    const styled_image = should_apply_card_hero_fit(record)
+      ? apply_line_card_hero(record)
+      : record
+    const normalized = resolve_line_image_url(
+      typeof styled_image.url === "string" ? styled_image.url : record.url,
+      context,
+    )
 
     if (!normalized.ok) {
       return null
     }
 
     return {
-      ...record,
+      ...styled_image,
       url: normalized.uri,
     }
   }
@@ -306,16 +320,41 @@ export async function deliverLine(
   contact: ContactRecord,
   message: OutputMessage,
   options: {
+    destination: OutputDestination
+    target: OutputTarget
     reply_token?: string | null
     provider_user_id?: string | null
-  } = {},
+  },
 ): Promise<DeliveryResult> {
   const token = process.env.LINE_MESSAGING_CHANNEL_ACCESS_TOKEN
   const provider_user_id = options.provider_user_id ?? contact.value
-  const reply_token = consumeLineReplyToken(options.reply_token)
+  const line_send_method = options.destination.line_send_method ?? "push"
+  const use_reply = line_send_method === "reply"
+  const reply_validation = use_reply
+    ? validate_line_webhook_reply_token(options.reply_token)
+    : { ok: false as const, reason: "missing" as const }
+  const reply_token = reply_validation.ok
+    ? reply_validation.record.reply_token
+    : null
 
-  if (options.reply_token && !reply_token) {
-    return { transport: "line", delivered: false }
+  if (use_reply && !reply_token) {
+    await sendAuthDebug("line_reply_send_failed", {
+      provider_user_id,
+      status: 0,
+      error_message: `reply_token_${reply_validation.reason}`,
+      room_uuid: options.target.room_uuid ?? null,
+      source_channel: options.target.channel ?? null,
+      receiver_channel: "line",
+      destination: options.destination.transport,
+      has_reply_token: Boolean(options.reply_token),
+      reply_token_source:
+        options.destination.reply_token_record?.reply_token_source ?? null,
+      reply_token_used:
+        options.destination.reply_token_record?.reply_token_used_at !== null,
+      line_send_method,
+      retry_allowed: false,
+    })
+    return { transport: "line_reply", delivered: false }
   }
 
   if (!token || (!contact.value && !reply_token)) {
@@ -323,8 +362,22 @@ export async function deliverLine(
       provider_user_id,
       status: 0,
       error_message: !token ? "missing_access_token" : "missing_line_destination",
+      room_uuid: options.target.room_uuid ?? null,
+      source_channel: options.target.channel ?? null,
+      receiver_channel: "line",
+      destination: options.destination.transport,
+      has_reply_token: Boolean(reply_token),
+      reply_token_source:
+        options.destination.reply_token_record?.reply_token_source ?? null,
+      reply_token_used:
+        options.destination.reply_token_record?.reply_token_used_at !== null,
+      line_send_method,
+      retry_allowed: false,
     })
-    return { transport: "line", delivered: false }
+    return {
+      transport: use_reply ? "line_reply" : "line_push",
+      delivered: false,
+    }
   }
 
   const line_payloads =
@@ -340,10 +393,24 @@ export async function deliverLine(
       },
     ]
 
+  if (reply_token) {
+    mark_line_reply_token_used(reply_token)
+  }
+
   await sendAuthDebug("line_reply_send_attempt", {
     provider_user_id,
     reply_token_exists: Boolean(reply_token),
     message_count: line_payloads.length,
+    room_uuid: options.target.room_uuid ?? null,
+    source_channel: options.target.channel ?? null,
+    receiver_channel: "line",
+    destination: options.destination.transport,
+    has_reply_token: Boolean(reply_token),
+    reply_token_source:
+      options.destination.reply_token_record?.reply_token_source ?? null,
+    reply_token_used: true,
+    line_send_method,
+    retry_allowed: false,
   })
 
   const response = await fetch(
@@ -378,14 +445,40 @@ export async function deliverLine(
       provider_user_id,
       status: response.status,
       error_message,
+      room_uuid: options.target.room_uuid ?? null,
+      source_channel: options.target.channel ?? null,
+      receiver_channel: "line",
+      destination: options.destination.transport,
+      has_reply_token: Boolean(reply_token),
+      reply_token_source:
+        options.destination.reply_token_record?.reply_token_source ?? null,
+      reply_token_used: true,
+      line_send_method,
+      retry_allowed: false,
     })
 
-    return { transport: "line", delivered: false }
+    return {
+      transport: use_reply ? "line_reply" : "line_push",
+      delivered: false,
+    }
   }
 
   await sendAuthDebug("line_reply_send_success", {
     provider_user_id,
+    room_uuid: options.target.room_uuid ?? null,
+    source_channel: options.target.channel ?? null,
+    receiver_channel: "line",
+    destination: options.destination.transport,
+    has_reply_token: Boolean(reply_token),
+    reply_token_source:
+      options.destination.reply_token_record?.reply_token_source ?? null,
+    reply_token_used: true,
+    line_send_method,
+    retry_allowed: false,
   })
 
-  return { transport: "line", delivered: response.ok }
+  return {
+    transport: use_reply ? "line_reply" : "line_push",
+    delivered: response.ok,
+  }
 }

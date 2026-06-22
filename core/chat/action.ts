@@ -7,6 +7,7 @@ import {
   resolveParticipantRole,
   buildChatContext,
 } from "@/core/chat/context"
+import { claim_chat_response } from "@/core/chat/response_idempotency"
 import { resolveChatSupportAccess } from "@/core/chat/support"
 import {
   findParticipant,
@@ -662,6 +663,37 @@ export async function handleIncomingChatMessageArchive(
   const response_route = resolve_chat_response_route(body, { line_linked })
 
   if (response_route.selected_action !== "none") {
+    const can_create_response = claim_chat_response({
+      room_uuid: room.room_uuid,
+      trigger_message_uuid: message.message_uuid,
+      selected_action: response_route.selected_action,
+    })
+
+    if (!can_create_response) {
+      await sendAuthDebug("chat_response_route_resolved", {
+        room_uuid: room.room_uuid,
+        message_uuid: message.message_uuid,
+        user_uuid: input.session.user_uuid,
+        visitor_uuid: input.session.visitor_uuid,
+        channel: input.source_channel,
+        line_linked,
+        normalized_text: response_route.normalized_text,
+        detected_intent: response_route.detected_intent,
+        selected_action: response_route.selected_action,
+        can_show_registration_card:
+          response_route.can_show_registration_card,
+        duplicate_skipped: true,
+      })
+
+      return {
+        bundle: toMessageBundle(message, room.locale),
+        mode_command_handled: false,
+        chat_response_handled: true,
+        driver_partner_handled:
+          response_route.selected_action === "show_driver_registration",
+      }
+    }
+
     const output_locale = resolveOutputLocale({
       preferred: input.locale,
       room_locale: room.locale,
@@ -692,6 +724,7 @@ export async function handleIncomingChatMessageArchive(
           selected_action: response_route.selected_action,
           can_show_registration_card:
             response_route.can_show_registration_card,
+          trigger_message_uuid: message.message_uuid,
         },
       },
     })
@@ -717,6 +750,8 @@ export async function handleIncomingChatMessageArchive(
         room,
         session: input.session,
         source_channel: input.source_channel,
+        source_message_uuid: message.message_uuid,
+        selected_action: response_route.selected_action,
         line_reply_token: input.line_reply_token,
         line_provider_user_id: input.line_provider_user_id,
         line_reply_allowed: input.line_reply_allowed,

@@ -13,7 +13,7 @@ import {
   can_reply_to_allowed_line_event,
   is_line_webhook_reply_enabled,
 } from "@/core/line/rules"
-import { beginLineReplyTokenScope } from "@/core/line/reply_token"
+import { beginLineReplyTokenScope, register_line_webhook_reply_token } from "@/core/line/reply_token"
 
 type LineEventSource = {
   userId?: string
@@ -57,6 +57,8 @@ export async function upsertLineContactsFromEvents(events: LineEvent[]) {
 async function processAllowedLineEvent(
   event: LineIncomingEvent,
 ): Promise<LineWebhookEventResult> {
+  register_line_webhook_reply_token(event.reply_token)
+
   const can_reply = can_reply_to_allowed_line_event(event)
 
   await sendAuthDebug("line_event_normalized", {

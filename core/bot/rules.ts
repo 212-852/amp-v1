@@ -1,6 +1,10 @@
 import type { ChatLocale } from "@/core/chat/types"
 import { sendAuthDebug } from "@/core/debug"
 import {
+  build_card_hero,
+  build_card_primary_button,
+} from "@/core/output/rules"
+import {
   getChatContentKeyCount,
   resolveChatContent,
   resolveChatContentRecord,
@@ -218,13 +222,7 @@ export function resolvePublicAssetUrl(path: string, base_url?: string | null) {
 }
 
 function buildHero(image_path: string) {
-  return {
-    type: "image",
-    url: image_path,
-    size: "full",
-    aspectRatio: "20:13",
-    aspectMode: "cover",
-  }
+  return build_card_hero({ url: image_path })
 }
 
 function buildWelcomeBodyBox(input: {
@@ -447,18 +445,14 @@ function buildQuickMenuBody(locale: ChatLocale) {
 }
 
 function buildWelcomeFlexButton(label: string, action: string) {
-  return {
-    type: "button",
-    style: "primary",
-    color: "#8F5D28",
-    height: "sm",
-    cornerRadius: "16px",
+  return build_card_primary_button({
+    label,
     action: {
       type: "postback",
-      label,
       data: action,
     },
-  }
+    cornerRadius: "16px",
+  })
 }
 
 function buildWelcomeFlexLink(label: string, action: string) {
@@ -559,17 +553,15 @@ function buildFooter(buttons: Array<{ label: string; action: string }>) {
     layout: "vertical",
     spacing: "sm",
     paddingAll: "12px",
-    contents: buttons.map((button) => ({
-      type: "button",
-      style: "primary",
-      color: "#8F5D28",
-      height: "sm",
-      action: {
-        type: "postback",
+    contents: buttons.map((button) =>
+      build_card_primary_button({
         label: button.label,
-        data: button.action,
-      },
-    })),
+        action: {
+          type: "postback",
+          data: button.action,
+        },
+      }),
+    ),
   }
 }
 
