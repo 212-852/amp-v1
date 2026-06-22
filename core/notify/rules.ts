@@ -388,7 +388,17 @@ function resolveReceiverNotifyDelivery(input: {
     }
   }
 
-  if (is_admin_receiver) {
+  if (contact && isValidPushContact(contact)) {
+    return {
+      delivery: "push",
+      selected_contact: toSelectedPushContact(contact),
+      line_user_id: null,
+      line_user_id_source: null,
+      skipped_reason: null,
+    }
+  }
+
+  if (contact.type === "line" || is_admin_receiver) {
     if (!line_user_id) {
       return {
         delivery: "none",
@@ -410,16 +420,6 @@ function resolveReceiverNotifyDelivery(input: {
         channel: contact?.channel ?? null,
         push_subscription: null,
       },
-      line_user_id,
-      line_user_id_source,
-      skipped_reason: null,
-    }
-  }
-
-  if (contact && isValidPushContact(contact)) {
-    return {
-      delivery: "push",
-      selected_contact: toSelectedPushContact(contact),
       line_user_id,
       line_user_id_source,
       skipped_reason: null,
@@ -973,6 +973,21 @@ export async function resolveChatNotifyRoutes(input: {
           line_user_id_source: null,
           skipped_reason: "availability_off" as const,
         }
+
+    if (contact?.type === "push" && resolved.delivery !== "push") {
+      await sendNotifyDebug("notify_push_overridden", {
+        room_uuid: input.room_uuid,
+        sender_uuid: input.sender_uuid ?? null,
+        receiver_uuid: receiver_user_uuid,
+        reason: resolved.skipped_reason ?? "push_not_selected",
+        contact_type: contact.type,
+        has_endpoint: Boolean(contact.endpoint?.trim()),
+        has_p256dh: Boolean(contact.p256dh?.trim()),
+        has_auth: Boolean(contact.auth?.trim()),
+        delivery: resolved.delivery,
+        request_id: input.request_id ?? null,
+      })
+    }
 
     await sendNotifyDebug("notify_contact_selected", {
       room_uuid: input.room_uuid,

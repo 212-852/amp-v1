@@ -289,6 +289,7 @@ const notifyEvents = new Set([
   "notify_push_send_started",
   "notify_push_send_success",
   "notify_push_send_failed",
+  "notify_push_overridden",
   "notify_line_send_started",
   "notify_line_send_success",
   "notify_line_send_failed",
