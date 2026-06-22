@@ -771,6 +771,21 @@ export default function AppFooter({
   }, [])
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+
+    if (params.get("line_link_required") !== "1") {
+      return
+    }
+
+    openOverlay({ type: "link", source: "user" })
+
+    params.delete("line_link_required")
+    const next_query = params.toString()
+    const next_url = `${window.location.pathname}${next_query ? `?${next_query}` : ""}${window.location.hash}`
+    window.history.replaceState({}, "", next_url)
+  }, [openOverlay])
+
+  useEffect(() => {
     function handle_profile_modal_visibility(event: Event) {
       const detail = (event as CustomEvent<{ open?: boolean }>).detail
       set_profile_modal_open(detail?.open === true)

@@ -37,6 +37,8 @@ const lineWebhookInfoEvents = new Set([
   "line_reply_blocked",
   "line_reply_send_attempt",
   "line_reply_send_success",
+  "line_flex_uri_normalized",
+  "line_flex_uri_rejected",
   "line_signature_verified",
   "line_webhook_gate_resolved",
   "line_webhook_health_check",

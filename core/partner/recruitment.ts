@@ -16,6 +16,8 @@ export const PARTNER_DRIVER_RECRUIT_DESCRIPTION =
 
 export const PARTNER_DRIVER_RECRUIT_BUTTON_LABEL = "登録フォームへ"
 
+export const PARTNER_DRIVER_REGISTER_PATH = "/driver/register"
+
 export function build_partner_liff_guidance_text() {
   return [
     "パートナードライバー登録をご希望の方は",

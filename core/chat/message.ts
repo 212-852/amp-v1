@@ -19,11 +19,12 @@ import {
   PARTNER_DRIVER_RECRUIT_DESCRIPTION,
   PARTNER_DRIVER_RECRUIT_IMAGE,
   PARTNER_DRIVER_RECRUIT_TITLE,
+  PARTNER_DRIVER_REGISTER_PATH,
 } from "@/core/partner/recruitment"
-import { build_line_messages_from_payload } from "@/core/output/line"
 import {
   type ChatResponseRoute,
   buildMessagePayload,
+  readMessageMeta,
   readMessageSourceKind,
   resolveArchivedMessageType,
   resolveDisplayFields,
@@ -146,15 +147,15 @@ function build_partner_recruit_uri_footer() {
         action: {
           type: "uri",
           label: PARTNER_DRIVER_RECRUIT_BUTTON_LABEL,
-          uri: "/driver/register",
+          uri: PARTNER_DRIVER_REGISTER_PATH,
         },
       },
     ],
   }
 }
 
-function build_partner_recruit_bubble() {
-  return {
+function build_partner_recruit_bubble(input: { include_registration_button: boolean }) {
+  const bubble: Record<string, unknown> = {
     type: "bubble",
     hero: {
       type: "image",
@@ -185,23 +186,36 @@ function build_partner_recruit_bubble() {
         },
       ],
     },
-    footer: build_partner_recruit_uri_footer(),
   }
+
+  if (input.include_registration_button) {
+    bubble.footer = build_partner_recruit_uri_footer()
+  }
+
+  return bubble
 }
 
-export function build_partner_driver_recruitment_carousel(): LineFlexCarouselPayload {
+export function build_partner_driver_recruitment_carousel(input?: {
+  include_registration_button?: boolean
+}): LineFlexCarouselPayload {
   return {
     type: "carousel",
-    contents: [build_partner_recruit_bubble()],
+    contents: [
+      build_partner_recruit_bubble({
+        include_registration_button: input?.include_registration_button !== false,
+      }) as LineFlexCarouselPayload["contents"][number],
+    ],
   }
 }
 
-export function build_partner_driver_recruitment_bundle() {
+export function build_partner_driver_recruitment_bundle(input?: {
+  include_registration_button?: boolean
+}) {
   return {
     type: "flex" as const,
     body: PARTNER_DRIVER_RECRUIT_BODY,
     alt_text: PARTNER_DRIVER_RECRUIT_ALT_TEXT,
-    payload: build_partner_driver_recruitment_carousel(),
+    payload: build_partner_driver_recruitment_carousel(input),
   }
 }
 
@@ -224,7 +238,9 @@ export function build_chat_response_message_bundle(route: ChatResponseRoute) {
     route.selected_action === "show_driver_registration" &&
     route.can_show_registration_card
   ) {
-    return build_partner_driver_recruitment_bundle()
+    return build_partner_driver_recruitment_bundle({
+      include_registration_button: true,
+    })
   }
 
   return null
@@ -448,15 +464,21 @@ export async function deliverMessageBundle(input: {
 
   const payload = input.message.payload
   const alt_text = resolveFlexAltText(input.message.body, input.room.locale)
-  const line_messages = build_line_messages_from_payload({
-    payload: payload as Record<string, unknown> | null,
-    alt_text,
-  })
-  const message_count = line_messages?.length ?? 1
+  const payload_record = payload as Record<string, unknown> | null
+  const output_data = isLineFlexCarouselPayload(payload_record)
+    ? {
+        ...payload_record,
+        meta: {
+          ...readMessageMeta(payload),
+          room_uuid: input.room.room_uuid,
+          message_bundle_type: input.message.body,
+        },
+      }
+    : payload_record ?? undefined
 
   await sendAuthDebug("chat_output_bundle_built", {
     room_uuid: input.room.room_uuid,
-    message_count,
+    message_count: 1,
     destination: input.source_channel,
   })
 
@@ -471,10 +493,7 @@ export async function deliverMessageBundle(input: {
     },
     {
       text: alt_text,
-      data: isLineFlexCarouselPayload(payload as Record<string, unknown>)
-        ? (payload as Record<string, unknown>)
-        : (payload as Record<string, unknown> | undefined),
-      line_messages,
+      data: output_data,
     },
   )
 }

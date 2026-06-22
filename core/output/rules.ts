@@ -8,6 +8,8 @@ export type OutputMessage = {
   line_messages?: unknown[]
 }
 
+export { resolve_public_app_url } from "@/core/output/uri"
+
 export type OutputTarget = {
   user_uuid?: string | null
   visitor_uuid?: string | null
