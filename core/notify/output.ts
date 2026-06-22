@@ -156,13 +156,39 @@ export async function deliverChatNotifyOutput(input: ChatNotifyOutputInput) {
     let result: { delivered: boolean; reason?: string }
 
     try {
+      await sendNotifyDebug("notification_push_dispatch_enter", {
+        delivery_channel: "push",
+        receiver_uuid: input.receiver_user_uuid,
+        contact_uuid: input.contact_uuid ?? null,
+        has_endpoint: Boolean(input.push_subscription.endpoint),
+        has_p256dh: Boolean(input.push_subscription.keys?.p256dh),
+        has_auth: Boolean(input.push_subscription.keys?.auth),
+        request_id: input.request_id ?? null,
+      })
+
       const { send_push_notification } = await import("@/core/notify/push")
       result = await send_push_notification({
         ...input,
         push_subscription: input.push_subscription,
       })
+
+      await sendNotifyDebug("notification_push_dispatch_exit", {
+        delivery_channel: "push",
+        receiver_uuid: input.receiver_user_uuid,
+        contact_uuid: input.contact_uuid ?? null,
+        delivered: result.delivered,
+        reason: result.reason ?? null,
+        request_id: input.request_id ?? null,
+      })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+      await sendNotifyDebug("notify_push_dispatch_failed", {
+        delivery_channel: "push",
+        receiver_uuid: input.receiver_user_uuid,
+        contact_uuid: input.contact_uuid ?? null,
+        error_message: message,
+        request_id: input.request_id ?? null,
+      })
       await sendNotifyDebug("notification_delivery_failed", {
         delivery_channel: "push",
         receiver_uuid: input.receiver_user_uuid,
