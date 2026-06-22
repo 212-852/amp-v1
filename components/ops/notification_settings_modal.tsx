@@ -54,6 +54,11 @@ const content = {
     en: "Push notification key is not configured",
     es: "La clave push no esta configurada",
   },
+  push_subscription_failed: {
+    ja: "Push通知キーを取得できませんでした",
+    en: "Failed to get push notification keys",
+    es: "No se pudieron obtener las claves push",
+  },
   save: {
     ja: "保存",
     en: "Save",
@@ -392,8 +397,21 @@ export default function NotificationSettingsModal({
     const json = await acquireFreshPushSubscription({
       public_key,
     })
+    const endpoint = json.endpoint?.trim()
+    const p256dh = json.keys?.p256dh?.trim()
+    const auth = json.keys?.auth?.trim()
+
+    if (!endpoint || !p256dh || !auth) {
+      throw new Error(
+        content.push_subscription_failed[locale as Locale] ??
+          content.push_subscription_failed.en,
+      )
+    }
+
     push_debug("push_subscribe_success", {
-      endpoint_exists: Boolean(json.endpoint),
+      endpoint_exists: true,
+      p256dh_exists: true,
+      auth_exists: true,
     })
     set_push_subscription(json)
     return json
@@ -419,6 +437,17 @@ export default function NotificationSettingsModal({
     } | null
 
     if (!response.ok || payload?.ok !== true) {
+      if (
+        payload?.error === "push_subscription_required" ||
+        payload?.error === "push_subscription_endpoint_required" ||
+        payload?.error === "push_subscription_key_required"
+      ) {
+        throw new Error(
+          content.push_subscription_failed[locale as Locale] ??
+            content.push_subscription_failed.en,
+        )
+      }
+
       throw new Error(payload?.error ?? "notification_save_failed")
     }
 

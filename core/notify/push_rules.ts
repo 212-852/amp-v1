@@ -51,10 +51,17 @@ export function normalizePushSubscription(
     throw new Error("push_subscription_endpoint_required")
   }
 
+  const p256dh = normalizeString(record.keys?.p256dh)
+  const auth = normalizeString(record.keys?.auth)
+
+  if (!p256dh || !auth) {
+    throw new Error("push_subscription_key_required")
+  }
+
   return {
     endpoint,
-    p256dh: normalizeString(record.keys?.p256dh),
-    auth: normalizeString(record.keys?.auth),
+    p256dh,
+    auth,
     user_agent,
   }
 }

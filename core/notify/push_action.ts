@@ -334,7 +334,7 @@ export async function savePushSubscription(input: {
       session: input.session,
       body: {
         type: "push",
-        value: null,
+        value: subscription.endpoint,
         channel: "pwa",
         state: "active",
         endpoint: subscription.endpoint,

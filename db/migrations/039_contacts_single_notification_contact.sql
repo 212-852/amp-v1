@@ -2,6 +2,11 @@ alter table public.contacts
 alter column value drop not null;
 
 drop index if exists contacts_push_endpoint_unique;
+drop index if exists contacts_type_value_unique;
+drop index if exists contacts_user_type_value_unique;
+drop index if exists contacts_user_type_value_uidx;
+drop index if exists contacts_visitor_type_value_unique;
+drop index if exists contacts_visitor_type_value_uidx;
 
 update public.contacts
 set
@@ -15,7 +20,7 @@ where type = 'line';
 
 update public.contacts
 set
-  value = null,
+  value = endpoint,
   user_agent = null,
   updated_at = now()
 where type = 'push';
