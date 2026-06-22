@@ -20,6 +20,7 @@ export type ChatMessageNotifyInput = {
   user_name: string
   message_body?: string | null
   message_type?: string | null
+  message_source?: string | null
   source_channel?: string | null
   request_id?: string | null
 }

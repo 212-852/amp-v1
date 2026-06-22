@@ -250,6 +250,13 @@ export function build_partner_driver_recruitment_bundle(input: {
   }
 }
 
+export function build_line_link_guidance_bundle() {
+  return {
+    type: "text" as const,
+    body: "LINE連携にはログインが必要です。LINEでログイン後、もう一度この画面を開いてください。",
+  }
+}
+
 export function toMessageBundle(
   message: ChatMessageRecord,
   room_locale: ChatLocale,

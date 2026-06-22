@@ -8,7 +8,7 @@ import {
 } from "@/core/notify/chat_rules"
 import { deliverChatNotifyOutput } from "@/core/notify/output"
 import { create_notification_preview } from "@/core/notify/message"
-import { resolveChatNotifyRoutes } from "@/core/notify/rules"
+import { resolveChatNotifyRouteResolution } from "@/core/notify/rules"
 import type { ChatMessageNotifyInput } from "@/core/notify/types"
 
 function resolveSkipReason(input: {
@@ -36,16 +36,18 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
   const sender_role = input.sender_role as ChatNotifySenderRole
 
   let delivered_count = 0
-  const routes = await resolveChatNotifyRoutes({
+  const route_resolution = await resolveChatNotifyRouteResolution({
     room_uuid: input.room_uuid,
     sender_uuid: input.sender_uuid ?? null,
     sender_participant_uuid: input.sender_participant_uuid ?? null,
     sender_role,
     message_uuid: input.message_uuid ?? null,
     message_text: input.message_body ?? null,
+    message_source: input.message_source ?? null,
     source_channel: input.source_channel ?? null,
     request_id,
   })
+  const routes = route_resolution.routes
 
   if (routes.length === 0) {
     await sendNotifyDebug("notification_route_decided", {
@@ -55,7 +57,7 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
       receiver_uuid: null,
       should_notify: false,
       delivery_channel: null,
-      reason: "no_receiver",
+      reason: route_resolution.skipped_reason ?? "no_receiver",
       request_id,
     })
 

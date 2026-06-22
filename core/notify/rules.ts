@@ -1,3 +1,5 @@
+import type { ChatRoomMode } from "@/core/chat/types"
+
 export type NotifyEventName =
   | "admin_page_accessed"
   | "admin_page_unauthorized_access"
@@ -211,6 +213,10 @@ type ContactRow = {
   receive?: boolean | null
   last_seen_at?: string | null
   updated_at?: string | null
+}
+
+type NotifyRoomRow = {
+  mode?: ChatRoomMode | null
 }
 
 const ROOM_PRESENCE_STALE_THRESHOLD_SECONDS = 60
@@ -907,18 +913,131 @@ async function loadReceiverLineProviderUserId(user_uuid: string) {
   return rows[0]?.provider_user_id?.trim() || null
 }
 
-export async function resolveChatNotifyRoutes(input: {
+async function loadRoomModeForNotify(
+  room_uuid: string,
+): Promise<ChatRoomMode | null> {
+  const { getRestConfig, restHeaders, restUrl } = await import("@/core/db/rest")
+  const config = getRestConfig()
+
+  if (!config) {
+    return null
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "rooms",
+      [
+        `room_uuid=eq.${encodeURIComponent(room_uuid)}`,
+        "select=mode",
+        "limit=1",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return null
+  }
+
+  const rows = (await response.json()) as NotifyRoomRow[]
+  const mode = rows[0]?.mode ?? null
+
+  if (mode === "bot" || mode === "concierge" || mode === "group") {
+    return mode
+  }
+
+  return null
+}
+
+function resolveNotifyMessageSource(input: {
+  message_source?: string | null
+  sender_role: string
+}) {
+  if (input.message_source) {
+    return input.message_source
+  }
+
+  if (isStaffSender(input.sender_role)) {
+    return "concierge"
+  }
+
+  if (input.sender_role === "bot") {
+    return "bot"
+  }
+
+  return "user"
+}
+
+type ResolveChatNotifyRoutesInput = {
   room_uuid: string
   sender_uuid?: string | null
   sender_participant_uuid?: string | null
   sender_role: string
   message_uuid?: string | null
   message_text?: string | null
+  message_source?: string | null
   source_channel?: string | null
   request_id?: string | null
-}): Promise<ChatNotifyContactRoute[]> {
+}
+
+export type ChatNotifyRouteResolution = {
+  routes: ChatNotifyContactRoute[]
+  skipped_reason: string | null
+  room_mode: ChatRoomMode | null
+  notification_allowed: boolean
+}
+
+export async function resolveChatNotifyRouteResolution(
+  input: ResolveChatNotifyRoutesInput,
+): Promise<ChatNotifyRouteResolution> {
   const { sendNotifyDebug } = await import("@/core/notify/debug")
   const { loadRoomPresence } = await import("@/core/chat/presence")
+  const room_mode = await loadRoomModeForNotify(input.room_uuid)
+  const notification_allowed = room_mode === "concierge"
+  const notification_reason = notification_allowed
+    ? "room_mode_concierge"
+    : room_mode
+      ? "room_mode_not_concierge"
+      : "room_mode_unknown"
+  const message_source = resolveNotifyMessageSource({
+    message_source: input.message_source ?? null,
+    sender_role: input.sender_role,
+  })
+
+  await sendNotifyDebug("notification_room_mode_checked", {
+    room_uuid: input.room_uuid,
+    channel: input.source_channel ?? null,
+    sender_role: input.sender_role,
+    message_source,
+    room_mode,
+    notification_allowed,
+    notification_reason,
+    request_id: input.request_id ?? null,
+  })
+
+  if (!notification_allowed) {
+    await sendNotifyDebug("notification_route_decided", {
+      message_uuid: input.message_uuid ?? input.request_id ?? null,
+      room_uuid: input.room_uuid,
+      sender_uuid: input.sender_uuid ?? null,
+      receiver_uuid: null,
+      should_notify: false,
+      delivery_channel: null,
+      reason: notification_reason,
+      request_id: input.request_id ?? null,
+    })
+
+    return {
+      routes: [],
+      skipped_reason: notification_reason,
+      room_mode,
+      notification_allowed,
+    }
+  }
 
   const receivers = await resolveRoomNotificationReceivers({
     room_uuid: input.room_uuid,
@@ -929,7 +1048,12 @@ export async function resolveChatNotifyRoutes(input: {
   })
 
   if (receivers.length === 0) {
-    return []
+    return {
+      routes: [],
+      skipped_reason: "no_receiver",
+      room_mode,
+      notification_allowed,
+    }
   }
 
   const room_presence = await loadRoomPresence(input.room_uuid)
@@ -1230,7 +1354,20 @@ export async function resolveChatNotifyRoutes(input: {
     })
   }
 
-  return routes
+  return {
+    routes,
+    skipped_reason: null,
+    room_mode,
+    notification_allowed,
+  }
+}
+
+export async function resolveChatNotifyRoutes(
+  input: ResolveChatNotifyRoutesInput,
+): Promise<ChatNotifyContactRoute[]> {
+  const resolution = await resolveChatNotifyRouteResolution(input)
+
+  return resolution.routes
 }
 
 export * from "@/core/notify/settings_rules"

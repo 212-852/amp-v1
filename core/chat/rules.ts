@@ -27,13 +27,80 @@ export function resolveTypingLabel(locale: ChatLocale, name: string) {
 }
 
 export function resolve_partner_driver_trigger(text: string) {
-  if (text.trim() !== PARTNER_DRIVER_TRIGGER_TEXT) {
+  const route = resolve_chat_response_route(text)
+
+  if (route.detected_intent !== "driver_recruitment") {
     return null
   }
 
   return {
     matched: true,
   } as const
+}
+
+export type ChatDetectedIntent = "line_link" | "driver_recruitment" | "none"
+
+export type ChatSelectedAction =
+  | "line_link_guidance"
+  | "partner_driver_recruitment"
+  | "none"
+
+export type ChatResponseRoute = {
+  normalized_text: string
+  detected_intent: ChatDetectedIntent
+  selected_action: ChatSelectedAction
+}
+
+const line_link_intent_terms = [
+  "連携",
+  "line連携",
+  "link",
+  "リンク",
+  "アカウント連携",
+]
+
+const driver_recruitment_intent_terms = [
+  "ドライバーになりたい",
+  "ドライバー募集",
+  "登録フォーム",
+  "パートナードライバー",
+  PARTNER_DRIVER_TRIGGER_TEXT,
+]
+
+export function normalize_chat_intent_text(text: string) {
+  return text.normalize("NFKC").trim().replace(/\s+/g, "").toLowerCase()
+}
+
+function includes_any_intent_term(text: string, terms: string[]) {
+  return terms.some((term) =>
+    text.includes(normalize_chat_intent_text(term)),
+  )
+}
+
+export function resolve_chat_response_route(text: string): ChatResponseRoute {
+  const normalized_text = normalize_chat_intent_text(text)
+
+  if (includes_any_intent_term(normalized_text, line_link_intent_terms)) {
+    return {
+      normalized_text,
+      detected_intent: "line_link",
+      selected_action: "line_link_guidance",
+    }
+  }
+
+  if (includes_any_intent_term(normalized_text, driver_recruitment_intent_terms)) {
+    return {
+      normalized_text,
+      detected_intent: "driver_recruitment",
+      selected_action: "partner_driver_recruitment",
+    }
+  }
+
+  return {
+    normalized_text,
+    detected_intent: "none",
+    selected_action: "none",
+  }
 }
 
 export function isPartnerDriverRecruitBody(body: string) {

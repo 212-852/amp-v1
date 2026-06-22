@@ -154,6 +154,7 @@ async function processAllowedLineEvent(
 
   if (
     archive_result.mode_command_handled ||
+    archive_result.chat_response_handled ||
     archive_result.driver_partner_handled
   ) {
     return {

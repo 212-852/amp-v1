@@ -24,7 +24,7 @@ import {
   assertMessageBody,
   assertRoomMode,
   resolve_concierge_thread_rule,
-  resolve_partner_driver_trigger,
+  resolve_chat_response_route,
   resolve_room_mode_trigger,
   resolveRoomModeCommandReply,
 } from "@/core/chat/rules"
@@ -32,6 +32,7 @@ import {
   archivePreparedMessage,
   archiveBotTriggerMessage,
   archivePresenceMessageBundle,
+  build_line_link_guidance_bundle,
   build_partner_driver_recruitment_bundle,
   deliverMessageBundle,
   ensureWelcomeMessageArchived,
@@ -119,6 +120,7 @@ async function triggerIncomingChatNotification(input: {
   user_name: string
   message_body: string
   message_type: string
+  message_source?: string | null
   source_channel?: string | null
 }) {
   const request_id = input.message_uuid
@@ -145,6 +147,7 @@ async function triggerIncomingChatNotification(input: {
     user_name: input.user_name,
     message_body: input.message_body,
     message_type: input.message_type,
+    message_source: input.message_source ?? null,
     source_channel: input.source_channel ?? null,
     request_id,
   })
@@ -520,6 +523,7 @@ export async function handleIncomingChatMessage(
 export type IncomingChatArchiveResult = {
   bundle: MessageBundle
   mode_command_handled: boolean
+  chat_response_handled: boolean
   driver_partner_handled: boolean
 }
 
@@ -614,6 +618,7 @@ export async function handleIncomingChatMessageArchive(
     return {
       bundle,
       mode_command_handled: true,
+      chat_response_handled: true,
       driver_partner_handled: false,
     }
   }
@@ -649,48 +654,53 @@ export async function handleIncomingChatMessageArchive(
     source_channel: input.source_channel,
   })
 
-  const line_identity_linked =
-    input.line_identity_linked === true
-      ? true
-      : input.line_identity_linked === false
-        ? false
-        : await resolve_user_has_line_identity(input.session.user_uuid)
+  const response_route = resolve_chat_response_route(body)
 
-  const partner_trigger = resolve_partner_driver_trigger(body)
-
-  if (partner_trigger?.matched) {
+  if (response_route.selected_action !== "none") {
     const output_locale = resolveOutputLocale({
       preferred: input.locale,
       room_locale: room.locale,
     })
-    const recruitment_bundle = build_partner_driver_recruitment_bundle({
-      line_identity_linked,
-    })
+    const response_bundle =
+      response_route.selected_action === "line_link_guidance"
+        ? build_line_link_guidance_bundle()
+        : build_partner_driver_recruitment_bundle({
+            line_identity_linked:
+              input.line_identity_linked === true
+                ? true
+                : input.line_identity_linked === false
+                  ? false
+                  : await resolve_user_has_line_identity(input.session.user_uuid),
+          })
+    const response_payload =
+      "payload" in response_bundle ? response_bundle.payload : {}
     const reply_message = await archivePreparedMessage({
       room,
       participant,
       source_channel: input.source_channel,
       source_kind: "bot",
-      type: recruitment_bundle.type,
-      body: recruitment_bundle.body,
+      type: response_bundle.type,
+      body: response_bundle.body,
       original_locale: output_locale,
       session: input.session,
       payload: {
-        ...recruitment_bundle.payload,
+        ...response_payload,
         meta: {
           actor_role: "bot",
           actor_display_name: "Bot",
+          detected_intent: response_route.detected_intent,
+          selected_action: response_route.selected_action,
         },
       },
     })
 
-    await sendAuthDebug("chat_driver_partner_resolved", {
+    await sendAuthDebug("chat_response_route_resolved", {
       room_uuid: room.room_uuid,
       message_uuid: reply_message.message_uuid,
-      source_channel: input.source_channel,
-      reason: line_identity_linked
-        ? "line_identity_linked"
-        : "line_identity_not_linked",
+      channel: input.source_channel,
+      normalized_text: response_route.normalized_text,
+      detected_intent: response_route.detected_intent,
+      selected_action: response_route.selected_action,
     })
 
     if (options.deliver_mode_reply ?? options.deliver !== false) {
@@ -708,7 +718,9 @@ export async function handleIncomingChatMessageArchive(
     return {
       bundle: toMessageBundle(reply_message, room.locale),
       mode_command_handled: false,
-      driver_partner_handled: true,
+      chat_response_handled: true,
+      driver_partner_handled:
+        response_route.selected_action === "partner_driver_recruitment",
     }
   }
 
@@ -721,6 +733,7 @@ export async function handleIncomingChatMessageArchive(
     user_name: actor_display_name,
     message_body: message.body,
     message_type: message.type,
+    message_source: "user",
     source_channel: input.source_channel,
   })
 
@@ -757,6 +770,7 @@ export async function handleIncomingChatMessageArchive(
   return {
     bundle: toMessageBundle(message, room.locale),
     mode_command_handled: false,
+    chat_response_handled: false,
     driver_partner_handled: false,
   }
 }
