@@ -1,13 +1,18 @@
-import AdminComingSoon from "@/components/admin/coming-soon"
 import AdminOpsFrame from "@/components/admin/frame"
+import NotificationPageView from "@/components/notification/page_view"
 import { requireAdminAccess } from "@/core/admin/guard"
+import { resolveAuthContext } from "@/core/auth/context"
 
 export default async function AdminNotificationsPage() {
+  const context = await resolveAuthContext("/admin/notifications")
   const { session } = await requireAdminAccess()
 
   return (
     <AdminOpsFrame pathname="/admin/notifications" session={session}>
-      <AdminComingSoon title="Notifications" />
+      <NotificationPageView
+        session={session}
+        locale={context.locale ?? "ja"}
+      />
     </AdminOpsFrame>
   )
 }

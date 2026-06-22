@@ -5,7 +5,6 @@ export type OverlayType =
   | "menu"
   | "link"
   | "account"
-  | "notice"
   | "language"
 
 export type OverlaySource = "user" | "driver" | "admin"

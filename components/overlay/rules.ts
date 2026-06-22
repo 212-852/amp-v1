@@ -12,7 +12,6 @@ const animationByType: Record<OverlayType, OverlayAnimation> = {
   menu: "from_left",
   link: "center_drop",
   account: "center_drop",
-  notice: "center_drop",
   language: "center_drop",
 }
 
@@ -21,7 +20,6 @@ const placementByType: Record<OverlayType, OverlayPlacement> = {
   menu: "left",
   link: "center",
   account: "center",
-  notice: "center",
   language: "center",
 }
 
@@ -73,15 +71,6 @@ const contentByType: Record<
     title: "",
     description: "",
     items: [],
-  },
-  notice: {
-    title: "",
-    description: "",
-    items: [
-      { id: "reservation_updates" },
-      { id: "driver_messages" },
-      { id: "system_notices" },
-    ],
   },
   language: {
     title: "",

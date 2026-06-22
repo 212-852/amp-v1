@@ -299,31 +299,6 @@ const content = {
     en: "Settings",
     es: "Ajustes",
   },
-  notice_title: {
-    ja: "Notice",
-    en: "Notice",
-    es: "Avisos",
-  },
-  notice_description: {
-    ja: "最新通知と必要な操作。",
-    en: "Latest notifications and required actions.",
-    es: "Notificaciones recientes y acciones necesarias.",
-  },
-  reservation_updates: {
-    ja: "予約の更新",
-    en: "Reservation updates",
-    es: "Actualizaciones de reserva",
-  },
-  driver_messages: {
-    ja: "ドライバーからのメッセージ",
-    en: "Driver messages",
-    es: "Mensajes del conductor",
-  },
-  system_notices: {
-    ja: "システム通知",
-    en: "System notices",
-    es: "Avisos del sistema",
-  },
 }
 
 function getModalLayoutClass(rule: OverlayRule) {
@@ -404,10 +379,6 @@ function get_modal_title(rule: OverlayRule, locale: Locale) {
     return content.menu_title[locale]
   }
 
-  if (rule.type === "notice") {
-    return content.notice_title[locale]
-  }
-
   return rule.title ?? ""
 }
 
@@ -430,10 +401,6 @@ function get_modal_description(rule: OverlayRule, locale: Locale) {
 
   if (rule.type === "menu") {
     return content.menu_description[locale]
-  }
-
-  if (rule.type === "notice") {
-    return content.notice_description[locale]
   }
 
   return rule.description ?? ""
@@ -498,18 +465,6 @@ function get_default_label(item: OverlayItem, locale: Locale) {
 
   if (item.id === "settings") {
     return content.settings[locale]
-  }
-
-  if (item.id === "reservation_updates") {
-    return content.reservation_updates[locale]
-  }
-
-  if (item.id === "driver_messages") {
-    return content.driver_messages[locale]
-  }
-
-  if (item.id === "system_notices") {
-    return content.system_notices[locale]
   }
 
   return item.title ?? ""

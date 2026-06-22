@@ -16,7 +16,7 @@ import {
 } from "@/components/auth/logout"
 import AuthOverlayToast from "@/components/ui/auth_overlay_toast"
 import ProfileSettings from "@/components/profile/settings"
-import NotificationSettingsModal from "@/components/ops/notification_settings_modal"
+import NotificationPanel from "@/components/notification/panel"
 import { useToast } from "@/components/ui/use_toast"
 import { canToggleConciergeAvailability } from "@/core/chat/concierge_access"
 import {
@@ -25,7 +25,6 @@ import {
 } from "@/core/ops/header_session"
 import { concierge_toggle_content } from "@/core/ops/concierge_toggle_content"
 import { get_display_name } from "@/core/profile/display"
-import type { NotificationType } from "@/core/chat/types"
 import type { ProfileDisplayPayload } from "@/core/profile/output"
 import { useLocale } from "@/src/components/locale/provider"
 
@@ -90,8 +89,6 @@ export default function OpsHeader({
   const [profile_settings_open, set_profile_settings_open] = useState(false)
   const [notification_settings_open, set_notification_settings_open] =
     useState(false)
-  const [notification_type, set_notification_type] =
-    useState<NotificationType>("line")
   const [is_logging_out, set_is_logging_out] = useState(false)
   const [logout_status_message, set_logout_status_message] = useState<string | null>(
     null,
@@ -106,43 +103,8 @@ export default function OpsHeader({
   })
 
   useEffect(() => {
-    if (!is_logged_in) {
-      return
-    }
-
-    let cancelled = false
-
-    async function load_notification_settings() {
-      try {
-        const response = await fetch("/api/chat/notifications", {
-          credentials: "include",
-          cache: "no-store",
-        })
-
-        if (!response.ok || cancelled) {
-          return
-        }
-
-        const payload = (await response.json()) as {
-          notification_type?: NotificationType
-        }
-
-        if (!cancelled) {
-          set_notification_type(
-            payload.notification_type === "pwa_push" ? "pwa_push" : "line",
-          )
-        }
-      } catch {
-        // keep default line
-      }
-    }
-
-    void load_notification_settings()
-
-    return () => {
-      cancelled = true
-    }
-  }, [is_logged_in])
+    set_concierge_available_state(enabled)
+  }, [enabled])
 
   useEffect(() => {
     if (!menu_open) {
@@ -510,11 +472,9 @@ export default function OpsHeader({
         </nav>
       ) : null}
 
-      <NotificationSettingsModal
+      <NotificationPanel
         open={notification_settings_open}
-        initial_notification_type={notification_type}
         onClose={() => set_notification_settings_open(false)}
-        onSaved={set_notification_type}
       />
 
       <ProfileSettings

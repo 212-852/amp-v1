@@ -4,6 +4,7 @@ import { Bell, Globe2, Mail, User } from "lucide-react"
 import { SiGoogle, SiLine } from "react-icons/si"
 import { useState } from "react"
 
+import NotificationPanel from "@/components/notification/panel"
 import { useOverlay } from "@/components/overlay"
 import ProfileSettings from "@/components/profile/settings"
 import { get_display_name } from "@/core/profile/display"
@@ -187,6 +188,7 @@ export default function AppHeader({ auth }: { auth: AppHeaderAuth }) {
   const { openOverlay } = useOverlay()
   const { locale } = useLocale()
   const [settings_open, set_settings_open] = useState(false)
+  const [notification_panel_open, set_notification_panel_open] = useState(false)
   const [saved_profile, set_saved_profile] =
     useState<ProfileDisplayPayload | null>(null)
   const display_name = get_display_name(saved_profile, {
@@ -277,7 +279,7 @@ export default function AppHeader({ auth }: { auth: AppHeaderAuth }) {
             <button
               type="button"
               aria-label={content.notifications_label[locale]}
-              onClick={() => openOverlay({ type: "notice", source: "user" })}
+              onClick={() => set_notification_panel_open(true)}
               className="flex h-8 w-8 items-center justify-center rounded-full bg-[#fdfaf6] text-[#8f5d28] ring-1 ring-[#dcc7aa]"
             >
               <Bell className="h-[22px] w-[22px]" strokeWidth={2} />
@@ -312,6 +314,10 @@ export default function AppHeader({ auth }: { auth: AppHeaderAuth }) {
           </div>
         </div>
       </div>
+      <NotificationPanel
+        open={notification_panel_open}
+        onClose={() => set_notification_panel_open(false)}
+      />
       <ProfileSettings
         open={settings_open}
         initial_profile={{
