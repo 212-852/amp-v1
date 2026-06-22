@@ -1,8 +1,49 @@
+import {
+  carouselPayloadToLineFlex,
+  isLineFlexCarouselPayload,
+  type LineFlexCarouselPayload,
+} from "@/core/bot/rules"
 import type { ContactRecord } from "@/core/contacts/rules"
 import type { DeliveryResult } from "@/core/output"
 import type { OutputMessage } from "@/core/output/rules"
 import { sendAuthDebug } from "@/core/debug"
 import { consumeLineReplyToken } from "@/core/line/reply_token"
+
+export function build_line_messages_from_payload(input: {
+  payload: Record<string, unknown> | null | undefined
+  alt_text: string
+  base_url?: string | null
+}): unknown[] | undefined {
+  if (!isLineFlexCarouselPayload(input.payload)) {
+    return undefined
+  }
+
+  return [
+    carouselPayloadToLineFlex({
+      payload: input.payload,
+      alt_text: input.alt_text,
+      base_url: input.base_url,
+    }),
+  ]
+}
+
+export function build_line_messages_from_output(
+  message: OutputMessage,
+  alt_text: string,
+  base_url?: string | null,
+) {
+  if (Array.isArray(message.line_messages) && message.line_messages.length > 0) {
+    return message.line_messages
+  }
+
+  return build_line_messages_from_payload({
+    payload: message.data ?? null,
+    alt_text,
+    base_url,
+  })
+}
+
+export { isLineFlexCarouselPayload, type LineFlexCarouselPayload }
 
 export async function deliverLine(
   contact: ContactRecord,
@@ -30,14 +71,13 @@ export async function deliverLine(
   }
 
   const line_payloads =
-    Array.isArray(message.line_messages) && message.line_messages.length > 0
-      ? message.line_messages
-      : [
-          {
-            type: "text",
-            text: message.text,
-          },
-        ]
+    build_line_messages_from_output(message, message.text) ??
+    [
+      {
+        type: "text",
+        text: message.text,
+      },
+    ]
 
   await sendAuthDebug("line_reply_send_attempt", {
     provider_user_id,

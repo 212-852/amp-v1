@@ -1,6 +1,7 @@
 import { resolveChatContent } from "@/core/chat/content"
 import type { Session } from "@/core/auth/types"
 import { isCarouselPayload } from "@/core/bot/rules"
+import { PARTNER_DRIVER_TRIGGER_TEXT } from "@/core/partner/recruitment"
 import {
   type ChatLocale,
   type ChatMessageKind,
@@ -23,6 +24,20 @@ export const TYPING_LABELS: Record<ChatLocale, string> = {
 
 export function resolveTypingLabel(locale: ChatLocale, name: string) {
   return (TYPING_LABELS[locale] ?? TYPING_LABELS.ja).replace("{name}", name)
+}
+
+export function resolve_partner_driver_trigger(text: string) {
+  if (text.trim() !== PARTNER_DRIVER_TRIGGER_TEXT) {
+    return null
+  }
+
+  return {
+    matched: true,
+  } as const
+}
+
+export function isPartnerDriverRecruitBody(body: string) {
+  return body === "partner_driver_recruit"
 }
 
 export function isChatMessageType(value: string): value is ChatMessageType {
@@ -85,6 +100,10 @@ export function readMessageSourceKind(
   }
 
   if (message.body === "welcome" || message.body === "quick_menu") {
+    return "bot"
+  }
+
+  if (isPartnerDriverRecruitBody(message.body)) {
     return "bot"
   }
 

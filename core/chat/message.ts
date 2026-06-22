@@ -5,13 +5,24 @@ import {
   resolveOutputLocaleDecision,
   type LocaleSource,
 } from "@/core/chat/context"
+import { createBotMessageBundle, type BotMessageBundle } from "@/core/bot/message"
 import {
-  carouselPayloadToLineFlex,
   isLineFlexCarouselPayload,
   resolveBotAltText,
   type BotMessageTrigger,
+  type LineFlexCarouselPayload,
 } from "@/core/bot/rules"
-import { createBotMessageBundle, type BotMessageBundle } from "@/core/bot/message"
+import {
+  PARTNER_DRIVER_LIFF_URL,
+  PARTNER_DRIVER_RECRUIT_ALT_TEXT,
+  PARTNER_DRIVER_RECRUIT_BODY,
+  PARTNER_DRIVER_RECRUIT_BUTTON_LABEL,
+  PARTNER_DRIVER_RECRUIT_DESCRIPTION,
+  PARTNER_DRIVER_RECRUIT_IMAGE,
+  PARTNER_DRIVER_RECRUIT_TITLE,
+  PARTNER_DRIVER_TRIGGER_TEXT,
+} from "@/core/partner/recruitment"
+import { build_line_messages_from_payload } from "@/core/output/line"
 import {
   buildMessagePayload,
   readMessageSourceKind,
@@ -114,7 +125,129 @@ function resolveFlexAltText(body: string, locale: ChatLocale) {
     return resolveBotAltText("chat_opened", locale)
   }
 
+  if (body === PARTNER_DRIVER_RECRUIT_BODY) {
+    return PARTNER_DRIVER_RECRUIT_ALT_TEXT
+  }
+
   return body
+}
+
+function build_partner_recruit_uri_footer() {
+  return {
+    type: "box",
+    layout: "vertical",
+    spacing: "sm",
+    paddingAll: "12px",
+    contents: [
+      {
+        type: "button",
+        style: "primary",
+        color: "#8F5D28",
+        height: "sm",
+        action: {
+          type: "uri",
+          label: PARTNER_DRIVER_RECRUIT_BUTTON_LABEL,
+          uri: PARTNER_DRIVER_LIFF_URL,
+        },
+      },
+    ],
+  }
+}
+
+function build_partner_recruit_bubble() {
+  return {
+    type: "bubble",
+    hero: {
+      type: "image",
+      url: PARTNER_DRIVER_RECRUIT_IMAGE,
+      size: "full",
+      aspectRatio: "20:13",
+      aspectMode: "cover",
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      paddingAll: "16px",
+      contents: [
+        {
+          type: "text",
+          text: PARTNER_DRIVER_RECRUIT_TITLE,
+          weight: "bold",
+          size: "md",
+          color: "#3D2A19",
+        },
+        {
+          type: "text",
+          text: PARTNER_DRIVER_RECRUIT_DESCRIPTION,
+          wrap: true,
+          size: "sm",
+          color: "#8C7358",
+        },
+      ],
+    },
+    footer: build_partner_recruit_uri_footer(),
+  }
+}
+
+function build_partner_line_guidance_bubble() {
+  return {
+    type: "bubble",
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      paddingAll: "16px",
+      contents: [
+        {
+          type: "text",
+          text: "パートナードライバー登録はLINE連携が必要です。",
+          wrap: true,
+          size: "sm",
+          color: "#8C7358",
+        },
+        {
+          type: "text",
+          text: [
+            "LINE連携後、",
+            `「${PARTNER_DRIVER_TRIGGER_TEXT}」`,
+            "と送信してください。",
+          ].join("\n"),
+          wrap: true,
+          size: "sm",
+          color: "#8C7358",
+        },
+      ],
+    },
+  }
+}
+
+export function build_partner_driver_recruitment_carousel(input: {
+  line_identity_linked: boolean
+}): LineFlexCarouselPayload {
+  const contents: Record<string, unknown>[] = []
+
+  if (!input.line_identity_linked) {
+    contents.push(build_partner_line_guidance_bubble())
+  }
+
+  contents.push(build_partner_recruit_bubble())
+
+  return {
+    type: "carousel",
+    contents,
+  }
+}
+
+export function build_partner_driver_recruitment_bundle(input: {
+  line_identity_linked: boolean
+}) {
+  return {
+    type: "flex" as const,
+    body: PARTNER_DRIVER_RECRUIT_BODY,
+    alt_text: PARTNER_DRIVER_RECRUIT_ALT_TEXT,
+    payload: build_partner_driver_recruitment_carousel(input),
+  }
 }
 
 export function toMessageBundle(
@@ -335,15 +468,10 @@ export async function deliverMessageBundle(input: {
 
   const payload = input.message.payload
   const alt_text = resolveFlexAltText(input.message.body, input.room.locale)
-
-  const line_messages = isLineFlexCarouselPayload(payload)
-    ? [
-        carouselPayloadToLineFlex({
-          payload,
-          alt_text,
-        }),
-      ]
-    : undefined
+  const line_messages = build_line_messages_from_payload({
+    payload: payload as Record<string, unknown> | null,
+    alt_text,
+  })
   const message_count = line_messages?.length ?? 1
 
   await sendAuthDebug("chat_output_bundle_built", {
@@ -363,7 +491,9 @@ export async function deliverMessageBundle(input: {
     },
     {
       text: alt_text,
-      data: payload as Record<string, unknown> | undefined,
+      data: isLineFlexCarouselPayload(payload as Record<string, unknown>)
+        ? (payload as Record<string, unknown>)
+        : (payload as Record<string, unknown> | undefined),
       line_messages,
     },
   )

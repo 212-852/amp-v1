@@ -21,9 +21,18 @@ import {
   updateRoomThreadState,
 } from "@/core/chat/archive"
 import {
+  assertMessageBody,
+  assertRoomMode,
+  resolve_concierge_thread_rule,
+  resolve_partner_driver_trigger,
+  resolve_room_mode_trigger,
+  resolveRoomModeCommandReply,
+} from "@/core/chat/rules"
+import {
   archivePreparedMessage,
   archiveBotTriggerMessage,
   archivePresenceMessageBundle,
+  build_partner_driver_recruitment_bundle,
   deliverMessageBundle,
   ensureWelcomeMessageArchived,
   toMessageBundle,
@@ -53,14 +62,6 @@ import type {
   ChatTypingInput,
   MessageBundle,
 } from "@/core/chat/types"
-import {
-  assertMessageBody,
-  assertRoomMode,
-  resolve_concierge_thread_rule,
-  resolve_room_mode_trigger,
-  resolveRoomModeCommandReply,
-} from "@/core/chat/rules"
-import { resolve_partner_driver_recruitment } from "@/core/partner/recruitment"
 import { resolve_user_has_line_identity } from "@/core/line/identity"
 import { recordSecurityAccessEvent } from "@/core/access"
 import type { Session } from "@/core/auth/types"
@@ -655,26 +656,27 @@ export async function handleIncomingChatMessageArchive(
         ? false
         : await resolve_user_has_line_identity(input.session.user_uuid)
 
-  const partner_recruitment = resolve_partner_driver_recruitment({
-    text: body,
-    line_identity_linked,
-  })
+  const partner_trigger = resolve_partner_driver_trigger(body)
 
-  if (partner_recruitment?.should_handle) {
+  if (partner_trigger?.matched) {
     const output_locale = resolveOutputLocale({
       preferred: input.locale,
       room_locale: room.locale,
+    })
+    const recruitment_bundle = build_partner_driver_recruitment_bundle({
+      line_identity_linked,
     })
     const reply_message = await archivePreparedMessage({
       room,
       participant,
       source_channel: input.source_channel,
       source_kind: "bot",
-      type: "text",
-      body: partner_recruitment.message_body,
+      type: recruitment_bundle.type,
+      body: recruitment_bundle.body,
       original_locale: output_locale,
       session: input.session,
       payload: {
+        ...recruitment_bundle.payload,
         meta: {
           actor_role: "bot",
           actor_display_name: "Bot",
@@ -686,7 +688,9 @@ export async function handleIncomingChatMessageArchive(
       room_uuid: room.room_uuid,
       message_uuid: reply_message.message_uuid,
       source_channel: input.source_channel,
-      reason: partner_recruitment.reason,
+      reason: line_identity_linked
+        ? "line_identity_linked"
+        : "line_identity_not_linked",
     })
 
     if (options.deliver_mode_reply ?? options.deliver !== false) {

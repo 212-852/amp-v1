@@ -1,8 +1,12 @@
 "use client"
 
 import { useOverlay } from "@/components/overlay"
-import { isQuickMenuTriggerAction } from "@/core/bot/rules"
 import type { ChatMessagePayload } from "@/core/chat/types"
+import {
+  read_web_carousel_payload,
+  resolve_web_flex_action,
+  type WebFlexAction,
+} from "@/core/output/web"
 
 type FlexRecord = Record<string, unknown>
 
@@ -134,24 +138,7 @@ function readAlign(value: unknown) {
 }
 
 function readCarouselPayload(payload: ChatMessagePayload | null) {
-  if (payload?.type === "carousel" && Array.isArray(payload.contents)) {
-    return payload
-  }
-
-  const line = readRecord(payload?.line)
-  const line_contents = readRecord(line?.contents)
-
-  if (
-    line_contents?.type === "carousel" &&
-    Array.isArray(line_contents.contents)
-  ) {
-    return {
-      type: "carousel" as const,
-      contents: line_contents.contents,
-    }
-  }
-
-  return null
+  return read_web_carousel_payload(payload as Record<string, unknown> | null)
 }
 
 async function requestQuickMenu() {
@@ -247,11 +234,11 @@ function FlexButton({
   onAction,
 }: Readonly<{
   node: FlexRecord
-  onAction: (action: string) => void
+  onAction: (action: WebFlexAction) => void
 }>) {
   const action = readRecord(node.action)
   const label = readText(action?.label)
-  const data = readText(action?.data) || label
+  const resolved_action = resolve_web_flex_action(action)
   const is_link = node.style === "link"
   const is_centered = readAlign(node.align) === "center"
 
@@ -263,7 +250,7 @@ function FlexButton({
     return (
       <button
         type="button"
-        onClick={() => onAction(data)}
+        onClick={() => onAction(resolved_action)}
         className={[
           "bg-transparent px-1 py-0.5 text-[13px] font-medium underline decoration-[#007AFF]/50 underline-offset-2",
           is_centered ? "w-auto text-center" : "w-full text-left",
@@ -278,7 +265,7 @@ function FlexButton({
   return (
     <button
       type="button"
-      onClick={() => onAction(data)}
+      onClick={() => onAction(resolved_action)}
       className={FLEX_ACTION_BUTTON_CLASS}
       style={{
         borderRadius: readCornerRadius(node.cornerRadius),
@@ -295,7 +282,7 @@ function FlexBox({
   onAction,
 }: Readonly<{
   node: FlexRecord
-  onAction: (action: string) => void
+  onAction: (action: WebFlexAction) => void
 }>) {
   const is_horizontal = node.layout === "horizontal"
   const padding = readBoxPadding(node)
@@ -333,7 +320,7 @@ function FlexBubbleSection({
   kind,
 }: Readonly<{
   node: FlexRecord
-  onAction: (action: string) => void
+  onAction: (action: WebFlexAction) => void
   kind: "header" | "body" | "footer"
 }>) {
   return (
@@ -354,7 +341,7 @@ function FlexNode({
   onAction,
 }: Readonly<{
   node: FlexRecord | null
-  onAction: (action: string) => void
+  onAction: (action: WebFlexAction) => void
 }>) {
   if (!node) {
     return null
@@ -388,7 +375,7 @@ function FlexBubble({
   onAction,
 }: Readonly<{
   bubble: FlexRecord
-  onAction: (action: string) => void
+  onAction: (action: WebFlexAction) => void
 }>) {
   if (bubble.type !== "bubble") {
     return null
@@ -439,13 +426,18 @@ export default function FlexMessage({
     return null
   }
 
-  function handleAction(action: string) {
-    if (isQuickMenuTriggerAction(action)) {
+  function handleAction(action: WebFlexAction) {
+    if (action.kind === "quick_menu") {
       void requestQuickMenu()
       return
     }
 
-    if (action) {
+    if (action.kind === "uri" && action.value) {
+      window.location.href = action.value
+      return
+    }
+
+    if (action.kind === "menu" && action.value) {
       openOverlay({ type: "menu", source: "user" })
     }
   }
