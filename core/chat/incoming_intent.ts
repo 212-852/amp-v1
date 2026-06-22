@@ -1,5 +1,7 @@
-import { normalize_chat_intent_text } from "@/core/chat/rules"
-import type { ChatParticipantRole } from "@/core/chat/types"
+import type {
+  ChatMessageType,
+  ChatParticipantRole,
+} from "@/core/chat/types"
 
 const INCOMING_INTENT_TTL_MS = 10_000
 
@@ -18,6 +20,11 @@ const BOT_FIXED_MESSAGE_BODIES = new Set([
 const ALLOWED_INCOMING_INTENT_ROLES = new Set<ChatParticipantRole>([
   "user",
   "guest",
+])
+
+const ALLOWED_INCOMING_SOURCE_EVENTS = new Set([
+  "user_submit",
+  "line_webhook",
 ])
 
 function prune_incoming_intent_claims(now: number) {
@@ -57,13 +64,40 @@ export function claim_incoming_intent(input: {
 
 export function can_process_incoming_chat_intent(input: {
   body: string
-  participant_role: ChatParticipantRole
+  sender_role: ChatParticipantRole
+  direction?: string | null
+  source_event?: string | null
+  message_type?: ChatMessageType | string | null
   source_kind?: string | null
 }) {
-  if (!ALLOWED_INCOMING_INTENT_ROLES.has(input.participant_role)) {
+  if (!ALLOWED_INCOMING_INTENT_ROLES.has(input.sender_role)) {
     return {
       allowed: false,
       blocked_reason: "sender_role_not_allowed",
+    } as const
+  }
+
+  if (input.direction !== "incoming") {
+    return {
+      allowed: false,
+      blocked_reason: "direction_not_incoming",
+    } as const
+  }
+
+  if (
+    !input.source_event ||
+    !ALLOWED_INCOMING_SOURCE_EVENTS.has(input.source_event)
+  ) {
+    return {
+      allowed: false,
+      blocked_reason: "source_event_not_allowed",
+    } as const
+  }
+
+  if (input.message_type === "flex") {
+    return {
+      allowed: false,
+      blocked_reason: "flex_message_not_allowed",
     } as const
   }
 
@@ -92,5 +126,5 @@ export function can_process_incoming_chat_intent(input: {
 }
 
 export function normalize_incoming_intent_text(text: string) {
-  return normalize_chat_intent_text(text)
+  return text.normalize("NFKC").trim().replace(/\s+/g, "").toLowerCase()
 }

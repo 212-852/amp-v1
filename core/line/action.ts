@@ -102,6 +102,9 @@ async function processAllowedLineEvent(
       {
         body: event.body,
         source_channel: event.source_channel,
+        direction: "incoming",
+        source_event: "line_webhook",
+        message_type: "text",
         locale: context.locale,
         session: context.session,
         external_id: event.external_id,
@@ -138,6 +141,9 @@ async function processAllowedLineEvent(
     {
       body: event.body,
       source_channel: event.source_channel,
+      direction: "incoming",
+      source_event: "line_webhook",
+      message_type: "text",
       locale: context.locale,
       session: context.session,
       external_id: event.external_id,

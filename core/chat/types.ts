@@ -29,6 +29,17 @@ export type ChatMessageType =
   | "system"
   | "typing"
 
+export type ChatIncomingDirection = "incoming"
+
+export type ChatIncomingSourceEvent =
+  | "user_submit"
+  | "line_webhook"
+  | "archived_message"
+  | "output_delivery"
+  | "message_sync"
+  | "realtime_subscription"
+  | "loaded_message"
+
 export const CHAT_MESSAGE_TYPES: ChatMessageType[] = [
   "text",
   "image",
@@ -167,6 +178,9 @@ export type ChatContext = {
 export type ChatIncomingInput = {
   body: string
   source_channel: SourceChannel
+  direction?: ChatIncomingDirection | string | null
+  source_event?: ChatIncomingSourceEvent | string | null
+  message_type?: ChatMessageType | string | null
   locale?: string | null
   session: Session
   participant_uuid?: string | null

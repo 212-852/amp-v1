@@ -27,7 +27,6 @@ import {
   updateRoomThreadState,
 } from "@/core/chat/archive"
 import {
-  assertMessageBody,
   assertRoomMode,
   resolve_concierge_thread_rule,
   resolve_chat_response_route,
@@ -83,6 +82,20 @@ type ChatBootstrapDebugEvent =
   | "chat_bootstrap_room_created"
   | "chat_bootstrap_room_reused"
   | "chat_bootstrap_welcome_created"
+
+function assertIncomingMessageBody(body: string) {
+  const normalized = body.trim()
+
+  if (!normalized) {
+    throw new Error("Message body is required")
+  }
+
+  if (normalized.length > 4000) {
+    throw new Error("Message body is too long")
+  }
+
+  return normalized
+}
 
 async function readChatBootstrapDebugContext(session: Session) {
   let request_id: string | null = null
@@ -542,11 +555,7 @@ export async function handleIncomingChatMessageArchive(
   } = {},
 ): Promise<IncomingChatArchiveResult> {
   const context = normalizeIncomingChatInput(input)
-  const body = assertMessageBody(input.body)
-  const mode_command =
-    options.apply_mode_command !== false
-      ? resolve_room_mode_trigger(body)
-      : null
+  const body = assertIncomingMessageBody(input.body)
   const can_use_explicit_room =
     input.session.role === "admin" ||
     input.session.role === "concierge" ||
@@ -587,9 +596,36 @@ export async function handleIncomingChatMessageArchive(
     room_mode: room.mode,
     source_channel: input.source_channel,
   })
+
+  const incoming_source_kind =
+    participant.role === "admin" || participant.role === "concierge"
+      ? "concierge"
+      : participant.role === "bot"
+        ? "bot"
+        : "user"
+  const message_type = input.message_type ?? "text"
+  const intent_gate = can_process_incoming_chat_intent({
+    body,
+    sender_role: participant.role,
+    direction: input.direction ?? null,
+    source_event: input.source_event ?? null,
+    message_type,
+    source_kind: incoming_source_kind,
+  })
+  const mode_command =
+    intent_gate.allowed && options.apply_mode_command !== false
+      ? resolve_room_mode_trigger(body)
+      : null
+
   await sendAuthDebug("chat_room_mode_trigger_checked", {
     text: body,
     matched_mode: mode_command,
+    direction: input.direction ?? null,
+    source_event: input.source_event ?? null,
+    sender_role: participant.role,
+    message_type,
+    intent_allowed: intent_gate.allowed,
+    blocked_reason: intent_gate.blocked_reason,
   })
 
   await broadcastTypingEvent({
@@ -636,10 +672,8 @@ export async function handleIncomingChatMessageArchive(
     room,
     participant,
     source_channel: input.source_channel,
-    source_kind:
-      participant.role === "admin" || participant.role === "concierge"
-        ? "concierge"
-        : "user",
+    source_kind: incoming_source_kind,
+    type: message_type === "flex" ? "flex" : undefined,
     body,
     original_locale: resolveChatLocale(input.locale, room.locale),
     session: input.session,
@@ -662,11 +696,6 @@ export async function handleIncomingChatMessageArchive(
   const line_user_id = await resolve_line_user_id(input.session.user_uuid)
   const line_linked = Boolean(line_user_id)
   const normalized_intent_text = normalize_incoming_intent_text(body)
-  const intent_gate = can_process_incoming_chat_intent({
-    body,
-    participant_role: participant.role,
-    source_kind: "user",
-  })
 
   let intent_processed = false
   let blocked_reason: string | null = intent_gate.blocked_reason
@@ -709,6 +738,9 @@ export async function handleIncomingChatMessageArchive(
               response_route.can_show_registration_card,
             duplicate_skipped: true,
             incoming_sender_role: participant.role,
+            direction: input.direction ?? null,
+            source_event: input.source_event ?? null,
+            message_type,
             incoming_message_uuid: message.message_uuid,
             generated_message_uuid: null,
             intent_processed: false,
@@ -775,6 +807,9 @@ export async function handleIncomingChatMessageArchive(
             response_route.can_show_registration_card,
           message_bundle_type: response_bundle.type,
           incoming_sender_role: participant.role,
+          direction: input.direction ?? null,
+          source_event: input.source_event ?? null,
+          message_type,
           incoming_message_uuid: message.message_uuid,
           generated_message_uuid: reply_message.message_uuid,
           intent_processed: true,
@@ -812,6 +847,9 @@ export async function handleIncomingChatMessageArchive(
       room_uuid: room.room_uuid,
       incoming_message_uuid: message.message_uuid,
       incoming_sender_role: participant.role,
+      direction: input.direction ?? null,
+      source_event: input.source_event ?? null,
+      message_type,
       generated_message_uuid,
       intent_processed,
       blocked_reason,

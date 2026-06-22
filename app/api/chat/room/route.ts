@@ -188,6 +188,9 @@ export async function POST(request: Request) {
     const message = await handleIncomingChatMessage({
       body: body.message,
       source_channel: context.source_channel,
+      direction: "incoming",
+      source_event: "user_submit",
+      message_type: "text",
       locale: request_locale,
       session,
       room_uuid:
