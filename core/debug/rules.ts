@@ -285,6 +285,7 @@ const notifyEvents = new Set([
   "notification_availability_checked",
   "notification_presence_checked",
   "notification_contact_checked",
+  "notification_contact_owner_mismatch",
   "notification_route_decided",
   "notification_line_target_resolved",
   "notification_push_target_resolved",
