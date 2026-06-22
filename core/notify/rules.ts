@@ -156,8 +156,14 @@ export type ChatNotifyContactRoute = {
   receiver_user_uuid: string
   receiver_role: string | null
   in_room: boolean
+  raw_in_room: boolean
   presence_status: string | null
   left_at: string | null
+  last_seen_at: string | null
+  last_seen_age_seconds: number | null
+  presence_stale_threshold_seconds: number
+  presence_is_stale: boolean
+  presence_reason: string
   contact_state: string | null
   delivery: import("@/core/notify/chat_rules").ChatNotifyDeliveryKind
   selected_contact: ChatNotifySelectedContact | null
@@ -195,6 +201,8 @@ type ContactRow = {
   updated_at?: string | null
 }
 
+const ROOM_PRESENCE_STALE_THRESHOLD_SECONDS = 60
+
 function isContactInApp(state: string | null | undefined) {
   return state === "active" || state === "online"
 }
@@ -211,6 +219,67 @@ function isContactAway(state: string | null | undefined) {
 
 function isAdminReceiverRole(role: string | null | undefined) {
   return role === "admin" || role === "owner"
+}
+
+function calculateLastSeenAgeSeconds(last_seen_at: string | null | undefined) {
+  if (!last_seen_at) {
+    return null
+  }
+
+  const last_seen_time = new Date(last_seen_at).getTime()
+
+  if (Number.isNaN(last_seen_time)) {
+    return null
+  }
+
+  return Math.max(0, Math.floor((Date.now() - last_seen_time) / 1000))
+}
+
+function resolveRoomPresenceState(input: {
+  room_uuid: string
+  participant_uuid: string | null
+  presence:
+    | {
+        room_uuid: string
+        participant_uuid: string
+        status: string
+        left_at: string | null
+        last_seen_at: string | null
+      }
+    | null
+}) {
+  const raw_in_room = Boolean(
+    input.participant_uuid &&
+      input.presence &&
+      input.presence.room_uuid === input.room_uuid &&
+      input.presence.participant_uuid === input.participant_uuid &&
+      (input.presence.status === "entered" ||
+        input.presence.status === "active") &&
+      !input.presence.left_at,
+  )
+  const last_seen_age_seconds = calculateLastSeenAgeSeconds(
+    input.presence?.last_seen_at ?? null,
+  )
+  const is_recent =
+    raw_in_room &&
+    last_seen_age_seconds !== null &&
+    last_seen_age_seconds <= ROOM_PRESENCE_STALE_THRESHOLD_SECONDS
+  const is_stale = raw_in_room && !is_recent
+  const is_in_room = raw_in_room && is_recent
+  const reason = is_stale
+    ? "room_presence_stale"
+    : is_in_room
+      ? "receiver_in_room"
+      : "receiver_not_in_room"
+
+  return {
+    is_in_room,
+    raw_in_room,
+    last_seen_age_seconds,
+    stale_threshold_seconds: ROOM_PRESENCE_STALE_THRESHOLD_SECONDS,
+    is_stale,
+    reason,
+  }
 }
 
 function isValidPushContact(contact: ContactRow) {
@@ -779,12 +848,6 @@ export async function resolveChatNotifyRoutes(input: {
   const latest_presence_by_participant = new Map(
     room_presence.map((presence) => [presence.participant_uuid, presence]),
   )
-  const entered_participant_uuids = new Set(
-    room_presence
-      .filter((presence) => presence.status === "entered" && !presence.left_at)
-      .map((presence) => presence.participant_uuid)
-      .filter(Boolean),
-  )
   const participant_user_map = await loadRoomParticipantUserMap(input.room_uuid)
   const receiver_role_map = await loadReceiverUserRoles(receiver_user_uuids)
   const availability_map = await loadReceiverAvailabilityMap(receiver_user_uuids)
@@ -799,9 +862,12 @@ export async function resolveChatNotifyRoutes(input: {
     const presence = participant_uuid
       ? latest_presence_by_participant.get(participant_uuid) ?? null
       : null
-    const in_room = Boolean(
-      participant_uuid && entered_participant_uuids.has(participant_uuid),
-    )
+    const presence_state = resolveRoomPresenceState({
+      room_uuid: input.room_uuid,
+      participant_uuid,
+      presence,
+    })
+    const in_room = presence_state.is_in_room
     const line_provider_user_id =
       await loadReceiverLineProviderUserId(receiver_user_uuid)
     const contact_line_user_id =
@@ -839,9 +905,14 @@ export async function resolveChatNotifyRoutes(input: {
       room_uuid: input.room_uuid,
       receiver_uuid: receiver_user_uuid,
       is_in_room: in_room,
+      raw_is_in_room: presence_state.raw_in_room,
       presence_status: presence?.status ?? null,
       left_at: presence?.left_at ?? null,
       last_seen_at: presence?.last_seen_at ?? null,
+      last_seen_age_seconds: presence_state.last_seen_age_seconds,
+      stale_threshold_seconds: presence_state.stale_threshold_seconds,
+      is_stale: presence_state.is_stale,
+      reason: presence_state.reason,
       request_id: input.request_id ?? null,
     })
 
@@ -879,6 +950,7 @@ export async function resolveChatNotifyRoutes(input: {
       receiver_uuid: receiver_user_uuid,
       receiver_role,
       in_room,
+      raw_in_room: presence_state.raw_in_room,
       contact_state: contact?.state ?? null,
       contact_count: contacts.length,
       contacts: contact_candidates,
@@ -908,6 +980,7 @@ export async function resolveChatNotifyRoutes(input: {
       receiver_uuid: receiver_user_uuid,
       receiver_role,
       in_room,
+      raw_in_room: presence_state.raw_in_room,
       contact_uuid: resolved.selected_contact?.contact_uuid ?? null,
       contact_type: resolved.selected_contact?.contact_type ?? null,
       receive: resolved.selected_contact?.receive ?? null,
@@ -924,6 +997,9 @@ export async function resolveChatNotifyRoutes(input: {
       should_notify: resolved.delivery !== "none",
       reason:
         resolved.skipped_reason ??
+        (presence_state.is_stale && resolved.delivery !== "none"
+          ? presence_state.reason
+          : null) ??
         (resolved.delivery === "push"
           ? `${contact?.state ?? "unknown"}_push_selected`
           : `${contact?.state ?? "unknown"}_line_selected`),
@@ -965,8 +1041,14 @@ export async function resolveChatNotifyRoutes(input: {
       receiver_user_uuid,
       receiver_role,
       in_room,
+      raw_in_room: presence_state.raw_in_room,
       presence_status: presence?.status ?? null,
       left_at: presence?.left_at ?? null,
+      last_seen_at: presence?.last_seen_at ?? null,
+      last_seen_age_seconds: presence_state.last_seen_age_seconds,
+      presence_stale_threshold_seconds: presence_state.stale_threshold_seconds,
+      presence_is_stale: presence_state.is_stale,
+      presence_reason: presence_state.reason,
       contact_state: contact?.state ?? null,
       delivery: resolved.delivery,
       selected_contact: resolved.selected_contact,
