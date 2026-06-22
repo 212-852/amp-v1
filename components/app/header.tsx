@@ -1,6 +1,7 @@
 "use client"
 
 import { Bell, Globe2, Mail, User } from "lucide-react"
+import Link from "next/link"
 import { SiGoogle, SiLine } from "react-icons/si"
 import { useState } from "react"
 
@@ -10,6 +11,11 @@ import ProfileSettings from "@/components/profile/settings"
 import { get_display_name } from "@/core/profile/display"
 import type { ProfilePayload } from "@/core/profile/output"
 import { useLocale } from "@/src/components/locale/provider"
+
+export type AppHeaderBreadcrumbItem = {
+  label: string
+  href?: string
+}
 
 export type AppHeaderAuth = {
   visitor_uuid?: string | null
@@ -150,6 +156,48 @@ function LinkPill({
   )
 }
 
+function HeaderBreadcrumb({
+  items,
+}: Readonly<{
+  items: AppHeaderBreadcrumbItem[]
+}>) {
+  if (items.length === 0) {
+    return null
+  }
+
+  return (
+    <nav
+      aria-label="Breadcrumb"
+      className="mt-2.5 text-[11px] font-medium leading-none text-[#8c7358]"
+    >
+      <ol className="flex min-w-0 items-center gap-1.5">
+        {items.map((item, index) => {
+          const is_last = index === items.length - 1
+
+          return (
+            <li
+              key={`${item.label}-${index}`}
+              className="flex min-w-0 items-center gap-1.5"
+            >
+              {index > 0 ? <span aria-hidden="true">&gt;</span> : null}
+              {item.href && !is_last ? (
+                <Link
+                  href={item.href}
+                  className="shrink-0 transition hover:text-[#3d2a19]"
+                >
+                  {item.label}
+                </Link>
+              ) : (
+                <span className="truncate text-[#6f5842]">{item.label}</span>
+              )}
+            </li>
+          )
+        })}
+      </ol>
+    </nav>
+  )
+}
+
 function HeaderCurve() {
   return (
     <svg
@@ -184,7 +232,15 @@ function UserAvatar({ auth }: { auth: AppHeaderAuth }) {
   )
 }
 
-export default function AppHeader({ auth }: { auth: AppHeaderAuth }) {
+export default function AppHeader({
+  auth,
+  breadcrumb_items = [],
+  layout = "chat",
+}: {
+  auth: AppHeaderAuth
+  breadcrumb_items?: AppHeaderBreadcrumbItem[]
+  layout?: "chat" | "page"
+}) {
   const { openOverlay } = useOverlay()
   const { locale } = useLocale()
   const [settings_open, set_settings_open] = useState(false)
@@ -234,16 +290,27 @@ export default function AppHeader({ auth }: { auth: AppHeaderAuth }) {
   }
 
   return (
-    <header className="fixed inset-x-0 top-0 z-50 h-[108px] text-[#3d2a19]">
+    <header
+      className={[
+        "inset-x-0 top-0 z-50 text-[#3d2a19]",
+        layout === "page"
+          ? "sticky min-h-[108px] bg-[#fdfaf6]"
+          : "fixed h-[108px]",
+      ].join(" ")}
+    >
       <HeaderCurve />
       <div className="relative z-10 mx-auto flex h-full w-full max-w-[430px] items-start justify-between gap-2 px-6 pb-2 pt-[calc(12px+env(safe-area-inset-top,0px))]">
         <div className="min-w-0 pt-1">
           <h1 className="text-[20px] font-semibold leading-none text-[#3d2a19]">
             {content.brand[locale]}
           </h1>
-          <p className="mt-2.5 text-[11px] font-medium leading-none text-[#8c7358]">
-            {content.breadcrumb_home[locale]}
-          </p>
+          {breadcrumb_items.length > 0 ? (
+            <HeaderBreadcrumb items={breadcrumb_items} />
+          ) : (
+            <p className="mt-2.5 text-[11px] font-medium leading-none text-[#8c7358]">
+              {content.breadcrumb_home[locale]}
+            </p>
+          )}
         </div>
 
         <div className="flex min-w-[200px] flex-col items-end pt-0.5">

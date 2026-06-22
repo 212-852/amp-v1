@@ -40,5 +40,12 @@ export function resolve_breadcrumb_items(
     return [{ label: "Home", href: "/admin" }]
   }
 
+  if (pathname === "/partner") {
+    return [
+      { label: "Home", href: "/app" },
+      { label: "Partner" },
+    ]
+  }
+
   return []
 }
