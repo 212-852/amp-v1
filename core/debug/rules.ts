@@ -269,6 +269,15 @@ const authSessionEvents = new Set([
 ])
 
 const notifyEvents = new Set([
+  "notify_message_received",
+  "notify_room_presence_checked",
+  "notify_contact_loaded",
+  "notify_route_decided",
+  "notify_line_target_resolved",
+  "notify_push_target_resolved",
+  "notify_delivery_started",
+  "notify_delivery_success",
+  "notify_delivery_failed",
   "notify_flow_started",
   "notify_flow_skipped",
   "notify_contact_candidates",

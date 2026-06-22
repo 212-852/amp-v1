@@ -156,10 +156,13 @@ export type ChatNotifyContactRoute = {
   receiver_user_uuid: string
   receiver_role: string | null
   in_room: boolean
+  presence_status: string | null
+  left_at: string | null
   contact_state: string | null
   delivery: import("@/core/notify/chat_rules").ChatNotifyDeliveryKind
   selected_contact: ChatNotifySelectedContact | null
   line_user_id: string | null
+  line_user_id_source: "contacts.value" | "identities" | null
   skipped_reason?: string | null
 }
 
@@ -238,10 +241,13 @@ function resolveReceiverNotifyDelivery(input: {
   contact: ContactRow | null
   receiver_role: string | null
   line_provider_user_id: string | null
+  contact_line_user_id: string | null
+  contact_line_user_id_source: "contacts.value" | null
 }): {
   delivery: import("@/core/notify/chat_rules").ChatNotifyDeliveryKind
   selected_contact: ChatNotifySelectedContact | null
   line_user_id: string | null
+  line_user_id_source: "contacts.value" | "identities" | null
   skipped_reason: string | null
 } {
   if (input.in_room) {
@@ -249,19 +255,52 @@ function resolveReceiverNotifyDelivery(input: {
       delivery: "none",
       selected_contact: null,
       line_user_id: null,
+      line_user_id_source: null,
       skipped_reason: "receiver_in_room",
     }
   }
 
   const contact = input.contact
   const state = contact?.state ?? null
+  const is_admin_receiver = isAdminReceiverRole(input.receiver_role)
+  const line_user_id = is_admin_receiver
+    ? input.line_provider_user_id
+    : input.contact_line_user_id ?? input.line_provider_user_id
+  const line_user_id_source = is_admin_receiver
+    ? (input.line_provider_user_id ? "identities" : null)
+    : input.contact_line_user_id
+      ? input.contact_line_user_id_source
+      : input.line_provider_user_id
+        ? "identities"
+        : null
+
+  if (!contact) {
+    return {
+      delivery: "none",
+      selected_contact: null,
+      line_user_id: null,
+      line_user_id_source: null,
+      skipped_reason: "missing_contact",
+    }
+  }
+
+  if (contact.receive !== true) {
+    return {
+      delivery: "none",
+      selected_contact: null,
+      line_user_id: null,
+      line_user_id_source: null,
+      skipped_reason: "contact_receive_disabled",
+    }
+  }
 
   if (isContactInApp(state)) {
     return {
-      delivery: "in_app_toast",
+      delivery: "none",
       selected_contact: null,
       line_user_id: null,
-      skipped_reason: null,
+      line_user_id_source: null,
+      skipped_reason: "receiver_active",
     }
   }
 
@@ -270,16 +309,18 @@ function resolveReceiverNotifyDelivery(input: {
       delivery: "none",
       selected_contact: null,
       line_user_id: null,
+      line_user_id_source: null,
       skipped_reason: "contact_state_unknown",
     }
   }
 
-  if (isAdminReceiverRole(input.receiver_role)) {
-    if (!input.line_provider_user_id) {
+  if (is_admin_receiver) {
+    if (!line_user_id) {
       return {
         delivery: "none",
         selected_contact: null,
         line_user_id: null,
+        line_user_id_source: null,
         skipped_reason: "missing_line_identity",
       }
     }
@@ -289,13 +330,14 @@ function resolveReceiverNotifyDelivery(input: {
       selected_contact: {
         contact_uuid: contact?.contact_uuid ?? null,
         contact_type: "line",
-        contact_value: input.line_provider_user_id,
+        contact_value: line_user_id,
         receive: contact?.receive ?? null,
         state,
         channel: contact?.channel ?? null,
         push_subscription: null,
       },
-      line_user_id: input.line_provider_user_id,
+      line_user_id,
+      line_user_id_source,
       skipped_reason: null,
     }
   }
@@ -304,24 +346,26 @@ function resolveReceiverNotifyDelivery(input: {
     return {
       delivery: "push",
       selected_contact: toSelectedPushContact(contact),
-      line_user_id: input.line_provider_user_id,
+      line_user_id,
+      line_user_id_source,
       skipped_reason: null,
     }
   }
 
-  if (input.line_provider_user_id) {
+  if (line_user_id) {
     return {
       delivery: "line",
       selected_contact: {
         contact_uuid: contact?.contact_uuid ?? null,
         contact_type: "line",
-        contact_value: input.line_provider_user_id,
+        contact_value: line_user_id,
         receive: contact?.receive ?? null,
         state,
         channel: contact?.channel ?? null,
         push_subscription: null,
       },
-      line_user_id: input.line_provider_user_id,
+      line_user_id,
+      line_user_id_source,
       skipped_reason: null,
     }
   }
@@ -330,7 +374,8 @@ function resolveReceiverNotifyDelivery(input: {
     delivery: "none",
     selected_contact: null,
     line_user_id: null,
-    skipped_reason: "missing_contact",
+    line_user_id_source: null,
+    skipped_reason: "missing_line_identity",
   }
 }
 
@@ -659,10 +704,12 @@ export async function resolveChatNotifyRoutes(input: {
   room_uuid: string
   sender_uuid?: string | null
   sender_role: string
+  message_uuid?: string | null
+  message_text?: string | null
   request_id?: string | null
 }): Promise<ChatNotifyContactRoute[]> {
   const { sendNotifyDebug } = await import("@/core/notify/debug")
-  const { loadOnlineRoomPresence } = await import("@/core/chat/presence")
+  const { loadRoomPresence } = await import("@/core/chat/presence")
 
   const receiver_user_uuids = await loadRoomReceiverUserUuids({
     room_uuid: input.room_uuid,
@@ -674,8 +721,13 @@ export async function resolveChatNotifyRoutes(input: {
     return []
   }
 
+  const room_presence = await loadRoomPresence(input.room_uuid)
+  const latest_presence_by_participant = new Map(
+    room_presence.map((presence) => [presence.participant_uuid, presence]),
+  )
   const entered_participant_uuids = new Set(
-    (await loadOnlineRoomPresence(input.room_uuid))
+    room_presence
+      .filter((presence) => presence.status === "entered" && !presence.left_at)
       .map((presence) => presence.participant_uuid)
       .filter(Boolean),
   )
@@ -688,11 +740,52 @@ export async function resolveChatNotifyRoutes(input: {
     const contact = contacts[0] ?? null
     const receiver_role = receiver_role_map.get(receiver_user_uuid) ?? null
     const participant_uuid = participant_user_map.get(receiver_user_uuid) ?? null
+    const presence = participant_uuid
+      ? latest_presence_by_participant.get(participant_uuid) ?? null
+      : null
     const in_room = Boolean(
       participant_uuid && entered_participant_uuids.has(participant_uuid),
     )
     const line_provider_user_id =
       await loadReceiverLineProviderUserId(receiver_user_uuid)
+    const contact_line_user_id =
+      contact?.type === "line" ? contact.value?.trim() || null : null
+    const contact_line_user_id_source = contact_line_user_id
+      ? ("contacts.value" as const)
+      : null
+
+    await sendNotifyDebug("notify_message_received", {
+      message_uuid: input.message_uuid ?? input.request_id ?? null,
+      room_uuid: input.room_uuid,
+      sender_uuid: input.sender_uuid ?? null,
+      receiver_uuid: receiver_user_uuid,
+      receiver_role,
+      request_id: input.request_id ?? null,
+    })
+
+    await sendNotifyDebug("notify_room_presence_checked", {
+      room_uuid: input.room_uuid,
+      receiver_uuid: receiver_user_uuid,
+      is_in_room: in_room,
+      presence_status: presence?.status ?? null,
+      left_at: presence?.left_at ?? null,
+      request_id: input.request_id ?? null,
+    })
+
+    await sendNotifyDebug("notify_contact_loaded", {
+      receiver_uuid: receiver_user_uuid,
+      contact_uuid: contact?.contact_uuid ?? null,
+      type: contact?.type ?? null,
+      channel: contact?.channel ?? null,
+      state: contact?.state ?? null,
+      receive: contact?.receive ?? null,
+      has_line_value:
+        contact?.type === "line" && Boolean(contact.value?.trim()),
+      has_push_endpoint: Boolean(contact?.endpoint?.trim()),
+      has_p256dh: Boolean(contact?.p256dh?.trim()),
+      has_auth: Boolean(contact?.auth?.trim()),
+      request_id: input.request_id ?? null,
+    })
 
     const contact_candidates = contacts.map((row) => ({
       contact_uuid: row.contact_uuid ?? null,
@@ -724,6 +817,8 @@ export async function resolveChatNotifyRoutes(input: {
       contact,
       receiver_role,
       line_provider_user_id,
+      contact_line_user_id,
+      contact_line_user_id_source,
     })
 
     await sendNotifyDebug("notify_contact_selected", {
@@ -743,14 +838,53 @@ export async function resolveChatNotifyRoutes(input: {
       request_id: input.request_id ?? null,
     })
 
+    await sendNotifyDebug("notify_route_decided", {
+      receiver_uuid: receiver_user_uuid,
+      should_notify: resolved.delivery !== "none",
+      reason:
+        resolved.skipped_reason ??
+        (resolved.delivery === "push"
+          ? `${contact?.state ?? "unknown"}_push_selected`
+          : `${contact?.state ?? "unknown"}_line_selected`),
+      delivery_channel: resolved.delivery === "none" ? null : resolved.delivery,
+      message_text: input.message_text ?? null,
+      request_id: input.request_id ?? null,
+    })
+
+    if (resolved.delivery === "line") {
+      await sendNotifyDebug("notify_line_target_resolved", {
+        receiver_uuid: receiver_user_uuid,
+        source: resolved.line_user_id_source,
+        has_line_user_id: Boolean(resolved.line_user_id),
+        request_id: input.request_id ?? null,
+      })
+    }
+
+    if (resolved.delivery === "push") {
+      await sendNotifyDebug("notify_push_target_resolved", {
+        receiver_uuid: receiver_user_uuid,
+        has_endpoint: Boolean(resolved.selected_contact?.push_subscription?.endpoint),
+        has_p256dh: Boolean(
+          resolved.selected_contact?.push_subscription?.keys?.p256dh,
+        ),
+        has_auth: Boolean(
+          resolved.selected_contact?.push_subscription?.keys?.auth,
+        ),
+        request_id: input.request_id ?? null,
+      })
+    }
+
     routes.push({
       receiver_user_uuid,
       receiver_role,
       in_room,
+      presence_status: presence?.status ?? null,
+      left_at: presence?.left_at ?? null,
       contact_state: contact?.state ?? null,
       delivery: resolved.delivery,
       selected_contact: resolved.selected_contact,
       line_user_id: resolved.line_user_id,
+      line_user_id_source: resolved.line_user_id_source,
       skipped_reason: resolved.skipped_reason,
     })
   }

@@ -13,6 +13,7 @@ export type ChatNotificationPayload = {
 
 export type ChatMessageNotifyInput = {
   room_uuid: string
+  message_uuid?: string | null
   sender_uuid?: string | null
   sender_role: string
   receiver_role?: string

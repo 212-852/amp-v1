@@ -22,15 +22,15 @@ export type ChatNotifySkipReason =
   | "availability_off"
   | "invalid_sender"
   | "receiver_in_room"
-  | "receiver_in_app"
+  | "receiver_active"
   | "contact_state_unknown"
+  | "contact_receive_disabled"
   | "missing_contact"
   | "missing_line_identity"
   | null
 
 export type ChatNotifyDeliveryKind =
   | "none"
-  | "in_app_toast"
   | "push"
   | "line"
 
@@ -75,7 +75,7 @@ export function buildChatNotificationContent(input: {
 
   return {
     title: "コンシェルジュ対応が必要です",
-    body: `${input.user_name} から新しいメッセージが届きました。`,
+    body: `${input.user_name}からコンシェルジュへの新着メッセージを受信しました`,
     room_uuid: input.room_uuid,
     room_url: liff_url,
   }

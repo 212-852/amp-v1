@@ -24,6 +24,7 @@ export async function dispatchIncomingChatNotification(input: {
 
   const notify_input: ChatMessageNotifyInput = {
     room_uuid: input.room_uuid,
+    message_uuid: input.message_uuid,
     sender_uuid: input.sender_uuid,
     sender_role: input.sender_role,
     receiver_role: "concierge",

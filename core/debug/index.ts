@@ -13,8 +13,9 @@ export async function sendAuthDebug(
   }
 
   try {
-    const { notifyDiscord } = await import("@/core/notify/discord")
-    await notifyDiscord({
+    const { notifyDebugMessage } = await import("@/core/notify")
+    await notifyDebugMessage({
+      channel: "discord",
       title: resolveDebugTitle(event),
       event,
       request_id,
