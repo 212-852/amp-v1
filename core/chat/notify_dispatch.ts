@@ -8,6 +8,8 @@ export async function dispatchIncomingChatNotification(input: {
   sender_uuid: string | null
   sender_role: string
   user_name: string
+  message_body: string
+  message_type: string
   source_channel?: string | null
 }) {
   const { sendNotifyDebug } = await import("@/core/notify/debug")
@@ -30,6 +32,8 @@ export async function dispatchIncomingChatNotification(input: {
     sender_role: input.sender_role,
     receiver_role: "concierge",
     user_name: input.user_name,
+    message_body: input.message_body,
+    message_type: input.message_type,
     source_channel: input.source_channel ?? null,
     request_id: input.message_uuid,
   }

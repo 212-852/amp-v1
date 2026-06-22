@@ -2,11 +2,12 @@ import "server-only"
 
 import { sendNotifyDebug } from "@/core/notify/debug"
 import {
-  buildChatNotificationContent,
+  buildChatNotificationUrls,
   resolveChatNotifyDecision,
   type ChatNotifySenderRole,
 } from "@/core/notify/chat_rules"
 import { deliverChatNotifyOutput } from "@/core/notify/output"
+import { create_notification_preview } from "@/core/notify/message"
 import { resolveChatNotifyRoutes } from "@/core/notify/rules"
 import type { ChatMessageNotifyInput } from "@/core/notify/types"
 
@@ -32,10 +33,6 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
     request_id,
   })
 
-  const content = buildChatNotificationContent({
-    user_name: input.user_name,
-    room_uuid: input.room_uuid,
-  })
   const sender_role = input.sender_role as ChatNotifySenderRole
 
   let delivered_count = 0
@@ -44,7 +41,7 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
     sender_uuid: input.sender_uuid ?? null,
     sender_role,
     message_uuid: input.message_uuid ?? null,
-    message_text: content.body,
+    message_text: input.message_body ?? null,
     source_channel: input.source_channel ?? null,
     request_id,
   })
@@ -62,6 +59,19 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
     })
 
     return { delivered_count }
+  }
+
+  const preview = create_notification_preview({
+    sender_name: input.user_name,
+    type: input.message_type ?? null,
+    body: input.message_body ?? null,
+  })
+  const { liff_url } = buildChatNotificationUrls()
+  const content = {
+    title: preview.title,
+    body: preview.body,
+    room_uuid: input.room_uuid,
+    room_url: liff_url,
   }
 
   for (const route of routes) {

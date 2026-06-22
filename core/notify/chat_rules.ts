@@ -68,20 +68,6 @@ export function resolveChatNotifyDecision(
   return { should_deliver: true, skip_reason: null }
 }
 
-export function buildChatNotificationContent(input: {
-  user_name: string
-  room_uuid: string
-}) {
-  const { liff_url } = buildChatNotificationUrls()
-
-  return {
-    title: "コンシェルジュ対応が必要です",
-    body: `${input.user_name}からコンシェルジュへの新着メッセージを受信しました`,
-    room_uuid: input.room_uuid,
-    room_url: liff_url,
-  }
-}
-
 export const CHAT_NOTIFICATION_LIFF_URL =
   "https://liff.line.me/2006953406-vj2gYoAb"
 

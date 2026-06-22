@@ -48,7 +48,7 @@ export async function deliverChatLineNotification(
       messages: [
         {
           type: "text",
-          text: `${input.body}\n\n${input.room_url}`,
+          text: `${input.title}\n\n${input.body}\n\n${input.room_url}`,
         },
       ],
     }),
