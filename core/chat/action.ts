@@ -28,7 +28,6 @@ import {
   ensureWelcomeMessageArchived,
   toMessageBundle,
 } from "@/core/chat/message"
-import { dispatchIncomingChatNotification } from "@/core/chat/notify_dispatch"
 import {
   buildPresenceMessageBundle,
   enrichPresenceViews,
@@ -106,6 +105,42 @@ function logChatBootstrap(
   data: Record<string, unknown>,
 ) {
   console.info(`[chat_bootstrap] ${event}`, data)
+}
+
+async function triggerIncomingChatNotification(input: {
+  room_uuid: string
+  message_uuid: string
+  sender_uuid: string | null
+  sender_role: string
+  user_name: string
+  source_channel?: string | null
+}) {
+  const request_id = input.message_uuid
+  const { sendNotifyDebug } = await import("@/core/notify/debug")
+
+  await sendNotifyDebug("notification_trigger_created", {
+    message_uuid: input.message_uuid,
+    room_uuid: input.room_uuid,
+    sender_uuid: input.sender_uuid,
+    sender_role: input.sender_role,
+    receiver_uuid: null,
+    receiver_role: "concierge",
+    source_channel: input.source_channel ?? null,
+    request_id,
+  })
+
+  const { notifyChatMessageReceived } = await import("@/core/notify")
+
+  return notifyChatMessageReceived({
+    room_uuid: input.room_uuid,
+    message_uuid: input.message_uuid,
+    sender_uuid: input.sender_uuid,
+    sender_role: input.sender_role,
+    receiver_role: "concierge",
+    user_name: input.user_name,
+    source_channel: input.source_channel ?? null,
+    request_id,
+  })
 }
 
 async function resolveConciergeCustomerName(room_uuid: string) {
@@ -637,7 +672,7 @@ export async function handleIncomingChatMessageArchive(
     source_channel: input.source_channel,
   })
 
-  await dispatchIncomingChatNotification({
+  await triggerIncomingChatNotification({
     room_uuid: room.room_uuid,
     message_uuid: message.message_uuid,
     sender_uuid: participant.user_uuid,

@@ -43,22 +43,47 @@ const content = {
   },
 }
 
-function formatMessageTime(created_at: string) {
-  const date = new Date(created_at)
+const tokyoDateTimeFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Tokyo",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+})
 
-  if (Number.isNaN(date.getTime())) {
-    return ""
-  }
-
-  return date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  })
+type TokyoDateParts = {
+  year: number
+  month: number
+  day: number
+  hour: string
+  minute: string
 }
 
-function startOfLocalDay(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+function readTokyoDateParts(date: Date): TokyoDateParts | null {
+  const values = new Map(
+    tokyoDateTimeFormatter
+      .formatToParts(date)
+      .map((part) => [part.type, part.value]),
+  )
+  const year = Number(values.get("year"))
+  const month = Number(values.get("month"))
+  const day = Number(values.get("day"))
+  const hour = values.get("hour")
+  const minute = values.get("minute")
+
+  if (!year || !month || !day || !hour || !minute) {
+    return null
+  }
+
+  return { year, month, day, hour, minute }
+}
+
+function tokyoDayNumber(parts: TokyoDateParts) {
+  return Math.floor(
+    Date.UTC(parts.year, parts.month - 1, parts.day) / 86400000,
+  )
 }
 
 function formatBubbleMessageTime(created_at: string) {
@@ -68,14 +93,15 @@ function formatBubbleMessageTime(created_at: string) {
     return ""
   }
 
-  const hour = String(date.getHours()).padStart(2, "0")
-  const minute = String(date.getMinutes()).padStart(2, "0")
-  const time = `${hour}:${minute}`
-  const today = startOfLocalDay(new Date())
-  const message_day = startOfLocalDay(date)
-  const diff_days = Math.round(
-    (today.getTime() - message_day.getTime()) / 86400000,
-  )
+  const message_parts = readTokyoDateParts(date)
+  const today_parts = readTokyoDateParts(new Date())
+
+  if (!message_parts || !today_parts) {
+    return ""
+  }
+
+  const time = `${message_parts.hour}:${message_parts.minute}`
+  const diff_days = tokyoDayNumber(today_parts) - tokyoDayNumber(message_parts)
 
   if (diff_days === 0) {
     return time
@@ -85,9 +111,9 @@ function formatBubbleMessageTime(created_at: string) {
     return `Yesterday ${time}`
   }
 
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, "0")
-  const day = String(date.getDate()).padStart(2, "0")
+  const year = message_parts.year
+  const month = String(message_parts.month).padStart(2, "0")
+  const day = String(message_parts.day).padStart(2, "0")
 
   return `${year}/${month}/${day} ${time}`
 }
@@ -177,24 +203,15 @@ function resolveAvatarInitials(
 
 function MessageHeader({
   kind,
-  created_at,
   locale,
   align,
   actor_display_name,
 }: Readonly<{
   kind: ChatMessageKind
-  created_at: string
   locale: Locale
   align: "left" | "right"
   actor_display_name?: string | null
 }>) {
-  const is_mounted = useSyncExternalStore(
-    subscribeMounted,
-    getMountedSnapshot,
-    getServerMountedSnapshot,
-  )
-  const time = is_mounted ? formatMessageTime(created_at) : ""
-
   return (
     <div
       className={[
@@ -205,7 +222,6 @@ function MessageHeader({
       <span className="font-semibold text-[#6f5842]">
         {actor_display_name?.trim() || resolveSenderLabel(kind, locale)}
       </span>
-      {time ? <span>{time}</span> : null}
     </div>
   )
 }
@@ -308,7 +324,6 @@ export default function ChatMessageBubble({
           {show_header ? (
             <MessageHeader
               kind={source_kind}
-              created_at={message.created_at}
               locale={active_locale}
               align={align}
               actor_display_name={actor_display_name}
@@ -339,18 +354,13 @@ export default function ChatMessageBubble({
             : content.show_original[active_locale]}
         </button>
       ) : null}
-      {rendered_time ? (
-        <span
-          className={[
-            "mt-1 block text-[10px] font-medium leading-none text-[#8c7358]",
-            is_user ? "text-right" : "text-left",
-          ].join(" ")}
-        >
-          {rendered_time}
-        </span>
-      ) : null}
     </div>
   )
+  const message_time = rendered_time ? (
+    <span className="mb-1 shrink-0 self-end whitespace-nowrap text-[10px] font-medium leading-none text-[#8c7358]">
+      {rendered_time}
+    </span>
+  ) : null
 
   return (
     <div
@@ -368,7 +378,6 @@ export default function ChatMessageBubble({
         {show_header ? (
           <MessageHeader
             kind={source_kind}
-            created_at={message.created_at}
             locale={active_locale}
             align={align}
             actor_display_name={actor_display_name}
@@ -376,8 +385,9 @@ export default function ChatMessageBubble({
         ) : null}
 
         {is_user ? (
-          <div className="flex items-start justify-end gap-2">
+          <div className="flex items-end justify-end gap-2">
             {text_bubble}
+            {message_time}
             <MessageAvatar
               initials={resolveAvatarInitials(
                 source_kind,
@@ -387,7 +397,7 @@ export default function ChatMessageBubble({
             />
           </div>
         ) : is_concierge ? (
-          <div className="flex items-start gap-2">
+          <div className="flex items-end gap-2">
             <MessageAvatar
               initials={resolveAvatarInitials(
                 source_kind,
@@ -395,6 +405,7 @@ export default function ChatMessageBubble({
                 actor_display_name,
               )}
             />
+            {message_time}
             {text_bubble}
           </div>
         ) : (

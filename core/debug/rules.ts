@@ -4,7 +4,6 @@ import {
   DEBUG_CHAT_FLOW,
   CHAT_REALTIME_DEBUG,
   DEBUG_LINE_WEBHOOK,
-  DEBUG_NOTIFY,
 } from "@/core/control"
 
 const alwaysReportEvents = new Set([
@@ -336,7 +335,7 @@ export function shouldSendAuthSessionDebug(event: string) {
   }
 
   if (notifyEvents.has(event)) {
-    return DEBUG_NOTIFY
+    return true
   }
 
   if (userChatLoadEvents.has(event)) {

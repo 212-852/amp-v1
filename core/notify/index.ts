@@ -40,20 +40,70 @@ async function logNotifyDebug(
   await sendNotifyDebug(event, payload, payload.request_id as string | null)
 }
 
-export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
-  const import_server_module = new Function(
-    "path",
-    "return import(path)",
-  ) as (path: string) => Promise<{
-    notifyChatMessageReceived: (
-      input: ChatMessageNotifyInput,
-    ) => Promise<{ delivered_count: number }>
-  }>
-  const module_path = "./chat_flow"
-  const { notifyChatMessageReceived: notify_chat_message_received } =
-    await import_server_module(module_path)
+async function resolveInternalNotifyUrl() {
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim()
 
-  return notify_chat_message_received(input)
+  if (configured) {
+    return `${configured.replace(/\/$/, "")}/api/notify/chat`
+  }
+
+  try {
+    const { headers } = await import("next/headers")
+    const request_headers = await headers()
+    const host =
+      request_headers.get("x-forwarded-host") ?? request_headers.get("host")
+    const proto = request_headers.get("x-forwarded-proto") ?? "https"
+
+    if (host) {
+      return `${proto}://${host}/api/notify/chat`
+    }
+  } catch {
+    // Headers are unavailable outside a request scope.
+  }
+
+  return null
+}
+
+export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
+  const url = await resolveInternalNotifyUrl()
+
+  if (!url) {
+    await sendNotifyDebug("notification_route_decided", {
+      message_uuid: input.message_uuid ?? null,
+      room_uuid: input.room_uuid,
+      sender_uuid: input.sender_uuid ?? null,
+      receiver_uuid: null,
+      should_notify: false,
+      delivery_channel: null,
+      reason: "internal_notify_url_missing",
+      request_id: input.request_id ?? null,
+    })
+
+    return { delivered_count: 0 }
+  }
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-amp-internal-notify": process.env.OTP_SECRET?.trim() ?? "",
+    },
+    body: JSON.stringify(input),
+    cache: "no-store",
+  })
+
+  if (!response.ok) {
+    await sendNotifyDebug("notification_delivery_failed", {
+      delivery_channel: "notify",
+      receiver_uuid: null,
+      error: `internal_notify_failed:${response.status}`,
+      request_id: input.request_id ?? null,
+    })
+
+    return { delivered_count: 0 }
+  }
+
+  return (await response.json()) as { delivered_count: number }
 }
 
 export async function notifyEvent(input: NotifyEventInput) {
