@@ -380,58 +380,124 @@ Allowed without explicit UI/chat change request:
 - changes explicitly requested in the task
 
 #########################
-NOTIFICATION RULE
+NOTIFICATION DEBUG RULE
 #########################
 
 Purpose:
-- PWA launch may enable PWA Push notification selection.
-- Notifications are sent only when chat availability is ON and the receiver is away from the app.
 
-Notification method:
-- Exactly one notification method must be selected: LINE notification or PWA Push notification.
-- Both OFF is forbidden.
-- Both ON is forbidden.
-- Turning one method ON must turn the other method OFF.
-- Notification method UI must use an iPhone-style green toggle.
+* Notification failure must be traceable from chat message creation to delivery.
+* If no notification is sent, debug must still explain why.
+* A missing debug event is a bug.
 
-PWA Push notification:
-- PWA Push notification can be selected only when the app is launched as PWA.
-- When PWA Push is enabled for the first time, obtain a Push subscription ID.
-- Save the Push subscription to DB.
-- Do not duplicate an existing Push subscription.
-- If Push permission is denied, PWA Push must be disabled and unselectable.
+Required debug flow:
+message created
+-> chat/action.ts
+-> notify/rules.ts
+-> notify/index.ts
+-> notify/line.ts or notify/push.ts
+-> debug/index.ts
+-> notify/index.ts
+-> notify/discord.ts
 
-Notification send conditions:
-- Send notification only when all conditions are true:
-  - header chat availability is ON.
-  - a new user message is received.
-  - receiver presence is away, offline, hidden, or inactive.
-  - notification method is configured as LINE or PWA Push.
+Debug responsibility:
 
-Presence rule:
-- Presence is the source of truth for notification eligibility.
-- Do not notify when receiver presence is active or online.
-- Notify only when receiver presence is away, offline, hidden, or inactive.
+* chat/action.ts may emit only notification trigger debug.
+* notify/rules.ts must emit decision debug.
+* notify/index.ts must emit dispatch debug.
+* notify/line.ts must emit LINE delivery debug.
+* notify/push.ts must emit Push delivery debug.
+* Do not send Discord debug directly from chat, API, UI, line, or push files.
 
-Responsibility separation:
-- Chat must not send LINE or Push directly.
-- Chat only creates the message event.
-- notify/rules.ts decides notification eligibility, notification method, and destination.
-- notify/index.ts is the single notification entry point.
-- notify/line.ts handles LINE delivery only.
-- notify/push.ts handles Push delivery only.
+Required debug events:
 
-DB rule:
-- Add storage for notification preference and Push subscription if needed.
-- Existing availability is ON/OFF only.
-- Do not mix notification method into availability.
+1. notification_trigger_created
 
-UI rule:
-- Notification settings modal must be centered on screen.
-- Notification settings modal must be above the AI assistant layer.
-- Notification settings modal must use the highest modal z-index.
-- Outside PWA, the PWA Push toggle must be disabled.
+* message_uuid
+* room_uuid
+* sender_uuid
+* sender_role
+* receiver_uuid
+* receiver_role
+* source_channel
 
-Architecture:
-- Keep the existing single core / unified flow.
-- Do not split notification logic per channel or UI entry point.
+2. notification_rule_started
+
+* message_uuid
+* room_uuid
+* receiver_uuid
+
+3. notification_availability_checked
+
+* receiver_uuid
+* enabled
+* reason
+
+4. notification_presence_checked
+
+* room_uuid
+* receiver_uuid
+* is_in_room
+* presence_status
+* left_at
+* last_seen_at
+
+5. notification_contact_checked
+
+* receiver_uuid
+* contact_uuid
+* type
+* channel
+* state
+* receive
+* has_value
+* has_endpoint
+* has_p256dh
+* has_auth
+
+6. notification_route_decided
+
+* receiver_uuid
+* should_notify
+* delivery_channel
+* reason
+
+7. notification_line_target_resolved
+
+* receiver_uuid
+* source
+* has_line_user_id
+
+8. notification_push_target_resolved
+
+* receiver_uuid
+* has_endpoint
+* has_p256dh
+* has_auth
+
+9. notification_delivery_started
+
+* delivery_channel
+* receiver_uuid
+
+10. notification_delivery_success
+
+* delivery_channel
+* receiver_uuid
+
+11. notification_delivery_failed
+
+* delivery_channel
+* receiver_uuid
+* error
+
+Important:
+
+* If chat availability is OFF, emit notification_route_decided with reason availability_off.
+* If receiver is in the room, emit reason receiver_in_room.
+* If contact.state is active, emit reason receiver_active.
+* If contact is missing, emit reason contact_missing.
+* If LINE target is missing, emit reason line_target_missing.
+* If Push keys are missing, emit reason push_target_missing.
+* If all checks pass, delivery must be attempted.
+* hidden, background, offline, away, inactive are notification eligible states.
+* active and online are not notification eligible states.

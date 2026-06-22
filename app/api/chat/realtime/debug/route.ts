@@ -2,6 +2,7 @@ import { sendAuthDebug } from "@/core/debug"
 
 const realtime_events = new Set([
   "chat_send_success",
+  "chat_message_rendered",
 ])
 
 export async function POST(request: Request) {

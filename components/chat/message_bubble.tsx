@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, useSyncExternalStore } from "react"
+import { useEffect, useState, useSyncExternalStore } from "react"
 
 import FlexMessage from "@/components/chat/flex"
+import { send_chat_realtime_debug } from "@/components/chat/realtime_debug"
 import {
   hasMessageTranslation,
   readMessageMeta,
@@ -54,6 +55,41 @@ function formatMessageTime(created_at: string) {
     minute: "2-digit",
     hour12: false,
   })
+}
+
+function startOfLocalDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+}
+
+function formatBubbleMessageTime(created_at: string) {
+  const date = new Date(created_at)
+
+  if (Number.isNaN(date.getTime())) {
+    return ""
+  }
+
+  const hour = String(date.getHours()).padStart(2, "0")
+  const minute = String(date.getMinutes()).padStart(2, "0")
+  const time = `${hour}:${minute}`
+  const today = startOfLocalDay(new Date())
+  const message_day = startOfLocalDay(date)
+  const diff_days = Math.round(
+    (today.getTime() - message_day.getTime()) / 86400000,
+  )
+
+  if (diff_days === 0) {
+    return time
+  }
+
+  if (diff_days === 1) {
+    return `Yesterday ${time}`
+  }
+
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+
+  return `${year}/${month}/${day} ${time}`
 }
 
 function formatPresenceSystemDateTime(created_at: string) {
@@ -213,10 +249,26 @@ export default function ChatMessageBubble({
   const is_concierge = source_kind === "concierge"
   const align = is_user ? "right" : "left"
   const actor_display_name = resolveActorDisplayName(message)
+  const rendered_time = is_mounted
+    ? formatBubbleMessageTime(message.created_at)
+    : ""
 
   const body = show_original
     ? resolveMessageBodyOriginal(message)
     : resolveMessageBodyDisplay(message, room_locale)
+
+  useEffect(() => {
+    if (!rendered_time) {
+      return
+    }
+
+    send_chat_realtime_debug("chat_message_rendered", {
+      message_uuid: message.message_uuid,
+      created_at: message.created_at,
+      rendered_time,
+      sender_type: source_kind,
+    })
+  }, [message.created_at, message.message_uuid, rendered_time, source_kind])
 
   if (is_system) {
     const is_presence = isPresenceSystemMessage(message)
@@ -286,6 +338,16 @@ export default function ChatMessageBubble({
             ? content.show_translation[active_locale]
             : content.show_original[active_locale]}
         </button>
+      ) : null}
+      {rendered_time ? (
+        <span
+          className={[
+            "mt-1 block text-[10px] font-medium leading-none text-[#8c7358]",
+            is_user ? "text-right" : "text-left",
+          ].join(" ")}
+        >
+          {rendered_time}
+        </span>
       ) : null}
     </div>
   )

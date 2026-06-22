@@ -8,19 +8,20 @@ export async function dispatchIncomingChatNotification(input: {
   sender_uuid: string | null
   sender_role: string
   user_name: string
+  source_channel?: string | null
 }) {
-  if (input.sender_role !== "user" && input.sender_role !== "guest") {
-    const { sendNotifyDebug } = await import("@/core/notify/debug")
-    await sendNotifyDebug("notify_flow_skipped", {
-      room_uuid: input.room_uuid,
-      sender_uuid: input.sender_uuid,
-      sender_role: input.sender_role,
-      reason: "sender_not_user_or_guest",
-      request_id: input.message_uuid,
-    })
+  const { sendNotifyDebug } = await import("@/core/notify/debug")
 
-    return { delivered_count: 0 }
-  }
+  await sendNotifyDebug("notification_trigger_created", {
+    message_uuid: input.message_uuid,
+    room_uuid: input.room_uuid,
+    sender_uuid: input.sender_uuid,
+    sender_role: input.sender_role,
+    receiver_uuid: null,
+    receiver_role: "concierge",
+    source_channel: input.source_channel ?? null,
+    request_id: input.message_uuid,
+  })
 
   const notify_input: ChatMessageNotifyInput = {
     room_uuid: input.room_uuid,
@@ -29,6 +30,7 @@ export async function dispatchIncomingChatNotification(input: {
     sender_role: input.sender_role,
     receiver_role: "concierge",
     user_name: input.user_name,
+    source_channel: input.source_channel ?? null,
     request_id: input.message_uuid,
   }
 

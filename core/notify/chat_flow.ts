@@ -16,10 +16,6 @@ function resolveSkipReason(input: {
 }) {
   const reason = input.route_reason ?? input.decision_reason ?? "unknown"
 
-  if (reason === "missing_contact") {
-    return "no_contact"
-  }
-
   return reason
 }
 
@@ -27,11 +23,12 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
   const request_id =
     input.request_id ?? `chat_notify:${input.room_uuid}:${Date.now()}`
 
-  await sendNotifyDebug("notify_flow_started", {
+  await sendNotifyDebug("notification_rule_started", {
+    message_uuid: input.message_uuid ?? input.request_id ?? null,
     room_uuid: input.room_uuid,
     sender_uuid: input.sender_uuid ?? null,
     sender_role: input.sender_role,
-    receiver_role: input.receiver_role ?? "concierge",
+    receiver_uuid: null,
     request_id,
   })
 
@@ -48,13 +45,18 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
     sender_role,
     message_uuid: input.message_uuid ?? null,
     message_text: content.body,
+    source_channel: input.source_channel ?? null,
     request_id,
   })
 
   if (routes.length === 0) {
-    await sendNotifyDebug("notify_flow_skipped", {
+    await sendNotifyDebug("notification_route_decided", {
+      message_uuid: input.message_uuid ?? null,
       room_uuid: input.room_uuid,
       sender_uuid: input.sender_uuid ?? null,
+      receiver_uuid: null,
+      should_notify: false,
+      delivery_channel: null,
       reason: "no_receiver",
       request_id,
     })
@@ -64,10 +66,13 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
 
   for (const route of routes) {
     if (route.delivery === "none") {
-      await sendNotifyDebug("notify_flow_skipped", {
+      await sendNotifyDebug("notification_route_decided", {
+        message_uuid: input.message_uuid ?? null,
         room_uuid: input.room_uuid,
         sender_uuid: input.sender_uuid ?? null,
         receiver_uuid: route.receiver_user_uuid,
+        should_notify: false,
+        delivery_channel: null,
         is_in_room: route.in_room,
         presence_status: route.presence_status,
         left_at: route.left_at,
@@ -85,11 +90,13 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
     })
 
     if (!decision.should_deliver) {
-      await sendNotifyDebug("notify_flow_skipped", {
+      await sendNotifyDebug("notification_route_decided", {
+        message_uuid: input.message_uuid ?? null,
         room_uuid: input.room_uuid,
         sender_uuid: input.sender_uuid ?? null,
         receiver_uuid: route.receiver_user_uuid,
-        delivery: route.delivery,
+        should_notify: false,
+        delivery_channel: route.delivery,
         reason: resolveSkipReason({
           route_reason: route.skipped_reason,
           decision_reason: decision.skip_reason,

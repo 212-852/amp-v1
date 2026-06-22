@@ -89,7 +89,7 @@ export async function deliverChatNotifyOutput(input: ChatNotifyOutputInput) {
 
   if (input.delivery === "line") {
     if (!input.line_user_id) {
-      await sendNotifyDebug("notify_delivery_failed", {
+      await sendNotifyDebug("notification_delivery_failed", {
         delivery_channel: "line",
         receiver_uuid: input.receiver_user_uuid,
         error: "missing_line_destination",
@@ -98,7 +98,7 @@ export async function deliverChatNotifyOutput(input: ChatNotifyOutputInput) {
       return { delivered: false, reason: "missing_line_destination" }
     }
 
-    await sendNotifyDebug("notify_delivery_started", {
+    await sendNotifyDebug("notification_delivery_started", {
       delivery_channel: "line",
       receiver_uuid: input.receiver_user_uuid,
       request_id: input.request_id ?? null,
@@ -113,7 +113,7 @@ export async function deliverChatNotifyOutput(input: ChatNotifyOutputInput) {
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      await sendNotifyDebug("notify_delivery_failed", {
+      await sendNotifyDebug("notification_delivery_failed", {
         delivery_channel: "line",
         receiver_uuid: input.receiver_user_uuid,
         error: message,
@@ -124,7 +124,7 @@ export async function deliverChatNotifyOutput(input: ChatNotifyOutputInput) {
     }
 
     await sendNotifyDebug(
-      result.delivered ? "notify_delivery_success" : "notify_delivery_failed",
+      result.delivered ? "notification_delivery_success" : "notification_delivery_failed",
       {
         delivery_channel: "line",
         receiver_uuid: input.receiver_user_uuid,
@@ -138,7 +138,7 @@ export async function deliverChatNotifyOutput(input: ChatNotifyOutputInput) {
 
   if (input.delivery === "push") {
     if (!input.push_subscription?.endpoint) {
-      await sendNotifyDebug("notify_delivery_failed", {
+      await sendNotifyDebug("notification_delivery_failed", {
         delivery_channel: "push",
         receiver_uuid: input.receiver_user_uuid,
         error: "missing_push_subscription",
@@ -147,7 +147,7 @@ export async function deliverChatNotifyOutput(input: ChatNotifyOutputInput) {
       return { delivered: false, reason: "missing_push_subscription" }
     }
 
-    await sendNotifyDebug("notify_delivery_started", {
+    await sendNotifyDebug("notification_delivery_started", {
       delivery_channel: "push",
       receiver_uuid: input.receiver_user_uuid,
       request_id: input.request_id ?? null,
@@ -163,7 +163,7 @@ export async function deliverChatNotifyOutput(input: ChatNotifyOutputInput) {
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      await sendNotifyDebug("notify_delivery_failed", {
+      await sendNotifyDebug("notification_delivery_failed", {
         delivery_channel: "push",
         receiver_uuid: input.receiver_user_uuid,
         error: message,
@@ -174,7 +174,7 @@ export async function deliverChatNotifyOutput(input: ChatNotifyOutputInput) {
     }
 
     await sendNotifyDebug(
-      result.delivered ? "notify_delivery_success" : "notify_delivery_failed",
+      result.delivered ? "notification_delivery_success" : "notification_delivery_failed",
       {
         delivery_channel: "push",
         receiver_uuid: input.receiver_user_uuid,

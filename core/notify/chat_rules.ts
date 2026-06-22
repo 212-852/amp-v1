@@ -25,8 +25,9 @@ export type ChatNotifySkipReason =
   | "receiver_active"
   | "contact_state_unknown"
   | "contact_receive_disabled"
-  | "missing_contact"
-  | "missing_line_identity"
+  | "contact_missing"
+  | "line_target_missing"
+  | "push_target_missing"
   | null
 
 export type ChatNotifyDeliveryKind =
@@ -61,7 +62,7 @@ export function resolveChatNotifyDecision(
   }
 
   if (input.delivery === "none") {
-    return { should_deliver: false, skip_reason: "missing_contact" }
+    return { should_deliver: false, skip_reason: "contact_missing" }
   }
 
   return { should_deliver: true, skip_reason: null }

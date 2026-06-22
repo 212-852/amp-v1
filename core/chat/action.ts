@@ -643,6 +643,7 @@ export async function handleIncomingChatMessageArchive(
     sender_uuid: participant.user_uuid,
     sender_role: participant.role,
     user_name: actor_display_name,
+    source_channel: input.source_channel,
   })
 
   if (

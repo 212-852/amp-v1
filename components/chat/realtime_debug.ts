@@ -27,6 +27,7 @@ type ChatRealtimeDebugEvent =
   | "chat_send_started"
   | "chat_send_success"
   | "chat_send_failed"
+  | "chat_message_rendered"
   | "chat_scroll_called"
   | "chat_scroll_done"
   | "chat_scroll_target_mismatch"
@@ -60,6 +61,7 @@ export function send_chat_realtime_debug(
 ) {
   if (
     event !== "chat_send_success" &&
+    event !== "chat_message_rendered" &&
     process.env.NEXT_PUBLIC_CHAT_REALTIME_DEBUG !== "true"
   ) {
     return
