@@ -18,34 +18,33 @@ export type ChatNotifyReceiverRole =
   | "guest"
   | "bot"
 
-export type ChatNotifyDecisionInput = {
-  availability: AvailabilityState
-  sender_role: ChatNotifySenderRole
-  receiver_role: ChatNotifyReceiverRole
-  receiver_active: boolean
-  contact_type: ChatNotificationContactType | null
-}
-
 export type ChatNotifySkipReason =
   | "availability_off"
   | "invalid_sender"
-  | "receiver_active"
+  | "receiver_in_room"
+  | "receiver_in_app"
+  | "contact_state_unknown"
   | "missing_contact"
+  | "missing_line_identity"
   | null
+
+export type ChatNotifyDeliveryKind =
+  | "none"
+  | "in_app_toast"
+  | "push"
+  | "line"
+
+export type ChatNotifyDecisionInput = {
+  availability: AvailabilityState
+  sender_role: ChatNotifySenderRole
+  delivery: ChatNotifyDeliveryKind
+}
 
 export function resolveChatNotifyDecision(
   input: ChatNotifyDecisionInput,
-): { should_notify: boolean; skip_reason: ChatNotifySkipReason } {
+): { should_deliver: boolean; skip_reason: ChatNotifySkipReason } {
   if (input.availability !== "on") {
-    return { should_notify: false, skip_reason: "availability_off" }
-  }
-
-  if (input.receiver_active) {
-    return { should_notify: false, skip_reason: "receiver_active" }
-  }
-
-  if (!input.contact_type) {
-    return { should_notify: false, skip_reason: "missing_contact" }
+    return { should_deliver: false, skip_reason: "availability_off" }
   }
 
   if (
@@ -54,14 +53,18 @@ export function resolveChatNotifyDecision(
     input.sender_role === "bot" ||
     input.sender_role === "system"
   ) {
-    return { should_notify: false, skip_reason: "invalid_sender" }
+    return { should_deliver: false, skip_reason: "invalid_sender" }
   }
 
-  if (input.sender_role === "user" || input.sender_role === "guest") {
-    return { should_notify: true, skip_reason: null }
+  if (input.sender_role !== "user" && input.sender_role !== "guest") {
+    return { should_deliver: false, skip_reason: "invalid_sender" }
   }
 
-  return { should_notify: false, skip_reason: "invalid_sender" }
+  if (input.delivery === "none") {
+    return { should_deliver: false, skip_reason: "missing_contact" }
+  }
+
+  return { should_deliver: true, skip_reason: null }
 }
 
 export function buildChatNotificationContent(input: {

@@ -154,9 +154,12 @@ export type ChatNotifySelectedContact = {
 
 export type ChatNotifyContactRoute = {
   receiver_user_uuid: string
+  receiver_role: string | null
+  in_room: boolean
+  contact_state: string | null
+  delivery: import("@/core/notify/chat_rules").ChatNotifyDeliveryKind
   selected_contact: ChatNotifySelectedContact | null
-  fallback_line_contact: ChatNotifySelectedContact | null
-  receiver_active: boolean
+  line_user_id: string | null
   skipped_reason?: string | null
 }
 
@@ -188,29 +191,147 @@ type ContactRow = {
   updated_at?: string | null
 }
 
-function isReceiverPresent(contact: ContactRow, now = new Date()) {
-  if (contact.receive !== true || contact.state !== "active") {
-    return false
-  }
+function isContactInApp(state: string | null | undefined) {
+  return state === "active"
+}
 
-  if (!contact.last_seen_at) {
-    return false
-  }
-
-  const last_seen_time = Date.parse(contact.last_seen_at)
-
+function isContactAway(state: string | null | undefined) {
   return (
-    Number.isFinite(last_seen_time) &&
-    now.getTime() - last_seen_time <= 60 * 1000
+    state === "hidden" || state === "background" || state === "offline"
   )
 }
 
-function resolveLineContactValue(contact: ContactRow) {
-  if (contact.type !== "line") {
+function isAdminReceiverRole(role: string | null | undefined) {
+  return role === "admin" || role === "owner"
+}
+
+function isValidPushContact(contact: ContactRow) {
+  return (
+    contact.type === "push" &&
+    contact.receive === true &&
+    Boolean(resolvePushSubscription(contact))
+  )
+}
+
+function toSelectedPushContact(
+  contact: ContactRow,
+): ChatNotifySelectedContact | null {
+  const push_subscription = resolvePushSubscription(contact)
+
+  if (!push_subscription) {
     return null
   }
 
-  return "line"
+  return {
+    contact_uuid: contact.contact_uuid ?? null,
+    contact_type: "push",
+    contact_value: push_subscription.endpoint,
+    receive: contact.receive ?? null,
+    state: contact.state ?? null,
+    channel: contact.channel ?? null,
+    push_subscription,
+  }
+}
+
+function resolveReceiverNotifyDelivery(input: {
+  in_room: boolean
+  contact: ContactRow | null
+  receiver_role: string | null
+  line_provider_user_id: string | null
+}): {
+  delivery: import("@/core/notify/chat_rules").ChatNotifyDeliveryKind
+  selected_contact: ChatNotifySelectedContact | null
+  line_user_id: string | null
+  skipped_reason: string | null
+} {
+  if (input.in_room) {
+    return {
+      delivery: "none",
+      selected_contact: null,
+      line_user_id: null,
+      skipped_reason: "receiver_in_room",
+    }
+  }
+
+  const contact = input.contact
+  const state = contact?.state ?? null
+
+  if (isContactInApp(state)) {
+    return {
+      delivery: "in_app_toast",
+      selected_contact: null,
+      line_user_id: null,
+      skipped_reason: null,
+    }
+  }
+
+  if (!isContactAway(state)) {
+    return {
+      delivery: "none",
+      selected_contact: null,
+      line_user_id: null,
+      skipped_reason: "contact_state_unknown",
+    }
+  }
+
+  if (isAdminReceiverRole(input.receiver_role)) {
+    if (!input.line_provider_user_id) {
+      return {
+        delivery: "none",
+        selected_contact: null,
+        line_user_id: null,
+        skipped_reason: "missing_line_identity",
+      }
+    }
+
+    return {
+      delivery: "line",
+      selected_contact: {
+        contact_uuid: contact?.contact_uuid ?? null,
+        contact_type: "line",
+        contact_value: input.line_provider_user_id,
+        receive: contact?.receive ?? null,
+        state,
+        channel: contact?.channel ?? null,
+        push_subscription: null,
+      },
+      line_user_id: input.line_provider_user_id,
+      skipped_reason: null,
+    }
+  }
+
+  if (contact && isValidPushContact(contact)) {
+    return {
+      delivery: "push",
+      selected_contact: toSelectedPushContact(contact),
+      line_user_id: input.line_provider_user_id,
+      skipped_reason: null,
+    }
+  }
+
+  if (input.line_provider_user_id) {
+    return {
+      delivery: "line",
+      selected_contact: {
+        contact_uuid: contact?.contact_uuid ?? null,
+        contact_type: "line",
+        contact_value: input.line_provider_user_id,
+        receive: contact?.receive ?? null,
+        state,
+        channel: contact?.channel ?? null,
+        push_subscription: null,
+      },
+      line_user_id: input.line_provider_user_id,
+      skipped_reason: null,
+    }
+  }
+
+  return {
+    delivery: "none",
+    selected_contact: null,
+    line_user_id: null,
+    skipped_reason: "missing_contact",
+  }
 }
 
 function resolvePushSubscription(contact: ContactRow): ChatNotifyPushSubscription | null {
@@ -250,99 +371,6 @@ function resolvePushSubscription(contact: ContactRow): ChatNotifyPushSubscriptio
       p256dh,
       auth,
     },
-  }
-}
-
-function toSelectedContact(contact: ContactRow): ChatNotifySelectedContact | null {
-  if (contact.type !== "line" && contact.type !== "push") {
-    return null
-  }
-
-  if (contact.receive !== true) {
-    return null
-  }
-
-  const contact_value =
-    contact.type === "push"
-      ? resolvePushSubscription(contact)?.endpoint ?? null
-      : resolveLineContactValue(contact)
-
-  if (!contact_value) {
-    return null
-  }
-
-  return {
-    contact_uuid: contact.contact_uuid ?? null,
-    contact_type: contact.type,
-    contact_value,
-    receive: contact.receive ?? null,
-    state: contact.state ?? null,
-    channel: contact.channel ?? null,
-    push_subscription:
-      contact.type === "push" ? resolvePushSubscription(contact) : null,
-  }
-}
-
-function toFallbackLineContact(contact: ContactRow): ChatNotifySelectedContact | null {
-  if (contact.type !== "line" || contact.receive !== true) {
-    return null
-  }
-
-  const contact_value = resolveLineContactValue(contact)
-
-  if (!contact_value) {
-    return null
-  }
-
-  return {
-    contact_uuid: contact.contact_uuid ?? null,
-    contact_type: "line",
-    contact_value,
-    receive: contact.receive ?? null,
-    state: contact.state ?? null,
-    channel: contact.channel ?? null,
-    push_subscription: null,
-  }
-}
-
-function selectNotifyContact(contacts: ContactRow[]): {
-  selected_contact: ChatNotifySelectedContact | null
-  fallback_line_contact: ChatNotifySelectedContact | null
-  skipped_reason?: string | null
-} {
-  const receivable = contacts
-    .map(toSelectedContact)
-    .filter((contact): contact is ChatNotifySelectedContact => Boolean(contact))
-  const push_contact =
-    receivable.find((contact) => contact.contact_type === "push") ?? null
-  const line_contact =
-    receivable.find((contact) => contact.contact_type === "line") ?? null
-  const fallback_line_contact =
-    contacts
-      .map(toFallbackLineContact)
-      .find((contact): contact is ChatNotifySelectedContact => Boolean(contact)) ??
-    null
-
-  if (push_contact) {
-    return {
-      selected_contact: push_contact,
-      fallback_line_contact,
-      skipped_reason: null,
-    }
-  }
-
-  if (line_contact) {
-    return {
-      selected_contact: line_contact,
-      fallback_line_contact: null,
-      skipped_reason: null,
-    }
-  }
-
-  return {
-    selected_contact: null,
-    fallback_line_contact: null,
-    skipped_reason: "no_contact",
   }
 }
 
@@ -501,6 +529,94 @@ async function loadReceiverContacts(user_uuid: string) {
   return (await response.json()) as ContactRow[]
 }
 
+async function loadReceiverUserRoles(user_uuids: string[]) {
+  const unique_user_uuids = [...new Set(user_uuids)].filter(Boolean)
+  const role_map = new Map<string, string>()
+
+  if (unique_user_uuids.length === 0) {
+    return role_map
+  }
+
+  const { getRestConfig, restHeaders, restUrl } = await import("@/core/db/rest")
+  const config = getRestConfig()
+
+  if (!config) {
+    return role_map
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "users",
+      [
+        `user_uuid=in.(${unique_user_uuids.map(encodeURIComponent).join(",")})`,
+        "select=user_uuid,role",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return role_map
+  }
+
+  const users = (await response.json()) as UserRow[]
+
+  for (const user of users) {
+    if (user.user_uuid && user.role) {
+      role_map.set(user.user_uuid, user.role)
+    }
+  }
+
+  return role_map
+}
+
+async function loadRoomParticipantUserMap(room_uuid: string) {
+  const participant_map = new Map<string, string>()
+  const { getRestConfig, restHeaders, restUrl } = await import("@/core/db/rest")
+  const config = getRestConfig()
+
+  if (!config) {
+    return participant_map
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "participants",
+      [
+        `room_uuid=eq.${encodeURIComponent(room_uuid)}`,
+        "user_uuid=not.is.null",
+        "select=user_uuid,participant_uuid",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return participant_map
+  }
+
+  const participants = (await response.json()) as Array<{
+    user_uuid?: string | null
+    participant_uuid?: string | null
+  }>
+
+  for (const participant of participants) {
+    if (participant.user_uuid && participant.participant_uuid) {
+      participant_map.set(participant.user_uuid, participant.participant_uuid)
+    }
+  }
+
+  return participant_map
+}
+
 async function loadReceiverLineProviderUserId(user_uuid: string) {
   const { getRestConfig, restHeaders, restUrl } = await import("@/core/db/rest")
   const config = getRestConfig()
@@ -546,87 +662,96 @@ export async function resolveChatNotifyRoutes(input: {
   request_id?: string | null
 }): Promise<ChatNotifyContactRoute[]> {
   const { sendNotifyDebug } = await import("@/core/notify/debug")
+  const { loadOnlineRoomPresence } = await import("@/core/chat/presence")
 
   const receiver_user_uuids = await loadRoomReceiverUserUuids({
     room_uuid: input.room_uuid,
     sender_uuid: input.sender_uuid ?? null,
     sender_role: input.sender_role,
   })
+
+  if (receiver_user_uuids.length === 0) {
+    return []
+  }
+
+  const entered_participant_uuids = new Set(
+    (await loadOnlineRoomPresence(input.room_uuid))
+      .map((presence) => presence.participant_uuid)
+      .filter(Boolean),
+  )
+  const participant_user_map = await loadRoomParticipantUserMap(input.room_uuid)
+  const receiver_role_map = await loadReceiverUserRoles(receiver_user_uuids)
   const routes: ChatNotifyContactRoute[] = []
 
   for (const receiver_user_uuid of receiver_user_uuids) {
     const contacts = await loadReceiverContacts(receiver_user_uuid)
-    const contact_candidates = contacts.map((contact) => ({
-      contact_uuid: contact.contact_uuid ?? null,
-      contact_type: contact.type ?? null,
-      receive: contact.receive ?? null,
-      state: contact.state ?? null,
-      channel: contact.channel ?? null,
-      has_value: Boolean(contact.value?.trim()),
-      has_endpoint: Boolean(contact.endpoint?.trim()),
-      has_p256dh: Boolean(contact.p256dh?.trim()),
-      has_auth: Boolean(contact.auth?.trim()),
-      valid_push:
-        contact.type === "push" &&
-        contact.receive === true &&
-        Boolean(resolvePushSubscription(contact)),
+    const contact = contacts[0] ?? null
+    const receiver_role = receiver_role_map.get(receiver_user_uuid) ?? null
+    const participant_uuid = participant_user_map.get(receiver_user_uuid) ?? null
+    const in_room = Boolean(
+      participant_uuid && entered_participant_uuids.has(participant_uuid),
+    )
+    const line_provider_user_id =
+      await loadReceiverLineProviderUserId(receiver_user_uuid)
+
+    const contact_candidates = contacts.map((row) => ({
+      contact_uuid: row.contact_uuid ?? null,
+      contact_type: row.type ?? null,
+      receive: row.receive ?? null,
+      state: row.state ?? null,
+      channel: row.channel ?? null,
+      has_value: Boolean(row.value?.trim()),
+      has_endpoint: Boolean(row.endpoint?.trim()),
+      has_p256dh: Boolean(row.p256dh?.trim()),
+      has_auth: Boolean(row.auth?.trim()),
+      valid_push: isValidPushContact(row),
     }))
 
     await sendNotifyDebug("notify_contact_candidates", {
       room_uuid: input.room_uuid,
       sender_uuid: input.sender_uuid ?? null,
       receiver_uuid: receiver_user_uuid,
+      receiver_role,
+      in_room,
+      contact_state: contact?.state ?? null,
       contact_count: contacts.length,
       contacts: contact_candidates,
       request_id: input.request_id ?? null,
     })
 
-    const receiver_active = contacts.some((contact) => isReceiverPresent(contact))
-    const selected = receiver_active
-      ? {
-          selected_contact: null,
-          fallback_line_contact: null,
-          skipped_reason: "receiver_active",
-        }
-      : selectNotifyContact(contacts)
-    let selected_contact = selected.selected_contact
-    let skipped_reason = selected.skipped_reason ?? null
-
-    if (selected_contact?.contact_type === "line") {
-      const line_provider_user_id =
-        await loadReceiverLineProviderUserId(receiver_user_uuid)
-
-      if (line_provider_user_id) {
-        selected_contact = {
-          ...selected_contact,
-          contact_value: line_provider_user_id,
-        }
-      } else {
-        selected_contact = null
-        skipped_reason = "missing_line_identity"
-      }
-    }
+    const resolved = resolveReceiverNotifyDelivery({
+      in_room,
+      contact,
+      receiver_role,
+      line_provider_user_id,
+    })
 
     await sendNotifyDebug("notify_contact_selected", {
       room_uuid: input.room_uuid,
       sender_uuid: input.sender_uuid ?? null,
       receiver_uuid: receiver_user_uuid,
-      contact_uuid: selected_contact?.contact_uuid ?? null,
-      contact_type: selected_contact?.contact_type ?? null,
-      receive: selected_contact?.receive ?? null,
-      state: selected_contact?.state ?? null,
-      channel: selected_contact?.channel ?? null,
-      receiver_active,
-      skipped_reason,
+      receiver_role,
+      in_room,
+      contact_uuid: resolved.selected_contact?.contact_uuid ?? null,
+      contact_type: resolved.selected_contact?.contact_type ?? null,
+      receive: resolved.selected_contact?.receive ?? null,
+      contact_state: contact?.state ?? null,
+      channel: resolved.selected_contact?.channel ?? null,
+      delivery: resolved.delivery,
+      line_user_id: resolved.line_user_id,
+      skipped_reason: resolved.skipped_reason,
       request_id: input.request_id ?? null,
     })
 
     routes.push({
       receiver_user_uuid,
-      selected_contact,
-      fallback_line_contact: selected.fallback_line_contact,
-      receiver_active,
-      skipped_reason,
+      receiver_role,
+      in_room,
+      contact_state: contact?.state ?? null,
+      delivery: resolved.delivery,
+      selected_contact: resolved.selected_contact,
+      line_user_id: resolved.line_user_id,
+      skipped_reason: resolved.skipped_reason,
     })
   }
 

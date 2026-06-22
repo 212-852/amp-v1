@@ -15,10 +15,9 @@ import {
 import {
   buildChatNotificationContent,
   resolveChatNotifyDecision,
-  type ChatNotifyReceiverRole,
   type ChatNotifySenderRole,
 } from "@/core/notify/chat_rules"
-import { deliverChatLineNotification } from "@/core/notify/line"
+import { deliverChatNotifyOutput } from "@/core/notify/output"
 import type { ChatMessageNotifyInput } from "@/core/notify/types"
 
 export type NotifyMessage = {
@@ -74,7 +73,6 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
     room_uuid: input.room_uuid,
   })
   const sender_role = input.sender_role as ChatNotifySenderRole
-  const receiver_role = (input.receiver_role ?? "concierge") as ChatNotifyReceiverRole
 
   let delivered_count = 0
   const routes = await resolveChatNotifyRoutes({
@@ -96,21 +94,31 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
   }
 
   for (const route of routes) {
-    const decision = resolveChatNotifyDecision({
-      availability: "on",
-      sender_role,
-      receiver_role,
-      receiver_active: route.receiver_active,
-      contact_type: route.selected_contact?.contact_type ?? null,
-    })
-
-    if (!decision.should_notify) {
+    if (route.delivery === "none") {
       await sendNotifyDebug("notify_flow_skipped", {
         room_uuid: input.room_uuid,
         sender_uuid: input.sender_uuid ?? null,
         receiver_uuid: route.receiver_user_uuid,
-        contact_uuid: route.selected_contact?.contact_uuid ?? null,
-        contact_type: route.selected_contact?.contact_type ?? null,
+        in_room: route.in_room,
+        contact_state: route.contact_state,
+        reason: resolveSkipReason({ route_reason: route.skipped_reason }),
+        request_id,
+      })
+      continue
+    }
+
+    const decision = resolveChatNotifyDecision({
+      availability: "on",
+      sender_role,
+      delivery: route.delivery,
+    })
+
+    if (!decision.should_deliver) {
+      await sendNotifyDebug("notify_flow_skipped", {
+        room_uuid: input.room_uuid,
+        sender_uuid: input.sender_uuid ?? null,
+        receiver_uuid: route.receiver_user_uuid,
+        delivery: route.delivery,
         reason: resolveSkipReason({
           route_reason: route.skipped_reason,
           decision_reason: decision.skip_reason,
@@ -120,44 +128,24 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
       continue
     }
 
-    const selected_contact = route.selected_contact
-
-    if (!selected_contact) {
-      await sendNotifyDebug("notify_flow_skipped", {
-        room_uuid: input.room_uuid,
-        sender_uuid: input.sender_uuid ?? null,
-        receiver_uuid: route.receiver_user_uuid,
-        reason: "no_contact",
-        request_id,
-      })
-      continue
-    }
-
     const payload = {
       ...content,
       receiver_user_uuid: route.receiver_user_uuid,
-      contact_uuid: selected_contact.contact_uuid,
-      selected_channel: selected_contact.contact_type,
-      contact_receive: selected_contact.receive,
-      contact_state: selected_contact.state,
-      contact_channel: selected_contact.channel,
+      contact_uuid: route.selected_contact?.contact_uuid ?? null,
+      selected_channel:
+        route.delivery === "in_app_toast"
+          ? null
+          : (route.selected_contact?.contact_type ?? null),
+      contact_receive: route.selected_contact?.receive ?? null,
+      contact_state: route.contact_state,
+      contact_channel: route.selected_contact?.channel ?? null,
       request_id,
     }
 
-    if (selected_contact.contact_type === "line") {
-      await sendNotifyDebug("notify_line_fallback_used", {
-        room_uuid: input.room_uuid,
-        sender_uuid: input.sender_uuid ?? null,
-        receiver_uuid: route.receiver_user_uuid,
-        contact_uuid: selected_contact.contact_uuid,
-        selected_channel: "line",
-        reason: "no_valid_push_contact",
-        request_id,
-      })
-
-      const result = await deliverChatLineNotification({
+    if (route.delivery === "in_app_toast") {
+      const result = await deliverChatNotifyOutput({
         ...payload,
-        line_user_id: selected_contact.contact_value,
+        delivery: "in_app_toast",
       })
 
       if (result.delivered) {
@@ -167,13 +155,48 @@ export async function notifyChatMessageReceived(input: ChatMessageNotifyInput) {
       continue
     }
 
-    if (selected_contact.contact_type === "push") {
-      const { send_push_notification } = await import("./push")
-      const result = await send_push_notification({
+    if (route.delivery === "push") {
+      const result = await deliverChatNotifyOutput({
         ...payload,
-        push_subscription: selected_contact.push_subscription ?? {
-          endpoint: selected_contact.contact_value,
-        },
+        delivery: "push",
+        push_subscription: route.selected_contact?.push_subscription ?? null,
+      })
+
+      if (result.delivered) {
+        delivered_count += 1
+        continue
+      }
+
+      if (route.line_user_id) {
+        await sendNotifyDebug("notify_line_fallback_used", {
+          room_uuid: input.room_uuid,
+          sender_uuid: input.sender_uuid ?? null,
+          receiver_uuid: route.receiver_user_uuid,
+          contact_uuid: route.selected_contact?.contact_uuid ?? null,
+          selected_channel: "line",
+          reason: "push_failed",
+          request_id,
+        })
+
+        const line_result = await deliverChatNotifyOutput({
+          ...payload,
+          delivery: "line",
+          line_user_id: route.line_user_id,
+        })
+
+        if (line_result.delivered) {
+          delivered_count += 1
+        }
+      }
+
+      continue
+    }
+
+    if (route.delivery === "line") {
+      const result = await deliverChatNotifyOutput({
+        ...payload,
+        delivery: "line",
+        line_user_id: route.line_user_id,
       })
 
       if (result.delivered) {

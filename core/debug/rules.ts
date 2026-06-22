@@ -282,6 +282,8 @@ const notifyEvents = new Set([
   "notify_line_send_success",
   "notify_line_send_failed",
   "notify_line_fallback_used",
+  "notify_in_app_toast_started",
+  "notify_in_app_toast_sent",
   "push_public_key_resolved",
   "push_subscription_save_started",
   "push_subscription_save_success",

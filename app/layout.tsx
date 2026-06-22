@@ -5,6 +5,7 @@ import { PwaOfflineScreen } from "@/components/pwa/offline_screen";
 import { PwaRuntime } from "@/components/pwa/runtime";
 import { PwaSessionRestore } from "@/components/pwa/session_restore";
 import { AccessPresence } from "@/components/access/presence";
+import { NotifyToastListener } from "@/components/notify/toast_listener";
 import { OverlayProvider } from "@/components/overlay";
 import { ToastProvider } from "@/components/ui/toast_provider";
 import { LocaleProvider } from "@/src/components/locale/provider";
@@ -46,6 +47,7 @@ export default function RootLayout({
               <PwaSessionRestore />
               <PwaOfflineScreen />
               <AccessPresence />
+              <NotifyToastListener />
               <LiffAutoLogin />
               {children}
             </OverlayProvider>
