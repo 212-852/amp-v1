@@ -1,6 +1,6 @@
 "use client"
 
-import { Bell } from "lucide-react"
+import { Bell, X } from "lucide-react"
 import { useEffect, useState } from "react"
 
 import type { NotificationType } from "@/core/chat/types"
@@ -28,6 +28,16 @@ const content = {
     ja: "PWA Push通知",
     en: "PWA Push Notification",
     es: "Notificacion push PWA",
+  },
+  line_saved: {
+    ja: "LINE通知へ変更しました",
+    en: "Switched to LINE notifications",
+    es: "Cambiado a notificaciones LINE",
+  },
+  push_saved: {
+    ja: "PWA Push通知へ変更しました",
+    en: "Switched to PWA Push notifications",
+    es: "Cambiado a notificaciones push PWA",
   },
   push_disabled: {
     ja: "PWA Pushは現在選択できません",
@@ -59,20 +69,15 @@ const content = {
     en: "Failed to get push notification keys",
     es: "No se pudieron obtener las claves push",
   },
-  save: {
-    ja: "保存",
-    en: "Save",
-    es: "Guardar",
+  line_identity_missing: {
+    ja: "LINE連携情報が見つかりません",
+    en: "LINE identity was not found",
+    es: "No se encontro la identidad LINE",
   },
-  close: {
-    ja: "閉じる",
-    en: "Close",
-    es: "Cerrar",
-  },
-  error: {
-    ja: "通知設定の保存に失敗しました",
-    en: "Failed to save notification settings",
-    es: "Error al guardar",
+  save_failed: {
+    ja: "通知設定の変更に失敗しました",
+    en: "Failed to update notification settings",
+    es: "Error al actualizar",
   },
 } as const
 
@@ -108,14 +113,6 @@ function resolve_push_availability(locale: Locale): PushAvailability {
 
   const is_pwa = is_pwa_display_mode()
 
-  push_debug("push_mode_detected", {
-    is_pwa_display_mode: is_pwa,
-    has_notification: "Notification" in window,
-    has_service_worker:
-      typeof navigator !== "undefined" && "serviceWorker" in navigator,
-    has_push_manager: "PushManager" in window,
-  })
-
   if (!is_pwa) {
     return {
       selectable: false,
@@ -145,6 +142,28 @@ function resolve_push_availability(locale: Locale): PushAvailability {
   }
 }
 
+function resolve_save_error_message(error: unknown, locale: Locale) {
+  if (!(error instanceof Error)) {
+    return content.save_failed[locale] ?? content.save_failed.en
+  }
+
+  if (error.message === "line_provider_user_id_missing") {
+    return content.line_identity_missing[locale] ?? content.line_identity_missing.en
+  }
+
+  if (
+    error.message === "push_subscription_required" ||
+    error.message === "push_subscription_endpoint_required" ||
+    error.message === "push_subscription_key_required"
+  ) {
+    return (
+      content.push_subscription_failed[locale] ?? content.push_subscription_failed.en
+    )
+  }
+
+  return error.message || (content.save_failed[locale] ?? content.save_failed.en)
+}
+
 type NotificationSettingsModalProps = {
   open: boolean
   initial_notification_type: NotificationType
@@ -164,16 +183,13 @@ export default function NotificationSettingsModal({
     useState<NotificationType>(initial_notification_type)
   const [saved_notification_type, set_saved_notification_type] =
     useState<NotificationType>(initial_notification_type)
-  const [is_saving, set_is_saving] = useState(false)
-  const [is_preparing_push, set_is_preparing_push] = useState(false)
+  const [is_changing, set_is_changing] = useState(false)
   const [error_message, set_error_message] = useState<string | null>(null)
   const [push_availability, set_push_availability] = useState<PushAvailability>({
     selectable: false,
     reason: null,
     permission: "unsupported",
   })
-  const [push_subscription, set_push_subscription] =
-    useState<PushSubscriptionJson | null>(null)
   const [push_key_missing, set_push_key_missing] = useState(false)
 
   useEffect(() => {
@@ -242,7 +258,6 @@ export default function NotificationSettingsModal({
         set_push_availability(availability)
 
         if (is_pwa) {
-          push_debug("push_key_fetch_started", { source: "modal_open" })
           const response = await fetch("/api/notify/push/key", {
             credentials: "include",
             cache: "no-store",
@@ -251,46 +266,17 @@ export default function NotificationSettingsModal({
             ? ((await response.json().catch(() => null)) as {
                 ok?: boolean
                 public_key?: string | null
-                error?: string | null
                 missing_env?: string | null
               } | null)
-            : ((await response?.json().catch(() => null)) as {
-                ok?: boolean
-                public_key?: string | null
-                error?: string | null
-                missing_env?: string | null
-              } | null)
+            : null
           public_key =
             response?.ok && payload?.ok === true
               ? payload.public_key?.trim() || null
               : null
           missing_env = payload?.missing_env ?? null
-          push_debug("push_key_fetch_response", {
-            source: "modal_open",
-            ok: response?.ok ?? false,
-            status: response?.status ?? null,
-            has_public_key: Boolean(public_key),
-            error: payload?.error ?? null,
-            missing_env: payload?.missing_env ?? null,
-          })
         }
 
         set_push_key_missing(is_pwa && !public_key && Boolean(missing_env))
-
-        if (!availability.selectable) {
-          console.info("[notification settings] pwa push disabled", {
-            reason: availability.reason,
-            permission: availability.permission,
-            is_pwa_display_mode: is_pwa,
-            has_notification:
-              typeof window !== "undefined" && "Notification" in window,
-            has_service_worker:
-              typeof navigator !== "undefined" && "serviceWorker" in navigator,
-            has_push_manager:
-              typeof window !== "undefined" && "PushManager" in window,
-            vapid_public_key_exists: Boolean(public_key),
-          })
-        }
       }
 
       void resolve_key_and_availability()
@@ -301,9 +287,7 @@ export default function NotificationSettingsModal({
     }
   }, [locale, open])
 
-  async function fetch_vapid_public_key(source: string) {
-    push_debug("push_key_fetch_started", { source })
-
+  async function fetch_vapid_public_key() {
     const response = await fetch("/api/notify/push/key", {
       credentials: "include",
       cache: "no-store",
@@ -311,26 +295,13 @@ export default function NotificationSettingsModal({
     const payload = (await response.json().catch(() => null)) as {
       ok?: boolean
       public_key?: string | null
-      error?: string | null
       missing_env?: string | null
     } | null
     const public_key =
       response.ok && payload?.ok === true ? payload.public_key?.trim() || null : null
 
-    push_debug("push_key_fetch_response", {
-      source,
-      ok: response.ok,
-      status: response.status,
-      has_public_key: Boolean(public_key),
-      error: payload?.error ?? null,
-      missing_env: payload?.missing_env ?? null,
-    })
-
     if (!public_key && payload?.missing_env) {
       set_push_key_missing(true)
-      push_debug("push_key_missing_env", {
-        missing_env: payload.missing_env,
-      })
       throw new Error(
         content.push_vapid_missing[locale as Locale] ??
           content.push_vapid_missing.en,
@@ -341,80 +312,16 @@ export default function NotificationSettingsModal({
     return public_key
   }
 
-  function show_push_error(message: string) {
-    set_error_message(message)
+  function show_center_toast(input: {
+    message: string
+    tone: "success" | "error"
+  }) {
     toast({
-      tone: "error",
+      tone: input.tone,
       placement: "center",
       duration_ms: 3000,
-      message,
+      message: input.message,
     })
-  }
-
-  async function ensure_push_subscription() {
-    const availability = resolve_push_availability(locale as Locale)
-    set_push_availability(availability)
-
-    if (!availability.selectable) {
-      set_notification_type("line")
-      throw new Error(availability.reason ?? "pwa_push_unavailable")
-    }
-
-    if (window.Notification.permission === "denied") {
-      push_debug("push_permission_result", { permission: "denied" })
-      throw new Error(content.push_denied[locale as Locale] ?? content.push_denied.en)
-    }
-
-    const public_key = await fetch_vapid_public_key("toggle_on")
-
-    if (!public_key) {
-      throw new Error(
-        content.push_vapid_missing[locale as Locale] ??
-          content.push_vapid_missing.en,
-      )
-    }
-
-    if (window.Notification.permission === "default") {
-      push_debug("push_permission_requested")
-      const permission = await window.Notification.requestPermission()
-      push_debug("push_permission_result", { permission })
-
-      if (permission !== "granted") {
-        const next_availability = resolve_push_availability(locale as Locale)
-        set_push_availability(next_availability)
-        set_notification_type("line")
-        throw new Error(
-          content.push_denied[locale as Locale] ?? content.push_denied.en,
-        )
-      }
-    } else {
-      push_debug("push_permission_result", {
-        permission: window.Notification.permission,
-      })
-    }
-
-    push_debug("push_subscribe_started")
-    const json = await acquireFreshPushSubscription({
-      public_key,
-    })
-    const endpoint = json.endpoint?.trim()
-    const p256dh = json.keys?.p256dh?.trim()
-    const auth = json.keys?.auth?.trim()
-
-    if (!endpoint || !p256dh || !auth) {
-      throw new Error(
-        content.push_subscription_failed[locale as Locale] ??
-          content.push_subscription_failed.en,
-      )
-    }
-
-    push_debug("push_subscribe_success", {
-      endpoint_exists: true,
-      p256dh_exists: true,
-      auth_exists: true,
-    })
-    set_push_subscription(json)
-    return json
   }
 
   async function persist_notification_settings(input: {
@@ -437,34 +344,92 @@ export default function NotificationSettingsModal({
     } | null
 
     if (!response.ok || payload?.ok !== true) {
-      if (
-        payload?.error === "push_subscription_required" ||
-        payload?.error === "push_subscription_endpoint_required" ||
-        payload?.error === "push_subscription_key_required"
-      ) {
-        throw new Error(
-          content.push_subscription_failed[locale as Locale] ??
-            content.push_subscription_failed.en,
-        )
-      }
-
       throw new Error(payload?.error ?? "notification_save_failed")
     }
-
-    push_debug("push_method_saved", {
-      notification_type:
-        payload.notification_type === "pwa_push" ? "pwa_push" : "line",
-    })
 
     return payload.notification_type === "pwa_push" ? "pwa_push" : "line"
   }
 
-  async function select_push_notifications() {
-    if (is_preparing_push) {
+  async function ensure_push_subscription() {
+    const availability = resolve_push_availability(locale as Locale)
+    set_push_availability(availability)
+
+    if (!availability.selectable) {
+      throw new Error(availability.reason ?? "pwa_push_unavailable")
+    }
+
+    if (window.Notification.permission === "denied") {
+      throw new Error(content.push_denied[locale as Locale] ?? content.push_denied.en)
+    }
+
+    const public_key = await fetch_vapid_public_key()
+
+    if (!public_key) {
+      throw new Error(
+        content.push_vapid_missing[locale as Locale] ??
+          content.push_vapid_missing.en,
+      )
+    }
+
+    if (window.Notification.permission === "default") {
+      const permission = await window.Notification.requestPermission()
+
+      if (permission !== "granted") {
+        set_push_availability(resolve_push_availability(locale as Locale))
+        throw new Error(content.push_denied[locale as Locale] ?? content.push_denied.en)
+      }
+    }
+
+    const json = await acquireFreshPushSubscription({ public_key })
+    const endpoint = json.endpoint?.trim()
+    const p256dh = json.keys?.p256dh?.trim()
+    const auth = json.keys?.auth?.trim()
+
+    if (!endpoint || !p256dh || !auth) {
+      throw new Error(
+        content.push_subscription_failed[locale as Locale] ??
+          content.push_subscription_failed.en,
+      )
+    }
+
+    return json
+  }
+
+  async function select_line_notifications() {
+    if (is_changing || saved_notification_type === "line") {
       return
     }
 
-    set_is_preparing_push(true)
+    set_is_changing(true)
+    set_error_message(null)
+
+    try {
+      const saved_type = await persist_notification_settings({
+        notification_type: "line",
+      })
+      set_notification_type(saved_type)
+      set_saved_notification_type(saved_type)
+      onSaved?.(saved_type)
+      show_center_toast({
+        message: content.line_saved[locale as Locale] ?? content.line_saved.en,
+        tone: "success",
+      })
+    } catch (error) {
+      set_notification_type(saved_notification_type)
+      const message = resolve_save_error_message(error, locale as Locale)
+      set_error_message(message)
+      show_center_toast({ message, tone: "error" })
+    } finally {
+      set_is_changing(false)
+    }
+  }
+
+  async function select_push_notifications() {
+    if (is_changing || saved_notification_type === "pwa_push") {
+      return
+    }
+
+    set_is_changing(true)
     set_error_message(null)
 
     try {
@@ -473,54 +438,20 @@ export default function NotificationSettingsModal({
         notification_type: "pwa_push",
         push_subscription: subscription,
       })
-      set_notification_type("pwa_push")
-      set_saved_notification_type(saved_type)
-      onSaved?.(saved_type)
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : content.push_disabled[locale as Locale] ?? content.push_disabled.en
-      push_debug("push_subscribe_failed", { error_message: message })
-      show_push_error(message)
-    } finally {
-      set_is_preparing_push(false)
-    }
-  }
-
-  async function save_settings() {
-    if (is_saving) {
-      return
-    }
-
-    set_is_saving(true)
-    set_error_message(null)
-
-    try {
-      const resolved_notification_type =
-        notification_type === "pwa_push" ? "pwa_push" : "line"
-      const resolved_push_subscription =
-        resolved_notification_type === "pwa_push"
-          ? push_subscription ?? (await ensure_push_subscription())
-          : null
-
-      const saved_type = await persist_notification_settings({
-        notification_type: resolved_notification_type,
-        push_subscription: resolved_push_subscription,
-      })
       set_notification_type(saved_type)
       set_saved_notification_type(saved_type)
       onSaved?.(saved_type)
-      onClose()
+      show_center_toast({
+        message: content.push_saved[locale as Locale] ?? content.push_saved.en,
+        tone: "success",
+      })
     } catch (error) {
       set_notification_type(saved_notification_type)
-      const message =
-        error instanceof Error
-          ? error.message
-          : content.error[locale as Locale] ?? content.error.en
-      show_push_error(message)
+      const message = resolve_save_error_message(error, locale as Locale)
+      set_error_message(message)
+      show_center_toast({ message, tone: "error" })
     } finally {
-      set_is_saving(false)
+      set_is_changing(false)
     }
   }
 
@@ -528,8 +459,7 @@ export default function NotificationSettingsModal({
     return null
   }
 
-  const can_start_push_setup = can_start_pwa_push_setup()
-  const push_option_disabled = !can_start_push_setup
+  const push_option_disabled = !can_start_pwa_push_setup()
 
   const options: Array<{
     value: NotificationType
@@ -546,15 +476,14 @@ export default function NotificationSettingsModal({
       value: "pwa_push",
       label: content.push[locale as Locale] ?? content.push.en,
       disabled: push_option_disabled,
-      helper:
-        push_option_disabled
-          ? push_availability.reason ??
-            content.push_disabled[locale as Locale] ??
-            content.push_disabled.en
-          : push_key_missing
-            ? content.push_vapid_missing[locale as Locale] ??
-              content.push_vapid_missing.en
-            : null,
+      helper: push_option_disabled
+        ? push_availability.reason ??
+          content.push_disabled[locale as Locale] ??
+          content.push_disabled.en
+        : push_key_missing
+          ? content.push_vapid_missing[locale as Locale] ??
+            content.push_vapid_missing.en
+          : null,
     },
   ]
 
@@ -580,11 +509,21 @@ export default function NotificationSettingsModal({
           event.stopPropagation()
         }}
       >
-        <div className="mb-4 flex items-center gap-2">
-          <Bell className="h-5 w-5 text-neutral-700" strokeWidth={1.8} />
-          <h2 className="text-[16px] font-semibold text-neutral-950">
-            {content.title[locale as Locale] ?? content.title.en}
-          </h2>
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <Bell className="h-5 w-5 shrink-0 text-neutral-700" strokeWidth={1.8} />
+            <h2 className="text-[16px] font-semibold text-neutral-950">
+              {content.title[locale as Locale] ?? content.title.en}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="閉じる"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+          >
+            <X className="h-5 w-5" strokeWidth={1.8} />
+          </button>
         </div>
 
         <div className="space-y-3">
@@ -595,7 +534,7 @@ export default function NotificationSettingsModal({
               <button
                 key={option.value}
                 type="button"
-                disabled={option.disabled || is_preparing_push || is_saving}
+                disabled={option.disabled || is_changing}
                 aria-pressed={selected}
                 onClick={() => {
                   if (option.value === "pwa_push") {
@@ -603,9 +542,7 @@ export default function NotificationSettingsModal({
                     return
                   }
 
-                  if (!option.disabled) {
-                    set_notification_type(option.value)
-                  }
+                  void select_line_notifications()
                 }}
                 className={[
                   "flex w-full items-center justify-between gap-4 rounded-xl border px-4 py-3 text-left",
@@ -623,7 +560,7 @@ export default function NotificationSettingsModal({
                       {option.helper}
                     </span>
                   ) : null}
-                  {option.value === "pwa_push" && is_preparing_push ? (
+                  {option.value === "pwa_push" && is_changing && !selected ? (
                     <span className="mt-0.5 block text-[12px] leading-5 text-neutral-500">
                       {content.push[locale as Locale] ?? content.push.en}
                     </span>
@@ -653,24 +590,6 @@ export default function NotificationSettingsModal({
             {error_message}
           </p>
         ) : null}
-
-        <div className="mt-5 flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border border-neutral-200 px-4 py-2 text-[13px] font-medium text-neutral-700"
-          >
-            {content.close[locale as Locale] ?? content.close.en}
-          </button>
-          <button
-            type="button"
-            disabled={is_saving}
-            onClick={() => void save_settings()}
-            className="rounded-full bg-neutral-900 px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-60"
-          >
-            {content.save[locale as Locale] ?? content.save.en}
-          </button>
-        </div>
       </div>
     </div>
   )

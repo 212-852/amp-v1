@@ -57,7 +57,14 @@ function serializeContacts(contacts: NotificationContactRow[]) {
 }
 
 function hasReceivingLineContact(contacts: NotificationContactRow[]) {
-  return contacts.length === 1 && contacts[0]?.type === "line" && contacts[0].receive === true
+  const contact = contacts[0]
+
+  return (
+    contacts.length === 1 &&
+    contact?.type === "line" &&
+    contact.receive === true &&
+    Boolean(contact.value?.trim())
+  )
 }
 
 function hasReceivingPushContact(contacts: NotificationContactRow[]) {
@@ -225,8 +232,56 @@ export async function getPushNotificationPublicKeyConfig() {
   return config
 }
 
+async function loadLineProviderUserId(user_uuid: string) {
+  const config = getRestConfig()
+
+  if (!config) {
+    return null
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "identities",
+      [
+        `user_uuid=eq.${encodeURIComponent(user_uuid)}`,
+        "provider=eq.line",
+        "provider_user_id=not.is.null",
+        "select=provider_user_id",
+        "order=created_at.desc",
+        "limit=1",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return null
+  }
+
+  const rows = (await response.json()) as Array<{
+    provider_user_id?: string | null
+  }>
+
+  return rows[0]?.provider_user_id?.trim() || null
+}
+
 export async function saveLineNotificationSettings(input: { session: Session }) {
+  if (!input.session.user_uuid) {
+    throw new Error("line_notification_requires_user")
+  }
+
+  const provider_user_id = await loadLineProviderUserId(input.session.user_uuid)
+
+  if (!provider_user_id) {
+    throw new Error("line_provider_user_id_missing")
+  }
+
   const before_contacts = await loadIdentityNotificationContacts(input.session)
+  const existing_contact = await loadIdentityNotificationContact(input.session)
 
   await sendNotifyDebug("notification_setting_save_start", {
     user_uuid: input.session.user_uuid,
@@ -243,13 +298,12 @@ export async function saveLineNotificationSettings(input: { session: Session }) 
 
   const saved = await saveSingleNotificationContact({
     session: input.session,
-    contact_uuid:
-      before_contacts.find((contact) => contact.type === "line")?.contact_uuid ??
-      null,
+    contact_uuid: existing_contact?.contact_uuid ?? null,
     body: {
       type: "line",
       channel: "line",
-      state: "offline",
+      receive: true,
+      value: provider_user_id,
       endpoint: null,
       p256dh: null,
       auth: null,
