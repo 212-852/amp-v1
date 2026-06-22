@@ -18,6 +18,8 @@ import {
 } from "@/core/output/rules"
 import { sendAuthDebug } from "@/core/debug"
 import {
+  claim_line_reply_token_for_send,
+  is_line_reply_token_fresh,
   mark_line_reply_token_used,
   validate_line_webhook_reply_token,
 } from "@/core/line/reply_token"
@@ -316,6 +318,35 @@ export function build_line_messages_from_output(
 
 export { isLineFlexCarouselPayload, type LineFlexCarouselPayload }
 
+function build_line_reply_debug_fields(
+  options: {
+    destination: OutputDestination
+    target: OutputTarget
+    reply_token?: string | null
+    line_send_method: string
+    output_idempotency_key?: string | null
+  },
+  extra: Record<string, unknown> = {},
+) {
+  const reply_token_record = options.destination.reply_token_record ?? null
+
+  return {
+    room_uuid: options.target.room_uuid ?? null,
+    source_channel: options.target.channel ?? null,
+    receiver_channel: "line",
+    destination: options.destination.transport,
+    has_reply_token: Boolean(options.reply_token),
+    reply_token_source: reply_token_record?.reply_token_source ?? null,
+    reply_token_used: reply_token_record?.reply_token_used_at !== null,
+    reply_token_fresh: is_line_reply_token_fresh(reply_token_record),
+    line_send_method: options.line_send_method,
+    output_idempotency_key: options.output_idempotency_key ?? null,
+    duplicate_skipped: false,
+    retry_allowed: false,
+    ...extra,
+  }
+}
+
 export async function deliverLine(
   contact: ContactRecord,
   message: OutputMessage,
@@ -324,6 +355,7 @@ export async function deliverLine(
     target: OutputTarget
     reply_token?: string | null
     provider_user_id?: string | null
+    output_idempotency_key?: string | null
   },
 ): Promise<DeliveryResult> {
   const token = process.env.LINE_MESSAGING_CHANNEL_ACCESS_TOKEN
@@ -333,50 +365,42 @@ export async function deliverLine(
   const reply_validation = use_reply
     ? validate_line_webhook_reply_token(options.reply_token)
     : { ok: false as const, reason: "missing" as const }
+  const debug_base = {
+    destination: options.destination,
+    target: options.target,
+    reply_token: options.reply_token,
+    line_send_method,
+    output_idempotency_key: options.output_idempotency_key ?? null,
+  }
+
+  if (use_reply && !reply_validation.ok) {
+    await sendAuthDebug("line_reply_skipped", build_line_reply_debug_fields(debug_base, {
+      provider_user_id,
+      skipped_reason: `reply_token_${reply_validation.reason}`,
+    }))
+    return {
+      transport: "line_reply",
+      delivered: false,
+      failed_final: true,
+      skipped_reason: `reply_token_${reply_validation.reason}`,
+    }
+  }
+
   const reply_token = reply_validation.ok
     ? reply_validation.record.reply_token
     : null
 
-  if (use_reply && !reply_token) {
-    await sendAuthDebug("line_reply_send_failed", {
-      provider_user_id,
-      status: 0,
-      error_message: `reply_token_${reply_validation.reason}`,
-      room_uuid: options.target.room_uuid ?? null,
-      source_channel: options.target.channel ?? null,
-      receiver_channel: "line",
-      destination: options.destination.transport,
-      has_reply_token: Boolean(options.reply_token),
-      reply_token_source:
-        options.destination.reply_token_record?.reply_token_source ?? null,
-      reply_token_used:
-        options.destination.reply_token_record?.reply_token_used_at !== null,
-      line_send_method,
-      retry_allowed: false,
-    })
-    return { transport: "line_reply", delivered: false }
-  }
-
   if (!token || (!contact.value && !reply_token)) {
-    await sendAuthDebug("line_reply_send_failed", {
+    await sendAuthDebug("line_reply_send_failed", build_line_reply_debug_fields(debug_base, {
       provider_user_id,
       status: 0,
       error_message: !token ? "missing_access_token" : "missing_line_destination",
-      room_uuid: options.target.room_uuid ?? null,
-      source_channel: options.target.channel ?? null,
-      receiver_channel: "line",
-      destination: options.destination.transport,
-      has_reply_token: Boolean(reply_token),
-      reply_token_source:
-        options.destination.reply_token_record?.reply_token_source ?? null,
-      reply_token_used:
-        options.destination.reply_token_record?.reply_token_used_at !== null,
-      line_send_method,
-      retry_allowed: false,
-    })
+    }))
     return {
       transport: use_reply ? "line_reply" : "line_push",
       delivered: false,
+      failed_final: use_reply,
+      skipped_reason: !token ? "missing_access_token" : "missing_line_destination",
     }
   }
 
@@ -393,25 +417,38 @@ export async function deliverLine(
       },
     ]
 
-  if (reply_token) {
-    mark_line_reply_token_used(reply_token)
-  }
+  if (use_reply && reply_token && reply_validation.ok) {
+    await sendAuthDebug("line_reply_send_attempt", build_line_reply_debug_fields(debug_base, {
+      provider_user_id,
+      reply_token_exists: true,
+      message_count: line_payloads.length,
+      reply_token_used: false,
+      reply_token_fresh: is_line_reply_token_fresh(reply_validation.record),
+    }))
 
-  await sendAuthDebug("line_reply_send_attempt", {
-    provider_user_id,
-    reply_token_exists: Boolean(reply_token),
-    message_count: line_payloads.length,
-    room_uuid: options.target.room_uuid ?? null,
-    source_channel: options.target.channel ?? null,
-    receiver_channel: "line",
-    destination: options.destination.transport,
-    has_reply_token: Boolean(reply_token),
-    reply_token_source:
-      options.destination.reply_token_record?.reply_token_source ?? null,
-    reply_token_used: true,
-    line_send_method,
-    retry_allowed: false,
-  })
+    const claim = claim_line_reply_token_for_send(reply_token)
+
+    if (!claim.ok) {
+      await sendAuthDebug("line_reply_skipped", build_line_reply_debug_fields(debug_base, {
+        provider_user_id,
+        skipped_reason: `reply_token_${claim.reason}`,
+      }))
+      return {
+        transport: "line_reply",
+        delivered: false,
+        failed_final: true,
+        skipped_reason: `reply_token_${claim.reason}`,
+      }
+    }
+  } else {
+    await sendAuthDebug("line_reply_send_attempt", build_line_reply_debug_fields(debug_base, {
+      provider_user_id,
+      reply_token_exists: Boolean(reply_token),
+      message_count: line_payloads.length,
+      reply_token_used: false,
+      reply_token_fresh: false,
+    }))
+  }
 
   const response = await fetch(
     reply_token
@@ -440,42 +477,36 @@ export async function deliverLine(
 
   if (!response.ok) {
     const error_message = await response.text().catch(() => "")
+    const invalid_reply_token =
+      use_reply &&
+      reply_token &&
+      (response.status === 400 ||
+        /invalid reply token/i.test(error_message))
 
-    await sendAuthDebug("line_reply_send_failed", {
+    if (invalid_reply_token && reply_token) {
+      mark_line_reply_token_used(reply_token)
+    }
+
+    await sendAuthDebug("line_reply_send_failed", build_line_reply_debug_fields(debug_base, {
       provider_user_id,
       status: response.status,
       error_message,
-      room_uuid: options.target.room_uuid ?? null,
-      source_channel: options.target.channel ?? null,
-      receiver_channel: "line",
-      destination: options.destination.transport,
-      has_reply_token: Boolean(reply_token),
-      reply_token_source:
-        options.destination.reply_token_record?.reply_token_source ?? null,
-      reply_token_used: true,
-      line_send_method,
-      retry_allowed: false,
-    })
+      reply_token_used: invalid_reply_token,
+      skipped_reason: invalid_reply_token ? "invalid_reply_token" : null,
+    }))
 
     return {
       transport: use_reply ? "line_reply" : "line_push",
       delivered: false,
+      failed_final: use_reply,
+      skipped_reason: invalid_reply_token ? "invalid_reply_token" : `http_${response.status}`,
     }
   }
 
-  await sendAuthDebug("line_reply_send_success", {
+  await sendAuthDebug("line_reply_send_success", build_line_reply_debug_fields(debug_base, {
     provider_user_id,
-    room_uuid: options.target.room_uuid ?? null,
-    source_channel: options.target.channel ?? null,
-    receiver_channel: "line",
-    destination: options.destination.transport,
-    has_reply_token: Boolean(reply_token),
-    reply_token_source:
-      options.destination.reply_token_record?.reply_token_source ?? null,
-    reply_token_used: true,
-    line_send_method,
-    retry_allowed: false,
-  })
+    reply_token_used: Boolean(reply_token),
+  }))
 
   return {
     transport: use_reply ? "line_reply" : "line_push",

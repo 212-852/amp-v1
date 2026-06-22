@@ -1,12 +1,16 @@
 import { redirect } from "next/navigation"
 
 import { resolveAuthContext } from "@/core/auth/context"
+import { resolve_line_user_id } from "@/core/auth/identity"
 import { resolveIdentity } from "@/core/auth/identity"
 import { resolveAuthRoute } from "@/core/auth/route"
 import { resolveSession } from "@/core/auth/session"
 import { resolveEntranceContext } from "@/core/entrance/context"
+import { resolve_public_app_url } from "@/core/output/uri"
 
 export type { AmpRouteKey, AmpRouteResult } from "@/core/auth/route"
+
+const ENTRY_HOME_URL = "https://app.da-nya.com/"
 
 export async function resolveAmpRouteForPath(requested_route: string) {
   const entrance = await resolveEntranceContext()
@@ -29,4 +33,21 @@ export async function enforceAuthRouteRedirect(requested_route: string) {
   }
 
   return route
+}
+
+export async function enforce_entry_line_access() {
+  const context = await resolveAuthContext("/entry")
+  const session = await resolveSession(context)
+  const line_user_id = await resolve_line_user_id(session.user_uuid)
+
+  if (!line_user_id) {
+    const app_url = resolve_public_app_url() || ENTRY_HOME_URL.replace(/\/$/, "")
+    redirect(`${app_url}/`)
+  }
+
+  return {
+    context,
+    session,
+    line_user_id,
+  }
 }

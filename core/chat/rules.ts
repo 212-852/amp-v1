@@ -74,10 +74,14 @@ export function normalize_chat_intent_text(text: string) {
   return text.normalize("NFKC").trim().replace(/\s+/g, "").toLowerCase()
 }
 
+function matches_intent_term(normalized_text: string, term: string) {
+  return normalized_text === normalize_chat_intent_text(term)
+}
+
 function includes_any_intent_term(text: string, terms: string[]) {
-  return terms.some((term) =>
-    text.includes(normalize_chat_intent_text(term)),
-  )
+  const normalized_text = normalize_chat_intent_text(text)
+
+  return terms.some((term) => matches_intent_term(normalized_text, term))
 }
 
 export function resolve_chat_response_route(

@@ -114,6 +114,35 @@ export function mark_line_reply_token_used(
   return next
 }
 
+export function is_line_reply_token_fresh(
+  record: LineReplyTokenRecord | null | undefined,
+  now: number = Date.now(),
+): boolean {
+  if (!record) {
+    return false
+  }
+
+  if (record.reply_token_used_at !== null) {
+    return false
+  }
+
+  return now - record.reply_token_received_at <= LINE_REPLY_TOKEN_TTL_MS
+}
+
+export function claim_line_reply_token_for_send(
+  reply_token: string | null | undefined,
+  now: number = Date.now(),
+): LineReplyTokenValidation {
+  const validation = validate_line_webhook_reply_token(reply_token, now)
+
+  if (!validation.ok) {
+    return validation
+  }
+
+  mark_line_reply_token_used(reply_token, now)
+  return validation
+}
+
 /** @deprecated Use register_line_webhook_reply_token + validate_line_webhook_reply_token */
 export function consumeLineReplyToken(
   reply_token: string | null | undefined,

@@ -8,6 +8,11 @@ import {
   buildChatContext,
 } from "@/core/chat/context"
 import { claim_chat_response } from "@/core/chat/response_idempotency"
+import {
+  can_process_incoming_chat_intent,
+  claim_incoming_intent,
+  normalize_incoming_intent_text,
+} from "@/core/chat/incoming_intent"
 import { resolveChatSupportAccess } from "@/core/chat/support"
 import {
   findParticipant,
@@ -63,7 +68,7 @@ import type {
   ChatTypingInput,
   MessageBundle,
 } from "@/core/chat/types"
-import { resolve_user_has_line_identity } from "@/core/line/identity"
+import { resolve_line_user_id } from "@/core/auth/identity"
 import { recordSecurityAccessEvent } from "@/core/access"
 import type { Session } from "@/core/auth/types"
 import { sendAuthDebug } from "@/core/debug"
@@ -654,117 +659,166 @@ export async function handleIncomingChatMessageArchive(
     source_channel: input.source_channel,
   })
 
-  const line_linked =
-    input.line_identity_linked === true
-      ? true
-      : input.line_identity_linked === false
-        ? false
-        : await resolve_user_has_line_identity(input.session.user_uuid)
-  const response_route = resolve_chat_response_route(body, { line_linked })
+  const line_user_id = await resolve_line_user_id(input.session.user_uuid)
+  const line_linked = Boolean(line_user_id)
+  const normalized_intent_text = normalize_incoming_intent_text(body)
+  const intent_gate = can_process_incoming_chat_intent({
+    body,
+    participant_role: participant.role,
+    source_kind: "user",
+  })
 
-  if (response_route.selected_action !== "none") {
-    const can_create_response = claim_chat_response({
+  let intent_processed = false
+  let blocked_reason: string | null = intent_gate.blocked_reason
+  let loop_prevented = false
+  let generated_message_uuid: string | null = null
+
+  if (intent_gate.allowed) {
+    const can_process_intent = claim_incoming_intent({
       room_uuid: room.room_uuid,
-      trigger_message_uuid: message.message_uuid,
-      selected_action: response_route.selected_action,
+      sender_key: participant.participant_uuid,
+      normalized_text: normalized_intent_text,
     })
 
-    if (!can_create_response) {
-      await sendAuthDebug("chat_response_route_resolved", {
-        room_uuid: room.room_uuid,
-        message_uuid: message.message_uuid,
-        user_uuid: input.session.user_uuid,
-        visitor_uuid: input.session.visitor_uuid,
-        channel: input.source_channel,
-        line_linked,
-        normalized_text: response_route.normalized_text,
-        detected_intent: response_route.detected_intent,
-        selected_action: response_route.selected_action,
-        can_show_registration_card:
-          response_route.can_show_registration_card,
-        duplicate_skipped: true,
-      })
+    if (!can_process_intent) {
+      blocked_reason = "incoming_intent_dedup"
+      loop_prevented = true
+    } else {
+      const response_route = resolve_chat_response_route(body, { line_linked })
 
-      return {
-        bundle: toMessageBundle(message, room.locale),
-        mode_command_handled: false,
-        chat_response_handled: true,
-        driver_partner_handled:
-          response_route.selected_action === "show_driver_registration",
-      }
-    }
+      if (response_route.selected_action !== "none") {
+        intent_processed = true
+        const can_create_response = claim_chat_response({
+          room_uuid: room.room_uuid,
+          trigger_message_uuid: message.message_uuid,
+          selected_action: response_route.selected_action,
+        })
 
-    const output_locale = resolveOutputLocale({
-      preferred: input.locale,
-      room_locale: room.locale,
-    })
-    const response_bundle = build_chat_response_message_bundle(response_route)
+        if (!can_create_response) {
+          await sendAuthDebug("chat_response_route_resolved", {
+            room_uuid: room.room_uuid,
+            message_uuid: message.message_uuid,
+            user_uuid: input.session.user_uuid,
+            visitor_uuid: input.session.visitor_uuid,
+            channel: input.source_channel,
+            line_linked,
+            normalized_text: response_route.normalized_text,
+            detected_intent: response_route.detected_intent,
+            selected_action: response_route.selected_action,
+            can_show_registration_card:
+              response_route.can_show_registration_card,
+            duplicate_skipped: true,
+            incoming_sender_role: participant.role,
+            incoming_message_uuid: message.message_uuid,
+            generated_message_uuid: null,
+            intent_processed: false,
+            blocked_reason: "chat_response_dedup",
+            loop_prevented: true,
+          })
 
-    if (!response_bundle) {
-      throw new Error(`Unsupported chat response action: ${response_route.selected_action}`)
-    }
+          return {
+            bundle: toMessageBundle(message, room.locale),
+            mode_command_handled: false,
+            chat_response_handled: true,
+            driver_partner_handled:
+              response_route.selected_action === "show_driver_registration",
+          }
+        }
 
-    const response_payload =
-      "payload" in response_bundle ? response_bundle.payload : {}
-    const reply_message = await archivePreparedMessage({
-      room,
-      participant,
-      source_channel: input.source_channel,
-      source_kind: "bot",
-      type: response_bundle.type,
-      body: response_bundle.body,
-      original_locale: output_locale,
-      session: input.session,
-      payload: {
-        ...response_payload,
-        meta: {
-          actor_role: "bot",
-          actor_display_name: "Bot",
+        const output_locale = resolveOutputLocale({
+          preferred: input.locale,
+          room_locale: room.locale,
+        })
+        const response_bundle = build_chat_response_message_bundle(response_route)
+
+        if (!response_bundle) {
+          throw new Error(`Unsupported chat response action: ${response_route.selected_action}`)
+        }
+
+        const response_payload =
+          "payload" in response_bundle ? response_bundle.payload : {}
+        const reply_message = await archivePreparedMessage({
+          room,
+          participant,
+          source_channel: input.source_channel,
+          source_kind: "bot",
+          type: response_bundle.type,
+          body: response_bundle.body,
+          original_locale: output_locale,
+          session: input.session,
+          payload: {
+            ...response_payload,
+            meta: {
+              actor_role: "bot",
+              actor_display_name: "Bot",
+              detected_intent: response_route.detected_intent,
+              selected_action: response_route.selected_action,
+              can_show_registration_card:
+                response_route.can_show_registration_card,
+              trigger_message_uuid: message.message_uuid,
+            },
+          },
+        })
+        generated_message_uuid = reply_message.message_uuid
+
+        await sendAuthDebug("chat_response_route_resolved", {
+          room_uuid: room.room_uuid,
+          message_uuid: reply_message.message_uuid,
+          user_uuid: input.session.user_uuid,
+          visitor_uuid: input.session.visitor_uuid,
+          channel: input.source_channel,
+          line_linked,
+          normalized_text: response_route.normalized_text,
           detected_intent: response_route.detected_intent,
           selected_action: response_route.selected_action,
           can_show_registration_card:
             response_route.can_show_registration_card,
-          trigger_message_uuid: message.message_uuid,
-        },
-      },
-    })
+          message_bundle_type: response_bundle.type,
+          incoming_sender_role: participant.role,
+          incoming_message_uuid: message.message_uuid,
+          generated_message_uuid: reply_message.message_uuid,
+          intent_processed: true,
+          blocked_reason: null,
+          loop_prevented: false,
+        })
 
-    await sendAuthDebug("chat_response_route_resolved", {
+        if (options.deliver_mode_reply ?? options.deliver !== false) {
+          await deliverMessageBundle({
+            message: reply_message,
+            room,
+            session: input.session,
+            source_channel: input.source_channel,
+            source_message_uuid: message.message_uuid,
+            selected_action: response_route.selected_action,
+            line_reply_token: input.line_reply_token,
+            line_provider_user_id: input.line_provider_user_id,
+            line_reply_allowed: input.line_reply_allowed,
+          })
+        }
+
+        return {
+          bundle: toMessageBundle(reply_message, room.locale),
+          mode_command_handled: false,
+          chat_response_handled: true,
+          driver_partner_handled:
+            response_route.selected_action === "show_driver_registration",
+        }
+      }
+    }
+  }
+
+  if (!intent_gate.allowed || loop_prevented) {
+    await sendAuthDebug("chat_intent_blocked", {
       room_uuid: room.room_uuid,
-      message_uuid: reply_message.message_uuid,
-      user_uuid: input.session.user_uuid,
-      visitor_uuid: input.session.visitor_uuid,
-      channel: input.source_channel,
-      line_linked,
-      normalized_text: response_route.normalized_text,
-      detected_intent: response_route.detected_intent,
-      selected_action: response_route.selected_action,
-      can_show_registration_card:
-        response_route.can_show_registration_card,
-      message_bundle_type: response_bundle.type,
+      incoming_message_uuid: message.message_uuid,
+      incoming_sender_role: participant.role,
+      generated_message_uuid,
+      intent_processed,
+      blocked_reason,
+      loop_prevented,
+      normalized_text: normalized_intent_text,
+      source_channel: input.source_channel,
     })
-
-    if (options.deliver_mode_reply ?? options.deliver !== false) {
-      await deliverMessageBundle({
-        message: reply_message,
-        room,
-        session: input.session,
-        source_channel: input.source_channel,
-        source_message_uuid: message.message_uuid,
-        selected_action: response_route.selected_action,
-        line_reply_token: input.line_reply_token,
-        line_provider_user_id: input.line_provider_user_id,
-        line_reply_allowed: input.line_reply_allowed,
-      })
-    }
-
-    return {
-      bundle: toMessageBundle(reply_message, room.locale),
-      mode_command_handled: false,
-      chat_response_handled: true,
-      driver_partner_handled:
-        response_route.selected_action === "show_driver_registration",
-    }
   }
 
   await triggerIncomingChatNotification({
