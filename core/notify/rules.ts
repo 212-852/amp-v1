@@ -154,8 +154,7 @@ export type ChatNotifySelectedContact = {
 
 export type ChatNotifyContactRoute = {
   resolved_receiver_uuid: string
-  receiver_user_uuid: string | null
-  receiver_visitor_uuid: string | null
+  receiver_user_uuid: string
   receiver_participant_uuid: string | null
   receiver_role: string | null
   in_room: boolean
@@ -184,8 +183,7 @@ type ParticipantRow = {
 
 type ChatNotifyReceiver = {
   participant_uuid: string | null
-  receiver_user_uuid: string | null
-  receiver_visitor_uuid: string | null
+  receiver_user_uuid: string
   receiver_role: string
 }
 
@@ -287,33 +285,6 @@ function participantMatchesSender(
   return false
 }
 
-function resolveReceiverUuid(receiver: ChatNotifyReceiver) {
-  return (
-    receiver.receiver_user_uuid ??
-    receiver.receiver_visitor_uuid ??
-    receiver.participant_uuid ??
-    ""
-  )
-}
-
-function contactBelongsToReceiver(
-  contact: ContactRow | null,
-  receiver: ChatNotifyReceiver,
-) {
-  if (!contact) {
-    return true
-  }
-
-  if (receiver.receiver_user_uuid) {
-    return contact.user_uuid === receiver.receiver_user_uuid
-  }
-
-  if (receiver.receiver_visitor_uuid) {
-    return contact.visitor_uuid === receiver.receiver_visitor_uuid
-  }
-
-  return false
-}
 
 function requiresAvailabilityGate(receiver_role: string | null | undefined) {
   return isStaffRole(receiver_role)
@@ -739,7 +710,6 @@ async function resolveRoomNotificationReceivers(input: {
       receivers.push({
         participant_uuid: participant.participant_uuid ?? null,
         receiver_user_uuid: participant.user_uuid,
-        receiver_visitor_uuid: null,
         receiver_role: participant.role ?? "concierge",
       })
     }
@@ -766,7 +736,6 @@ async function resolveRoomNotificationReceivers(input: {
       receivers.push({
         participant_uuid: null,
         receiver_user_uuid: user_uuid,
-        receiver_visitor_uuid: null,
         receiver_role: receiver_role ?? "concierge",
       })
     }
@@ -780,14 +749,13 @@ async function resolveRoomNotificationReceivers(input: {
         continue
       }
 
-      if (!participant.user_uuid && !participant.visitor_uuid) {
+      if (!participant.user_uuid) {
         continue
       }
 
       receivers.push({
         participant_uuid: participant.participant_uuid ?? null,
-        receiver_user_uuid: participant.user_uuid ?? null,
-        receiver_visitor_uuid: participant.visitor_uuid ?? null,
+        receiver_user_uuid: participant.user_uuid,
         receiver_role: participant.role ?? "user",
       })
     }
@@ -809,12 +777,11 @@ async function resolveRoomNotificationReceivers(input: {
   }
 
   for (const receiver of receivers) {
-    const resolved_receiver_uuid = resolveReceiverUuid(receiver)
     await sendNotifyDebug("notification_receiver_resolve_success", {
       room_uuid: input.room_uuid,
       sender_uuid: input.sender_uuid,
       sender_role: input.sender_role,
-      resolved_receiver_uuid,
+      resolved_receiver_uuid: receiver.receiver_user_uuid,
       resolved_receiver_role: receiver.receiver_role,
       participant_count,
       reason: null,
@@ -825,19 +792,11 @@ async function resolveRoomNotificationReceivers(input: {
   return receivers
 }
 
-async function loadReceiverContacts(input: {
-  user_uuid?: string | null
-  visitor_uuid?: string | null
-}) {
+async function loadReceiverContacts(user_uuid: string) {
   const { getRestConfig, restHeaders, restUrl } = await import("@/core/db/rest")
   const config = getRestConfig()
-  const filter = input.user_uuid
-    ? `user_uuid=eq.${encodeURIComponent(input.user_uuid)}`
-    : input.visitor_uuid
-      ? `visitor_uuid=eq.${encodeURIComponent(input.visitor_uuid)}`
-      : null
 
-  if (!config || !filter) {
+  if (!config || !user_uuid) {
     return []
   }
 
@@ -846,7 +805,7 @@ async function loadReceiverContacts(input: {
       config,
       "contacts",
       [
-        filter,
+        `user_uuid=eq.${encodeURIComponent(user_uuid)}`,
         "select=contact_uuid,user_uuid,visitor_uuid,type,value,endpoint,p256dh,auth,channel,state,receive,last_seen_at,updated_at",
         "order=updated_at.desc",
         "limit=1",
@@ -987,13 +946,21 @@ export async function resolveChatNotifyRoutes(input: {
   const routes: ChatNotifyContactRoute[] = []
 
   for (const receiver of receivers) {
-    const contacts = await loadReceiverContacts({
-      user_uuid: receiver.receiver_user_uuid,
-      visitor_uuid: receiver.receiver_visitor_uuid,
+    const receiver_user_uuid = receiver.receiver_user_uuid
+
+    await sendNotifyDebug("notification_receiver_resolved", {
+      room_uuid: input.room_uuid,
+      sender_uuid: input.sender_uuid ?? null,
+      receiver_participant_uuid: receiver.participant_uuid,
+      receiver_user_uuid,
+      receiver_role: receiver.receiver_role,
+      request_id: input.request_id ?? null,
     })
+
+    const contacts = await loadReceiverContacts(receiver_user_uuid)
     const contact = contacts[0] ?? null
     const availability_enabled = requiresAvailabilityGate(receiver.receiver_role)
-      ? availability_map.get(receiver.receiver_user_uuid ?? "") === true
+      ? availability_map.get(receiver_user_uuid) === true
       : true
     const participant_uuid = receiver.participant_uuid
     const presence = participant_uuid
@@ -1005,16 +972,16 @@ export async function resolveChatNotifyRoutes(input: {
       presence,
     })
     const in_room = presence_state.is_in_room
-    const line_provider_user_id = receiver.receiver_user_uuid
-      ? await loadReceiverLineProviderUserId(receiver.receiver_user_uuid)
-      : null
+    const line_provider_user_id =
+      await loadReceiverLineProviderUserId(receiver_user_uuid)
     const contact_line_user_id =
       contact?.type === "line" ? contact.value?.trim() || null : null
     const contact_line_user_id_source = contact_line_user_id
       ? ("contacts.value" as const)
       : null
-    const resolved_receiver_uuid = resolveReceiverUuid(receiver)
-    const contact_owner_matches = contactBelongsToReceiver(contact, receiver)
+    const resolved_receiver_uuid = receiver_user_uuid
+    const contact_owner_matches =
+      !contact || contact.user_uuid === receiver_user_uuid
 
     await sendNotifyDebug("notification_trigger_created", {
       message_uuid: input.message_uuid ?? input.request_id ?? null,
@@ -1078,8 +1045,7 @@ export async function resolveChatNotifyRoutes(input: {
         room_uuid: input.room_uuid,
         sender_uuid: input.sender_uuid ?? null,
         receiver_uuid: resolved_receiver_uuid,
-        receiver_user_uuid: receiver.receiver_user_uuid,
-        receiver_visitor_uuid: receiver.receiver_visitor_uuid,
+        receiver_user_uuid,
         contact_uuid: contact?.contact_uuid ?? null,
         contact_user_uuid: contact?.user_uuid ?? null,
         contact_visitor_uuid: contact?.visitor_uuid ?? null,
@@ -1097,8 +1063,7 @@ export async function resolveChatNotifyRoutes(input: {
 
       routes.push({
         resolved_receiver_uuid,
-        receiver_user_uuid: receiver.receiver_user_uuid,
-        receiver_visitor_uuid: receiver.receiver_visitor_uuid,
+        receiver_user_uuid,
         receiver_participant_uuid: receiver.participant_uuid,
         receiver_role: receiver.receiver_role,
         in_room,
@@ -1244,8 +1209,7 @@ export async function resolveChatNotifyRoutes(input: {
 
     routes.push({
       resolved_receiver_uuid,
-      receiver_user_uuid: receiver.receiver_user_uuid,
-      receiver_visitor_uuid: receiver.receiver_visitor_uuid,
+      receiver_user_uuid,
       receiver_participant_uuid: receiver.participant_uuid,
       receiver_role: receiver.receiver_role,
       in_room,

@@ -281,6 +281,7 @@ const notifyEvents = new Set([
   "notification_receiver_resolve_started",
   "notification_receiver_resolve_success",
   "notification_receiver_resolve_failed",
+  "notification_receiver_resolved",
   "notification_rule_started",
   "notification_availability_checked",
   "notification_presence_checked",
