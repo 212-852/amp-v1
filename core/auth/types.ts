@@ -36,6 +36,11 @@ export type AssistantState =
   | "idle"
   | "notification"
 
+export type LiffSessionInfo = {
+  provider_user_id: string | null
+  verified: boolean
+}
+
 export type Session = {
   visitor_uuid: string | null
   user_uuid: string | null
@@ -48,6 +53,7 @@ export type Session = {
   source_channel: SourceChannel
   can_logout: boolean
   can_start_line_oauth: boolean
+  liff?: LiffSessionInfo | null
 }
 
 export type AppSession = Session

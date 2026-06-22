@@ -68,6 +68,7 @@ const chatFlowInfoEvents = new Set([
   "chat_render_state_resolved",
   "chat_response_route_resolved",
   "chat_intent_blocked",
+  "entry_access_checked",
   "chat_room_mode_trigger_checked",
   "chat_room_mode_updated",
   "chat_room_resolved",

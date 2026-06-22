@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation"
+
 import type { EntranceContext } from "@/core/entrance/context"
 import type {
   AuthContext,
@@ -6,6 +8,10 @@ import type {
   Session,
   SessionRole,
 } from "@/core/auth/types"
+import { resolve_entry_line_identity } from "@/core/auth/identity"
+import { sendAuthDebug } from "@/core/debug"
+
+const ENTRY_HOME_URL = "https://app.da-nya.com/"
 
 export type AmpRouteKey =
   | "app-top"
@@ -186,6 +192,32 @@ export function resolveAuthRoute(
   identity: IdentityRecord,
 ): AmpRouteResult {
   return resolveEntryPath(context, entrance, session, identity)
+}
+
+export async function enforceEntryLineAccess(
+  context: AuthContext,
+  session: Session,
+) {
+  const entry_identity = await resolve_entry_line_identity(context, session)
+  const redirect_to = entry_identity.has_line_identity ? null : ENTRY_HOME_URL
+
+  await sendAuthDebug("entry_access_checked", {
+    pathname: context.requested_route ?? "/entry",
+    user_uuid: session.user_uuid,
+    visitor_uuid: session.visitor_uuid,
+    provider: entry_identity.provider,
+    provider_user_id_exists: Boolean(entry_identity.provider_user_id),
+    line_user_id_exists: Boolean(entry_identity.line_user_id),
+    liff_provider_user_id_exists: Boolean(entry_identity.liff_provider_user_id),
+    has_line_identity: entry_identity.has_line_identity,
+    redirect_to,
+  })
+
+  if (!entry_identity.has_line_identity) {
+    redirect(ENTRY_HOME_URL)
+  }
+
+  return entry_identity
 }
 
 export type GuardedAccessMeta = {

@@ -1,11 +1,36 @@
 const OUTPUT_IDEMPOTENCY_TTL_MS = 5 * 60_000
 
-const delivered_output_keys = new Map<string, number>()
+export type OutputDeliveryState =
+  | "pending"
+  | "sending"
+  | "sent"
+  | "skipped"
+  | "failed_final"
+
+type OutputDeliveryRecord = {
+  state: OutputDeliveryState
+  updated_at: number
+}
+
+const output_delivery_registry = new Map<string, OutputDeliveryRecord>()
+
+const TERMINAL_OUTPUT_STATES = new Set<OutputDeliveryState>([
+  "sent",
+  "skipped",
+  "failed_final",
+])
+
+const DUPLICATE_OUTPUT_STATES = new Set<OutputDeliveryState>([
+  "sending",
+  "sent",
+  "skipped",
+  "failed_final",
+])
 
 function prune_output_idempotency(now: number) {
-  for (const [key, created_at] of delivered_output_keys.entries()) {
-    if (now - created_at > OUTPUT_IDEMPOTENCY_TTL_MS) {
-      delivered_output_keys.delete(key)
+  for (const [key, record] of output_delivery_registry.entries()) {
+    if (now - record.updated_at > OUTPUT_IDEMPOTENCY_TTL_MS) {
+      output_delivery_registry.delete(key)
     }
   }
 }
@@ -24,20 +49,66 @@ export function build_output_idempotency_key(input: {
   ].join(":")
 }
 
-export function claim_output_delivery(key: string) {
+export function inspect_output_delivery_state(
+  key: string,
+): OutputDeliveryState | null {
   const now = Date.now()
   prune_output_idempotency(now)
-
-  if (delivered_output_keys.has(key)) {
-    return false
-  }
-
-  delivered_output_keys.set(key, now)
-  return true
+  return output_delivery_registry.get(key)?.state ?? null
 }
 
-export function has_output_delivery(key: string) {
+export function begin_output_delivery(key: string):
+  | {
+      ok: true
+      state: "sending"
+    }
+  | {
+      ok: false
+      existing_state: OutputDeliveryState
+    } {
   const now = Date.now()
   prune_output_idempotency(now)
-  return delivered_output_keys.has(key)
+
+  const existing = output_delivery_registry.get(key)
+
+  if (existing && DUPLICATE_OUTPUT_STATES.has(existing.state)) {
+    return {
+      ok: false,
+      existing_state: existing.state,
+    }
+  }
+
+  output_delivery_registry.set(key, {
+    state: "sending",
+    updated_at: now,
+  })
+
+  return {
+    ok: true,
+    state: "sending",
+  }
+}
+
+export function complete_output_delivery(
+  key: string,
+  state: Extract<OutputDeliveryState, "sent" | "skipped" | "failed_final">,
+) {
+  const now = Date.now()
+  prune_output_idempotency(now)
+
+  output_delivery_registry.set(key, {
+    state,
+    updated_at: now,
+  })
+}
+
+/** @deprecated Use begin_output_delivery + complete_output_delivery */
+export function claim_output_delivery(key: string) {
+  return begin_output_delivery(key).ok
+}
+
+/** @deprecated Use inspect_output_delivery_state */
+export function has_output_delivery(key: string) {
+  const state = inspect_output_delivery_state(key)
+  return Boolean(state && TERMINAL_OUTPUT_STATES.has(state))
 }

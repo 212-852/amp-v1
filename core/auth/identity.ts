@@ -725,6 +725,118 @@ export async function resolveIdentityByProviderUserId(input: {
   return rows[0] ?? null
 }
 
+export type EntryLineIdentity = {
+  line_user_id: string | null
+  provider: IdentityProvider | null
+  provider_user_id: string | null
+  liff_provider_user_id: string | null
+  has_line_identity: boolean
+}
+
+async function resolve_visitor_user_uuid(
+  visitor_uuid: string | null | undefined,
+): Promise<string | null> {
+  if (!visitor_uuid) {
+    return null
+  }
+
+  const config = getRestConfig()
+
+  if (!config) {
+    return null
+  }
+
+  const response = await fetch(
+    restUrl(
+      config,
+      "visitors",
+      [
+        `visitor_uuid=eq.${encodeURIComponent(visitor_uuid)}`,
+        "select=user_uuid",
+        "limit=1",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    return null
+  }
+
+  const rows = (await response.json()) as UserUuidRow[]
+  return rows[0]?.user_uuid ?? null
+}
+
+async function resolve_line_identity_profile(user_uuid: string | null) {
+  if (!user_uuid) {
+    return {
+      line_user_id: null,
+      provider: null as IdentityProvider | null,
+      provider_user_id: null,
+    }
+  }
+
+  const line_user_id = await resolve_line_user_id(user_uuid)
+
+  if (line_user_id) {
+    return {
+      line_user_id,
+      provider: "line" as const,
+      provider_user_id: line_user_id,
+    }
+  }
+
+  const profile = await resolveAuthUserProfile(user_uuid)
+
+  return {
+    line_user_id: null,
+    provider: profile.provider === "line" ? ("line" as const) : profile.provider,
+    provider_user_id:
+      profile.provider === "line" ? profile.provider_user_id : null,
+  }
+}
+
+export async function resolve_entry_line_identity(
+  context: AuthContext,
+  session: Session,
+): Promise<EntryLineIdentity> {
+  const effective_user_uuid =
+    session.user_uuid ??
+    (await resolve_visitor_user_uuid(session.visitor_uuid))
+
+  const identity_profile = await resolve_line_identity_profile(
+    effective_user_uuid,
+  )
+
+  const liff_provider_user_id =
+    context.source_channel === "liff"
+      ? session.liff?.provider_user_id ??
+        identity_profile.line_user_id ??
+        (identity_profile.provider === "line"
+          ? identity_profile.provider_user_id
+          : null)
+      : null
+
+  const has_line_identity =
+    Boolean(identity_profile.line_user_id) ||
+    Boolean(
+      identity_profile.provider === "line" &&
+        identity_profile.provider_user_id,
+    ) ||
+    Boolean(liff_provider_user_id)
+
+  return {
+    line_user_id: identity_profile.line_user_id,
+    provider: identity_profile.provider,
+    provider_user_id: identity_profile.provider_user_id,
+    liff_provider_user_id,
+    has_line_identity,
+  }
+}
+
 export async function resolve_line_user_id(
   user_uuid: string | null | undefined,
 ): Promise<string | null> {

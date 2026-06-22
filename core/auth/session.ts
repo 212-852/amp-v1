@@ -1,9 +1,11 @@
 import { cache } from "react"
 
 import { resolveAuthContext } from "@/core/auth/context"
+import { resolve_line_user_id } from "@/core/auth/identity"
 import type {
   AppSession,
   AuthContext,
+  LiffSessionInfo,
   SessionProvider,
   SessionRole,
   SessionTier,
@@ -877,6 +879,24 @@ function resolveLogoutVisibility(session: {
   )
 }
 
+async function resolveLiffSessionInfo(input: {
+  source_channel: SourceChannel
+  user_uuid: string | null
+}): Promise<LiffSessionInfo | null> {
+  if (input.source_channel !== "liff") {
+    return null
+  }
+
+  const provider_user_id = input.user_uuid
+    ? await resolve_line_user_id(input.user_uuid)
+    : null
+
+  return {
+    provider_user_id,
+    verified: Boolean(provider_user_id),
+  }
+}
+
 async function withLogoutVisibility(
   session: Omit<
     AppSession,
@@ -927,6 +947,10 @@ async function withLogoutVisibility(
     can_logout: resolveLogoutVisibility(session),
     can_start_line_oauth:
       session.source_channel === "web" || session.source_channel === "pwa",
+    liff: await resolveLiffSessionInfo({
+      source_channel: session.source_channel,
+      user_uuid: session.user_uuid,
+    }),
   }
 
   await send_auth_debug(
