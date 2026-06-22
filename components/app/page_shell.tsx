@@ -12,13 +12,13 @@ export default function AppPageShell({
   children: React.ReactNode
 }>) {
   return (
-    <div className="flex min-h-dvh flex-col bg-[#fdfaf6] text-[#3d2a19]">
+    <div className="flex min-h-dvh flex-col bg-[#f5e8d5] text-[#3d2a19]">
       <AppHeader
         auth={auth}
         breadcrumb_items={breadcrumb_items}
         layout="page"
       />
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-6 py-8">
+      <main className="mx-auto flex w-full max-w-[430px] flex-1 flex-col px-4 py-4">
         {children}
       </main>
       <AppSiteFooter />

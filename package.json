@@ -6,7 +6,8 @@
     "dev": "node scripts/generate_sw.mjs && next dev",
     "build": "node scripts/generate_sw.mjs && next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "image:webp": "tsx scripts/image/webp.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",
@@ -25,7 +26,9 @@
     "@types/web-push": "^3.6.4",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4",
+    "tsx": "^4.20.5",
     "typescript": "^5"
   }
 }

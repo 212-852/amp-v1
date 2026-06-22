@@ -294,7 +294,7 @@ export default function AppHeader({
       className={[
         "inset-x-0 top-0 z-50 text-[#3d2a19]",
         layout === "page"
-          ? "sticky min-h-[108px] bg-[#fdfaf6]"
+          ? "sticky min-h-[108px] bg-[#f5e8d5]"
           : "fixed h-[108px]",
       ].join(" ")}
     >
