@@ -46,10 +46,10 @@ export type ChatRoomBootstrapViewState = {
 }
 
 function logClientBootstrap(
-  event: string,
-  data: Record<string, unknown> = {},
+  _event: string,
+  _data: Record<string, unknown> = {},
 ) {
-  console.info(`[chat_bootstrap] ${event}`, data)
+  // Browser bootstrap diagnostics go through centralized debug only.
 }
 
 function resolveBootstrapLocale(fallback: Locale = default_locale): Locale {

@@ -276,6 +276,44 @@ export function resolve_room_mode_trigger(text: string): "bot" | "concierge" | n
 
 export const resolve_room_mode_command = resolve_room_mode_trigger
 
+export const DRIVER_RECRUITMENT_TRIGGER_TEXT = "動物のためのドライバー"
+export const DRIVER_RECRUITMENT_LIFF_URL =
+  "https://liff.line.me/2006953406-vj2gYoAb"
+export const DRIVER_RECRUITMENT_RESPONSE_TEXT = [
+  "動物のためのドライバー登録フォームをご案内します。",
+  "以下の登録フォームから必要事項を送信してください。",
+  DRIVER_RECRUITMENT_LIFF_URL,
+].join("\n")
+export const DRIVER_RECRUITMENT_LINE_GUIDANCE_TEXT =
+  "LINEで連携後、動物のためのドライバー と送信してください。"
+
+export function resolve_driver_recruitment_rule(input: {
+  text: string
+  source_channel: string
+  line_identity_linked?: boolean | null
+}) {
+  if (input.text.trim() !== DRIVER_RECRUITMENT_TRIGGER_TEXT) {
+    return null
+  }
+
+  if (input.source_channel === "line" && input.line_identity_linked === true) {
+    return {
+      should_handle: true,
+      response_text: DRIVER_RECRUITMENT_RESPONSE_TEXT,
+      reason: "line_identity_linked",
+    } as const
+  }
+
+  return {
+    should_handle: true,
+    response_text: DRIVER_RECRUITMENT_LINE_GUIDANCE_TEXT,
+    reason:
+      input.source_channel === "line"
+        ? "line_identity_not_linked"
+        : "non_line_channel",
+  } as const
+}
+
 export function resolve_concierge_thread_rule(input: {
   room_uuid: string
   thread_id?: string | null

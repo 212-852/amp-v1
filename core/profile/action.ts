@@ -58,7 +58,8 @@ const PROFILE_REQUIRED_COLUMNS = new Set([
 ])
 
 function log_profile_core(event: string, payload: Record<string, unknown>) {
-  console.info(event, payload)
+  void event
+  void payload
 }
 
 function resolve_missing_profile_column(error: {

@@ -46,8 +46,6 @@ const content = {
   },
 }
 
-const DEBUG_REALTIME_DUPLICATES = false
-
 function shouldShowMessageHeader(
   message: ChatMessageRecord,
   previous_message: ChatMessageRecord | null,
@@ -245,13 +243,6 @@ export default function ChatRoomPanel({
     pending_scroll_ref.current = reason
   }, [])
 
-  useEffect(() => {
-    console.log("[chat realtime] room_uuid", {
-      room_uuid: room.room_uuid,
-      view: show_presence ? "concierge" : "user",
-    })
-  }, [room.room_uuid, show_presence])
-
   const refresh = useCallback(async () => {
     const params = new URLSearchParams()
 
@@ -333,15 +324,6 @@ export default function ChatRoomPanel({
         const result = mergeRealtimeInsert(current, next_message)
 
         if (result.action === "duplicate_replaced") {
-          if (DEBUG_REALTIME_DUPLICATES) {
-            console.log("[chat realtime] duplicate skipped", {
-              room_uuid: next_message.room_uuid,
-              message_uuid: result.incoming_message_uuid,
-              client_message_id: result.incoming_client_message_id,
-              sender_uuid: result.sender_uuid,
-              receiver_view: realtime_debug_context.view,
-            })
-          }
           send_chat_realtime_debug("chat_realtime_insert_duplicate_skipped", {
             receiver_view: realtime_debug_context.view,
             room_uuid: room.room_uuid,
@@ -360,14 +342,6 @@ export default function ChatRoomPanel({
             ? result.messages.length
             : filterUserVisibleChatMessages(result.messages).length
 
-          console.log("[chat realtime] append message", {
-            room_uuid: next_message.room_uuid,
-            message_uuid: result.incoming_message_uuid,
-            client_message_id: result.incoming_client_message_id,
-            sender_uuid: result.sender_uuid,
-            receiver_view: realtime_debug_context.view,
-            rendered_count,
-          })
           send_chat_realtime_debug("chat_realtime_insert_append_done", {
             receiver_view: realtime_debug_context.view,
             room_uuid: room.room_uuid,

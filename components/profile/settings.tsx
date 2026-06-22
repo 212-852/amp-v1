@@ -176,10 +176,7 @@ export default function ProfileSettings({
     async function load_profile() {
       const profile_response = await fetch("/api/profile", {
         cache: "no-store",
-      }).catch((error) => {
-          console.error("profile_load_failed", {
-            error_message: error instanceof Error ? error.message : String(error),
-          })
+      }).catch(() => {
           return null
         })
 
@@ -247,14 +244,6 @@ export default function ProfileSettings({
         memo,
       }
 
-      console.debug("profile_save_payload", {
-        payload,
-        fields: Object.keys(payload),
-        has_prefecture: Boolean(payload.prefecture_code),
-        has_city: Boolean(payload.city_code),
-        language: payload.language,
-      })
-
       const response = await fetch("/api/profile", {
         method: "POST",
         headers: {
@@ -275,11 +264,6 @@ export default function ProfileSettings({
       ) {
         throw new Error(response_payload?.error ?? "profile_save_failed")
       }
-
-      console.debug("profile_save_success", {
-        display_name: response_payload.profile.display_name,
-        locale: response_payload.profile.locale,
-      })
 
       set_nickname(response_payload.profile.nickname ?? "")
       set_first_name(response_payload.profile.first_name ?? "")
@@ -309,10 +293,6 @@ export default function ProfileSettings({
     } catch (error) {
       const error_message =
         error instanceof Error ? error.message : content.failed[locale]
-
-      console.error("profile_save_failed", {
-        error_message,
-      })
 
       toast({
         tone: "error",

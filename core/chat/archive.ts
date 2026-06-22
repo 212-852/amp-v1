@@ -656,15 +656,6 @@ export async function updateRoomThreadState(input: {
     body.thread_id = input.thread_id
   }
 
-  console.log({
-    event: "odin_room_update_entered",
-    room_uuid: input.room_uuid,
-    thread_id: input.thread_id ?? null,
-    thread_status: input.thread_status,
-    http_status: null,
-    error_message: null,
-  })
-
   const response = await fetch(
     restUrl(config, "rooms", `room_uuid=eq.${encodeURIComponent(input.room_uuid)}&select=*`),
     {
@@ -703,23 +694,6 @@ export async function updateRoomThreadState(input: {
 
   const rows = (await response.json()) as ChatRoomRecord[]
   const room = rows[0]
-
-  console.log({
-    event: "odin_room_update_response",
-    room_uuid: input.room_uuid,
-    thread_id: room?.thread_id ?? input.thread_id ?? null,
-    thread_status: room?.thread_status ?? input.thread_status,
-    http_status: response.status,
-    error_message: null,
-  })
-  console.log({
-    event: "room_thread_saved",
-    room_uuid: input.room_uuid,
-    thread_id: room?.thread_id ?? input.thread_id ?? null,
-    thread_status: room?.thread_status ?? input.thread_status,
-    http_status: response.status,
-    error_message: null,
-  })
 
   return rows[0]
 }

@@ -80,14 +80,6 @@ export default function AppChatSection({
   ])
 
   useEffect(() => {
-    console.info("[chat_bootstrap] user_chat_render_result", {
-      room_uuid,
-      rendered_count,
-      loading,
-      message_count,
-      render_state,
-    })
-
     if (room_uuid || message_count > 0 || !loading) {
       return
     }

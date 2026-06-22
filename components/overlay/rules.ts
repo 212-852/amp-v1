@@ -46,6 +46,7 @@ const contentByType: Record<
     items: [
       { id: "dashboard" },
       { id: "support" },
+      { id: "driver_recruitment", href: "/募集" },
       { id: "settings" },
     ],
   },

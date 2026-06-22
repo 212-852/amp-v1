@@ -133,16 +133,6 @@ async function discordRequest<T>(
 ) {
   const thread_id = extractThreadIdFromPath(path, config.channel_id)
 
-  console.log({
-    event: "odin_request",
-    room_uuid: log_context?.room_uuid ?? null,
-    channel_id: config.channel_id,
-    thread_id,
-    thread_status: log_context?.thread_status ?? null,
-    http_status: null,
-    error_message: null,
-  })
-
   const response = await fetch(`${DISCORD_API_BASE}${path}`, {
     ...init,
     headers: {
@@ -150,16 +140,6 @@ async function discordRequest<T>(
       "Content-Type": "application/json",
       ...(init.headers ?? {}),
     },
-  })
-
-  console.log({
-    event: "odin_response",
-    room_uuid: log_context?.room_uuid ?? null,
-    thread_id,
-    thread_status: log_context?.thread_status ?? null,
-    http_status: response.status,
-    ok: response.ok,
-    error_message: null,
   })
 
   if (!response.ok) {
@@ -210,7 +190,6 @@ async function createThread(
     http_status: null,
     error_message: null,
   }
-  console.log(entered_payload)
   await logOdinServerDebug("odin_thread_create_entered", entered_payload)
 
   try {
@@ -231,7 +210,6 @@ async function createThread(
       error_message: null,
       has_message: Boolean(payload.message.content.trim()),
     }
-    console.log(payload_ready)
     await logOdinServerDebug("odin_thread_create_payload_ready", payload_ready)
 
     const thread = await discordRequest<{ id: string }>(
@@ -255,16 +233,7 @@ async function createThread(
       http_status: thread.http_status,
       error_message: null,
     }
-    console.log(response_payload)
     await logOdinServerDebug("odin_thread_create_response", response_payload)
-    console.log({
-      event: "odin_thread_created",
-      room_uuid: input.room_uuid,
-      thread_id: thread.data.id,
-      thread_status: "open",
-      http_status: thread.http_status,
-      error_message: null,
-    })
 
     return {
       thread_id: thread.data.id,
@@ -320,7 +289,6 @@ async function closeThread(
     http_status: null,
     error_message: null,
   }
-  console.log(entered_payload)
   await logOdinServerDebug("odin_thread_close_entered", entered_payload)
 
   try {
@@ -348,7 +316,6 @@ async function closeThread(
       http_status: response.http_status,
       error_message: null,
     }
-    console.log(response_payload)
     await logOdinServerDebug("odin_thread_close_response", response_payload)
 
     return response
@@ -486,23 +453,6 @@ export async function deliverOdinNotification(
   delivery: NotifyDelivery,
 ): Promise<OdinDeliveryResult> {
   const room_uuid = readRoomUuid(delivery.payload)
-
-  console.log({
-    event: "odin_notify_entered",
-    notify_event: delivery.event,
-    room_uuid,
-    has_thread_id: typeof delivery.payload.thread_id === "string",
-    thread_id:
-      typeof delivery.payload.thread_id === "string"
-        ? delivery.payload.thread_id
-        : null,
-    thread_status:
-      typeof delivery.payload.thread_status === "string"
-        ? delivery.payload.thread_status
-        : null,
-    http_status: null,
-    error_message: null,
-  })
 
   const skip_reason = resolveOdinSkipReason()
 

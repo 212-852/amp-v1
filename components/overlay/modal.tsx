@@ -294,6 +294,11 @@ const content = {
     en: "Support",
     es: "Soporte",
   },
+  driver_recruitment: {
+    ja: "Driver recruitment",
+    en: "Driver recruitment",
+    es: "Driver recruitment",
+  },
   settings: {
     ja: "設定",
     en: "Settings",
@@ -463,6 +468,10 @@ function get_default_label(item: OverlayItem, locale: Locale) {
     return content.support[locale]
   }
 
+  if (item.id === "driver_recruitment") {
+    return content.driver_recruitment[locale]
+  }
+
   if (item.id === "settings") {
     return content.settings[locale]
   }
@@ -560,7 +569,6 @@ function AccountPanel({
         window.location.replace("/app")
       }, 650)
     } catch (error) {
-      console.error("logout failed", error)
       void send_auth_client_debug("logout_request_failed", {
         source: "account_modal",
         error_message: error instanceof Error ? error.message : String(error),
@@ -985,13 +993,16 @@ function LanguageOption({
 function DefaultOption({
   item,
   locale,
+  onSelect,
 }: Readonly<{
   item: OverlayItem
   locale: Locale
+  onSelect: (item: OverlayItem) => void
 }>) {
   return (
     <button
       type="button"
+      onClick={() => onSelect(item)}
       className="rounded-2xl border border-[#e5e5e5] px-4 py-3 text-left text-[14px] font-semibold text-[#111111]"
     >
       {get_default_label(item, locale)}
@@ -1590,6 +1601,15 @@ export default function OverlayModal({
     })
   }
 
+  function handle_default_click(item: OverlayItem) {
+    if (!item.href) {
+      return
+    }
+
+    onClose()
+    router.push(item.href)
+  }
+
   const bridge_toast_message =
     bridge_status === "polling"
       ? content.line_bridge_title[locale]
@@ -1751,7 +1771,12 @@ export default function OverlayModal({
                   onClose={onClose}
                 />
               ) : (
-                <DefaultOption key={item.id} item={item} locale={locale} />
+                <DefaultOption
+                  key={item.id}
+                  item={item}
+                  locale={locale}
+                  onSelect={handle_default_click}
+                />
               ),
             )}
           </>

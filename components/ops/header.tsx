@@ -188,11 +188,6 @@ export default function OpsHeader({
       }
 
       if (!response.ok || payload.ok !== true || typeof payload.enabled !== "boolean") {
-        console.error("concierge toggle failed", {
-          status: response.status,
-          body: payload,
-          raw: response_text,
-        })
         throw new Error(payload.error ?? "concierge_toggle_failed")
       }
 
@@ -212,8 +207,7 @@ export default function OpsHeader({
           ? concierge_toggle_content.on_success[locale]
           : concierge_toggle_content.off_success[locale],
       })
-    } catch (error) {
-      console.error("concierge toggle error", error)
+    } catch {
       set_concierge_available_state(previous_enabled)
       toast({
         tone: "error",
@@ -255,7 +249,6 @@ export default function OpsHeader({
         window.location.replace("/app")
       }, 650)
     } catch (error) {
-      console.error("logout failed", error)
       void send_auth_client_debug("logout_request_failed", {
         source: "ops_header",
         error_message: error instanceof Error ? error.message : String(error),

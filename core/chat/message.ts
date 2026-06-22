@@ -188,14 +188,6 @@ export async function archivePreparedMessage(input: PreparedMessageInput) {
       existing_payload: input.payload,
     })
 
-    console.info("[chat_core] message_archive_entered", {
-      room_uuid: input.room.room_uuid,
-      participant_uuid: participant.participant_uuid,
-      source_channel: input.source_channel,
-      source_kind: input.source_kind,
-      type: message_type,
-    })
-
     const message = await insertMessage({
       message_uuid,
       room_uuid: input.room.room_uuid,
@@ -205,15 +197,6 @@ export async function archivePreparedMessage(input: PreparedMessageInput) {
       payload,
       source_channel: input.source_channel,
       external_id: input.external_id ?? null,
-    })
-
-    console.info("[chat_core] message_archive_success", {
-      room_uuid: message.room_uuid,
-      message_uuid: message.message_uuid,
-      participant_uuid: message.participant_uuid,
-      source_channel: input.source_channel,
-      source_kind: input.source_kind,
-      type: message.type,
     })
 
     await sendAuthDebug("message_archived", {
@@ -229,15 +212,6 @@ export async function archivePreparedMessage(input: PreparedMessageInput) {
 
     return message
   } catch (error) {
-    console.info("[chat_core] message_archive_failed", {
-      room_uuid: input.room.room_uuid,
-      participant_uuid: input.participant?.participant_uuid ?? null,
-      source_channel: input.source_channel,
-      source_kind: input.source_kind,
-      type: message_type,
-      error_message: error instanceof Error ? error.message : String(error),
-    })
-
     await sendAuthDebug("chat_archive_failed", {
       room_uuid: input.room.room_uuid,
       participant_uuid: input.participant?.participant_uuid ?? null,
@@ -306,14 +280,6 @@ export async function archiveBotMessageBundle(input: {
       room_uuid: input.room.room_uuid,
       role: "bot",
     })
-    console.info("[chat_core] message_archive_entered", {
-      room_uuid: input.room.room_uuid,
-      participant_uuid: participant.participant_uuid,
-      source_channel: input.source_channel,
-      source_kind: "bot",
-      type: input.bundle.type,
-      message_kind,
-    })
     const message = await insertMessage({
       message_uuid: randomUUID(),
       room_uuid: input.room.room_uuid,
@@ -323,16 +289,6 @@ export async function archiveBotMessageBundle(input: {
       body: input.bundle.body,
       payload: input.bundle.payload,
       source_channel: input.source_channel,
-    })
-
-    console.info("[chat_core] message_archive_success", {
-      room_uuid: message.room_uuid,
-      message_uuid: message.message_uuid,
-      participant_uuid: message.participant_uuid,
-      source_channel: null,
-      source_kind: "bot",
-      type: message.type,
-      message_kind,
     })
 
     await sendAuthDebug("message_archived", {
@@ -345,16 +301,6 @@ export async function archiveBotMessageBundle(input: {
 
     return message
   } catch (error) {
-    console.info("[chat_core] message_archive_failed", {
-      room_uuid: input.room.room_uuid,
-      participant_uuid: participant?.participant_uuid ?? null,
-      source_channel: input.source_channel,
-      source_kind: "bot",
-      type: input.bundle.type,
-      message_kind,
-      error_message: error instanceof Error ? error.message : String(error),
-    })
-
     await sendAuthDebug("chat_archive_failed", {
       room_uuid: input.room.room_uuid,
       participant_uuid: participant?.participant_uuid ?? null,

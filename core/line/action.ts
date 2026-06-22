@@ -105,6 +105,7 @@ async function processAllowedLineEvent(
         external_id: event.external_id,
         line_provider_user_id: event.provider_user_id,
         line_reply_allowed: false,
+        line_identity_linked: Boolean(context.identity_uuid && context.user_uuid),
       },
       {
         deliver: false,
@@ -141,6 +142,7 @@ async function processAllowedLineEvent(
       line_reply_token: event.reply_token,
       line_provider_user_id: event.provider_user_id,
       line_reply_allowed: true,
+      line_identity_linked: Boolean(context.identity_uuid && context.user_uuid),
     },
     {
       deliver: false,
@@ -150,7 +152,10 @@ async function processAllowedLineEvent(
     },
   )
 
-  if (archive_result.mode_command_handled) {
+  if (
+    archive_result.mode_command_handled ||
+    archive_result.driver_recruitment_handled
+  ) {
     return {
       provider_user_id: event.provider_user_id,
       ignored: false,

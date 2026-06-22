@@ -76,11 +76,6 @@ export async function POST(request: Request) {
           : { enabled },
     })
 
-    console.info("[concierge_toggle] concierge_toggle_success", {
-      enabled: result.enabled,
-      request_body: body,
-    })
-
     return NextResponse.json({
       ok: true,
       enabled: result.enabled,
@@ -95,12 +90,6 @@ export async function POST(request: Request) {
         { status: 403 },
       )
     }
-
-    console.info("[concierge_toggle] concierge_toggle_failed", {
-      request_body: body,
-      enabled,
-      error_message: error instanceof Error ? error.message : String(error),
-    })
 
     return NextResponse.json(
       {

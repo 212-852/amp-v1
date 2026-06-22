@@ -13,7 +13,7 @@ import { sendAuthDebug } from "@/core/debug"
 export const runtime = "nodejs"
 
 function logChatRoomGetNoRoom(data: Record<string, unknown>) {
-  console.info("[chat_bootstrap] chat_room_get_no_room", data)
+  void sendAuthDebug("chat_room_get_no_room", data)
 }
 
 async function readChatRoomDebugContext(input: {

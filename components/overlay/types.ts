@@ -32,6 +32,7 @@ export type OverlayItem = {
   title?: string
   description?: string
   badge?: string
+  href?: string
   action?: "line" | "google" | "email"
   locale?: Locale
 }

@@ -21,10 +21,6 @@ export function useAddressOptions() {
 
         if (!response.ok) {
           const message = "Address options request failed"
-          console.error("address_options_load_failed", {
-            status: response.status,
-            error_message: message,
-          })
           set_error_message(message)
           return
         }
@@ -39,18 +35,12 @@ export function useAddressOptions() {
 
         if (!payload?.prefectures || !payload.cities_by_prefecture) {
           const message = "Invalid address options response"
-          console.error("address_options_load_failed", {
-            error_message: message,
-          })
           set_error_message(message)
           return
         }
 
         if (payload.prefectures.length === 0) {
           const message = "No prefecture options returned"
-          console.error("address_options_load_failed", {
-            error_message: message,
-          })
           set_error_message(message)
           return
         }
@@ -58,9 +48,6 @@ export function useAddressOptions() {
         set_address_options(payload)
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
-        console.error("address_options_load_failed", {
-          error_message: message,
-        })
         set_error_message(message)
       } finally {
         if (!cancelled) {

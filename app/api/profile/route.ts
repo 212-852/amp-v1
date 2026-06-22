@@ -7,7 +7,8 @@ import {
 } from "@/core/profile/action"
 
 function log_profile_debug(event: string, payload: Record<string, unknown>) {
-  console.info(event, payload)
+  void event
+  void payload
 }
 
 export async function GET() {

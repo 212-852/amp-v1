@@ -170,6 +170,7 @@ export type ChatIncomingInput = {
   line_reply_token?: string | null
   line_provider_user_id?: string | null
   line_reply_allowed?: boolean
+  line_identity_linked?: boolean
 }
 
 export type ChatModeSwitchInput = {

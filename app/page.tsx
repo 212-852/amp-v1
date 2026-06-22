@@ -17,15 +17,6 @@ export default async function Page() {
     redirect(route.path)
   } catch (error) {
     unstable_rethrow(error)
-    console.error("root_route_resolution_failed", {
-      error_message: error instanceof Error ? error.message : String(error),
-      error_stack:
-        process.env.NODE_ENV === "production"
-          ? null
-          : error instanceof Error
-            ? error.stack
-            : null,
-    })
     throw error
   }
 }

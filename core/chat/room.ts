@@ -94,10 +94,10 @@ async function readRoomDebugContext(
 }
 
 function logRoomDebug(
-  event: RoomDebugEvent,
-  data: Record<string, unknown>,
+  _event: RoomDebugEvent,
+  _data: Record<string, unknown>,
 ) {
-  console.info(`[chat_room] ${event}`, data)
+  // Room diagnostics go through centralized debug only.
 }
 
 function resolveRoomIdentity(context: ChatContext, session: Session): RoomIdentity {
@@ -279,13 +279,6 @@ export async function resolveOwnedRoom(input: {
     browser_locale: input.browser_locale,
   })
   const room_key = resolve_room_key(input.identity)
-  console.info("[chat_core] room_resolve_entered", {
-    room_key,
-    user_uuid: input.identity.user_uuid,
-    visitor_uuid: input.identity.visitor_uuid,
-    order_uuid: input.identity.order_uuid ?? null,
-  })
-
   const existing = await resolveExistingOwnedRoom({
     identity: input.identity,
     room_key,

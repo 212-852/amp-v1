@@ -1,6 +1,14 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  async rewrites() {
+    return [
+      {
+        source: "/募集",
+        destination: "/recruit",
+      },
+    ];
+  },
   async redirects() {
     return [
       {

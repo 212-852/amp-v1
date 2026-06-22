@@ -79,10 +79,6 @@ export async function POST(request: Request) {
       }
 
       if (DEBUG_LINE_WEBHOOK) {
-        console.info("[line_webhook] line_test_blocked_before_db", {
-          provider_user_id: event.provider_user_id,
-          source_channel: event.source_channel,
-        })
         await sendAuthDebug("line_webhook_ignored_not_allowed", {
           provider_user_id: event.provider_user_id,
           reason: event.provider_user_id

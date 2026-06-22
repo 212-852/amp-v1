@@ -56,6 +56,7 @@ import type {
 import {
   assertMessageBody,
   assertRoomMode,
+  resolve_driver_recruitment_rule,
   resolve_concierge_thread_rule,
   resolve_room_mode_trigger,
   resolveRoomModeCommandReply,
@@ -101,10 +102,10 @@ async function readChatBootstrapDebugContext(session: Session) {
 }
 
 function logChatBootstrap(
-  event: ChatBootstrapDebugEvent,
-  data: Record<string, unknown>,
+  _event: ChatBootstrapDebugEvent,
+  _data: Record<string, unknown>,
 ) {
-  console.info(`[chat_bootstrap] ${event}`, data)
+  // Bootstrap diagnostics go through centralized debug only.
 }
 
 async function triggerIncomingChatNotification(input: {
@@ -201,24 +202,6 @@ async function syncConciergeOdinModeChange(input: {
         thread_status: current_room.thread_status,
       })
 
-      console.log({
-        event: "concierge_mode_requested",
-        room_uuid: current_room.room_uuid,
-        thread_id: thread_rule.thread_id,
-        thread_status: thread_rule.thread_status,
-        reason: thread_rule.reason,
-      })
-
-      console.log({
-        event: thread_rule.requires_thread
-          ? "odin_thread_required"
-          : "odin_thread_reused",
-        room_uuid: current_room.room_uuid,
-        thread_id: thread_rule.thread_id,
-        thread_status: thread_rule.thread_status,
-        reason: thread_rule.reason,
-      })
-
       const result = await notifyEvent({
         event: "concierge_requested",
         request_id: `${current_room.room_uuid}:concierge_requested:${Date.now()}`,
@@ -297,14 +280,6 @@ async function syncConciergeOdinModeChange(input: {
           thread_status: "closed",
         })
 
-        console.log({
-          event: "room_thread_closed",
-          room_uuid: current_room.room_uuid,
-          thread_id: closed_room?.thread_id ?? thread_id,
-          thread_status: closed_room?.thread_status ?? "closed",
-          http_status: null,
-          error_message: null,
-        })
       } catch (error) {
         console.warn({
           event: "room_thread_close_failed",
@@ -543,6 +518,7 @@ export async function handleIncomingChatMessage(
 export type IncomingChatArchiveResult = {
   bundle: MessageBundle
   mode_command_handled: boolean
+  driver_recruitment_handled: boolean
 }
 
 export async function handleIncomingChatMessageArchive(
@@ -556,12 +532,6 @@ export async function handleIncomingChatMessageArchive(
 ): Promise<IncomingChatArchiveResult> {
   const context = normalizeIncomingChatInput(input)
   const body = assertMessageBody(input.body)
-  console.info("[chat_core] chat_core_entered", {
-    source_channel: input.source_channel,
-    user_uuid: input.session.user_uuid,
-    visitor_uuid: input.session.visitor_uuid,
-    has_line_reply_token: Boolean(input.line_reply_token),
-  })
   const mode_command =
     options.apply_mode_command !== false
       ? resolve_room_mode_trigger(body)
@@ -642,6 +612,7 @@ export async function handleIncomingChatMessageArchive(
     return {
       bundle,
       mode_command_handled: true,
+      driver_recruitment_handled: false,
     }
   }
 
@@ -675,6 +646,60 @@ export async function handleIncomingChatMessageArchive(
     message_uuid: message.message_uuid,
     source_channel: input.source_channel,
   })
+
+  const driver_recruitment_rule = resolve_driver_recruitment_rule({
+    text: body,
+    source_channel: input.source_channel,
+    line_identity_linked: input.line_identity_linked === true,
+  })
+
+  if (driver_recruitment_rule?.should_handle) {
+    const output_locale = resolveOutputLocale({
+      preferred: input.locale,
+      room_locale: room.locale,
+    })
+    const reply_message = await archivePreparedMessage({
+      room,
+      participant,
+      source_channel: input.source_channel,
+      source_kind: "bot",
+      type: "text",
+      body: driver_recruitment_rule.response_text,
+      original_locale: output_locale,
+      session: input.session,
+      payload: {
+        meta: {
+          actor_role: "bot",
+          actor_display_name: "Bot",
+        },
+      },
+    })
+
+    await sendAuthDebug("chat_driver_recruitment_resolved", {
+      room_uuid: room.room_uuid,
+      message_uuid: reply_message.message_uuid,
+      source_channel: input.source_channel,
+      reason: driver_recruitment_rule.reason,
+    })
+
+    if (options.deliver_mode_reply ?? options.deliver !== false) {
+      await deliverMessageBundle({
+        message: reply_message,
+        room,
+        session: input.session,
+        source_channel: input.source_channel,
+        line_reply_token: input.line_reply_token,
+        line_provider_user_id: input.line_provider_user_id,
+        line_reply_allowed: input.line_reply_allowed,
+      })
+    }
+
+    return {
+      bundle: toMessageBundle(reply_message, room.locale),
+      mode_command_handled: false,
+      driver_recruitment_handled: true,
+    }
+  }
 
   await triggerIncomingChatNotification({
     room_uuid: room.room_uuid,
@@ -721,6 +746,7 @@ export async function handleIncomingChatMessageArchive(
   return {
     bundle: toMessageBundle(message, room.locale),
     mode_command_handled: false,
+    driver_recruitment_handled: false,
   }
 }
 
@@ -1165,10 +1191,10 @@ async function readConciergeToggleDebugContext(session: Session) {
 }
 
 function logConciergeToggle(
-  event: ConciergeToggleDebugEvent,
-  data: Record<string, unknown>,
+  _event: ConciergeToggleDebugEvent,
+  _data: Record<string, unknown>,
 ) {
-  console.info(`[concierge_toggle] ${event}`, data)
+  // Concierge toggle diagnostics go through centralized debug only.
 }
 
 export async function toggleConciergeAvailability(input: {
