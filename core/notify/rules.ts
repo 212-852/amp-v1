@@ -9,6 +9,7 @@ export type NotifyEventName =
   | "concierge_closed"
   | "concierge_requested"
   | "driver_page_unauthorized_access"
+  | "driver_provisional_registered"
   | "odin_smoke_test"
 
 export type NotifyPriority = "normal" | "high" | "warning"
@@ -126,6 +127,22 @@ export function resolveNotifyDelivery(input: NotifyEventInput): NotifyDelivery {
       alert_headline: "⚠️⚠️⚠️ UNAUTHORIZED DRIVER ACCESS DETECTED ⚠️⚠️⚠️",
       alert_description: "Non-driver user attempted to access driver page.",
       embed_title: "⚠️ Unauthorized Driver Access",
+      request_id: input.request_id,
+      payload: input.payload,
+    }
+  }
+
+  if (input.event === "driver_provisional_registered") {
+    return {
+      channel: "discord",
+      webhook_url,
+      title: "新しいドライバーの仮登録がありました",
+      event: input.event,
+      priority: "normal",
+      mention,
+      summary: "driver provisional registration completed",
+      format: "plain",
+      embed_color: null,
       request_id: input.request_id,
       payload: input.payload,
     }

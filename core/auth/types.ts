@@ -11,6 +11,7 @@ export type SessionTier =
   | "member"
   | "vip"
   | "trainee"
+  | "standard"
   | "active"
   | "admin"
   | "owner"

@@ -232,7 +232,7 @@ export default function EntryForm({
       </section>
 
       <section className="grid gap-4 border-t border-[#ead7c3] pt-6">
-        <h3 className={sectionTitleClass}>パートナードライバー応募アンケート</h3>
+        <h3 className={sectionTitleClass}>パートナードライバーの稼働条件</h3>
 
         <fieldset className="grid gap-2">
           <legend className="mb-1 text-[13px] font-semibold text-[#5b422b]">
@@ -400,7 +400,7 @@ export default function EntryForm({
         disabled={isSubmitting}
         className="inline-flex h-12 w-full items-center justify-center rounded-full bg-[#06C755] px-8 text-sm font-bold text-white shadow-[0_8px_18px_rgba(6,199,85,0.24)] disabled:opacity-60"
       >
-        {isSubmitting ? "送信中..." : "応募する"}
+        {isSubmitting ? "送信中..." : "仮登録する"}
       </button>
     </form>
   )

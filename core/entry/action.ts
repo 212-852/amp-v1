@@ -1,3 +1,5 @@
+import { apply_driver_provisional_registration } from "@/core/auth/role_tier"
+import { resolveRequestIdFromHeaders } from "@/core/auth/session"
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
 import type { EntryRequestContext } from "@/core/entry/context"
 import {
@@ -10,6 +12,7 @@ import {
   validate_entry_input,
 } from "@/core/entry/rules"
 import { save_profile_patch } from "@/core/profile/action"
+import { notifyEvent } from "@/core/notify"
 
 type EntryInsertRow = {
   entry_uuid?: string | null
@@ -112,7 +115,11 @@ async function archive_driver_questionnaire(
         pet_experience,
         transport_experience: questionnaire.transport_experience,
         application_reason: questionnaire.application_reason,
-        status: "applied",
+        status: "provisional",
+        business_notification_ready: false,
+        vehicle_ready: false,
+        black_plate_ready: false,
+        safety_manager_ready: false,
         entry_uuid,
       }),
       cache: "no-store",
@@ -159,7 +166,7 @@ async function archive_entry_record(context: EntryRequestContext) {
           context.line_identity.line_user_id ??
           context.line_identity.liff_provider_user_id,
         source_channel: context.auth.source_channel,
-        status: "applied",
+        status: "provisional",
         name: display_name || null,
         phone: profile.phone,
         email: profile.email,
@@ -221,6 +228,38 @@ async function link_entry_driver(
   )
 }
 
+async function notify_driver_provisional_registration(
+  context: EntryRequestContext,
+  input: {
+    entry_uuid: string
+    driver_uuid: string | null
+  },
+) {
+  const { profile, questionnaire } = context.input
+  const display_name = `${profile.last_name}${profile.first_name}`.trim()
+  const pet_experience = normalize_pet_experience(questionnaire.pet_experience)
+  const request_id = await resolveRequestIdFromHeaders()
+
+  await notifyEvent({
+    event: "driver_provisional_registered",
+    request_id,
+    payload: {
+      name: display_name,
+      phone: profile.phone,
+      prefecture: profile.prefecture,
+      city: profile.city,
+      vehicle_status: questionnaire.vehicle_status,
+      freight_operator_status: questionnaire.freight_operator_status,
+      safety_manager_status: questionnaire.safety_manager_status,
+      pet_experience: pet_experience.join(", "),
+      transport_experience: questionnaire.transport_experience,
+      driver_uuid: input.driver_uuid,
+      user_uuid: context.session.user_uuid,
+      entry_uuid: input.entry_uuid,
+    },
+  })
+}
+
 export async function submit_entry(
   context: EntryRequestContext,
 ): Promise<EntrySubmitOutput> {
@@ -243,6 +282,15 @@ export async function submit_entry(
   if (driver_uuid) {
     await link_entry_driver(entry_uuid, driver_uuid)
   }
+
+  if (context.session.user_uuid) {
+    await apply_driver_provisional_registration(context.session.user_uuid)
+  }
+
+  await notify_driver_provisional_registration(context, {
+    entry_uuid,
+    driver_uuid,
+  })
 
   return build_entry_success_output({
     entry_uuid,

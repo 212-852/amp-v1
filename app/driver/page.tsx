@@ -1,7 +1,10 @@
 import OpsComingSoon from "@/components/ops/coming-soon"
 import OpsShell from "@/components/ops/shell"
+import DriverPreparationChecklist from "@/components/driver/preparation_checklist"
 import { resolveAuthContext } from "@/core/auth/context"
 import { resolveSession } from "@/core/auth/session"
+import { load_driver_preparation_state } from "@/core/driver/action"
+import { can_driver_operate, is_trainee_driver } from "@/core/driver/rules"
 import { normalizeOpsHeaderSession } from "@/core/ops/header_session"
 import { enforceAuthRouteRedirect } from "@/core/route/rules"
 
@@ -10,6 +13,11 @@ export default async function DriverPage() {
 
   const context = await resolveAuthContext("/driver")
   const session = await resolveSession(context)
+  const preparation = await load_driver_preparation_state(session.user_uuid)
+  const show_preparation =
+    is_trainee_driver(session) ||
+    (session.role === "driver" && session.tier === "standard")
+  const can_operate = can_driver_operate(session)
 
   return (
     <OpsShell
@@ -19,7 +27,21 @@ export default async function DriverPage() {
         default_role: "driver",
       })}
     >
-      <OpsComingSoon title="Driver" />
+      {show_preparation ? (
+        <DriverPreparationChecklist
+          initial_items={preparation.items}
+          initial_all_ready={preparation.all_ready}
+          tier={session.tier}
+        />
+      ) : null}
+
+      {can_operate ? (
+        <OpsComingSoon title="Driver" />
+      ) : (
+        <section className="rounded-2xl bg-white px-4 py-5 text-sm leading-7 text-neutral-600 ring-1 ring-neutral-200">
+          仮登録済みです。必須の準備が完了するまで稼働できません。
+        </section>
+      )}
     </OpsShell>
   )
 }

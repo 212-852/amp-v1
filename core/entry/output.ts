@@ -28,8 +28,9 @@ export function build_entry_success_output(input: {
 }): EntrySubmitOutput {
   return {
     ok: true,
-    message: "応募ありがとうございます。",
-    redirect_path: null,
+    message:
+      "仮登録が完了しました。ドライバー画面で稼働に必要な準備を進めてください。",
+    redirect_path: "/driver",
     show_success: true,
     entry_uuid: input.entry_uuid,
     driver_uuid: input.driver_uuid,
