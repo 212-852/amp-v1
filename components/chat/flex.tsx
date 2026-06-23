@@ -167,7 +167,10 @@ function FlexHero({ node }: Readonly<{ node: FlexRecord }>) {
     <img
       src={url}
       alt=""
-      className={resolve_web_flex_hero_class_name(node)}
+      className={[
+        "chat_card_image",
+        resolve_web_flex_hero_class_name(node),
+      ].join(" ")}
     />
   )
 }
@@ -211,7 +214,7 @@ function FlexSeparator({ node }: Readonly<{ node?: FlexRecord | null }>) {
 }
 
 const FLEX_ACTION_BUTTON_CLASS =
-  "flex h-[44px] w-full items-center justify-center px-4 text-[14px] font-semibold"
+        "chat_card_button flex h-[44px] items-center justify-center px-4 text-[14px] font-semibold"
 
 function readCornerRadius(value: unknown) {
   return typeof value === "string" ? value : "16px"
@@ -337,6 +340,7 @@ function FlexBubbleSection({
     <section
       className={[
         "relative z-[1] w-full bg-white",
+        kind === "body" ? "chat_card_body" : "",
         kind === "body" ? "flex-1" : "",
         kind === "footer" ? "mt-auto" : "",
       ].join(" ")}
@@ -397,7 +401,7 @@ function FlexBubble({
   const footer = readRecord(bubble.footer)
 
   return (
-    <article className="chat_card flex h-auto max-h-none w-[300px] max-w-full shrink-0 snap-start self-stretch flex-col overflow-hidden rounded-[18px] bg-white">
+    <article className="chat_card flex h-auto max-h-none shrink-0 snap-start self-stretch flex-col overflow-hidden rounded-[18px] bg-white">
       {header ? (
         <FlexBubbleSection
           node={header}

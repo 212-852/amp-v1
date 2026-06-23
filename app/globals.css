@@ -50,13 +50,33 @@ select {
   margin-right: auto;
 }
 
-.chat_card,
+.chat_card {
+  width: 100%;
+  max-width: 320px;
+  box-sizing: border-box;
+}
+
 .quick_menu_card,
 .faq_card,
 .message_card {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+}
+
+.chat_card_image {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+.chat_card_body {
+  width: 100%;
+}
+
+.chat_card_button {
+  width: 100%;
 }
 
 .chat_input_footer {
