@@ -1,10 +1,11 @@
 "use client"
 
-import type { FormEvent } from "react"
+import type { ChangeEvent, ClipboardEvent, FormEvent } from "react"
 import { useMemo, useState } from "react"
 
 import EntrySuccessScreen from "@/components/app/entry_success"
 import type { EntryFormInitialValues } from "@/core/entry/context"
+import { normalize_phone } from "@/form/normalize"
 import AddressSelector from "@/src/address/selector"
 import { useAddressOptions } from "@/src/address/use_options"
 import {
@@ -48,6 +49,7 @@ export default function EntryForm({
   const addressState = useAddressOptions()
   const [prefectureCode, setPrefectureCode] = useState(initial.prefecture_code)
   const [cityCode, setCityCode] = useState(initial.city_code)
+  const [phone, setPhone] = useState(normalize_phone(initial.phone))
   const [petExperience, setPetExperience] = useState<string[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
@@ -83,6 +85,22 @@ export default function EntryForm({
     })
   }
 
+  function handle_phone_change(value: string) {
+    setPhone(normalize_phone(value))
+  }
+
+  function handle_phone_paste(event: ClipboardEvent<HTMLInputElement>) {
+    event.preventDefault()
+
+    const target = event.currentTarget
+    const start = target.selectionStart ?? phone.length
+    const end = target.selectionEnd ?? phone.length
+    const pasted = event.clipboardData.getData("text")
+    const next = `${phone.slice(0, start)}${pasted}${phone.slice(end)}`
+
+    setPhone(normalize_phone(next))
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
@@ -93,6 +111,8 @@ export default function EntryForm({
     setIsSubmitting(true)
     setMessage(null)
     setErrors({})
+    const normalizedPhone = normalize_phone(phone)
+    setPhone(normalizedPhone)
 
     try {
       const form = new FormData(event.currentTarget)
@@ -105,6 +125,7 @@ export default function EntryForm({
         },
         body: JSON.stringify({
           ...payload,
+          phone: normalizedPhone,
           has_driver_license: form.get("has_driver_license") === "on",
           pet_experience: petExperience,
         }),
@@ -170,10 +191,16 @@ export default function EntryForm({
           <input
             type="tel"
             name="phone"
-            className={fieldClass}
-            defaultValue={initial.phone}
+            className={`${fieldClass} phone_input`}
+            value={phone}
+            onChange={(event: ChangeEvent<HTMLInputElement>) =>
+              handle_phone_change(event.target.value)
+            }
+            onPaste={handle_phone_paste}
+            onBlur={() => handle_phone_change(phone)}
             inputMode="numeric"
             autoComplete="tel"
+            pattern="[0-9]*"
           />
         </label>
 

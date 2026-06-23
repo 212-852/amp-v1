@@ -79,6 +79,11 @@ select {
   width: 100%;
 }
 
+.phone_input {
+  letter-spacing: normal;
+  font-variant-numeric: tabular-nums;
+}
+
 .flex_carousel {
   display: flex;
   gap: 12px;

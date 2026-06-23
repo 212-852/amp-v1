@@ -101,14 +101,16 @@ export function normalize_number(value: unknown) {
   return without_spaces.replace(/\D/g, "")
 }
 
-export function normalize_phone(value: unknown) {
-  const half_width = to_half_width_digits(read_input_string(value))
-  const without_formatting = half_width.replace(
-    /[\s\u3000\-ー－()（）]/g,
-    "",
-  )
+export function normalize_digits(value: string) {
+  return value
+    .normalize("NFKC")
+    .replace(/[^\d]/g, "")
+}
 
-  return without_formatting.replace(/\D/g, "")
+export function normalize_phone(value: string): string
+export function normalize_phone(value: unknown): string
+export function normalize_phone(value: unknown) {
+  return normalize_digits(read_input_string(value))
 }
 
 export function normalize_postal_code(value: unknown) {
