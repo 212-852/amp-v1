@@ -12,7 +12,6 @@ export type EntryProfileInput = {
   prefecture: string
   city: string
   address: string
-  memo: string
 }
 
 export type DriverVehicleStatus = "owned" | "planned" | "consult"
@@ -65,7 +64,6 @@ export type EntryFormInitialValues = {
   prefecture: string
   city: string
   address: string
-  memo: string
 }
 
 function readString(body: Record<string, unknown>, key: string) {
@@ -115,7 +113,6 @@ export function build_entry_form_initial(input: {
     prefecture_code?: string | null
     city_code?: string | null
     address?: string | null
-    memo?: string | null
   } | null
 }): EntryFormInitialValues {
   return {
@@ -128,7 +125,6 @@ export function build_entry_form_initial(input: {
     prefecture: input.profile?.prefecture?.trim() ?? "",
     city: input.profile?.city?.trim() ?? "",
     address: input.profile?.address?.trim() ?? "",
-    memo: input.profile?.memo?.trim() ?? "",
   }
 }
 
@@ -155,7 +151,6 @@ export function build_entry_context(input: {
         prefecture: readString(body, "prefecture"),
         city: readString(body, "city"),
         address: readString(body, "address"),
-        memo: readString(body, "memo"),
       },
       questionnaire: {
         has_driver_license: readBoolean(body, "has_driver_license"),

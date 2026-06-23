@@ -166,7 +166,6 @@ export function normalize_entry_form_body(body: Record<string, unknown>) {
     prefecture: normalize_text,
     city: normalize_text,
     address: normalize_text,
-    memo: normalize_textarea,
     application_reason: normalize_textarea,
   })
 }

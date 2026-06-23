@@ -255,14 +255,6 @@ export default function EntryForm({
           />
         </label>
 
-        <label className={labelClass}>
-          自己紹介・ご質問・補足事項
-          <textarea
-            name="memo"
-            className={textAreaClass}
-            defaultValue={initial.memo}
-          />
-        </label>
       </section>
 
       <section className="grid gap-4 border-t border-[#ead7c3] pt-6">
@@ -407,7 +399,11 @@ export default function EntryForm({
 
         <label className={labelClass}>
           なぜパートナードライバーをやってみたいと思いましたか？
-          <textarea name="application_reason" className={textAreaClass} />
+          <textarea
+            name="application_reason"
+            className={textAreaClass}
+            placeholder="応募理由や動物への想い、現在の状況などをご記入ください"
+          />
         </label>
       </section>
 

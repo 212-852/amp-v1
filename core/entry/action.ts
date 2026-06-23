@@ -72,7 +72,6 @@ async function save_entry_profile(context: EntryRequestContext) {
       prefecture_code: profile.prefecture_code,
       city_code: profile.city_code,
       address: profile.address,
-      memo: profile.memo || null,
     },
   })
 
@@ -175,7 +174,7 @@ async function archive_entry_record(context: EntryRequestContext) {
         prefecture: profile.prefecture,
         city: profile.city,
         address: profile.address,
-        note: profile.memo || null,
+        note: null,
         payload: {
           profile,
           questionnaire: {
@@ -253,6 +252,7 @@ async function notify_driver_provisional_registration(
       safety_manager_status: questionnaire.safety_manager_status,
       pet_experience: pet_experience.join(", "),
       transport_experience: questionnaire.transport_experience,
+      application_reason: questionnaire.application_reason,
       driver_uuid: input.driver_uuid,
       user_uuid: context.session.user_uuid,
       entry_uuid: input.entry_uuid,
