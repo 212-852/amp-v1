@@ -292,14 +292,14 @@ export default function AppHeader({
   return (
     <header
       className={[
-        "inset-x-0 top-0 z-50 text-[#3d2a19]",
+        "layout_header inset-x-0 top-0 z-50 w-full text-[#3d2a19]",
         layout === "page"
           ? "sticky min-h-[108px] bg-[#f5e8d5]"
-          : "fixed h-[108px]",
+          : "fixed h-[108px] bg-[#f5e8d5]",
       ].join(" ")}
     >
       <HeaderCurve />
-      <div className="relative z-10 mx-auto flex h-full w-full max-w-[430px] items-start justify-between gap-2 px-6 pb-2 pt-[calc(12px+env(safe-area-inset-top,0px))]">
+      <div className="content_container relative z-10 flex h-full w-full items-start justify-between gap-2 px-6 pb-2 pt-[calc(12px+env(safe-area-inset-top,0px))]">
         <div className="min-w-0 pt-1">
           <h1 className="text-[20px] font-semibold leading-none text-[#3d2a19]">
             {content.brand[locale]}

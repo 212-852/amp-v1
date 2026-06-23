@@ -18,7 +18,7 @@ export default function AppPageShell({
         breadcrumb_items={breadcrumb_items}
         layout="page"
       />
-      <main className="mx-auto flex w-full max-w-[430px] flex-1 flex-col px-4 py-4">
+      <main className="content_container flex w-full flex-1 flex-col px-4 py-4">
         {children}
       </main>
       <AppSiteFooter />

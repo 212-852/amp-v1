@@ -397,7 +397,7 @@ function FlexBubble({
   const footer = readRecord(bubble.footer)
 
   return (
-    <article className="flex h-auto max-h-none w-[300px] max-w-[calc(100vw-76px)] shrink-0 snap-start self-stretch flex-col overflow-hidden rounded-[18px] bg-white">
+    <article className="chat_card flex h-auto max-h-none w-[300px] max-w-full shrink-0 snap-start self-stretch flex-col overflow-hidden rounded-[18px] bg-white">
       {header ? (
         <FlexBubbleSection
           node={header}
@@ -453,7 +453,7 @@ export default function FlexMessage({
   }
 
   return (
-    <div className="h-auto max-h-none w-full min-w-0 overflow-x-auto overflow-y-visible overscroll-x-contain pb-0 pt-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="chat_card h-auto max-h-none w-full min-w-0 overflow-x-auto overflow-y-visible overscroll-x-contain pb-0 pt-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <div className="flex w-max snap-x snap-mandatory items-stretch gap-3">
         {carousel.contents.map((bubble, index) => (
           <FlexBubble

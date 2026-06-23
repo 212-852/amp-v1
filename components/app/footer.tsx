@@ -87,7 +87,7 @@ const content = {
 }
 
 const footer_shell_class =
-  "relative mx-auto h-[186px] w-full max-w-[430px]"
+  "content_container relative h-[186px] w-full"
 
 const fixed_paw_button_class = [
   "flex h-[60px] w-[60px]",
@@ -387,7 +387,7 @@ function BottomMenuRow({
   return (
     <nav
       aria-label={content.footer_menu[locale]}
-      className="grid w-full grid-cols-3 gap-1 pb-[calc(env(safe-area-inset-bottom,0px)+16px)] text-[#8f5d28]"
+      className="quick_menu_card grid w-full grid-cols-3 gap-1 pb-[calc(env(safe-area-inset-bottom,0px)+16px)] text-[#8f5d28]"
     >
       {items.map((item) => {
         const Icon = item.icon
@@ -857,7 +857,7 @@ export default function AppFooter({
     <footer
       ref={footer_ref}
       className={[
-        "chat_input_footer fixed left-1/2 right-auto bottom-[max(0px,env(safe-area-inset-bottom,0px))] w-full max-w-[430px] -translate-x-1/2",
+        "layout_footer chat_input_footer fixed inset-x-0 bottom-[max(0px,env(safe-area-inset-bottom,0px))] w-full",
         ui_layer_class.chat_composer,
       ].join(" ")}
     >

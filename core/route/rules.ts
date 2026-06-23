@@ -45,6 +45,7 @@ export async function enforce_entry_line_access() {
 
   return {
     context,
+    entry_identity,
     identity,
     route,
     session,

@@ -1,5 +1,5 @@
 const SW_VERSION = "v5"
-const BUILD_ID = "mqp8hjd1"
+const BUILD_ID = "mqq4ugaf"
 const CACHE_NAME = "amp-pwa-" + SW_VERSION + "-" + BUILD_ID
 const LEGACY_CACHE_PREFIX = "amp-pwa-"
 const APP_SHELL_URL = "/"

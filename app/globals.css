@@ -31,6 +31,34 @@ select {
   }
 }
 
+:root {
+  --content-max-width: 480px;
+}
+
+.layout_header {
+  width: 100%;
+}
+
+.layout_footer {
+  width: 100%;
+}
+
+.content_container {
+  width: 100%;
+  max-width: var(--content-max-width);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.chat_card,
+.quick_menu_card,
+.faq_card,
+.message_card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 .chat_input_footer {
   bottom: max(0px, env(safe-area-inset-bottom, 0px));
 }

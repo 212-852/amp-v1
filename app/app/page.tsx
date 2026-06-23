@@ -1,6 +1,7 @@
 import AppFooter from "@/components/app/footer"
 import AppHeader from "@/components/app/header"
 import AppHome from "@/components/app/home"
+import AppLayoutShell from "@/components/app/layout_shell"
 import { resolveAuthContext } from "@/core/auth/context"
 import { resolveSession } from "@/core/auth/session"
 import { resolveChatSupportAccess } from "@/core/chat/support"
@@ -40,10 +41,15 @@ export default async function AppPage() {
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
       <AppHeader auth={session} />
-      <AppHome
-        chat_state={null}
-        viewer_display_name={session.display_name}
-      />
+      <AppLayoutShell
+        className="min-h-0 flex-1 overflow-hidden"
+        content_className="px-4"
+      >
+        <AppHome
+          chat_state={null}
+          viewer_display_name={session.display_name}
+        />
+      </AppLayoutShell>
       <AppFooter
         support_access={support_access}
         can_start_line_oauth={session.can_start_line_oauth}

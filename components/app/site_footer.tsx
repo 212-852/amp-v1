@@ -42,8 +42,8 @@ export default function AppSiteFooter() {
   const { locale } = useLocale()
 
   return (
-    <footer className="border-t border-[#ead7c3] bg-[#f5e8d5] text-[#3d2a19]">
-      <div className="mx-auto flex w-full max-w-[430px] flex-col gap-6 px-4 py-8">
+    <footer className="layout_footer w-full border-t border-[#ead7c3] bg-[#f5e8d5] text-[#3d2a19]">
+      <div className="content_container flex w-full flex-col gap-6 px-4 py-8">
         <p className="text-lg font-semibold">{content.brand[locale]}</p>
 
         <div className="space-y-5">

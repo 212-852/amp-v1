@@ -59,7 +59,7 @@ export default function NotificationPanel({
       <div
         role="dialog"
         aria-modal="true"
-        className="relative z-[9999] max-h-[calc(100dvh-48px-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] w-full max-w-[430px] overflow-y-auto rounded-2xl border border-neutral-200 bg-white p-5 shadow-[0_18px_40px_rgba(0,0,0,0.18)]"
+        className="relative z-[9999] max-h-[calc(100dvh-48px-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] w-full max-w-[var(--content-max-width,480px)] overflow-y-auto rounded-2xl border border-neutral-200 bg-white p-5 shadow-[0_18px_40px_rgba(0,0,0,0.18)]"
         onClick={(event) => {
           event.stopPropagation()
         }}

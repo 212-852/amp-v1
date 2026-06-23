@@ -104,7 +104,7 @@ export default function ChatLatestButton({
   if (placement === "above_input") {
     return (
       <div className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--chat-composer-height,var(--chat-input-height,120px))+env(safe-area-inset-bottom,0px)+12px)] z-30 px-4">
-        <div className="mx-auto flex w-full max-w-[430px] justify-end">
+        <div className="content_container flex w-full justify-end">
           <div className="pointer-events-auto">{button}</div>
         </div>
       </div>

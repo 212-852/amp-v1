@@ -319,7 +319,7 @@ export default function ChatMessageBubble({
 
   if (is_flex) {
     return (
-      <div className="relative flex w-full justify-start overflow-visible pt-0">
+      <div className="message_card relative flex w-full justify-start overflow-visible pt-0">
         <div className="w-full min-w-0 max-w-full">
           {show_header ? (
             <MessageHeader
@@ -338,7 +338,7 @@ export default function ChatMessageBubble({
   const text_bubble = (
     <div
       className={[
-        "max-w-full rounded-[18px] px-4 py-3 text-[14px] leading-relaxed",
+        "message_card max-w-full rounded-[18px] px-4 py-3 text-[14px] leading-relaxed",
         bubble_class,
       ].join(" ")}
     >

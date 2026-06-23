@@ -199,21 +199,35 @@ export async function enforceEntryLineAccess(
   session: Session,
 ) {
   const entry_identity = await resolve_entry_line_identity(context, session)
-  const redirect_to = entry_identity.has_line_identity ? null : ENTRY_HOME_URL
+  const has_verified_liff_session =
+    session.liff?.verified === true &&
+    Boolean(entry_identity.liff_provider_user_id)
+  const has_linked_line_identity =
+    Boolean(entry_identity.line_user_id) ||
+    Boolean(
+      entry_identity.provider === "line" &&
+        entry_identity.provider_user_id,
+    )
+  const has_entry_access =
+    has_linked_line_identity || has_verified_liff_session
+  const redirect_to = has_entry_access ? null : ENTRY_HOME_URL
 
   await sendAuthDebug("entry_access_checked", {
     pathname: context.requested_route ?? "/entry",
     user_uuid: session.user_uuid,
     visitor_uuid: session.visitor_uuid,
+    role: session.role,
     provider: entry_identity.provider,
     provider_user_id_exists: Boolean(entry_identity.provider_user_id),
     line_user_id_exists: Boolean(entry_identity.line_user_id),
     liff_provider_user_id_exists: Boolean(entry_identity.liff_provider_user_id),
+    liff_verified: session.liff?.verified === true,
     has_line_identity: entry_identity.has_line_identity,
+    has_entry_access,
     redirect_to,
   })
 
-  if (!entry_identity.has_line_identity) {
+  if (!has_entry_access) {
     redirect(ENTRY_HOME_URL)
   }
 
