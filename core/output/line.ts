@@ -614,12 +614,29 @@ export async function deliverLine(
       mark_line_reply_token_used(reply_token)
     }
 
+    if (invalid_reply_token) {
+      await sendAuthDebug("line_reply_skipped", build_line_reply_debug_fields(debug_base, {
+        provider_user_id,
+        status: response.status,
+        error_message,
+        reply_token_used: true,
+        reply_token_fresh: false,
+        skipped_reason: "invalid_reply_token",
+      }))
+
+      return {
+        transport: use_reply ? "line_reply" : "line_push",
+        delivered: false,
+        failed_final: true,
+        skipped_reason: "invalid_reply_token",
+      }
+    }
+
     await sendAuthDebug("line_reply_send_failed", build_line_reply_debug_fields(debug_base, {
       provider_user_id,
       status: response.status,
       error_message,
-      reply_token_used: invalid_reply_token,
-      skipped_reason: invalid_reply_token ? "invalid_reply_token" : null,
+      skipped_reason: `http_${response.status}`,
     }))
 
     return {

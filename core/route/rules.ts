@@ -5,6 +5,10 @@ import { resolveIdentity } from "@/core/auth/identity"
 import { enforceEntryLineAccess, resolveAuthRoute } from "@/core/auth/route"
 import { resolveSession } from "@/core/auth/session"
 import { resolveEntranceContext } from "@/core/entrance/context"
+import {
+  build_entry_page_opened_payload,
+  send_entry_line_auth_debug,
+} from "@/core/entry/debug"
 
 export type { AmpRouteKey, AmpRouteResult } from "@/core/auth/route"
 
@@ -34,6 +38,16 @@ export async function enforceAuthRouteRedirect(requested_route: string) {
 export async function enforce_entry_line_access() {
   const context = await resolveAuthContext("/entry")
   const session = await resolveSession(context)
+
+  await send_entry_line_auth_debug(
+    "entry_page_opened",
+    await build_entry_page_opened_payload({
+      context,
+      session,
+      pathname: "/entry",
+    }),
+  )
+
   const identity = await resolveIdentity(context, session)
   const route = resolveAuthRoute(
     context,

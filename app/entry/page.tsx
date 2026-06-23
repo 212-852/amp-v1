@@ -3,10 +3,17 @@ import AppPageShell from "@/components/app/page_shell"
 import PartnerHero from "@/components/app/partner_hero"
 import EntryForm from "@/components/app/entry_form"
 import { build_breadcrumb_output } from "@/core/breadcrumb/output"
+import { build_entry_form_initial } from "@/core/entry/context"
+import { get_profile_settings } from "@/core/profile/action"
 
 export default async function EntryPage() {
   const guard = await enforce_entry_line_access()
-  const breadcrumbs = build_breadcrumb_output({ pathname: "/partner" })
+  const profile = await get_profile_settings(guard.session)
+  const initial = build_entry_form_initial({
+    session: guard.session,
+    profile,
+  })
+  const breadcrumbs = build_breadcrumb_output({ pathname: "/entry" })
 
   return (
     <AppPageShell auth={guard.session} breadcrumb_items={breadcrumbs.items}>
@@ -23,7 +30,7 @@ export default async function EntryPage() {
         </div>
 
         <div className="pb-4">
-          <EntryForm />
+          <EntryForm initial={initial} />
         </div>
       </section>
     </AppPageShell>

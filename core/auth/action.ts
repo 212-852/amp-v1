@@ -13,6 +13,7 @@ import {
   AUTH_LOGGED_OUT_COOKIE_NAME,
   authLoggedOutCookieOptions,
   resolveSession,
+  resolveRequestIdFromHeaders,
   VISITOR_COOKIE_NAME,
   visitorCookieOptions,
   type AppSession,
@@ -20,6 +21,10 @@ import {
 import type { SessionRole, SessionTier, SourceChannel } from "@/core/auth/types"
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
 import { sendAuthDebug } from "@/core/debug"
+import {
+  is_line_in_app_browser,
+  send_entry_line_auth_debug,
+} from "@/core/entry/debug"
 import { sendMail } from "@/core/mail/action"
 import { homePathForRole } from "@/core/auth/route"
 
@@ -1654,6 +1659,20 @@ export async function startLineLogin(request: NextRequest) {
       return_to,
     })
 
+    if (return_to === "/entry") {
+      await send_entry_line_auth_debug("entry_redirect_to_line_login", {
+        request_id: await resolveRequestIdFromHeaders(),
+        return_to,
+        login_url_exists: Boolean(url.toString()),
+        state_exists: Boolean(state),
+        state_key: LINE_LOGIN_STATE_COOKIE,
+        is_line_browser: is_line_in_app_browser(
+          request.headers.get("user-agent"),
+        ),
+        redirect_to: url.toString(),
+      })
+    }
+
     await sendIdentityDebug("oauth_state_saved_cookie", {
       provider: "line",
       bridge_uuid: bridge?.otp_uuid ?? null,
@@ -2128,6 +2147,21 @@ export async function completeLineLogin(request: NextRequest) {
       can_logout: true,
       can_start_line_oauth: false,
     }
+    const callback_request_id = await resolveRequestIdFromHeaders()
+    const redirect_to = cookieState.return_to ?? "/"
+
+    await send_entry_line_auth_debug("line_login_callback_received", {
+      request_id: callback_request_id,
+      state_exists: Boolean(state && cookieState.state),
+      return_to: cookieState.return_to,
+      provider_user_id_exists: Boolean(profile.userId),
+      line_user_id_exists: Boolean(
+        linkedProfile.provider_user_id ?? profile.userId,
+      ),
+      identity_upserted: Boolean(result.identity_uuid),
+      session_restored: Boolean(linkedSession.user_uuid),
+      redirect_to,
+    })
 
     await sendAuthDebug("resolved_user_uuid", {
       provider: "line",
@@ -2168,6 +2202,20 @@ export async function completeLineLogin(request: NextRequest) {
       user_uuid: result.user_uuid,
       pathname: "/api/auth/line/callback",
     })
+
+    await send_entry_line_auth_debug("line_session_written", {
+      request_id: callback_request_id,
+      user_uuid: linkedSession.user_uuid,
+      visitor_uuid: linkedSession.visitor_uuid,
+      provider: linkedSession.provider,
+      provider_user_id_exists: Boolean(linkedSession.provider_user_id),
+      line_user_id_exists: Boolean(
+        linkedSession.provider_user_id ?? linkedProfile.provider_user_id,
+      ),
+      cookie_written: true,
+      cookie_names: [VISITOR_COOKIE_NAME],
+    })
+
     clearLineOAuthStateCookie(response)
     clearAuthLoggedOutCookie(response)
 

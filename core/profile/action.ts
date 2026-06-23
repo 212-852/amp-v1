@@ -376,6 +376,17 @@ async function upsert_profile_row(input: {
   }
 }
 
+export async function save_profile_patch(input: {
+  session: Session
+  patch: ProfileSettingsPatch
+}) {
+  return upsert_profile_row({
+    user_uuid: input.session.user_uuid,
+    visitor_uuid: input.session.visitor_uuid,
+    patch: input.patch,
+  })
+}
+
 export async function get_profile_settings(session: Session) {
   const [row, users_name] = await Promise.all([
     load_profile_row(session),

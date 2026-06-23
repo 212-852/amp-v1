@@ -3,6 +3,8 @@
 import type { FormEvent } from "react"
 import { useMemo, useState } from "react"
 
+import EntrySuccessScreen from "@/components/app/entry_success"
+import type { EntryFormInitialValues } from "@/core/entry/context"
 import AddressSelector from "@/src/address/selector"
 import { useAddressOptions } from "@/src/address/use_options"
 import {
@@ -18,18 +20,37 @@ const textAreaClass =
 
 const labelClass = "grid gap-1.5 text-[13px] font-semibold text-[#5b422b]"
 
+const sectionTitleClass = "text-[16px] font-bold text-[#3d2a19]"
+
+const radioGroupClass = "grid gap-2 text-[14px] text-[#5b422b]"
+
+const checkboxClass = "h-4 w-4 accent-[#06C755]"
+
 type SubmitResponse = {
   ok?: boolean
   message?: string
-  redirect_path?: string | null
+  show_success?: boolean
   errors?: Record<string, string>
 }
 
-export default function EntryForm() {
+const petExperienceOptions = [
+  { value: "dog", label: "犬" },
+  { value: "cat", label: "猫" },
+  { value: "other", label: "その他" },
+  { value: "none", label: "飼育経験なし" },
+] as const
+
+export default function EntryForm({
+  initial,
+}: Readonly<{
+  initial: EntryFormInitialValues
+}>) {
   const addressState = useAddressOptions()
-  const [prefectureCode, setPrefectureCode] = useState("")
-  const [cityCode, setCityCode] = useState("")
+  const [prefectureCode, setPrefectureCode] = useState(initial.prefecture_code)
+  const [cityCode, setCityCode] = useState(initial.city_code)
+  const [petExperience, setPetExperience] = useState<string[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showSuccess, setShowSuccess] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const selectedCityCode = resolve_selected_city_code(
@@ -45,6 +66,22 @@ export default function EntryForm() {
       }),
     [addressState.options, prefectureCode, selectedCityCode],
   )
+
+  function togglePetExperience(value: string) {
+    setPetExperience((current) => {
+      if (value === "none") {
+        return current.includes("none") ? [] : ["none"]
+      }
+
+      const withoutNone = current.filter((item) => item !== "none")
+
+      if (withoutNone.includes(value)) {
+        return withoutNone.filter((item) => item !== value)
+      }
+
+      return [...withoutNone, value]
+    })
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -66,7 +103,11 @@ export default function EntryForm() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ...payload,
+          has_driver_license: form.get("has_driver_license") === "on",
+          pet_experience: petExperience,
+        }),
       })
       const result = (await response.json().catch(() => null)) as
         | SubmitResponse
@@ -78,11 +119,12 @@ export default function EntryForm() {
         return
       }
 
-      setMessage(result.message ?? "登録を受け付けました。")
+      if (result.show_success) {
+        setShowSuccess(true)
+        return
+      }
 
-      window.setTimeout(() => {
-        window.location.assign(result.redirect_path ?? "/app")
-      }, 1200)
+      setMessage(result.message ?? "登録を受け付けました。")
     } catch {
       setMessage("登録できませんでした。")
     } finally {
@@ -90,97 +132,250 @@ export default function EntryForm() {
     }
   }
 
+  if (showSuccess) {
+    return <EntrySuccessScreen />
+  }
+
   return (
-    <form onSubmit={submit} className="grid gap-4">
-      <label className={labelClass}>
-        お名前
-        <input name="name" className={fieldClass} autoComplete="name" />
-      </label>
+    <form onSubmit={submit} className="grid gap-6">
+      <section className="grid gap-4">
+        <h3 className={sectionTitleClass}>プロフィール</h3>
 
-      <label className={labelClass}>
-        電話番号
-        <input name="phone" className={fieldClass} autoComplete="tel" />
-      </label>
+        <label className={labelClass}>
+          姓
+          <input
+            name="last_name"
+            className={fieldClass}
+            defaultValue={initial.last_name}
+            autoComplete="family-name"
+          />
+        </label>
 
-      <label className={labelClass}>
-        メールアドレス
-        <input
-          name="email"
-          type="email"
-          className={fieldClass}
-          autoComplete="email"
+        <label className={labelClass}>
+          名
+          <input
+            name="first_name"
+            className={fieldClass}
+            defaultValue={initial.first_name}
+            autoComplete="given-name"
+          />
+        </label>
+
+        <label className={labelClass}>
+          電話番号
+          <input
+            name="phone"
+            className={fieldClass}
+            defaultValue={initial.phone}
+            autoComplete="tel"
+          />
+        </label>
+
+        <label className={labelClass}>
+          メールアドレス
+          <input
+            name="email"
+            type="email"
+            className={fieldClass}
+            defaultValue={initial.email}
+            autoComplete="email"
+          />
+        </label>
+
+        <AddressSelector
+          options={addressState.options}
+          prefecture_code={prefectureCode}
+          city_code={cityCode}
+          labels={{
+            prefecture: "都道府県",
+            city: "市区町村",
+            select_prefecture: "都道府県を選択",
+            select_city: "市区町村を選択",
+          }}
+          classes={{
+            label: labelClass,
+            field_label: "",
+            select: fieldClass,
+          }}
+          onChange={(value) => {
+            setPrefectureCode(value.prefecture_code)
+            setCityCode(value.city_code)
+          }}
         />
-      </label>
-
-      <AddressSelector
-        options={addressState.options}
-        prefecture_code={prefectureCode}
-        city_code={cityCode}
-        labels={{
-          prefecture: "都道府県",
-          city: "市区町村",
-          select_prefecture: "都道府県を選択",
-          select_city: "市区町村を選択",
-        }}
-        classes={{
-          label: labelClass,
-          field_label: "",
-          select: fieldClass,
-        }}
-        onChange={(value) => {
-          setPrefectureCode(value.prefecture_code)
-          setCityCode(value.city_code)
-        }}
-      />
-      <input type="hidden" name="prefecture_code" value={prefectureCode} />
-      <input type="hidden" name="city_code" value={selectedCityCode} />
-      <input
-        type="hidden"
-        name="prefecture"
-        value={selectedLabels.prefecture ?? ""}
-      />
-      <input type="hidden" name="city" value={selectedLabels.city ?? ""} />
-
-      <label className={labelClass}>
-        住所
+        <input type="hidden" name="prefecture_code" value={prefectureCode} />
+        <input type="hidden" name="city_code" value={selectedCityCode} />
         <input
-          name="address"
-          className={fieldClass}
-          autoComplete="street-address"
+          type="hidden"
+          name="prefecture"
+          value={selectedLabels.prefecture ?? ""}
         />
-      </label>
+        <input type="hidden" name="city" value={selectedLabels.city ?? ""} />
 
-      <label className={labelClass}>
-        車の所有
-        <select name="car_owned" className={fieldClass}>
-          <option value="">選択してください</option>
-          <option value="yes">あり</option>
-          <option value="no">なし</option>
-        </select>
-      </label>
+        <label className={labelClass}>
+          住所
+          <input
+            name="address"
+            className={fieldClass}
+            defaultValue={initial.address}
+            autoComplete="street-address"
+          />
+        </label>
 
-      <label className={labelClass}>
-        運転免許
-        <select name="license_owned" className={fieldClass}>
-          <option value="">選択してください</option>
-          <option value="yes">あり</option>
-          <option value="no">なし</option>
-        </select>
-      </label>
+        <label className={labelClass}>
+          自己紹介・ご質問・補足事項
+          <textarea
+            name="memo"
+            className={textAreaClass}
+            defaultValue={initial.memo}
+          />
+        </label>
+      </section>
 
-      <label className={labelClass}>
-        稼働可能日
-        <input
-          name="available_days"
-          className={fieldClass}
-          placeholder="例: 平日夜、土日など"
-        />
-      </label>
+      <section className="grid gap-4 border-t border-[#ead7c3] pt-6">
+        <h3 className={sectionTitleClass}>パートナードライバー応募アンケート</h3>
 
-      <label className={labelClass}>
-        備考
-        <textarea name="note" className={textAreaClass} />
-      </label>
+        <fieldset className="grid gap-2">
+          <legend className="mb-1 text-[13px] font-semibold text-[#5b422b]">
+            普通自動車運転免許証
+          </legend>
+          <label className="flex items-center gap-2 text-[14px] text-[#5b422b]">
+            <input
+              type="checkbox"
+              name="has_driver_license"
+              className={checkboxClass}
+            />
+            普通自動車運転免許証を所持しています
+          </label>
+        </fieldset>
+
+        <fieldset className="grid gap-2">
+          <legend className="mb-1 text-[13px] font-semibold text-[#5b422b]">
+            ペット輸送可能な車両
+          </legend>
+          <div className={radioGroupClass}>
+            <label className="flex items-center gap-2">
+              <input type="radio" name="vehicle_status" value="owned" />
+              所有している
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="radio" name="vehicle_status" value="planned" />
+              調達予定
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="radio" name="vehicle_status" value="consult" />
+              相談したい
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset className="grid gap-2">
+          <legend className="mb-1 text-[13px] font-semibold text-[#5b422b]">
+            貨物軽自動車運送事業者
+          </legend>
+          <div className={radioGroupClass}>
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="freight_operator_status"
+                value="obtained"
+              />
+              取得済み
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="freight_operator_status"
+                value="applying"
+              />
+              申請予定
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="freight_operator_status"
+                value="unknown"
+              />
+              わからない
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="freight_operator_status"
+                value="consult"
+              />
+              相談したい
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset className="grid gap-2">
+          <legend className="mb-1 text-[13px] font-semibold text-[#5b422b]">
+            貨物軽自動車安全管理者
+          </legend>
+          <div className={radioGroupClass}>
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="safety_manager_status"
+                value="obtained"
+              />
+              取得済み
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="radio" name="safety_manager_status" value="planned" />
+              取得予定
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="radio" name="safety_manager_status" value="unknown" />
+              わからない
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="radio" name="safety_manager_status" value="consult" />
+              相談したい
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset className="grid gap-2">
+          <legend className="mb-1 text-[13px] font-semibold text-[#5b422b]">
+            ペット飼育経験
+          </legend>
+          <div className={radioGroupClass}>
+            {petExperienceOptions.map((option) => (
+              <label key={option.value} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className={checkboxClass}
+                  checked={petExperience.includes(option.value)}
+                  onChange={() => togglePetExperience(option.value)}
+                />
+                {option.label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset className="grid gap-2">
+          <legend className="mb-1 text-[13px] font-semibold text-[#5b422b]">
+            ペット輸送経験
+          </legend>
+          <div className={radioGroupClass}>
+            <label className="flex items-center gap-2">
+              <input type="radio" name="transport_experience" value="yes" />
+              あり
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="radio" name="transport_experience" value="no" />
+              なし
+            </label>
+          </div>
+        </fieldset>
+
+        <label className={labelClass}>
+          なぜパートナードライバーをやってみたいと思いましたか？
+          <textarea name="application_reason" className={textAreaClass} />
+        </label>
+      </section>
 
       {addressState.error_message ? (
         <p className="text-[13px] font-semibold text-red-700">
@@ -203,9 +398,9 @@ export default function EntryForm() {
       <button
         type="submit"
         disabled={isSubmitting}
-        className="mt-2 inline-flex h-12 w-full items-center justify-center rounded-full bg-[#06C755] px-8 text-sm font-bold text-white shadow-[0_8px_18px_rgba(6,199,85,0.24)] disabled:opacity-60"
+        className="inline-flex h-12 w-full items-center justify-center rounded-full bg-[#06C755] px-8 text-sm font-bold text-white shadow-[0_8px_18px_rgba(6,199,85,0.24)] disabled:opacity-60"
       >
-        登録する
+        {isSubmitting ? "送信中..." : "応募する"}
       </button>
     </form>
   )

@@ -4,6 +4,7 @@ import {
   DEBUG_CHAT_FLOW,
   CHAT_REALTIME_DEBUG,
   DEBUG_CONTACT_PRESENCE,
+  DEBUG_ENTRY_LINE_AUTH,
   DEBUG_LINE_WEBHOOK,
   DEBUG_NOTIFY,
 } from "@/core/control"
@@ -68,7 +69,6 @@ const chatFlowInfoEvents = new Set([
   "chat_render_state_resolved",
   "chat_response_route_resolved",
   "chat_intent_blocked",
-  "entry_access_checked",
   "chat_room_mode_trigger_checked",
   "chat_room_mode_updated",
   "chat_room_resolved",
@@ -106,6 +106,15 @@ const identityAllowedEvents = new Set([
   "session_update_failed",
   "user_create_success",
   "identity_upsert_success",
+])
+
+const entryLineAuthEvents = new Set([
+  "entry_page_opened",
+  "entry_guard_checked",
+  "entry_redirect_to_line_login",
+  "line_login_callback_received",
+  "line_session_written",
+  "liff_client_checked",
 ])
 
 const identityEvents = new Set([
@@ -373,6 +382,10 @@ export function shouldSendAuthSessionDebug(event: string) {
     return DEBUG_NOTIFY
   }
 
+  if (entryLineAuthEvents.has(event)) {
+    return DEBUG_ENTRY_LINE_AUTH
+  }
+
   if (userChatLoadEvents.has(event)) {
     return CHAT_REALTIME_DEBUG
   }
@@ -416,6 +429,10 @@ export function resolveDebugTitle(event: string) {
 
   if (notifyEvents.has(event)) {
     return "NOTIFY"
+  }
+
+  if (entryLineAuthEvents.has(event)) {
+    return "ENTRY_LINE_AUTH"
   }
 
   if (userChatLoadEvents.has(event)) {

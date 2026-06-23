@@ -1,4 +1,13 @@
-import type { EntryFormInput } from "@/core/entry/context"
+import type {
+  DriverFreightOperatorStatus,
+  DriverPetExperience,
+  DriverSafetyManagerStatus,
+  DriverTransportExperience,
+  DriverVehicleStatus,
+  EntryFormInput,
+  EntryProfileInput,
+  EntryQuestionnaireInput,
+} from "@/core/entry/context"
 import { ADDRESS_OPTIONS } from "@/src/address/options"
 import { validate_address_selection } from "@/src/address/rules"
 
@@ -7,52 +16,126 @@ export type EntryValidationResult = {
   errors: Record<string, string>
 }
 
-const required_fields: Array<keyof EntryFormInput> = [
-  "name",
+const profile_required_fields: Array<keyof EntryProfileInput> = [
+  "last_name",
+  "first_name",
   "phone",
   "email",
   "prefecture_code",
   "city_code",
   "address",
-  "car_owned",
-  "license_owned",
-  "available_days",
 ]
 
-export function validate_entry_input(input: EntryFormInput): EntryValidationResult {
+const vehicle_status_values = new Set<DriverVehicleStatus>([
+  "owned",
+  "planned",
+  "consult",
+])
+
+const freight_operator_status_values = new Set<DriverFreightOperatorStatus>([
+  "obtained",
+  "applying",
+  "unknown",
+  "consult",
+])
+
+const safety_manager_status_values = new Set<DriverSafetyManagerStatus>([
+  "obtained",
+  "planned",
+  "unknown",
+  "consult",
+])
+
+const pet_experience_values = new Set<DriverPetExperience>([
+  "dog",
+  "cat",
+  "other",
+  "none",
+])
+
+const transport_experience_values = new Set<DriverTransportExperience>([
+  "yes",
+  "no",
+])
+
+function validate_profile_input(profile: EntryProfileInput) {
   const errors: Record<string, string> = {}
 
-  for (const field of required_fields) {
-    if (!input[field]) {
+  for (const field of profile_required_fields) {
+    if (!profile[field]) {
       errors[field] = "required"
     }
   }
 
-  if (input.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) {
+  if (profile.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email)) {
     errors.email = "invalid"
-  }
-
-  if (input.car_owned !== "yes" && input.car_owned !== "no") {
-    errors.car_owned = "invalid"
-  }
-
-  if (input.license_owned !== "yes" && input.license_owned !== "no") {
-    errors.license_owned = "invalid"
   }
 
   try {
     validate_address_selection(ADDRESS_OPTIONS, {
-      prefecture_code: input.prefecture_code,
-      city_code: input.city_code,
+      prefecture_code: profile.prefecture_code,
+      city_code: profile.city_code,
     })
   } catch {
-    if (input.prefecture_code) {
+    if (profile.prefecture_code) {
       errors.prefecture_code = "invalid"
     }
 
-    if (input.city_code) {
+    if (profile.city_code) {
       errors.city_code = "invalid"
     }
+  }
+
+  return errors
+}
+
+function validate_questionnaire_input(questionnaire: EntryQuestionnaireInput) {
+  const errors: Record<string, string> = {}
+
+  if (!questionnaire.has_driver_license) {
+    errors.has_driver_license = "required"
+  }
+
+  if (!vehicle_status_values.has(questionnaire.vehicle_status)) {
+    errors.vehicle_status = "required"
+  }
+
+  if (!freight_operator_status_values.has(questionnaire.freight_operator_status)) {
+    errors.freight_operator_status = "required"
+  }
+
+  if (!safety_manager_status_values.has(questionnaire.safety_manager_status)) {
+    errors.safety_manager_status = "required"
+  }
+
+  const pet_experience = questionnaire.pet_experience.filter((value) =>
+    pet_experience_values.has(value),
+  )
+
+  if (pet_experience.length === 0) {
+    errors.pet_experience = "required"
+  } else if (
+    pet_experience.includes("none") &&
+    pet_experience.some((value) => value !== "none")
+  ) {
+    errors.pet_experience = "invalid"
+  }
+
+  if (!transport_experience_values.has(questionnaire.transport_experience)) {
+    errors.transport_experience = "required"
+  }
+
+  if (!questionnaire.application_reason.trim()) {
+    errors.application_reason = "required"
+  }
+
+  return errors
+}
+
+export function validate_entry_input(input: EntryFormInput): EntryValidationResult {
+  const errors = {
+    ...validate_profile_input(input.profile),
+    ...validate_questionnaire_input(input.questionnaire),
   }
 
   return {
@@ -61,6 +144,14 @@ export function validate_entry_input(input: EntryFormInput): EntryValidationResu
   }
 }
 
-export function resolve_entry_redirect_path(role: string) {
-  return role === "driver" ? "/driver" : "/app"
+export function normalize_pet_experience(values: DriverPetExperience[]) {
+  const normalized = values.filter((value) => pet_experience_values.has(value))
+
+  if (normalized.includes("none")) {
+    return ["none"] as DriverPetExperience[]
+  }
+
+  return Array.from(new Set(normalized))
 }
+
+export const ENTRY_SUCCESS_REDIRECT_PATH = "/app"

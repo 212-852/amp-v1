@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation"
+import { headers } from "next/headers"
 
 import type { EntranceContext } from "@/core/entrance/context"
 import type {
@@ -9,9 +10,14 @@ import type {
   SessionRole,
 } from "@/core/auth/types"
 import { resolve_entry_line_identity } from "@/core/auth/identity"
-import { sendAuthDebug } from "@/core/debug"
+import { resolveRequestIdFromHeaders } from "@/core/auth/session"
+import {
+  is_line_in_app_browser,
+  send_entry_line_auth_debug,
+} from "@/core/entry/debug"
 
 const ENTRY_RETURN_TO = "/entry"
+const LINE_LOGIN_STATE_COOKIE = "amp_line_oauth_state"
 
 export type AmpRouteKey =
   | "app-top"
@@ -198,6 +204,7 @@ export async function enforceEntryLineAccess(
   context: AuthContext,
   session: Session,
 ) {
+  const request_id = await resolveRequestIdFromHeaders()
   const entry_identity = await resolve_entry_line_identity(context, session)
   const has_verified_liff_session =
     Boolean(session.liff?.provider_user_id) ||
@@ -216,29 +223,39 @@ export async function enforceEntryLineAccess(
   const has_entry_access =
     has_linked_line_identity || has_verified_liff_session
   const login_url = `/api/auth/line/start?return_to=${encodeURIComponent(ENTRY_RETURN_TO)}`
-  const redirect_to = has_entry_access ? null : login_url
-  const redirect_reason = has_entry_access ? null : "line_identity_missing"
+  const redirect_required = !has_entry_access
+  const redirect_to = redirect_required ? login_url : null
+  const redirect_reason = redirect_required ? "line_identity_missing" : null
 
-  await sendAuthDebug("entry_access_checked", {
-    pathname: context.requested_route ?? "/entry",
-    return_to: ENTRY_RETURN_TO,
-    is_liff: context.source_channel === "liff",
+  await send_entry_line_auth_debug("entry_guard_checked", {
+    request_id,
     user_uuid: session.user_uuid,
     visitor_uuid: session.visitor_uuid,
-    role: session.role,
     provider: entry_identity.provider,
     provider_user_id_exists: Boolean(entry_identity.provider_user_id),
     line_user_id_exists: Boolean(entry_identity.line_user_id),
-    liff_provider_user_id_exists: Boolean(entry_identity.liff_provider_user_id),
+    session_provider: session.provider,
     session_provider_user_id_exists: Boolean(session.provider_user_id),
-    liff_verified: session.liff?.verified === true,
+    liff_provider_user_id_exists: Boolean(entry_identity.liff_provider_user_id),
     has_line_identity: entry_identity.has_line_identity,
-    has_entry_access,
-    redirect_reason,
+    redirect_required,
     redirect_to,
+    redirect_reason,
+    pathname: context.requested_route ?? "/entry",
+    is_liff: context.source_channel === "liff",
   })
 
-  if (!has_entry_access) {
+  if (redirect_required) {
+    const requestHeaders = await headers()
+    await send_entry_line_auth_debug("entry_redirect_to_line_login", {
+      request_id,
+      return_to: ENTRY_RETURN_TO,
+      login_url_exists: Boolean(login_url),
+      state_exists: false,
+      state_key: LINE_LOGIN_STATE_COOKIE,
+      is_line_browser: is_line_in_app_browser(requestHeaders.get("user-agent")),
+      redirect_to: login_url,
+    })
     redirect(login_url)
   }
 

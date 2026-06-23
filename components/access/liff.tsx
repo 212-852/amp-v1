@@ -63,6 +63,43 @@ async function postLiffDebug(event: string, payload: Record<string, unknown> = {
   }).catch(() => undefined)
 }
 
+async function postClientDebug(payload: Record<string, unknown>) {
+  await fetch("/api/debug/client", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-amp-source-channel": "liff",
+    },
+    body: JSON.stringify({
+      event: "liff_client_checked",
+      ...payload,
+    }),
+    cache: "no-store",
+  }).catch(() => undefined)
+}
+
+function id_token_has_decoded_sub(idToken: string | null) {
+  if (!idToken) {
+    return false
+  }
+
+  try {
+    const payload = idToken.split(".")[1]
+
+    if (!payload) {
+      return false
+    }
+
+    const decoded = JSON.parse(
+      atob(payload.replace(/-/g, "+").replace(/_/g, "/")),
+    ) as { sub?: unknown }
+
+    return typeof decoded.sub === "string" && decoded.sub.trim().length > 0
+  } catch {
+    return false
+  }
+}
+
 async function linkLineProfile(profile: LiffProfile, idToken: string | null) {
   await fetch("/api/auth/liff/session", {
     method: "POST",
@@ -95,40 +132,81 @@ export function LiffAutoLogin() {
       await postLiffDebug("liff_init_started", {
         liff_id: LIFF_ID,
       })
-      await loadLiffScript()
 
-      if (cancelled) {
-        return
-      }
+      try {
+        await loadLiffScript()
 
-      const liff = (window as LiffWindow).liff
+        if (cancelled) {
+          return
+        }
 
-      if (!liff) {
-        return
-      }
+        const liff = (window as LiffWindow).liff
 
-      await liff.init({ liffId: LIFF_ID })
+        if (!liff) {
+          await postClientDebug({
+            liff_ready: false,
+            is_in_client: false,
+            is_logged_in: false,
+            decoded_id_token_exists: false,
+            user_id_exists: false,
+            error_message: "liff_sdk_missing",
+          })
+          return
+        }
 
-      if (!liff.isLoggedIn()) {
-        await postLiffDebug("liff_login_required", {
-          liff_id: LIFF_ID,
+        await liff.init({ liffId: LIFF_ID })
+
+        const is_in_client = liff.isInClient()
+        const is_logged_in = liff.isLoggedIn()
+        const idToken = liff.getIDToken()
+
+        if (!is_logged_in) {
+          await postClientDebug({
+            liff_ready: true,
+            is_in_client,
+            is_logged_in: false,
+            decoded_id_token_exists: id_token_has_decoded_sub(idToken),
+            user_id_exists: false,
+            error_message: null,
+          })
+          await postLiffDebug("liff_login_required", {
+            liff_id: LIFF_ID,
+          })
+          liff.login()
+          return
+        }
+
+        const profile = await liff.getProfile()
+
+        await postClientDebug({
+          liff_ready: true,
+          is_in_client,
+          is_logged_in: true,
+          decoded_id_token_exists: id_token_has_decoded_sub(idToken),
+          user_id_exists: Boolean(profile.userId),
+          error_message: null,
         })
-        liff.login()
-        return
-      }
 
-      const profile = await liff.getProfile()
-      const idToken = liff.getIDToken()
+        await postLiffDebug("liff_profile_resolved", {
+          line_user_id: profile.userId,
+          display_name: profile.displayName ?? null,
+          id_token_exists: Boolean(idToken),
+        })
+        await linkLineProfile(profile, idToken)
 
-      await postLiffDebug("liff_profile_resolved", {
-        line_user_id: profile.userId,
-        display_name: profile.displayName ?? null,
-        id_token_exists: Boolean(idToken),
-      })
-      await linkLineProfile(profile, idToken)
-
-      if (!cancelled) {
-        router.refresh()
+        if (!cancelled) {
+          router.refresh()
+        }
+      } catch (error) {
+        await postClientDebug({
+          liff_ready: false,
+          is_in_client: false,
+          is_logged_in: false,
+          decoded_id_token_exists: false,
+          user_id_exists: false,
+          error_message:
+            error instanceof Error ? error.message : String(error),
+        })
       }
     }
 

@@ -14,7 +14,7 @@ import type {
 import { sendAuthDebug as send_auth_debug } from "@/core/debug"
 import { resolve_profile_name } from "@/core/profile/rules"
 
-const VISITOR_COOKIE_NAME = "amp_visitor_uuid"
+export const VISITOR_COOKIE_NAME = "amp_visitor_uuid"
 const VISITOR_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
 export const AUTH_LOGGED_OUT_COOKIE_NAME = "amp_auth_logged_out"
 export const SOURCE_CHANNEL_COOKIE_NAME = "amp_source_channel"
@@ -189,6 +189,12 @@ async function resolveRequestId(runtime?: SessionRuntime): Promise<string> {
   }
 
   return crypto.randomUUID()
+}
+
+export async function resolveRequestIdFromHeaders(
+  runtime?: SessionRuntime,
+): Promise<string> {
+  return resolveRequestId(runtime)
 }
 
 function getSupabaseConfig(): SupabaseConfig | null {
@@ -1901,7 +1907,6 @@ async function getResolvedSessionFromRequestHeaders(): Promise<AppSession | null
 }
 
 export {
-  VISITOR_COOKIE_NAME,
   authLoggedOutCookieOptions,
   visitorCookieOptions,
 }
