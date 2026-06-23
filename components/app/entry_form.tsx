@@ -141,25 +141,27 @@ export default function EntryForm({
       <section className="grid gap-4">
         <h3 className={sectionTitleClass}>プロフィール</h3>
 
-        <label className={labelClass}>
-          姓
-          <input
-            name="last_name"
-            className={fieldClass}
-            defaultValue={initial.last_name}
-            autoComplete="family-name"
-          />
-        </label>
+        <div className="grid grid-cols-2 gap-4 max-[480px]:grid-cols-1">
+          <label className={labelClass}>
+            姓
+            <input
+              name="last_name"
+              className={fieldClass}
+              defaultValue={initial.last_name}
+              autoComplete="family-name"
+            />
+          </label>
 
-        <label className={labelClass}>
-          名
-          <input
-            name="first_name"
-            className={fieldClass}
-            defaultValue={initial.first_name}
-            autoComplete="given-name"
-          />
-        </label>
+          <label className={labelClass}>
+            名
+            <input
+              name="first_name"
+              className={fieldClass}
+              defaultValue={initial.first_name}
+              autoComplete="given-name"
+            />
+          </label>
+        </div>
 
         <label className={labelClass}>
           電話番号
