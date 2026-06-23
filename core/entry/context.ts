@@ -1,5 +1,6 @@
 import type { EntryLineIdentity } from "@/core/auth/identity"
 import type { AuthContext, Session } from "@/core/auth/types"
+import { normalize_entry_form_body } from "@/form/normalize"
 
 export type EntryProfileInput = {
   last_name: string
@@ -137,46 +138,48 @@ export function build_entry_context(input: {
   line_identity: EntryLineIdentity
   body: Record<string, unknown>
 }): EntryRequestContext {
+  const body = normalize_entry_form_body(input.body)
+
   return {
     auth: input.auth,
     session: input.session,
     line_identity: input.line_identity,
     input: {
       profile: {
-        last_name: readString(input.body, "last_name"),
-        first_name: readString(input.body, "first_name"),
-        phone: readString(input.body, "phone"),
-        email: readString(input.body, "email"),
-        prefecture_code: readString(input.body, "prefecture_code"),
-        city_code: readString(input.body, "city_code"),
-        prefecture: readString(input.body, "prefecture"),
-        city: readString(input.body, "city"),
-        address: readString(input.body, "address"),
-        memo: readString(input.body, "memo"),
+        last_name: readString(body, "last_name"),
+        first_name: readString(body, "first_name"),
+        phone: readString(body, "phone"),
+        email: readString(body, "email"),
+        prefecture_code: readString(body, "prefecture_code"),
+        city_code: readString(body, "city_code"),
+        prefecture: readString(body, "prefecture"),
+        city: readString(body, "city"),
+        address: readString(body, "address"),
+        memo: readString(body, "memo"),
       },
       questionnaire: {
-        has_driver_license: readBoolean(input.body, "has_driver_license"),
+        has_driver_license: readBoolean(body, "has_driver_license"),
         vehicle_status: readString(
-          input.body,
+          body,
           "vehicle_status",
         ) as EntryQuestionnaireInput["vehicle_status"],
         freight_operator_status: readString(
-          input.body,
+          body,
           "freight_operator_status",
         ) as EntryQuestionnaireInput["freight_operator_status"],
         safety_manager_status: readString(
-          input.body,
+          body,
           "safety_manager_status",
         ) as EntryQuestionnaireInput["safety_manager_status"],
         pet_experience: readStringArray(
-          input.body,
+          body,
           "pet_experience",
         ) as DriverPetExperience[],
         transport_experience: readString(
-          input.body,
+          body,
           "transport_experience",
         ) as EntryQuestionnaireInput["transport_experience"],
-        application_reason: readString(input.body, "application_reason"),
+        application_reason: readString(body, "application_reason"),
       },
     },
   }

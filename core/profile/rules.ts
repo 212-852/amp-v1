@@ -1,6 +1,7 @@
 import type { Session } from "@/core/auth/types"
 import type { NotificationType } from "@/core/chat/types"
 import { get_display_name } from "@/core/profile/display"
+import { to_half_width_alphanumeric } from "@/form/normalize"
 import { normalize_address_code } from "@/src/address/rules"
 
 export type ProfileLocale = "ja" | "en" | "es"
@@ -68,11 +69,13 @@ function normalize_birth_date(value: unknown) {
     return normalized
   }
 
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+  const half_width = to_half_width_alphanumeric(normalized)
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(half_width)) {
     throw new Error("Invalid birth date")
   }
 
-  return normalized
+  return half_width
 }
 
 export function resolve_profile_name(input: {

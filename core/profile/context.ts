@@ -3,6 +3,7 @@ import {
   validate_profile_patch,
   type ProfileSettingsPatch,
 } from "@/core/profile/rules"
+import { normalize_profile_form_body } from "@/form/normalize"
 
 export type ProfileContext = {
   session: Session
@@ -18,7 +19,7 @@ export function normalize_profile_context(input: {
 }): ProfileContext {
   const body =
     input.body && typeof input.body === "object" && !Array.isArray(input.body)
-      ? (input.body as Record<string, unknown>)
+      ? normalize_profile_form_body(input.body as Record<string, unknown>)
       : {}
   const patch = validate_profile_patch(body, input.session)
   const target = input.session.user_uuid ? "user" : "visitor"

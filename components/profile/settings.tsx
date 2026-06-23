@@ -386,6 +386,8 @@ export default function ProfileSettings({
             <input
               value={phone}
               onChange={(event) => set_phone(event.target.value)}
+              inputMode="tel"
+              autoComplete="tel"
               className="h-10 w-full rounded-md border border-neutral-200 px-3 text-[14px] text-neutral-950 outline-none focus:border-neutral-500 focus:ring-2 focus:ring-neutral-100"
             />
           </label>

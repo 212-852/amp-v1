@@ -169,6 +169,7 @@ export default function EntryForm({
             name="phone"
             className={fieldClass}
             defaultValue={initial.phone}
+            inputMode="tel"
             autoComplete="tel"
           />
         </label>
@@ -180,6 +181,7 @@ export default function EntryForm({
             type="email"
             className={fieldClass}
             defaultValue={initial.email}
+            inputMode="email"
             autoComplete="email"
           />
         </label>

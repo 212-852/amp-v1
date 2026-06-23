@@ -125,6 +125,40 @@ Admin and Driver fixes must never modify:
 User UI changes require explicit instructions.
 
 #########################
+FORM INPUT RULE
+#########################
+
+All form input normalization must be centralized.
+
+Do not write normalization logic inside components.
+Do not write normalization logic inside API routes.
+
+Every form submit must normalize values through form/normalize.ts.
+
+Flow:
+
+input
+-> form/normalize.ts
+-> context
+-> rules
+-> action
+-> output
+
+Use semantic normalizers:
+
+* normalize_number
+* normalize_phone
+* normalize_email
+* normalize_text
+* normalize_textarea
+* normalize_postal_code
+
+Phone numbers are stored as digits only.
+Numeric values are stored as half-width digits only.
+
+UI may display formatted values, but DB save values must be normalized.
+
+#########################
 CHAT TRANSLATION RULE
 #########################
 
