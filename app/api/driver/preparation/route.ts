@@ -4,7 +4,7 @@ import { unstable_rethrow } from "next/navigation"
 import { resolveAuthContext } from "@/core/auth/context"
 import { resolveSession } from "@/core/auth/session"
 import { build_driver_preparation_context } from "@/core/driver/context"
-import { update_driver_preparation } from "@/core/driver/action"
+import { update_driver_preparation, load_driver_state } from "@/core/driver/action"
 import {
   build_driver_preparation_access_denied_output,
   build_driver_preparation_success_output,
@@ -46,13 +46,11 @@ export async function PATCH(request: Request) {
       return NextResponse.json(output, { status: 400 })
     }
 
-    const previous_tier = session.tier
+    const before = await load_driver_state(session.user_uuid)
     const state = await update_driver_preparation(context)
-    const current_tier = state.all_ready ? "standard" : previous_tier
     const output = build_driver_preparation_success_output({
       state,
-      previous_tier,
-      current_tier,
+      previous_status: before.status,
     })
 
     return NextResponse.json(output, { status: 200 })

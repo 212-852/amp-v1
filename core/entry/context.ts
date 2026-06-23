@@ -34,9 +34,9 @@ export type DriverTransportExperience = "yes" | "no"
 
 export type EntryQuestionnaireInput = {
   has_driver_license: boolean
-  vehicle_status: DriverVehicleStatus
-  freight_operator_status: DriverFreightOperatorStatus
-  safety_manager_status: DriverSafetyManagerStatus
+  vehicle: DriverVehicleStatus
+  freight_operator: DriverFreightOperatorStatus
+  safety_manager: DriverSafetyManagerStatus
   pet_experience: DriverPetExperience[]
   transport_experience: DriverTransportExperience
   application_reason: string
@@ -154,18 +154,15 @@ export function build_entry_context(input: {
       },
       questionnaire: {
         has_driver_license: readBoolean(body, "has_driver_license"),
-        vehicle_status: readString(
+        vehicle: readString(body, "vehicle") as EntryQuestionnaireInput["vehicle"],
+        freight_operator: readString(
           body,
-          "vehicle_status",
-        ) as EntryQuestionnaireInput["vehicle_status"],
-        freight_operator_status: readString(
+          "freight_operator",
+        ) as EntryQuestionnaireInput["freight_operator"],
+        safety_manager: readString(
           body,
-          "freight_operator_status",
-        ) as EntryQuestionnaireInput["freight_operator_status"],
-        safety_manager_status: readString(
-          body,
-          "safety_manager_status",
-        ) as EntryQuestionnaireInput["safety_manager_status"],
+          "safety_manager",
+        ) as EntryQuestionnaireInput["safety_manager"],
         pet_experience: readStringArray(
           body,
           "pet_experience",

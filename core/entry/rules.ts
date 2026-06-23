@@ -96,16 +96,16 @@ function validate_questionnaire_input(questionnaire: EntryQuestionnaireInput) {
     errors.has_driver_license = "required"
   }
 
-  if (!vehicle_status_values.has(questionnaire.vehicle_status)) {
-    errors.vehicle_status = "required"
+  if (!vehicle_status_values.has(questionnaire.vehicle)) {
+    errors.vehicle = "required"
   }
 
-  if (!freight_operator_status_values.has(questionnaire.freight_operator_status)) {
-    errors.freight_operator_status = "required"
+  if (!freight_operator_status_values.has(questionnaire.freight_operator)) {
+    errors.freight_operator = "required"
   }
 
-  if (!safety_manager_status_values.has(questionnaire.safety_manager_status)) {
-    errors.safety_manager_status = "required"
+  if (!safety_manager_status_values.has(questionnaire.safety_manager)) {
+    errors.safety_manager = "required"
   }
 
   const pet_experience = questionnaire.pet_experience.filter((value) =>

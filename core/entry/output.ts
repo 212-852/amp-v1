@@ -23,7 +23,6 @@ export function build_entry_validation_output(
 }
 
 export function build_entry_success_output(input: {
-  entry_uuid: string | null
   driver_uuid: string | null
 }): EntrySubmitOutput {
   return {
@@ -32,7 +31,7 @@ export function build_entry_success_output(input: {
       "仮登録が完了しました。ドライバー画面で稼働に必要な準備を進めてください。",
     redirect_path: "/driver",
     show_success: true,
-    entry_uuid: input.entry_uuid,
+    entry_uuid: null,
     driver_uuid: input.driver_uuid,
   }
 }

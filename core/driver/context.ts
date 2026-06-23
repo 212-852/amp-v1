@@ -1,10 +1,13 @@
 import type { AuthContext, Session } from "@/core/auth/types"
 
+export type DriverStatus = "preparing" | "active" | "suspended" | "retired"
+
 export type DriverPreparationKey =
-  | "business_notification_ready"
-  | "vehicle_ready"
-  | "black_plate_ready"
-  | "safety_manager_ready"
+  | "has_driver_license"
+  | "freight_operator"
+  | "vehicle"
+  | "black_plate"
+  | "safety_manager"
 
 export type DriverPreparationItem = {
   key: DriverPreparationKey
@@ -12,8 +15,9 @@ export type DriverPreparationItem = {
   ready: boolean
 }
 
-export type DriverPreparationState = {
+export type DriverState = {
   driver_uuid: string | null
+  status: DriverStatus
   items: DriverPreparationItem[]
   all_ready: boolean
 }
@@ -49,15 +53,16 @@ export function build_driver_preparation_context(input: {
 
 function readPreparationKey(value: unknown): DriverPreparationKey {
   if (
-    value === "business_notification_ready" ||
-    value === "vehicle_ready" ||
-    value === "black_plate_ready" ||
-    value === "safety_manager_ready"
+    value === "has_driver_license" ||
+    value === "freight_operator" ||
+    value === "vehicle" ||
+    value === "black_plate" ||
+    value === "safety_manager"
   ) {
     return value
   }
 
-  return "business_notification_ready"
+  return "has_driver_license"
 }
 
 function readBoolean(value: unknown) {

@@ -1,11 +1,11 @@
-import type { DriverPreparationState } from "@/core/driver/context"
+import type { DriverState } from "@/core/driver/context"
 import type { DriverPreparationValidationResult } from "@/core/driver/rules"
 
 export type DriverPreparationOutput = {
   ok: boolean
   message: string
-  state?: DriverPreparationState
-  tier_promoted?: boolean
+  state?: DriverState
+  status_activated?: boolean
   errors?: Record<string, string>
 }
 
@@ -32,19 +32,18 @@ export function build_driver_preparation_access_denied_output(
 }
 
 export function build_driver_preparation_success_output(input: {
-  state: DriverPreparationState
-  previous_tier: string
-  current_tier: string
+  state: DriverState
+  previous_status: string
 }): DriverPreparationOutput {
-  const tier_promoted =
-    input.previous_tier === "trainee" && input.current_tier === "standard"
+  const status_activated =
+    input.previous_status === "preparing" && input.state.status === "active"
 
   return {
     ok: true,
-    message: tier_promoted
+    message: status_activated
       ? "稼働準備が完了しました。稼働可能です。"
       : "準備状況を更新しました。",
     state: input.state,
-    tier_promoted,
+    status_activated,
   }
 }

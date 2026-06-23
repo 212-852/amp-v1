@@ -2,44 +2,44 @@
 
 import { useState } from "react"
 
-import type { DriverPreparationItem } from "@/core/driver/context"
+import type { DriverPreparationItem, DriverStatus } from "@/core/driver/context"
 
 type PreparationResponse = {
   ok?: boolean
   message?: string
   state?: {
+    status: DriverStatus
     items: DriverPreparationItem[]
     all_ready: boolean
   }
-  tier_promoted?: boolean
+  status_activated?: boolean
 }
 
 function statusIcon(ready: boolean) {
-  return ready ? "✅" : "❌"
+  return ready ? "✓" : "✕"
 }
 
 export default function DriverPreparationChecklist({
   initial_items,
   initial_all_ready,
-  tier,
+  initial_status,
 }: Readonly<{
   initial_items: DriverPreparationItem[]
   initial_all_ready: boolean
-  tier: string
+  initial_status: DriverStatus
 }>) {
   const [items, setItems] = useState(initial_items)
   const [allReady, setAllReady] = useState(initial_all_ready)
+  const [status, setStatus] = useState(initial_status)
   const [message, setMessage] = useState<string | null>(
-    tier === "standard" || initial_all_ready
+    initial_status === "active" || initial_all_ready
       ? "稼働準備が完了しました。稼働可能です。"
       : null,
   )
-  const [currentTier, setCurrentTier] = useState(tier)
-
   const [pendingKey, setPendingKey] = useState<string | null>(null)
 
   async function toggleItem(item: DriverPreparationItem) {
-    if (pendingKey || currentTier === "standard") {
+    if (pendingKey || status !== "preparing") {
       return
     }
 
@@ -69,9 +69,9 @@ export default function DriverPreparationChecklist({
 
       setItems(result.state.items)
       setAllReady(result.state.all_ready)
+      setStatus(result.state.status)
 
-      if (result.tier_promoted || result.state.all_ready) {
-        setCurrentTier("standard")
+      if (result.status_activated || result.state.status === "active") {
         setMessage("稼働準備が完了しました。稼働可能です。")
         return
       }
@@ -84,7 +84,7 @@ export default function DriverPreparationChecklist({
     }
   }
 
-  if (currentTier !== "trainee" && currentTier !== "standard") {
+  if (status !== "preparing" && status !== "active") {
     return null
   }
 
@@ -94,7 +94,7 @@ export default function DriverPreparationChecklist({
         <h2 className="text-base font-bold text-neutral-900">
           動物のドライバー 必須の準備
         </h2>
-        {currentTier === "trainee" ? (
+        {status === "preparing" ? (
           <p className="text-sm leading-6 text-neutral-600">
             すべての準備が完了すると稼働可能になります。
           </p>
@@ -106,11 +106,19 @@ export default function DriverPreparationChecklist({
           <li key={item.key}>
             <button
               type="button"
-              disabled={pendingKey !== null || currentTier === "standard"}
+              disabled={pendingKey !== null || status !== "preparing"}
               onClick={() => toggleItem(item)}
               className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-[15px] text-neutral-800 transition hover:bg-neutral-50 disabled:cursor-default disabled:hover:bg-transparent"
             >
-              <span aria-hidden="true" className="text-lg leading-none">
+              <span
+                aria-hidden="true"
+                className={[
+                  "flex h-6 w-6 items-center justify-center rounded-full text-sm font-bold leading-none",
+                  item.ready
+                    ? "bg-[#eef9f0] text-[#1f6b3b]"
+                    : "bg-[#fff1f1] text-[#b42318]",
+                ].join(" ")}
+              >
                 {statusIcon(item.ready)}
               </span>
               <span className="font-medium">{item.label}</span>
@@ -122,12 +130,6 @@ export default function DriverPreparationChecklist({
       {message ? (
         <p className="rounded-xl bg-[#eef9f0] px-3 py-3 text-sm font-medium leading-6 text-[#1f6b3b]">
           {message}
-        </p>
-      ) : null}
-
-      {currentTier === "trainee" && allReady ? (
-        <p className="text-sm leading-6 text-neutral-600">
-          すべての項目が完了しました。ページを再読み込みすると稼働状態が反映されます。
         </p>
       ) : null}
     </section>

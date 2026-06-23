@@ -1,16 +1,24 @@
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
-import { promote_driver_to_standard } from "@/core/auth/role_tier"
-import type { DriverPreparationState } from "@/core/driver/context"
+import type { DriverState, DriverStatus } from "@/core/driver/context"
 import type { DriverRequestContext } from "@/core/driver/context"
 import {
   build_preparation_items,
+  build_preparation_patch,
   is_all_preparation_ready,
-  type DriverPreparationRow,
+  type DriverRow,
 } from "@/core/driver/rules"
 
-async function fetch_driver_preparation_row(
-  user_uuid: string,
-): Promise<DriverPreparationRow | null> {
+const DRIVER_SELECT_FIELDS = [
+  "driver_uuid",
+  "status",
+  "has_driver_license",
+  "freight_operator",
+  "vehicle",
+  "black_plate",
+  "safety_manager",
+].join(",")
+
+async function fetch_driver_row(user_uuid: string): Promise<DriverRow | null> {
   const config = getRestConfig()
 
   if (!config) {
@@ -23,8 +31,7 @@ async function fetch_driver_preparation_row(
       "drivers",
       [
         `user_uuid=eq.${encodeURIComponent(user_uuid)}`,
-        "select=driver_uuid,business_notification_ready,vehicle_ready,black_plate_ready,safety_manager_ready",
-        "order=created_at.desc",
+        `select=${DRIVER_SELECT_FIELDS}`,
         "limit=1",
       ].join("&"),
     ),
@@ -38,36 +45,38 @@ async function fetch_driver_preparation_row(
     return null
   }
 
-  const rows = (await response.json()) as DriverPreparationRow[]
+  const rows = (await response.json()) as DriverRow[]
 
   return rows[0] ?? null
 }
 
-export async function load_driver_preparation_state(
-  user_uuid: string | null,
-): Promise<DriverPreparationState> {
-  if (!user_uuid) {
-    return {
-      driver_uuid: null,
-      items: build_preparation_items(null),
-      all_ready: false,
-    }
-  }
-
-  const row = await fetch_driver_preparation_row(user_uuid)
+function build_driver_state(row: DriverRow | null): DriverState {
   const items = build_preparation_items(row)
+  const status = row?.status ?? "preparing"
 
   return {
     driver_uuid: row?.driver_uuid ?? null,
+    status,
     items,
     all_ready: is_all_preparation_ready(items),
   }
 }
 
-async function patch_driver_preparation_item(
+export async function load_driver_state(
+  user_uuid: string | null,
+): Promise<DriverState> {
+  if (!user_uuid) {
+    return build_driver_state(null)
+  }
+
+  const row = await fetch_driver_row(user_uuid)
+
+  return build_driver_state(row)
+}
+
+async function patch_driver_record(
   driver_uuid: string,
-  item: keyof DriverPreparationRow,
-  ready: boolean,
+  patch: Record<string, unknown>,
 ) {
   const config = getRestConfig()
 
@@ -84,9 +93,7 @@ async function patch_driver_preparation_item(
     {
       method: "PATCH",
       headers: restHeaders(config),
-      body: JSON.stringify({
-        [item]: ready,
-      }),
+      body: JSON.stringify(patch),
       cache: "no-store",
     },
   )
@@ -95,39 +102,56 @@ async function patch_driver_preparation_item(
     const error = await readRestError(response)
 
     throw new Error(
-      `Failed to update driver preparation: ${error.code ?? "unknown"} ${
+      `Failed to update driver record: ${error.code ?? "unknown"} ${
         error.message ?? "No PostgREST error returned"
       }`,
     )
   }
 }
 
+async function activate_driver_if_ready(driver_uuid: string, user_uuid: string) {
+  const state = await load_driver_state(user_uuid)
+
+  if (!state.all_ready || state.status !== "preparing") {
+    return state
+  }
+
+  await patch_driver_record(driver_uuid, {
+    status: "active",
+  })
+
+  return load_driver_state(user_uuid)
+}
+
 export async function update_driver_preparation(
   context: DriverRequestContext,
-): Promise<DriverPreparationState> {
+): Promise<DriverState> {
   const user_uuid = context.session.user_uuid
 
   if (!user_uuid) {
     throw new Error("Driver preparation update requires user_uuid")
   }
 
-  const row = await fetch_driver_preparation_row(user_uuid)
+  const row = await fetch_driver_row(user_uuid)
 
   if (!row?.driver_uuid) {
     throw new Error("Driver record not found")
   }
 
-  await patch_driver_preparation_item(
-    row.driver_uuid,
-    context.input.item,
-    context.input.ready,
-  )
-
-  const state = await load_driver_preparation_state(user_uuid)
-
-  if (state.all_ready) {
-    await promote_driver_to_standard(user_uuid)
+  if (row.status !== "preparing") {
+    return build_driver_state(row)
   }
 
-  return state
+  await patch_driver_record(
+    row.driver_uuid,
+    build_preparation_patch(context.input.item, context.input.ready),
+  )
+
+  return activate_driver_if_ready(row.driver_uuid, user_uuid)
+}
+
+export async function activate_driver_status(driver_uuid: string) {
+  await patch_driver_record(driver_uuid, {
+    status: "active" satisfies DriverStatus,
+  })
 }

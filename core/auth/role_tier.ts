@@ -1,11 +1,11 @@
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
-import type { SessionRole, SessionTier } from "@/core/auth/types"
+import type { SessionRole } from "@/core/auth/types"
 
 export async function update_user_role_tier(
   user_uuid: string,
   patch: {
     role?: SessionRole
-    tier?: SessionTier
+    tier?: string
   },
 ) {
   const config = getRestConfig()
@@ -49,15 +49,8 @@ export async function update_user_role_tier(
   }
 }
 
-export async function apply_driver_provisional_registration(user_uuid: string) {
+export async function apply_driver_registration(user_uuid: string) {
   await update_user_role_tier(user_uuid, {
     role: "driver",
-    tier: "trainee",
-  })
-}
-
-export async function promote_driver_to_standard(user_uuid: string) {
-  await update_user_role_tier(user_uuid, {
-    tier: "standard",
   })
 }

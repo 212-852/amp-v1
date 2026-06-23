@@ -9,7 +9,7 @@ export type NotifyEventName =
   | "concierge_closed"
   | "concierge_requested"
   | "driver_page_unauthorized_access"
-  | "driver_provisional_registered"
+  | "driver_entry"
   | "odin_smoke_test"
 
 export type NotifyPriority = "normal" | "high" | "warning"
@@ -132,19 +132,31 @@ export function resolveNotifyDelivery(input: NotifyEventInput): NotifyDelivery {
     }
   }
 
-  if (input.event === "driver_provisional_registered") {
+  if (input.event === "driver_entry") {
+    const payload = input.payload
+
     return {
       channel: "discord",
       webhook_url,
-      title: "新しいドライバーの仮登録がありました",
+      title: "新しいドライバー仮登録がありました",
       event: input.event,
       priority: "normal",
       mention,
-      summary: "driver provisional registration completed",
+      summary: [
+        "新しいドライバー仮登録がありました",
+        `氏名: ${String(payload.name ?? "")}`,
+        `電話: ${String(payload.phone ?? "")}`,
+        `メール: ${String(payload.email ?? "")}`,
+        `user_uuid: ${String(payload.user_uuid ?? "")}`,
+        `driver_uuid: ${String(payload.driver_uuid ?? "")}`,
+      ].join("\n"),
       format: "plain",
       embed_color: null,
       request_id: input.request_id,
-      payload: input.payload,
+      payload: {
+        category: "DRIVER_ENTRY",
+        ...payload,
+      },
     }
   }
 

@@ -280,15 +280,15 @@ export default function EntryForm({
           </legend>
           <div className={radioGroupClass}>
             <label className="flex items-center gap-2">
-              <input type="radio" name="vehicle_status" value="owned" />
+              <input type="radio" name="vehicle" value="owned" />
               所有している
             </label>
             <label className="flex items-center gap-2">
-              <input type="radio" name="vehicle_status" value="planned" />
+              <input type="radio" name="vehicle" value="planned" />
               調達予定
             </label>
             <label className="flex items-center gap-2">
-              <input type="radio" name="vehicle_status" value="consult" />
+              <input type="radio" name="vehicle" value="consult" />
               相談したい
             </label>
           </div>
@@ -302,7 +302,7 @@ export default function EntryForm({
             <label className="flex items-center gap-2">
               <input
                 type="radio"
-                name="freight_operator_status"
+                name="freight_operator"
                 value="obtained"
               />
               取得済み
@@ -310,7 +310,7 @@ export default function EntryForm({
             <label className="flex items-center gap-2">
               <input
                 type="radio"
-                name="freight_operator_status"
+                name="freight_operator"
                 value="applying"
               />
               申請予定
@@ -318,7 +318,7 @@ export default function EntryForm({
             <label className="flex items-center gap-2">
               <input
                 type="radio"
-                name="freight_operator_status"
+                name="freight_operator"
                 value="unknown"
               />
               わからない
@@ -326,7 +326,7 @@ export default function EntryForm({
             <label className="flex items-center gap-2">
               <input
                 type="radio"
-                name="freight_operator_status"
+                name="freight_operator"
                 value="consult"
               />
               相談したい
@@ -342,21 +342,21 @@ export default function EntryForm({
             <label className="flex items-center gap-2">
               <input
                 type="radio"
-                name="safety_manager_status"
+                name="safety_manager"
                 value="obtained"
               />
               取得済み
             </label>
             <label className="flex items-center gap-2">
-              <input type="radio" name="safety_manager_status" value="planned" />
+              <input type="radio" name="safety_manager" value="planned" />
               取得予定
             </label>
             <label className="flex items-center gap-2">
-              <input type="radio" name="safety_manager_status" value="unknown" />
+              <input type="radio" name="safety_manager" value="unknown" />
               わからない
             </label>
             <label className="flex items-center gap-2">
-              <input type="radio" name="safety_manager_status" value="consult" />
+              <input type="radio" name="safety_manager" value="consult" />
               相談したい
             </label>
           </div>
