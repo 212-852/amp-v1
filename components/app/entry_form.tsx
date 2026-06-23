@@ -145,6 +145,7 @@ export default function EntryForm({
           <label className={labelClass}>
             姓
             <input
+              type="text"
               name="last_name"
               className={fieldClass}
               defaultValue={initial.last_name}
@@ -155,6 +156,7 @@ export default function EntryForm({
           <label className={labelClass}>
             名
             <input
+              type="text"
               name="first_name"
               className={fieldClass}
               defaultValue={initial.first_name}
@@ -166,10 +168,11 @@ export default function EntryForm({
         <label className={labelClass}>
           電話番号
           <input
+            type="tel"
             name="phone"
             className={fieldClass}
             defaultValue={initial.phone}
-            inputMode="tel"
+            inputMode="numeric"
             autoComplete="tel"
           />
         </label>
@@ -181,7 +184,6 @@ export default function EntryForm({
             type="email"
             className={fieldClass}
             defaultValue={initial.email}
-            inputMode="email"
             autoComplete="email"
           />
         </label>
@@ -218,6 +220,7 @@ export default function EntryForm({
         <label className={labelClass}>
           住所
           <input
+            type="text"
             name="address"
             className={fieldClass}
             defaultValue={initial.address}
