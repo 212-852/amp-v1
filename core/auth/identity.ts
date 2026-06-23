@@ -811,14 +811,16 @@ export async function resolve_entry_line_identity(
     effective_user_uuid,
   )
 
+  const session_line_provider_user_id =
+    session.provider === "line" ? session.provider_user_id : null
   const liff_provider_user_id =
-    context.source_channel === "liff"
-      ? session.liff?.provider_user_id ??
-        identity_profile.line_user_id ??
+    session.liff?.provider_user_id ??
+    (context.source_channel === "liff"
+      ? identity_profile.line_user_id ??
         (identity_profile.provider === "line"
           ? identity_profile.provider_user_id
-          : null)
-      : null
+          : session_line_provider_user_id)
+      : null)
 
   const has_line_identity =
     Boolean(identity_profile.line_user_id) ||
@@ -826,12 +828,14 @@ export async function resolve_entry_line_identity(
       identity_profile.provider === "line" &&
         identity_profile.provider_user_id,
     ) ||
+    Boolean(session_line_provider_user_id) ||
     Boolean(liff_provider_user_id)
 
   return {
-    line_user_id: identity_profile.line_user_id,
-    provider: identity_profile.provider,
-    provider_user_id: identity_profile.provider_user_id,
+    line_user_id: identity_profile.line_user_id ?? session_line_provider_user_id,
+    provider: identity_profile.provider ?? session.provider,
+    provider_user_id:
+      identity_profile.provider_user_id ?? session_line_provider_user_id,
     liff_provider_user_id,
     has_line_identity,
   }

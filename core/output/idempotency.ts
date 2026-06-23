@@ -37,16 +37,43 @@ function prune_output_idempotency(now: number) {
 
 export function build_output_idempotency_key(input: {
   room_uuid: string
-  source_message_uuid: string
+  source_message_uuid?: string | null
+  source_event_uuid?: string | null
+  normalized_text?: string | null
   selected_action?: string | null
   destination: string
 }) {
+  const minute_bucket = Math.floor(Date.now() / 60_000).toString()
+  const semantic_source_key = input.source_event_uuid?.trim()
+    ? `event:${input.source_event_uuid.trim()}`
+    : input.normalized_text?.trim()
+      ? `text:${input.normalized_text.trim()}:${minute_bucket}`
+      : `message:${input.source_message_uuid ?? "unknown"}`
+
   return [
     input.room_uuid,
-    input.source_message_uuid,
+    semantic_source_key,
     input.selected_action ?? "none",
     input.destination,
   ].join(":")
+}
+
+export function build_output_semantic_source_key(input: {
+  source_message_uuid?: string | null
+  source_event_uuid?: string | null
+  normalized_text?: string | null
+}) {
+  const minute_bucket = Math.floor(Date.now() / 60_000).toString()
+
+  if (input.source_event_uuid?.trim()) {
+    return `event:${input.source_event_uuid.trim()}`
+  }
+
+  if (input.normalized_text?.trim()) {
+    return `text:${input.normalized_text.trim()}:${minute_bucket}`
+  }
+
+  return `message:${input.source_message_uuid ?? "unknown"}`
 }
 
 export function inspect_output_delivery_state(

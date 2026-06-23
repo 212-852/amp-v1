@@ -75,6 +75,7 @@ type LineOAuthStateCookiePayload = {
   visitor_uuid: string | null
   source_channel: SourceChannel
   issued_at: string
+  return_to: string | null
 }
 
 function lineOAuthStateSecret() {
@@ -136,6 +137,8 @@ function parseLineOAuthStateCookie(
         visitor_uuid: payload.visitor_uuid,
         source_channel: payload.source_channel,
         issued_at: payload.issued_at,
+        return_to:
+          typeof payload.return_to === "string" ? payload.return_to : null,
       }
     }
   } catch {
@@ -170,6 +173,20 @@ function clearLineOAuthStateCookie(response: NextResponse) {
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
   })
+}
+
+function normalizeReturnTo(value: string | null | undefined) {
+  if (!value) {
+    return null
+  }
+
+  const trimmed = value.trim()
+
+  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) {
+    return null
+  }
+
+  return trimmed
 }
 
 function setAuthLoggedOutCookie(response: NextResponse) {
@@ -680,6 +697,7 @@ export async function update_session(input: {
     tier: input.linked.profile.tier,
     display_name: input.linked.profile.display_name,
     provider: input.identity.provider,
+    provider_user_id: input.identity.provider_user_id,
     email: input.identity.email,
     source_channel: input.linked.result.source_channel,
   }
@@ -1563,17 +1581,7 @@ export async function startLineLogin(request: NextRequest) {
     const session = await resolveSession(context)
     const requestUrl = new URL(request.url)
     const bridge_uuid = requestUrl.searchParams.get("bridge_uuid")
-
-    if (context.source_channel === "liff" || context.source_channel === "line") {
-      await sendIdentityDebug("line_oauth_skipped_for_liff", {
-        provider: "line",
-        visitor_uuid: session.visitor_uuid,
-        user_uuid: session.user_uuid,
-        source_channel: context.source_channel,
-      })
-
-      return NextResponse.redirect(new URL("/", appBaseUrl(request)), 303)
-    }
+    const return_to = normalizeReturnTo(requestUrl.searchParams.get("return_to"))
 
     const config = lineLoginConfig(request)
     const bridge =
@@ -1609,6 +1617,7 @@ export async function startLineLogin(request: NextRequest) {
       source_channel: bridge ? "pwa" : context.source_channel,
       channel_id: config.channelId,
       redirect_uri: config.redirectUri,
+      return_to,
       expected_redirect_uri: "https://app.da-nya.com/api/auth/line/callback",
       callback_matches_expected:
         config.redirectUri === "https://app.da-nya.com/api/auth/line/callback",
@@ -1623,6 +1632,7 @@ export async function startLineLogin(request: NextRequest) {
       user_uuid: session.user_uuid,
       source_channel: bridge ? "pwa" : context.source_channel,
       final_url: url.toString(),
+      return_to,
     })
 
     const response = NextResponse.redirect(url, 303)
@@ -1641,6 +1651,7 @@ export async function startLineLogin(request: NextRequest) {
       visitor_uuid: session.visitor_uuid,
       source_channel: bridge ? "pwa" : context.source_channel,
       issued_at: new Date().toISOString(),
+      return_to,
     })
 
     await sendIdentityDebug("oauth_state_saved_cookie", {
@@ -1653,6 +1664,7 @@ export async function startLineLogin(request: NextRequest) {
       same_site: "lax",
       secure: process.env.NODE_ENV === "production",
       state_exists: Boolean(state),
+      return_to,
     })
 
     await sendIdentityDebug("line_oauth_started", {
@@ -1662,6 +1674,7 @@ export async function startLineLogin(request: NextRequest) {
       user_uuid: session.user_uuid,
       source_channel: bridge ? "pwa" : context.source_channel,
       redirect_uri: config.redirectUri,
+      return_to,
     })
     await sendIdentityDebug("line_oauth_redirect_complete", {
       provider: "line",
@@ -1670,6 +1683,7 @@ export async function startLineLogin(request: NextRequest) {
       user_uuid: session.user_uuid,
       source_channel: bridge ? "pwa" : context.source_channel,
       final_url: url.toString(),
+      return_to,
     })
 
     return response
@@ -1983,6 +1997,7 @@ export async function completeLineLogin(request: NextRequest) {
       visitor_uuid: cookieState.visitor_uuid,
       source_channel: cookieState.source_channel,
       issued_at: cookieState.issued_at,
+      return_to: cookieState.return_to,
       state_exists: true,
     })
   } else {
@@ -2107,6 +2122,7 @@ export async function completeLineLogin(request: NextRequest) {
       display_name: linkedProfile.display_name ?? result.display_name,
       image_url: linkedProfile.image_url,
       provider: linkedProfile.provider ?? "line",
+      provider_user_id: linkedProfile.provider_user_id ?? profile.userId ?? null,
       email: linkedProfile.email,
       source_channel: result.source_channel as AppSession["source_channel"],
       can_logout: true,
@@ -2139,10 +2155,13 @@ export async function completeLineLogin(request: NextRequest) {
       visitor_uuid: result.visitor_uuid,
       user_uuid: result.user_uuid,
       source_channel: result.source_channel,
-      redirect_path: "/",
+      redirect_path: cookieState.return_to ?? "/",
     })
 
-    const response = NextResponse.redirect(new URL("/", appBaseUrl(request)), 303)
+    const response = NextResponse.redirect(
+      new URL(cookieState.return_to ?? "/", appBaseUrl(request)),
+      303,
+    )
     await writeSessionVisitorCookie({
       response,
       visitor_uuid: result.visitor_uuid,

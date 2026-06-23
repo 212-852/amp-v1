@@ -73,6 +73,8 @@ export type ChatMessageMeta = {
   selected_action?: string
   can_show_registration_card?: boolean
   trigger_message_uuid?: string
+  source_event_uuid?: string
+  normalized_text?: string
   room_uuid?: string
   message_bundle_type?: string
 }

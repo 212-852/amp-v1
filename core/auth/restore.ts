@@ -109,7 +109,7 @@ export async function restoreAuthSession(input?: {
   const authLoggedOut =
     request?.cookies.get(AUTH_LOGGED_OUT_COOKIE_NAME)?.value === "true"
 
-  let context = withChannelContext(
+  const context = withChannelContext(
     await resolveAuthContext(requested_route),
     channel,
   )
@@ -186,6 +186,7 @@ export async function restoreAuthSession(input?: {
         display_name: null,
         image_url: null,
         provider: null,
+        provider_user_id: null,
         email: null,
         source_channel: context.source_channel,
         can_logout: false,
@@ -201,6 +202,7 @@ export async function restoreAuthSession(input?: {
         display_name: null,
         image_url: null,
         provider: null,
+        provider_user_id: null,
         email: null,
         source_channel: context.source_channel,
         can_logout: false,

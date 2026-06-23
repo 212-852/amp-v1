@@ -90,6 +90,7 @@ type SessionProfile = {
   display_name: string | null
   image_url: string | null
   provider: SessionProvider | null
+  provider_user_id: string | null
   email: string | null
 }
 
@@ -109,6 +110,7 @@ type ProfileNameRow = {
 
 type IdentityProfileRow = {
   provider?: string | null
+  provider_user_id?: string | null
   email?: string | null
 }
 
@@ -700,6 +702,7 @@ function buildAnonymousSession(context: AuthContext): AppSession {
     display_name: null,
     image_url: null,
     provider: null,
+    provider_user_id: null,
     email: null,
     source_channel: context.source_channel ?? "web",
     can_logout: false,
@@ -754,6 +757,7 @@ async function resolveSessionProfile(user_uuid: string | null): Promise<SessionP
       display_name: null,
       image_url: null,
       provider: null,
+      provider_user_id: null,
       email: null,
     }
   }
@@ -765,9 +769,10 @@ async function resolveSessionProfile(user_uuid: string | null): Promise<SessionP
       role: "user",
       tier: "member",
       display_name: null,
-      image_url: null,
-      provider: null,
-      email: null,
+        image_url: null,
+        provider: null,
+        provider_user_id: null,
+        email: null,
     }
   }
 
@@ -820,7 +825,7 @@ async function resolveSessionProfile(user_uuid: string | null): Promise<SessionP
         "identities",
         [
           `user_uuid=eq.${encodeURIComponent(user_uuid)}`,
-          "select=provider,email",
+          "select=provider,provider_user_id,email",
           "limit=1",
         ].join("&"),
       ),
@@ -838,6 +843,7 @@ async function resolveSessionProfile(user_uuid: string | null): Promise<SessionP
       display_name: null,
       image_url: null,
       provider: null,
+      provider_user_id: null,
       email: null,
     }
   }
@@ -865,6 +871,7 @@ async function resolveSessionProfile(user_uuid: string | null): Promise<SessionP
     }),
     image_url: normalizeNullableString(user?.image_url),
     provider: normalizeSessionProvider(identity?.provider),
+    provider_user_id: normalizeNullableString(identity?.provider_user_id),
     email: normalizeNullableString(identity?.email),
   }
 }
@@ -907,6 +914,7 @@ async function withLogoutVisibility(
     | "display_name"
     | "image_url"
     | "provider"
+    | "provider_user_id"
     | "email"
   > & {
     can_logout?: boolean
@@ -916,6 +924,7 @@ async function withLogoutVisibility(
     display_name?: string | null
     image_url?: string | null
     provider?: SessionProvider | null
+    provider_user_id?: string | null
     email?: string | null
   },
   request_id?: string | null,
@@ -926,6 +935,7 @@ async function withLogoutVisibility(
     "display_name" in session &&
     "image_url" in session &&
     "provider" in session &&
+    "provider_user_id" in session &&
     "email" in session
       ? {
           role: session.role,
@@ -933,6 +943,7 @@ async function withLogoutVisibility(
           display_name: session.display_name ?? null,
           image_url: session.image_url ?? null,
           provider: session.provider ?? null,
+          provider_user_id: session.provider_user_id ?? null,
           email: session.email ?? null,
         }
       : await resolveSessionProfile(session.user_uuid)
@@ -943,6 +954,7 @@ async function withLogoutVisibility(
     display_name: profile.display_name,
     image_url: profile.image_url,
     provider: profile.provider,
+    provider_user_id: profile.provider_user_id,
     email: profile.email,
     can_logout: resolveLogoutVisibility(session),
     can_start_line_oauth:

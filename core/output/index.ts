@@ -9,6 +9,7 @@ import {
 import {
   begin_output_delivery,
   build_output_idempotency_key,
+  build_output_semantic_source_key,
   complete_output_delivery,
   inspect_output_delivery_state,
   type OutputDeliveryState,
@@ -42,12 +43,42 @@ function resolve_output_idempotency_key(
       (typeof message.data?.source_message_uuid === "string"
         ? message.data.source_message_uuid
         : "unknown"),
+    source_event_uuid:
+      message.source_event_uuid ??
+      (typeof message.data?.source_event_uuid === "string"
+        ? message.data.source_event_uuid
+        : null),
+    normalized_text:
+      message.normalized_text ??
+      (typeof message.data?.normalized_text === "string"
+        ? message.data.normalized_text
+        : message.text.trim().toLowerCase()),
     selected_action:
       message.selected_action ??
       (typeof message.data?.selected_action === "string"
         ? message.data.selected_action
         : null),
     destination: destination.transport,
+  })
+}
+
+function resolve_output_semantic_source_key(message: OutputMessage) {
+  return build_output_semantic_source_key({
+    source_message_uuid:
+      message.source_message_uuid ??
+      (typeof message.data?.source_message_uuid === "string"
+        ? message.data.source_message_uuid
+        : "unknown"),
+    source_event_uuid:
+      message.source_event_uuid ??
+      (typeof message.data?.source_event_uuid === "string"
+        ? message.data.source_event_uuid
+        : null),
+    normalized_text:
+      message.normalized_text ??
+      (typeof message.data?.normalized_text === "string"
+        ? message.data.normalized_text
+        : message.text.trim().toLowerCase()),
   })
 }
 
@@ -77,6 +108,7 @@ async function log_output_route(
     destination,
   )
   const existing_output_state = inspect_output_delivery_state(output_idempotency_key)
+  const semantic_source_key = resolve_output_semantic_source_key(message)
 
   await sendAuthDebug("output_route_resolved", {
     room_uuid: target.room_uuid ?? null,
@@ -88,6 +120,7 @@ async function log_output_route(
     ...resolve_reply_token_debug(target, destination),
     line_send_method: destination.line_send_method ?? null,
     output_idempotency_key,
+    semantic_source_key,
     existing_output_state,
     duplicate_skipped: false,
     skipped_reason: null,
@@ -166,6 +199,7 @@ async function deliver_destination(
         ...resolve_reply_token_debug(target, destination),
         line_send_method: destination.line_send_method ?? null,
         output_idempotency_key,
+        semantic_source_key: resolve_output_semantic_source_key(message),
         existing_output_state: begin.state,
         duplicate_skipped: false,
         skipped_reason,

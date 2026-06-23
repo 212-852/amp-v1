@@ -114,6 +114,21 @@ select {
   padding-bottom: calc(var(--chat-input-height, 120px) + env(safe-area-inset-bottom, 0px));
 }
 
+.chat_body {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  padding-top: 32px;
+  padding-bottom: 140px;
+  overflow: visible;
+}
+
+@media (max-width: 480px) {
+  .chat_body {
+    padding-top: 24px;
+  }
+}
+
 .chat-bottom-spacer {
   height: var(
     --chat-message-bottom-padding,

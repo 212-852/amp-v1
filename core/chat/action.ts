@@ -721,6 +721,8 @@ export async function handleIncomingChatMessageArchive(
           room_uuid: room.room_uuid,
           trigger_message_uuid: message.message_uuid,
           selected_action: response_route.selected_action,
+          source_event_uuid: input.external_id,
+          normalized_text: response_route.normalized_text,
         })
 
         if (!can_create_response) {
@@ -824,6 +826,8 @@ export async function handleIncomingChatMessageArchive(
             session: input.session,
             source_channel: input.source_channel,
             source_message_uuid: message.message_uuid,
+            source_event_uuid: input.external_id,
+            normalized_text: response_route.normalized_text,
             selected_action: response_route.selected_action,
             line_reply_token: input.line_reply_token,
             line_provider_user_id: input.line_provider_user_id,

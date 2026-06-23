@@ -14,14 +14,25 @@ export function build_chat_response_claim_key(input: {
   room_uuid: string
   trigger_message_uuid: string
   selected_action: string
+  source_event_uuid?: string | null
+  normalized_text?: string | null
 }) {
-  return `${input.room_uuid}:${input.trigger_message_uuid}:${input.selected_action}`
+  const minute_bucket = Math.floor(Date.now() / 60_000).toString()
+  const semantic_source_key = input.source_event_uuid?.trim()
+    ? `event:${input.source_event_uuid.trim()}`
+    : input.normalized_text?.trim()
+      ? `text:${input.normalized_text.trim()}:${minute_bucket}`
+      : `message:${input.trigger_message_uuid}`
+
+  return `${input.room_uuid}:${semantic_source_key}:${input.selected_action}`
 }
 
 export function claim_chat_response(input: {
   room_uuid: string
   trigger_message_uuid: string
   selected_action: string
+  source_event_uuid?: string | null
+  normalized_text?: string | null
 }) {
   const key = build_chat_response_claim_key(input)
   const now = Date.now()

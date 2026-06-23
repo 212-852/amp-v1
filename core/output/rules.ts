@@ -12,6 +12,8 @@ export type OutputMessage = {
   line_messages?: unknown[]
   source_message_uuid?: string | null
   selected_action?: string | null
+  source_event_uuid?: string | null
+  normalized_text?: string | null
 }
 
 export { resolve_public_app_url } from "@/core/output/uri"
@@ -51,6 +53,18 @@ const CONTACT_SELECT =
 
 export function isLineWebhookReplyEnabled() {
   return process.env.LINE_WEBHOOK_REPLY_ENABLED === "true"
+}
+
+function line_reply_validation_skip_reason(reason: string) {
+  if (reason === "already_used") {
+    return "reply_token_already_used"
+  }
+
+  if (reason === "expired") {
+    return "reply_token_expired"
+  }
+
+  return `reply_token_${reason}`
 }
 
 export function is_web_source_channel(
@@ -155,13 +169,13 @@ export function resolveOutputDestinations(
     if (target.line_reply_token) {
       return [{
         contact: line_contact ?? null,
-        transport: "none",
-        should_send: false,
-        reason: !line_reply_allowed
-          ? "line_reply_not_allowed"
-          : !reply_enabled
-            ? "line_reply_disabled"
-            : `line_reply_token_${reply_validation.reason}`,
+      transport: "none",
+      should_send: false,
+      reason: !line_reply_allowed
+        ? "line_reply_not_allowed"
+        : !reply_enabled
+          ? "line_reply_disabled"
+          : line_reply_validation_skip_reason(reply_validation.reason),
         receiver_channel: "line",
         line_send_method: "reply",
         reply_token_record: reply_validation.ok ? reply_validation.record : null,

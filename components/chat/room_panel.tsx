@@ -823,8 +823,8 @@ export default function ChatRoomPanel({
     : filterUserVisibleChatMessages(messages)
 
   const scroll_class = fill_height
-    ? "h-full space-y-4 overflow-y-auto overscroll-y-contain pt-0 [overflow-anchor:none]"
-    : "max-h-[calc(100dvh-220px)] space-y-4 overflow-y-auto overscroll-y-contain pt-0 [overflow-anchor:none]"
+    ? "h-full overflow-y-auto overflow-x-visible overscroll-y-contain pt-0 [overflow-anchor:none]"
+    : "max-h-[calc(100dvh-220px)] overflow-y-auto overflow-x-visible overscroll-y-contain pt-0 [overflow-anchor:none]"
 
   return (
     <section
@@ -871,33 +871,35 @@ export default function ChatRoomPanel({
           }
         }}
       >
-        {is_loading_older ? (
-          <p className="px-2 py-1 text-center text-[12px] font-medium text-[#8c7358]">
-            Loading...
-          </p>
-        ) : null}
-        {visible_messages.map((message, index) => (
-          <ChatMessageBubble
-            key={message.message_uuid}
-            message={message}
-            room_locale={(room.locale as Locale) ?? "ja"}
-            viewer_display_name={current_viewer_display_name}
-            show_header={shouldShowMessageHeader(
-              message,
-              visible_messages[index - 1] ?? null,
-            )}
+        <div className="chat_body chat_messages space-y-4">
+          {is_loading_older ? (
+            <p className="px-2 py-1 text-center text-[12px] font-medium text-[#8c7358]">
+              Loading...
+            </p>
+          ) : null}
+          {visible_messages.map((message, index) => (
+            <ChatMessageBubble
+              key={message.message_uuid}
+              message={message}
+              room_locale={(room.locale as Locale) ?? "ja"}
+              viewer_display_name={current_viewer_display_name}
+              show_header={shouldShowMessageHeader(
+                message,
+                visible_messages[index - 1] ?? null,
+              )}
+            />
+          ))}
+          {typing_label ? (
+            <p className="px-2 text-[12px] font-medium text-[#8c7358]">
+              {typing_label}
+            </p>
+          ) : null}
+          <div
+            ref={bottom_ref}
+            aria-hidden="true"
+            className={[CHAT_BOTTOM_SPACER_CLASS, "shrink-0"].join(" ")}
           />
-        ))}
-        {typing_label ? (
-          <p className="px-2 text-[12px] font-medium text-[#8c7358]">
-            {typing_label}
-          </p>
-        ) : null}
-        <div
-          ref={bottom_ref}
-          aria-hidden="true"
-          className={[CHAT_BOTTOM_SPACER_CLASS, "shrink-0"].join(" ")}
-        />
+        </div>
       </div>
     </section>
   )

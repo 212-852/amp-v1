@@ -49,6 +49,7 @@ export type Session = {
   display_name: string | null
   image_url: string | null
   provider: SessionProvider | null
+  provider_user_id: string | null
   email: string | null
   source_channel: SourceChannel
   can_logout: boolean

@@ -22,8 +22,8 @@ import {
   PARTNER_DRIVER_RECRUIT_BUTTON_LABEL,
   PARTNER_DRIVER_RECRUIT_DESCRIPTION,
   PARTNER_DRIVER_RECRUIT_IMAGE,
+  PARTNER_DRIVER_LINE_REGISTER_PATH,
   PARTNER_DRIVER_RECRUIT_TITLE,
-  PARTNER_DRIVER_REGISTER_PATH,
 } from "@/core/partner/recruitment"
 import {
   type ChatResponseRoute,
@@ -147,7 +147,7 @@ function build_partner_recruit_uri_footer() {
         label: PARTNER_DRIVER_RECRUIT_BUTTON_LABEL,
         action: {
           type: "uri",
-          uri: PARTNER_DRIVER_REGISTER_PATH,
+          uri: PARTNER_DRIVER_LINE_REGISTER_PATH,
         },
       }),
     ],
@@ -445,6 +445,8 @@ export async function deliverMessageBundle(input: {
   source_channel: SourceChannel
   source_message_uuid?: string | null
   selected_action?: string | null
+  source_event_uuid?: string | null
+  normalized_text?: string | null
   line_reply_token?: string | null
   line_provider_user_id?: string | null
   line_reply_allowed?: boolean
@@ -482,6 +484,8 @@ export async function deliverMessageBundle(input: {
           room_uuid: input.room.room_uuid,
           message_bundle_type: input.message.body,
           trigger_message_uuid: source_message_uuid,
+          source_event_uuid: input.source_event_uuid ?? undefined,
+          normalized_text: input.normalized_text ?? undefined,
           selected_action,
         },
       }
@@ -514,6 +518,8 @@ export async function deliverMessageBundle(input: {
       data: output_data,
       source_message_uuid,
       selected_action,
+      source_event_uuid: input.source_event_uuid,
+      normalized_text: input.normalized_text,
     },
   )
 }

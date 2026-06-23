@@ -372,6 +372,18 @@ function build_line_reply_debug_fields(
   }
 }
 
+function line_reply_token_skip_reason(reason: string) {
+  if (reason === "already_used") {
+    return "reply_token_already_used"
+  }
+
+  if (reason === "expired") {
+    return "reply_token_expired"
+  }
+
+  return `reply_token_${reason}`
+}
+
 export async function deliverLine(
   contact: ContactRecord,
   message: OutputMessage,
@@ -473,13 +485,13 @@ export async function deliverLine(
     if (!live_state.reply_token_fresh) {
       await sendAuthDebug("line_reply_skipped", build_line_reply_debug_fields(debug_base, {
         provider_user_id,
-        skipped_reason: "reply_token_not_fresh",
+        skipped_reason: "reply_token_expired",
       }))
       return {
         transport: "line_reply",
         delivered: false,
         failed_final: true,
-        skipped_reason: "reply_token_not_fresh",
+        skipped_reason: "reply_token_expired",
       }
     }
   }
@@ -491,13 +503,13 @@ export async function deliverLine(
   if (use_reply && !reply_validation.ok) {
     await sendAuthDebug("line_reply_skipped", build_line_reply_debug_fields(debug_base, {
       provider_user_id,
-      skipped_reason: `reply_token_${reply_validation.reason}`,
+      skipped_reason: line_reply_token_skip_reason(reply_validation.reason),
     }))
     return {
       transport: "line_reply",
       delivered: false,
       failed_final: true,
-      skipped_reason: `reply_token_${reply_validation.reason}`,
+      skipped_reason: line_reply_token_skip_reason(reply_validation.reason),
     }
   }
 
@@ -546,13 +558,13 @@ export async function deliverLine(
     if (!claim.ok) {
       await sendAuthDebug("line_reply_skipped", build_line_reply_debug_fields(debug_base, {
         provider_user_id,
-        skipped_reason: `reply_token_${claim.reason}`,
+        skipped_reason: line_reply_token_skip_reason(claim.reason),
       }))
       return {
         transport: "line_reply",
         delivered: false,
         failed_final: true,
-        skipped_reason: `reply_token_${claim.reason}`,
+        skipped_reason: line_reply_token_skip_reason(claim.reason),
       }
     }
   } else {

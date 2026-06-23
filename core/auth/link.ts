@@ -302,6 +302,7 @@ export async function linkVisitorToIdentity(
     display_name: null,
     image_url: null,
     provider: null,
+    provider_user_id: null,
     email: null,
     source_channel: options.source_channel as AppSession["source_channel"],
     can_logout: false,
@@ -322,6 +323,8 @@ export async function linkVisitorToIdentity(
       display_name: input.display_name ?? session.display_name,
       image_url: input.image_url ?? session.image_url,
       provider: input.provider,
+      provider_user_id:
+        input.provider_user_id ?? input.email ?? session.provider_user_id,
       email: input.email ?? session.email,
     },
   }

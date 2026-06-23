@@ -11,7 +11,7 @@ import type {
 import { resolve_entry_line_identity } from "@/core/auth/identity"
 import { sendAuthDebug } from "@/core/debug"
 
-const ENTRY_HOME_URL = "https://app.da-nya.com/"
+const ENTRY_RETURN_TO = "/entry"
 
 export type AmpRouteKey =
   | "app-top"
@@ -200,20 +200,29 @@ export async function enforceEntryLineAccess(
 ) {
   const entry_identity = await resolve_entry_line_identity(context, session)
   const has_verified_liff_session =
-    session.liff?.verified === true &&
-    Boolean(entry_identity.liff_provider_user_id)
+    Boolean(session.liff?.provider_user_id) ||
+    (session.liff?.verified === true &&
+      Boolean(entry_identity.liff_provider_user_id))
   const has_linked_line_identity =
     Boolean(entry_identity.line_user_id) ||
     Boolean(
       entry_identity.provider === "line" &&
         entry_identity.provider_user_id,
+    ) ||
+    Boolean(
+      session.provider === "line" &&
+        session.provider_user_id,
     )
   const has_entry_access =
     has_linked_line_identity || has_verified_liff_session
-  const redirect_to = has_entry_access ? null : ENTRY_HOME_URL
+  const login_url = `/api/auth/line/start?return_to=${encodeURIComponent(ENTRY_RETURN_TO)}`
+  const redirect_to = has_entry_access ? null : login_url
+  const redirect_reason = has_entry_access ? null : "line_identity_missing"
 
   await sendAuthDebug("entry_access_checked", {
     pathname: context.requested_route ?? "/entry",
+    return_to: ENTRY_RETURN_TO,
+    is_liff: context.source_channel === "liff",
     user_uuid: session.user_uuid,
     visitor_uuid: session.visitor_uuid,
     role: session.role,
@@ -221,14 +230,16 @@ export async function enforceEntryLineAccess(
     provider_user_id_exists: Boolean(entry_identity.provider_user_id),
     line_user_id_exists: Boolean(entry_identity.line_user_id),
     liff_provider_user_id_exists: Boolean(entry_identity.liff_provider_user_id),
+    session_provider_user_id_exists: Boolean(session.provider_user_id),
     liff_verified: session.liff?.verified === true,
     has_line_identity: entry_identity.has_line_identity,
     has_entry_access,
+    redirect_reason,
     redirect_to,
   })
 
   if (!has_entry_access) {
-    redirect(ENTRY_HOME_URL)
+    redirect(login_url)
   }
 
   return entry_identity
