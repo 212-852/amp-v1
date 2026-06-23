@@ -79,6 +79,33 @@ select {
   width: 100%;
 }
 
+.flex_carousel {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding: 0 12px 8px;
+}
+
+.flex_carousel_item {
+  flex: 0 0 280px;
+  max-width: 280px;
+  scroll-snap-align: start;
+}
+
+.flex_bubble_single {
+  width: 100%;
+  max-width: 320px;
+}
+
+.flex_image {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
 .chat_input_footer {
   bottom: max(0px, env(safe-area-inset-bottom, 0px));
 }

@@ -169,6 +169,7 @@ function FlexHero({ node }: Readonly<{ node: FlexRecord }>) {
       alt=""
       className={[
         "chat_card_image",
+        "flex_image",
         resolve_web_flex_hero_class_name(node),
       ].join(" ")}
     />
@@ -387,9 +388,11 @@ function FlexNode({
 function FlexBubble({
   bubble,
   onAction,
+  variant = "single",
 }: Readonly<{
   bubble: FlexRecord
   onAction: (action: WebFlexAction) => void
+  variant?: "carousel" | "single"
 }>) {
   if (bubble.type !== "bubble") {
     return null
@@ -401,7 +404,12 @@ function FlexBubble({
   const footer = readRecord(bubble.footer)
 
   return (
-    <article className="chat_card flex h-auto max-h-none shrink-0 snap-start self-stretch flex-col overflow-hidden rounded-[18px] bg-white">
+    <article
+      className={[
+        "chat_card flex h-auto max-h-none shrink-0 snap-start self-stretch flex-col overflow-hidden rounded-[18px] bg-white",
+        variant === "carousel" ? "flex_carousel_item" : "flex_bubble_single",
+      ].join(" ")}
+    >
       {header ? (
         <FlexBubbleSection
           node={header}
@@ -440,6 +448,8 @@ export default function FlexMessage({
     return null
   }
 
+  const isCarousel = carousel.type === "carousel"
+
   function handleAction(action: WebFlexAction) {
     if (action.kind === "quick_menu") {
       void requestQuickMenu()
@@ -456,17 +466,27 @@ export default function FlexMessage({
     }
   }
 
-  return (
-    <div className="chat_card h-auto max-h-none w-full min-w-0 overflow-x-auto overflow-y-visible overscroll-x-contain pb-0 pt-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      <div className="flex w-max snap-x snap-mandatory items-stretch gap-3">
+  if (isCarousel) {
+    return (
+      <div className="flex_carousel min-w-0 overflow-y-visible overscroll-x-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {carousel.contents.map((bubble, index) => (
           <FlexBubble
             key={index}
             bubble={readRecord(bubble) ?? {}}
             onAction={handleAction}
+            variant="carousel"
           />
         ))}
       </div>
+    )
+  }
+
+  return (
+    <div className="w-full min-w-0">
+      <FlexBubble
+        bubble={readRecord(carousel.contents[0]) ?? {}}
+        onAction={handleAction}
+      />
     </div>
   )
 }
