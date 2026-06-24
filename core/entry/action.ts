@@ -127,7 +127,7 @@ async function create_driver_record(context: EntryRequestContext) {
             pet_experience,
             transport_experience: questionnaire.transport_experience,
             application_reason: questionnaire.application_reason,
-            status: "preparing",
+            status: "provisional",
           }),
           cache: "no-store",
         },
@@ -159,7 +159,7 @@ async function create_driver_record(context: EntryRequestContext) {
       },
       body: JSON.stringify({
         user_uuid: context.session.user_uuid,
-        status: "preparing",
+        status: "provisional",
         has_driver_license: questionnaire.has_driver_license,
         vehicle: questionnaire.vehicle,
         freight_operator: questionnaire.freight_operator,

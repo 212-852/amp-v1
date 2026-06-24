@@ -1,6 +1,6 @@
 import type { AuthContext, Session } from "@/core/auth/types"
 
-export type DriverStatus = "preparing" | "active" | "suspended" | "retired"
+export type DriverStatus = "provisional" | "active" | "suspended" | "retired"
 
 export type DriverPreparationKey =
   | "has_driver_license"

@@ -52,7 +52,7 @@ async function fetch_driver_row(user_uuid: string): Promise<DriverRow | null> {
 
 function build_driver_state(row: DriverRow | null): DriverState {
   const items = build_preparation_items(row)
-  const status = row?.status ?? "preparing"
+  const status = row?.status ?? "provisional"
 
   return {
     driver_uuid: row?.driver_uuid ?? null,
@@ -112,7 +112,7 @@ async function patch_driver_record(
 async function activate_driver_if_ready(driver_uuid: string, user_uuid: string) {
   const state = await load_driver_state(user_uuid)
 
-  if (!state.all_ready || state.status !== "preparing") {
+  if (!state.all_ready || state.status !== "provisional") {
     return state
   }
 
@@ -138,7 +138,7 @@ export async function update_driver_preparation(
     throw new Error("Driver record not found")
   }
 
-  if (row.status !== "preparing") {
+  if (row.status !== "provisional") {
     return build_driver_state(row)
   }
 

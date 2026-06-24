@@ -22,6 +22,7 @@ export default function OpsShell({
   breadcrumb_items = [],
   layout = "default",
   concierge_available,
+  interaction_locked = false,
 }: Readonly<{
   children: React.ReactNode
   session: OpsHeaderSession
@@ -30,10 +31,12 @@ export default function OpsShell({
   breadcrumb_items?: HeaderBreadcrumbItem[]
   layout?: "default" | "full_height"
   concierge_available?: boolean
+  interaction_locked?: boolean
 }>) {
   const page_label = resolvePageLabel(pathname)
   const has_breadcrumb = breadcrumb_items.length > 0
   const header_offset = resolve_header_offset(has_breadcrumb)
+  const show_footer_assistant = show_assistant && !interaction_locked
 
   if (layout === "full_height") {
     return (
@@ -43,6 +46,7 @@ export default function OpsShell({
           page_label={page_label}
           breadcrumb_items={breadcrumb_items}
           concierge_available={concierge_available}
+          interaction_locked={interaction_locked}
         />
         <main
           className={`mx-auto flex h-dvh w-full max-w-[430px] flex-col overflow-hidden px-5 ${header_offset}`}
@@ -60,19 +64,20 @@ export default function OpsShell({
         page_label={page_label}
         breadcrumb_items={breadcrumb_items}
         concierge_available={concierge_available}
+        interaction_locked={interaction_locked}
       />
       <main
         className={[
           "mx-auto flex w-full max-w-[430px] flex-col gap-3 px-5",
           header_offset,
-          show_assistant
+          show_footer_assistant
             ? "pb-[calc(118px+env(safe-area-inset-bottom,0px))]"
             : "pb-4",
         ].join(" ")}
       >
         {children}
       </main>
-      {show_assistant ? <OpsAssistant /> : null}
+      {show_footer_assistant ? <OpsAssistant /> : null}
     </div>
   )
 }

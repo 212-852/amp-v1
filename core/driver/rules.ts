@@ -10,7 +10,7 @@ import type {
 export const DRIVER_PREP_READY = "ready"
 
 export const DRIVER_PREPARATION_LABELS: Record<DriverPreparationKey, string> = {
-  has_driver_license: "普通自動車運転免許",
+  has_driver_license: "普通自動車運転免許証",
   freight_operator: "貨物軽自動車運送事業者",
   vehicle: "ペット輸送用車両",
   black_plate: "黒ナンバー",
@@ -36,12 +36,16 @@ export type DriverPreparationValidationResult = {
   errors: Record<string, string>
 }
 
-export function is_driver_preparing(status: DriverStatus | null | undefined) {
-  return status === "preparing"
+export function is_driver_provisional(status: DriverStatus | null | undefined) {
+  return status === "provisional"
 }
 
 export function can_driver_operate(status: DriverStatus | null | undefined) {
   return status === "active"
+}
+
+export function count_preparation_progress(items: DriverPreparationItem[]) {
+  return items.filter((item) => item.ready).length
 }
 
 export function can_update_driver_preparation(context: DriverRequestContext) {
@@ -129,5 +133,5 @@ export function can_show_driver_preparation(input: {
   role: SessionRole
   status: DriverStatus | null | undefined
 }) {
-  return input.role === "driver" && (input.status === "preparing" || input.status === "active")
+  return input.role === "driver" && is_driver_provisional(input.status)
 }

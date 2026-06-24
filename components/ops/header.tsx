@@ -62,11 +62,13 @@ export default function OpsHeader({
   session,
   concierge_available,
   breadcrumb_items = [],
+  interaction_locked = false,
 }: {
   session?: HeaderSessionLike | null
   page_label: string
   concierge_available?: boolean
   breadcrumb_items?: HeaderBreadcrumbItem[]
+  interaction_locked?: boolean
 }) {
   const enabled = concierge_available === true
   const safe_session = normalizeOpsHeaderDisplay(session)
@@ -101,6 +103,7 @@ export default function OpsHeader({
     role: safe_session.role,
     tier: safe_session.tier,
   })
+  const controls_disabled = interaction_locked || is_logging_out
 
   useEffect(() => {
     set_concierge_available_state(enabled)
@@ -139,10 +142,18 @@ export default function OpsHeader({
   }
 
   function toggle_menu() {
+    if (interaction_locked) {
+      return
+    }
+
     set_menu_open((current) => !current)
   }
 
   function open_profile_settings() {
+    if (interaction_locked) {
+      return
+    }
+
     set_profile_settings_open(true)
     close_menu()
   }
@@ -152,7 +163,7 @@ export default function OpsHeader({
   }
 
   async function toggle_concierge_availability() {
-    if (!can_toggle_concierge || is_saving_concierge) {
+    if (interaction_locked || !can_toggle_concierge || is_saving_concierge) {
       return
     }
 
@@ -310,7 +321,7 @@ export default function OpsHeader({
               concierge_available_state ? "Concierge ON" : "Concierge OFF"
             }
             aria-pressed={concierge_available_state}
-            disabled={!can_toggle_concierge || is_saving_concierge}
+            disabled={interaction_locked || !can_toggle_concierge || is_saving_concierge}
             onClick={
               can_toggle_concierge ? toggle_concierge_availability : undefined
             }
@@ -345,8 +356,9 @@ export default function OpsHeader({
           <button
             type="button"
             aria-label="Settings"
+            disabled={controls_disabled}
             onClick={open_profile_settings}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-900"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-900 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Settings className="h-4 w-4" strokeWidth={1.8} />
           </button>
@@ -354,8 +366,13 @@ export default function OpsHeader({
           <button
             type="button"
             aria-label="Notification settings"
-            onClick={() => set_notification_settings_open(true)}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-900"
+            disabled={controls_disabled}
+            onClick={() => {
+              if (!interaction_locked) {
+                set_notification_settings_open(true)
+              }
+            }}
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-900 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Bell className="h-4 w-4" strokeWidth={1.8} />
           </button>
@@ -366,8 +383,9 @@ export default function OpsHeader({
               aria-label="Menu"
               aria-expanded={menu_open}
               aria-haspopup="menu"
+              disabled={controls_disabled}
               onClick={toggle_menu}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-900"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-900 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {menu_open ? (
                 <X className="h-4 w-4" strokeWidth={1.8} />

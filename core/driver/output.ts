@@ -36,7 +36,7 @@ export function build_driver_preparation_success_output(input: {
   previous_status: string
 }): DriverPreparationOutput {
   const status_activated =
-    input.previous_status === "preparing" && input.state.status === "active"
+    input.previous_status === "provisional" && input.state.status === "active"
 
   return {
     ok: true,

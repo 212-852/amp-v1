@@ -1,12 +1,12 @@
 import OpsComingSoon from "@/components/ops/coming-soon"
 import OpsShell from "@/components/ops/shell"
-import DriverPreparationChecklist from "@/components/driver/preparation_checklist"
+import DriverOnboardingModal from "@/components/driver/onboarding_modal"
 import { resolveAuthContext } from "@/core/auth/context"
 import { resolveSession } from "@/core/auth/session"
 import { load_driver_state } from "@/core/driver/action"
 import {
   can_driver_operate,
-  can_show_driver_preparation,
+  is_driver_provisional,
 } from "@/core/driver/rules"
 import { normalizeOpsHeaderSession } from "@/core/ops/header_session"
 import { enforceAuthRouteRedirect } from "@/core/route/rules"
@@ -17,10 +17,7 @@ export default async function DriverPage() {
   const context = await resolveAuthContext("/driver")
   const session = await resolveSession(context)
   const driver = await load_driver_state(session.user_uuid)
-  const show_preparation = can_show_driver_preparation({
-    role: session.role,
-    status: driver.status,
-  })
+  const onboarding_locked = is_driver_provisional(driver.status)
   const can_operate = can_driver_operate(driver.status)
 
   return (
@@ -30,22 +27,17 @@ export default async function DriverPage() {
         default_display_name: "Driver",
         default_role: "driver",
       })}
+      show_assistant={can_operate}
+      interaction_locked={onboarding_locked}
     >
-      {show_preparation ? (
-        <DriverPreparationChecklist
+      {onboarding_locked ? (
+        <DriverOnboardingModal
           initial_items={driver.items}
-          initial_all_ready={driver.all_ready}
           initial_status={driver.status}
         />
       ) : null}
 
-      {can_operate ? (
-        <OpsComingSoon title="Driver" />
-      ) : (
-        <section className="rounded-2xl bg-white px-4 py-5 text-sm leading-7 text-neutral-600 ring-1 ring-neutral-200">
-          仮登録済みです。必須の準備が完了するまで稼働できません。
-        </section>
-      )}
+      {can_operate ? <OpsComingSoon title="Driver" /> : null}
     </OpsShell>
   )
 }
