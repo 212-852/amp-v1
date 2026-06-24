@@ -1,7 +1,7 @@
 "use client"
 
 import type { ChangeEvent } from "react"
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 import {
   capture_video_frame,
@@ -13,6 +13,7 @@ import {
 } from "@/core/ocr/camera"
 import {
   OCR_AUTO_CAPTURE_STABLE_MS,
+  OCR_AUTO_SCAN_TIMEOUT_MS,
   type OcrDocumentType,
 } from "@/core/ocr/rules"
 
@@ -27,7 +28,7 @@ export default function DocumentScanner({
   document_type,
   on_capture,
   disabled = false,
-  auto_start = false,
+  auto_start = true,
 }: Readonly<DocumentScannerProps>) {
   const container_ref = useRef<HTMLDivElement>(null)
   const video_ref = useRef<HTMLVideoElement>(null)
@@ -36,9 +37,25 @@ export default function DocumentScanner({
   const captured_ref = useRef(false)
 
   const [camera_active, setCameraActive] = useState(false)
-  const [camera_error, setCameraError] = useState<string | null>(null)
+  const [fallback_mode, setFallbackMode] = useState(false)
+  const [fallback_message, setFallbackMessage] = useState<string | null>(null)
   const [frame, setFrame] = useState<FrameRect>({ x: 0, y: 0, width: 0, height: 0 })
   const [quality, setQuality] = useState<FrameQualityResult | null>(null)
+
+  const stop_camera = useCallback(() => {
+    stream_ref.current?.getTracks().forEach((track) => track.stop())
+    stream_ref.current = null
+    setCameraActive(false)
+  }, [])
+
+  const enter_fallback = useCallback(
+    (message: string) => {
+      stop_camera()
+      setFallbackMode(true)
+      setFallbackMessage(message)
+    },
+    [stop_camera],
+  )
 
   useEffect(() => {
     function update_frame() {
@@ -68,7 +85,7 @@ export default function DocumentScanner({
   }, [])
 
   useEffect(() => {
-    if (!camera_active || disabled || captured_ref.current) {
+    if (!camera_active || disabled || captured_ref.current || fallback_mode) {
       return
     }
 
@@ -105,16 +122,31 @@ export default function DocumentScanner({
     animation_id = window.requestAnimationFrame(tick)
 
     return () => window.cancelAnimationFrame(animation_id)
-  }, [camera_active, disabled, frame, on_capture])
+  }, [camera_active, disabled, fallback_mode, frame, on_capture, stop_camera])
 
-  function stop_camera() {
-    stream_ref.current?.getTracks().forEach((track) => track.stop())
-    stream_ref.current = null
-    setCameraActive(false)
-  }
+  useEffect(() => {
+    if (!camera_active || captured_ref.current || fallback_mode) {
+      return
+    }
 
-  async function start_camera() {
-    setCameraError(null)
+    const timer = window.setTimeout(() => {
+      if (captured_ref.current) {
+        return
+      }
+
+      enter_fallback("自動スキャンできませんでした。画像を選択してください。")
+    }, OCR_AUTO_SCAN_TIMEOUT_MS)
+
+    return () => window.clearTimeout(timer)
+  }, [camera_active, enter_fallback, fallback_mode])
+
+  const start_camera = useCallback(async () => {
+    if (disabled || captured_ref.current) {
+      return
+    }
+
+    setFallbackMode(false)
+    setFallbackMessage(null)
     captured_ref.current = false
     stable_since_ref.current = null
 
@@ -138,10 +170,17 @@ export default function DocumentScanner({
 
       setCameraActive(true)
     } catch {
-      setCameraError("カメラを使用できません。画像を選択してください。")
-      setCameraActive(false)
+      enter_fallback("カメラを使用できません。画像を選択してください。")
     }
-  }
+  }, [disabled, enter_fallback])
+
+  useEffect(() => {
+    if (!auto_start || disabled || fallback_mode || captured_ref.current) {
+      return
+    }
+
+    void start_camera()
+  }, [auto_start, disabled, fallback_mode, start_camera])
 
   async function handle_file_select(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
@@ -158,17 +197,7 @@ export default function DocumentScanner({
     event.target.value = ""
   }
 
-  useEffect(() => {
-    if (!auto_start || disabled) {
-      return
-    }
-
-    void start_camera()
-  }, [auto_start, disabled])
-
-  const guidance =
-    quality?.guidance_message ??
-    (camera_active ? "枠内に合わせてください" : "カメラでスキャンを開始してください")
+  const guidance = quality?.guidance_message ?? "枠内に合わせてください"
 
   return (
     <div className="space-y-3">
@@ -181,7 +210,7 @@ export default function DocumentScanner({
           playsInline
           muted
           className={`absolute inset-0 h-full w-full object-cover ${
-            camera_active ? "opacity-100" : "opacity-30"
+            camera_active ? "opacity-100" : "opacity-0"
           }`}
         />
 
@@ -208,30 +237,23 @@ export default function DocumentScanner({
         </div>
       </div>
 
-      {camera_error ? (
-        <p className="text-sm leading-6 text-neutral-600">{camera_error}</p>
+      {fallback_mode ? (
+        <div className="space-y-2">
+          {fallback_message ? (
+            <p className="text-sm leading-6 text-neutral-600">{fallback_message}</p>
+          ) : null}
+          <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-neutral-300 px-4 py-2 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50">
+            画像を選択
+            <input
+              type="file"
+              accept="image/*"
+              disabled={disabled}
+              onChange={(event) => void handle_file_select(event)}
+              className="sr-only"
+            />
+          </label>
+        </div>
       ) : null}
-
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          disabled={disabled || camera_active}
-          onClick={() => void start_camera()}
-          className="inline-flex items-center justify-center rounded-full border border-neutral-300 px-4 py-2 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50 disabled:opacity-60"
-        >
-          カメラでスキャン
-        </button>
-        <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-neutral-300 px-4 py-2 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50">
-          画像を選択
-          <input
-            type="file"
-            accept="image/*"
-            disabled={disabled}
-            onChange={(event) => void handle_file_select(event)}
-            className="sr-only"
-          />
-        </label>
-      </div>
     </div>
   )
 }

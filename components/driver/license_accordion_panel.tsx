@@ -221,19 +221,25 @@ export default function DriverLicenseAccordionPanel({
         <h4 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
           免許証スキャン
         </h4>
-        <DocumentScanner
-          document_type="driver_license_front"
-          on_capture={handle_capture}
-          disabled={isSubmitting || ocr_loading}
-          auto_start
-        />
-        {preview_url ? (
-          <img
-            src={preview_url}
-            alt="運転免許証プレビュー"
-            className="max-h-40 w-full rounded-xl object-contain ring-1 ring-neutral-200"
+        {image_url ? (
+          preview_url ? (
+            <img
+              src={preview_url}
+              alt="運転免許証プレビュー"
+              className="aspect-[3/4] w-full rounded-2xl bg-black object-contain"
+            />
+          ) : (
+            <div className="flex aspect-[3/4] w-full items-center justify-center rounded-2xl bg-black text-sm text-white/80">
+              画像を読み込みました
+            </div>
+          )
+        ) : (
+          <DocumentScanner
+            document_type="driver_license_front"
+            on_capture={handle_capture}
+            disabled={isSubmitting || ocr_loading}
           />
-        ) : null}
+        )}
       </section>
 
       <section className="space-y-1">
@@ -251,26 +257,28 @@ export default function DriverLicenseAccordionPanel({
           氏名
           <input
             value={form.license_name}
+            disabled={!image_url.trim() || ocr_loading}
             onChange={(event) =>
               setForm((current) => ({
                 ...current,
                 license_name: event.target.value,
               }))
             }
-            className="h-11 rounded-xl border border-neutral-200 px-3 text-neutral-900"
+            className="h-11 rounded-xl border border-neutral-200 px-3 text-neutral-900 disabled:bg-neutral-50 disabled:text-neutral-400"
           />
         </label>
         <label className="grid gap-1 text-sm text-neutral-700">
           住所
           <input
             value={form.license_address}
+            disabled={!image_url.trim() || ocr_loading}
             onChange={(event) =>
               setForm((current) => ({
                 ...current,
                 license_address: event.target.value,
               }))
             }
-            className="h-11 rounded-xl border border-neutral-200 px-3 text-neutral-900"
+            className="h-11 rounded-xl border border-neutral-200 px-3 text-neutral-900 disabled:bg-neutral-50 disabled:text-neutral-400"
           />
         </label>
         <label className="grid gap-1 text-sm text-neutral-700">
@@ -278,26 +286,28 @@ export default function DriverLicenseAccordionPanel({
           <input
             type="date"
             value={form.license_birth_date}
+            disabled={!image_url.trim() || ocr_loading}
             onChange={(event) =>
               setForm((current) => ({
                 ...current,
                 license_birth_date: event.target.value,
               }))
             }
-            className="h-11 rounded-xl border border-neutral-200 px-3 text-neutral-900"
+            className="h-11 rounded-xl border border-neutral-200 px-3 text-neutral-900 disabled:bg-neutral-50 disabled:text-neutral-400"
           />
         </label>
         <label className="grid gap-1 text-sm text-neutral-700">
           免許証番号
           <input
             value={form.license_number}
+            disabled={!image_url.trim() || ocr_loading}
             onChange={(event) =>
               setForm((current) => ({
                 ...current,
                 license_number: event.target.value,
               }))
             }
-            className="h-11 rounded-xl border border-neutral-200 px-3 text-neutral-900"
+            className="h-11 rounded-xl border border-neutral-200 px-3 text-neutral-900 disabled:bg-neutral-50 disabled:text-neutral-400"
           />
         </label>
         <label className="grid gap-1 text-sm text-neutral-700">
@@ -305,13 +315,14 @@ export default function DriverLicenseAccordionPanel({
           <input
             type="date"
             value={form.license_expiration_date}
+            disabled={!image_url.trim() || ocr_loading}
             onChange={(event) =>
               setForm((current) => ({
                 ...current,
                 license_expiration_date: event.target.value,
               }))
             }
-            className="h-11 rounded-xl border border-neutral-200 px-3 text-neutral-900"
+            className="h-11 rounded-xl border border-neutral-200 px-3 text-neutral-900 disabled:bg-neutral-50 disabled:text-neutral-400"
           />
         </label>
       </section>

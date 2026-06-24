@@ -50,6 +50,7 @@ export const OCR_GUIDANCE: Record<string, string> = {
 
 export const OCR_AUTO_CAPTURE_STABLE_MS = 500
 export const OCR_AUTO_CAPTURE_MIN_SCORE = 0.72
+export const OCR_AUTO_SCAN_TIMEOUT_MS = 45_000
 
 export function read_ocr_document_type(value: unknown): OcrDocumentType | null {
   if (
