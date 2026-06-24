@@ -20,7 +20,14 @@ import {
 
 const DRIVER_CORE_FIELDS = ["driver_uuid", "user_uuid", "status"].join(",")
 
-const DRIVER_EXTENDED_FIELDS = [
+const DRIVER_PROGRESS_FIELDS = [
+  "driver_uuid",
+  "user_uuid",
+  "status",
+  "driver_progress",
+].join(",")
+
+const DRIVER_ENTRY_FIELDS = [
   "driver_uuid",
   "user_uuid",
   "status",
@@ -36,11 +43,14 @@ type FetchDriverRowResult = {
   error_message: string | null
 }
 
-function is_missing_column_error(error: {
-  code?: string
-  message?: string
-  details?: string
-}, column: string) {
+function is_missing_column_error(
+  error: {
+    code?: string
+    message?: string
+    details?: string
+  },
+  column: string,
+) {
   const haystack = [error.code, error.message, error.details]
     .filter(Boolean)
     .join(" ")
@@ -63,59 +73,15 @@ async function query_driver_row(
     return { ok: false, error: "Database configuration is missing" }
   }
 
-  const response = await fetch(
-    restUrl(
-      config,
-      "drivers",
-      [
-        `user_uuid=eq.${encodeURIComponent(user_uuid)}`,
-        `select=${select}`,
-        "limit=1",
-      ].join("&"),
-    ),
-    {
-      headers: restHeaders(config),
-      cache: "no-store",
-    },
-  )
-
-  if (!response.ok) {
-    const error = await readRestError(response)
-
-    return {
-      ok: false,
-      error: error.message ?? `drivers fetch failed (${response.status})`,
-    }
-  }
-
-  const rows = (await response.json()) as DriverProgressRow[]
-
-  return { ok: true, row: rows[0] ?? null }
-}
-
-async function fetch_driver_row(user_uuid: string): Promise<FetchDriverRowResult> {
-  const extended = await query_driver_row(user_uuid, DRIVER_EXTENDED_FIELDS)
-
-  if (extended.ok) {
-    return {
-      row: extended.row,
-      has_driver_progress_column: true,
-      error_message: null,
-    }
-  }
-
-  const extended_error = extended.error
-  const config = getRestConfig()
-
-  if (config) {
-    const probe = await fetch(
+  try {
+    const response = await fetch(
       restUrl(
         config,
         "drivers",
         [
           `user_uuid=eq.${encodeURIComponent(user_uuid)}`,
-          "select=driver_progress",
-          "limit=0",
+          `select=${select}`,
+          "limit=1",
         ].join("&"),
       ),
       {
@@ -124,26 +90,81 @@ async function fetch_driver_row(user_uuid: string): Promise<FetchDriverRowResult
       },
     )
 
-    if (!probe.ok) {
-      const probe_error = await readRestError(probe)
+    if (!response.ok) {
+      const error = await readRestError(response)
 
-      if (is_missing_column_error(probe_error, "driver_progress")) {
-        const core = await query_driver_row(user_uuid, DRIVER_CORE_FIELDS)
+      return {
+        ok: false,
+        error: error.message ?? `drivers fetch failed (${response.status})`,
+      }
+    }
 
-        if (core.ok) {
+    const rows = (await response.json()) as DriverProgressRow[]
+
+    return { ok: true, row: rows[0] ?? null }
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "drivers fetch failed",
+    }
+  }
+}
+
+async function fetch_driver_row(user_uuid: string): Promise<FetchDriverRowResult> {
+  const with_progress = await query_driver_row(user_uuid, DRIVER_PROGRESS_FIELDS)
+
+  if (with_progress.ok) {
+    return {
+      row: with_progress.row,
+      has_driver_progress_column: true,
+      error_message: null,
+    }
+  }
+
+  const progress_error = with_progress.error
+  const config = getRestConfig()
+
+  if (config) {
+    try {
+      const probe = await fetch(
+        restUrl(
+          config,
+          "drivers",
+          [
+            `user_uuid=eq.${encodeURIComponent(user_uuid)}`,
+            "select=driver_progress",
+            "limit=0",
+          ].join("&"),
+        ),
+        {
+          headers: restHeaders(config),
+          cache: "no-store",
+        },
+      )
+
+      if (!probe.ok) {
+        const probe_error = await readRestError(probe)
+
+        if (is_missing_column_error(probe_error, "driver_progress")) {
+          const core = await query_driver_row(user_uuid, DRIVER_CORE_FIELDS)
+
+          if (core.ok) {
+            return {
+              row: core.row,
+              has_driver_progress_column: false,
+              error_message: null,
+            }
+          }
+
           return {
-            row: core.row,
+            row: null,
             has_driver_progress_column: false,
-            error_message: null,
+            error_message: core.error,
           }
         }
-
-        return {
-          row: null,
-          has_driver_progress_column: false,
-          error_message: core.error,
-        }
       }
+    } catch {
+      // Fall through to core-only fetch.
     }
   }
 
@@ -160,18 +181,13 @@ async function fetch_driver_row(user_uuid: string): Promise<FetchDriverRowResult
   return {
     row: null,
     has_driver_progress_column: false,
-    error_message: core.error ?? extended_error,
+    error_message: core.error ?? progress_error,
   }
 }
 
-async function insert_driver_row(input: {
-  user_uuid: string
-  status?: DriverStatus
-  driver_progress?: DriverProgress
-  pet_experience?: string[]
-  transport_experience?: string | null
-  application_reason?: string | null
-  include_driver_progress?: boolean
+async function post_driver_row(input: {
+  body: Record<string, unknown>
+  select: string
 }) {
   const config = getRestConfig()
 
@@ -179,35 +195,15 @@ async function insert_driver_row(input: {
     throw new Error("Database configuration is missing")
   }
 
-  const include_driver_progress = input.include_driver_progress ?? true
-  const body: Record<string, unknown> = {
-    user_uuid: input.user_uuid,
-    status: input.status ?? "provisional",
-    pet_experience: input.pet_experience ?? [],
-    transport_experience: input.transport_experience ?? null,
-    application_reason: input.application_reason ?? null,
-  }
-
-  if (include_driver_progress) {
-    body.driver_progress = input.driver_progress ?? empty_driver_progress()
-  }
-
-  const response = await fetch(
-    restUrl(
-      config,
-      "drivers",
-      `select=${include_driver_progress ? DRIVER_EXTENDED_FIELDS : DRIVER_CORE_FIELDS}`,
-    ),
-    {
-      method: "POST",
-      headers: {
-        ...restHeaders(config),
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify(body),
-      cache: "no-store",
+  const response = await fetch(restUrl(config, "drivers", `select=${input.select}`), {
+    method: "POST",
+    headers: {
+      ...restHeaders(config),
+      Prefer: "return=representation",
     },
-  )
+    body: JSON.stringify(input.body),
+    cache: "no-store",
+  })
 
   if (!response.ok) {
     const error = await readRestError(response)
@@ -222,6 +218,87 @@ async function insert_driver_row(input: {
   const rows = (await response.json()) as DriverProgressRow[]
 
   return rows[0] ?? null
+}
+
+async function insert_driver_row(input: {
+  user_uuid: string
+  status?: DriverStatus
+  driver_progress?: DriverProgress
+  pet_experience?: string[]
+  transport_experience?: string | null
+  application_reason?: string | null
+  include_driver_progress?: boolean
+}) {
+  const include_driver_progress = input.include_driver_progress ?? true
+  const body: Record<string, unknown> = {
+    user_uuid: input.user_uuid,
+    status: input.status ?? "provisional",
+  }
+
+  if (input.pet_experience !== undefined) {
+    body.pet_experience = input.pet_experience
+  }
+
+  if (input.transport_experience !== undefined) {
+    body.transport_experience = input.transport_experience
+  }
+
+  if (input.application_reason !== undefined) {
+    body.application_reason = input.application_reason
+  }
+
+  if (include_driver_progress) {
+    body.driver_progress = input.driver_progress ?? empty_driver_progress()
+  }
+
+  return post_driver_row({
+    body,
+    select: include_driver_progress ? DRIVER_ENTRY_FIELDS : DRIVER_CORE_FIELDS,
+  })
+}
+
+async function insert_driver_row_for_page(
+  user_uuid: string,
+  include_driver_progress: boolean,
+) {
+  const attempts: Array<{
+    status: DriverStatus
+    include_driver_progress: boolean
+    pet_experience?: string[]
+    transport_experience?: string | null
+    application_reason?: string | null
+  }> = [
+    { status: "provisional", include_driver_progress },
+    { status: "provisional", include_driver_progress: false },
+    {
+      status: "provisional",
+      include_driver_progress: false,
+      pet_experience: [],
+      transport_experience: "no",
+      application_reason: "",
+    },
+  ]
+
+  for (const attempt of attempts) {
+    try {
+      const row = await insert_driver_row({
+        user_uuid,
+        status: attempt.status,
+        include_driver_progress: attempt.include_driver_progress,
+        pet_experience: attempt.pet_experience,
+        transport_experience: attempt.transport_experience,
+        application_reason: attempt.application_reason,
+      })
+
+      if (row?.driver_uuid) {
+        return row
+      }
+    } catch {
+      continue
+    }
+  }
+
+  return null
 }
 
 async function patch_driver_row(
@@ -272,19 +349,6 @@ function is_duplicate_driver_error(error: unknown) {
   )
 }
 
-function is_missing_driver_progress_column_error(error: unknown) {
-  if (!(error instanceof Error)) {
-    return false
-  }
-
-  return is_missing_column_error(
-    {
-      message: error.message,
-    },
-    "driver_progress",
-  )
-}
-
 export async function ensure_driver_record(user_uuid: string) {
   const fetched = await fetch_driver_row(user_uuid)
 
@@ -293,18 +357,15 @@ export async function ensure_driver_record(user_uuid: string) {
   }
 
   try {
-    return await insert_driver_row({
+    const created = await insert_driver_row_for_page(
       user_uuid,
-      include_driver_progress: fetched.has_driver_progress_column,
-    })
-  } catch (error) {
-    if (is_missing_driver_progress_column_error(error)) {
-      return insert_driver_row({
-        user_uuid,
-        include_driver_progress: false,
-      })
-    }
+      fetched.has_driver_progress_column,
+    )
 
+    if (created?.driver_uuid) {
+      return created
+    }
+  } catch (error) {
     if (is_duplicate_driver_error(error)) {
       const retry = await fetch_driver_row(user_uuid)
 
@@ -315,6 +376,24 @@ export async function ensure_driver_record(user_uuid: string) {
 
     throw error
   }
+
+  const retry = await fetch_driver_row(user_uuid)
+
+  if (retry.row?.driver_uuid) {
+    return retry.row
+  }
+
+  throw new Error("Failed to resolve driver record")
+}
+
+async function ensure_driver_record_safe(user_uuid: string) {
+  try {
+    return await ensure_driver_record(user_uuid)
+  } catch {
+    const fetched = await fetch_driver_row(user_uuid)
+
+    return fetched.row
+  }
 }
 
 export type DriverPageLoadResult =
@@ -323,6 +402,7 @@ export type DriverPageLoadResult =
       state: DriverProgressState
       has_driver: boolean
       has_driver_progress: boolean
+      driver_uuid: string | null
     }
   | {
       ok: false
@@ -351,6 +431,7 @@ export async function load_driver_page_state(
       state: build_driver_progress_state(null),
       has_driver: false,
       has_driver_progress: false,
+      driver_uuid: null,
     }
   }
 
@@ -359,10 +440,10 @@ export async function load_driver_page_state(
     let row = fetched.row
 
     if (!row?.driver_uuid) {
-      row = await ensure_driver_record(user_uuid)
+      row = await ensure_driver_record_safe(user_uuid)
     }
 
-    if (!row) {
+    if (!row?.driver_uuid) {
       return {
         ok: false,
         error_message: fetched.error_message ?? "Failed to resolve driver record",
@@ -375,9 +456,10 @@ export async function load_driver_page_state(
     return {
       ok: true,
       state: build_driver_progress_state(row),
-      has_driver: Boolean(row.driver_uuid),
+      has_driver: true,
       has_driver_progress:
         fetched.has_driver_progress_column && row.driver_progress != null,
+      driver_uuid: row.driver_uuid ?? null,
     }
   } catch (error) {
     const error_message =

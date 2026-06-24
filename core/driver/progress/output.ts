@@ -2,6 +2,11 @@ import type {
   DriverProgressState,
   DriverProgressValidationResult,
 } from "@/core/driver/progress/rules"
+import {
+  load_driver_page_state,
+  log_driver_page_render_failed,
+  type DriverPageLoadResult,
+} from "@/core/driver/progress/action"
 
 export type DriverProgressOutput = {
   ok: boolean
@@ -62,20 +67,36 @@ export function build_driver_license_success_output(input: {
   }
 }
 
-export type DriverPageLoadResult = {
-  ok: boolean
-  state?: DriverProgressState
-  error_message?: string
-  has_driver?: boolean
-  has_driver_progress?: boolean
-  driver_uuid?: string | null
+export type DriverPageOutput = DriverPageLoadResult
+
+export async function resolve_driver_page_state(
+  user_uuid: string | null,
+): Promise<DriverPageOutput> {
+  return load_driver_page_state(user_uuid)
 }
 
 export function build_driver_page_error_output(input: {
   error_message: string
-}): DriverPageLoadResult {
+  user_uuid?: string | null
+  driver_uuid?: string | null
+  has_driver?: boolean
+  has_driver_progress?: boolean
+}): DriverPageOutput {
+  log_driver_page_render_failed({
+    user_uuid: input.user_uuid ?? null,
+    driver_uuid: input.driver_uuid ?? null,
+    has_driver: input.has_driver ?? false,
+    has_driver_progress: input.has_driver_progress ?? false,
+    error_message: input.error_message,
+  })
+
   return {
     ok: false,
     error_message: input.error_message,
+    has_driver: input.has_driver ?? false,
+    has_driver_progress: input.has_driver_progress ?? false,
+    driver_uuid: input.driver_uuid ?? null,
   }
 }
+
+export type { DriverPageLoadResult }

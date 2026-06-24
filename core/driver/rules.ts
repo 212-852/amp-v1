@@ -10,6 +10,7 @@ export {
   empty_driver_progress,
   normalize_driver_progress,
   normalize_driver_progress_value,
+  normalize_driver_status,
   is_all_progress_complete,
   is_driver_provisional,
   seed_driver_progress_from_entry,

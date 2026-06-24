@@ -5,15 +5,17 @@ import OpsShell from "@/components/ops/shell"
 import { resolveAuthContext } from "@/core/auth/context"
 import { resolveSession } from "@/core/auth/session"
 import {
-  load_driver_page_state,
-  log_driver_page_render_failed,
-} from "@/core/driver/progress/action"
+  build_driver_page_error_output,
+  resolve_driver_page_state,
+} from "@/core/driver/progress/output"
 import {
   can_driver_operate,
   can_show_driver_onboarding,
 } from "@/core/driver/progress/rules"
 import { normalizeOpsHeaderSession } from "@/core/ops/header_session"
 import { enforceAuthRouteRedirect } from "@/core/route/rules"
+
+export const dynamic = "force-dynamic"
 
 function renderDriverProgressError(session: Awaited<ReturnType<typeof resolveSession>>) {
   return (
@@ -37,15 +39,15 @@ export default async function DriverPage() {
 
     const context = await resolveAuthContext("/driver")
     const session = await resolveSession(context)
-    const progress_result = await load_driver_page_state(session.user_uuid)
+    const progress_result = await resolve_driver_page_state(session.user_uuid)
 
     if (!progress_result.ok) {
-      log_driver_page_render_failed({
+      build_driver_page_error_output({
+        error_message: progress_result.error_message,
         user_uuid: session.user_uuid,
         driver_uuid: progress_result.driver_uuid,
         has_driver: progress_result.has_driver,
         has_driver_progress: progress_result.has_driver_progress,
-        error_message: progress_result.error_message,
       })
 
       return renderDriverProgressError(session)
@@ -70,7 +72,7 @@ export default async function DriverPage() {
       >
         {onboarding_locked ? (
           <DriverOnboardingModal
-            initial_items={driver.items}
+            initial_items={driver.items ?? []}
             initial_status={driver.status}
             completed_count={driver.completed_count}
             total_count={driver.total_count}
@@ -88,12 +90,12 @@ export default async function DriverPage() {
       throw error
     }
 
-    log_driver_page_render_failed({
+    build_driver_page_error_output({
+      error_message,
       user_uuid: null,
       driver_uuid: null,
       has_driver: false,
       has_driver_progress: false,
-      error_message,
     })
 
     const context = await resolveAuthContext("/driver").catch(() => null)

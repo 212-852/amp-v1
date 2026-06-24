@@ -202,18 +202,56 @@ export function append_progress_entry(
   return next
 }
 
-export function build_driver_progress_state(row: DriverProgressRow | null): DriverProgressState {
-  const progress = normalize_driver_progress(row)
-  const items = build_checklist_items(progress)
+export function normalize_driver_status(value: unknown): DriverStatus {
+  if (
+    value === "provisional" ||
+    value === "active" ||
+    value === "suspended" ||
+    value === "retired"
+  ) {
+    return value
+  }
 
-  return {
-    driver_uuid: row?.driver_uuid ?? null,
-    status: row?.status ?? "provisional",
-    items,
-    progress,
-    completed_count: count_completed_items(items),
-    total_count: DRIVER_PROGRESS_KEYS.length,
-    all_complete: is_all_progress_complete(progress),
+  if (
+    value === "preparing" ||
+    value === "applied" ||
+    value === "reviewing" ||
+    value === "approved" ||
+    value === "rejected"
+  ) {
+    return "provisional"
+  }
+
+  return "provisional"
+}
+
+export function build_driver_progress_state(row: DriverProgressRow | null): DriverProgressState {
+  try {
+    const progress = normalize_driver_progress(row)
+    const items = build_checklist_items(progress)
+
+    return {
+      driver_uuid: row?.driver_uuid ?? null,
+      status: normalize_driver_status(row?.status),
+      items,
+      progress,
+      completed_count: count_completed_items(items),
+      total_count: DRIVER_PROGRESS_KEYS.length,
+      all_complete: is_all_progress_complete(progress),
+    }
+  } catch {
+    const progress = empty_driver_progress()
+    const items = build_checklist_items(progress)
+
+    return {
+      driver_uuid: row?.driver_uuid ?? null,
+      status: "provisional",
+      items,
+      progress,
+      completed_count: 0,
+      total_count: DRIVER_PROGRESS_KEYS.length,
+      all_complete: false,
+    }
   }
 }
 

@@ -75,7 +75,7 @@ export default function DriverOnboardingModal({
           </div>
 
           <ul className="flex-1 space-y-2 overflow-y-auto px-5 py-4">
-            {initial_items.map((item) => (
+            {(initial_items ?? []).map((item) => (
               <li key={item.key}>
                 {item.key === "driver_license" ? (
                   <button
