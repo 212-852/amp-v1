@@ -8,8 +8,6 @@ import type {
   EntryProfileInput,
   EntryQuestionnaireInput,
 } from "@/core/entry/context"
-import { ADDRESS_OPTIONS } from "@/src/address/options"
-import { validate_address_selection } from "@/src/address/rules"
 
 export type EntryValidationResult = {
   ok: boolean
@@ -69,21 +67,6 @@ function validate_profile_input(profile: EntryProfileInput) {
 
   if (profile.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email)) {
     errors.email = "invalid"
-  }
-
-  try {
-    validate_address_selection(ADDRESS_OPTIONS, {
-      prefecture_code: profile.prefecture_code,
-      city_code: profile.city_code,
-    })
-  } catch {
-    if (profile.prefecture_code) {
-      errors.prefecture_code = "invalid"
-    }
-
-    if (profile.city_code) {
-      errors.city_code = "invalid"
-    }
   }
 
   return errors

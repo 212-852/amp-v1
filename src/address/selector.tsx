@@ -31,11 +31,6 @@ export default function AddressSelector({
   onChange: (value: { prefecture_code: string; city_code: string }) => void
 }>) {
   const city_options = get_city_options(options, prefecture_code)
-  const selected_city_code = city_options.some(
-    (option) => option.value === city_code,
-  )
-    ? city_code
-    : ""
 
   return (
     <div className="grid grid-cols-2 gap-2">
@@ -62,7 +57,7 @@ export default function AddressSelector({
       <label className={classes?.label ?? "block"}>
         <span className={classes?.field_label}>{labels.city}</span>
         <select
-          value={selected_city_code}
+          value={city_code ?? ""}
           disabled={!prefecture_code}
           onChange={(event) => {
             onChange({

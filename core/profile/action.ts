@@ -327,6 +327,15 @@ async function assert_profile_save_address_allowed(input: {
       : null
 
   if (!city_code) {
+    await sendAuthDebug("PROFILE_CITY_STATE", {
+      ui_city_select_value: raw_city_code ?? null,
+      profile_city_code: city_code || null,
+      payload_city_code: city_code || null,
+      selected_city_label: selected_labels.city ?? submitted_city_label,
+      prefecture_code: prefecture_code ?? null,
+      city_exists: false,
+      validation_passed: false,
+    })
     await sendAuthDebug("PROFILE_SAVE_PAYLOAD", {
       user_uuid: input.session.user_uuid,
       profile_uuid,
@@ -343,6 +352,22 @@ async function assert_profile_save_address_allowed(input: {
 
   const city_row = await load_city_code_row(city_code)
   const city_exists = Boolean(city_row?.city_code)
+  const selected_city_label =
+    selected_labels.city ??
+    submitted_city_label ??
+    city_row?.city_name_ja ??
+    city_row?.label ??
+    null
+
+  await sendAuthDebug("PROFILE_CITY_STATE", {
+    ui_city_select_value: raw_city_code ?? null,
+    profile_city_code: city_code,
+    payload_city_code: city_code,
+    selected_city_label,
+    prefecture_code: prefecture_code ?? null,
+    city_exists,
+    validation_passed: city_exists,
+  })
 
   await sendAuthDebug("PROFILE_SAVE_PAYLOAD", {
     user_uuid: input.session.user_uuid,
@@ -350,12 +375,7 @@ async function assert_profile_save_address_allowed(input: {
     prefecture_code: prefecture_code ?? null,
     city_code,
     city_code_type: typeof city_code,
-    selected_city_label:
-      selected_labels.city ??
-      submitted_city_label ??
-      city_row?.city_name_ja ??
-      city_row?.label ??
-      null,
+    selected_city_label,
     city_exists,
     save_allowed: city_exists,
     blocked_reason: city_exists ? null : "city_code_not_found",

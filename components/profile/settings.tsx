@@ -9,10 +9,7 @@ import type { ProfilePayload } from "@/core/profile/output"
 import ProfileAddressSelector, {
   useProfileAddressOptions,
 } from "@/src/address/profile_selector"
-import {
-  resolve_address_labels,
-  resolve_selected_city_code,
-} from "@/src/address/rules"
+import { resolve_address_labels } from "@/src/address/rules"
 import { useLocale } from "@/src/components/locale/provider"
 import type { Locale } from "@/src/lib/locale"
 import { ui_layer_class } from "@/src/ui/layers"
@@ -153,14 +150,9 @@ export default function ProfileSettings({
     city_code,
   })
   const address_options = address_state.options
-  const selected_city_code = resolve_selected_city_code(
-    address_options,
-    prefecture_code,
-    city_code,
-  )
   const selected_address_labels = resolve_address_labels(address_options, {
     prefecture_code,
-    city_code: selected_city_code,
+    city_code,
   })
 
   useEffect(() => {
@@ -239,10 +231,9 @@ export default function ProfileSettings({
         birth_date,
         phone,
         prefecture: selected_address_labels.prefecture,
-        city: selected_address_labels.city,
         language: selected_locale,
         prefecture_code,
-        city_code: selected_city_code,
+        city_code,
         address,
         memo,
       }

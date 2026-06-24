@@ -8,10 +8,7 @@ import type { EntryFormInitialValues } from "@/core/entry/context"
 import { normalize_phone } from "@/form/normalize"
 import AddressSelector from "@/src/address/selector"
 import { useAddressOptions } from "@/src/address/use_options"
-import {
-  resolve_address_labels,
-  resolve_selected_city_code,
-} from "@/src/address/rules"
+import { resolve_address_labels } from "@/src/address/rules"
 
 const fieldClass =
   "h-11 w-full rounded-md border border-[#d7b98f] bg-[#fffaf3] px-3 text-[15px] text-[#3d2a19] outline-none transition focus:border-[#a46a2a] focus:ring-2 focus:ring-[#a46a2a]/15"
@@ -46,11 +43,13 @@ export default function EntryForm({
 }: Readonly<{
   initial: EntryFormInitialValues
 }>) {
-  const [prefectureCode, setPrefectureCode] = useState(initial.prefecture_code)
-  const [cityCode, setCityCode] = useState(initial.city_code)
+  const [profile, setProfile] = useState({
+    prefecture_code: initial.prefecture_code,
+    city_code: initial.city_code,
+  })
   const addressState = useAddressOptions({
-    prefecture_code: prefectureCode,
-    city_code: cityCode,
+    prefecture_code: profile.prefecture_code,
+    city_code: profile.city_code,
   })
   const [phone, setPhone] = useState(normalize_phone(initial.phone))
   const [petExperience, setPetExperience] = useState<string[]>([])
@@ -58,18 +57,13 @@ export default function EntryForm({
   const [showSuccess, setShowSuccess] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
-  const selectedCityCode = resolve_selected_city_code(
-    addressState.options,
-    prefectureCode,
-    cityCode,
-  )
   const selectedLabels = useMemo(
     () =>
       resolve_address_labels(addressState.options, {
-        prefecture_code: prefectureCode,
-        city_code: selectedCityCode,
+        prefecture_code: profile.prefecture_code,
+        city_code: profile.city_code,
       }),
-    [addressState.options, prefectureCode, selectedCityCode],
+    [addressState.options, profile.city_code, profile.prefecture_code],
   )
 
   function togglePetExperience(value: string) {
@@ -117,7 +111,7 @@ export default function EntryForm({
     const normalizedPhone = normalize_phone(phone)
     setPhone(normalizedPhone)
 
-    if (!selectedCityCode) {
+    if (!profile.city_code) {
       setErrors({ city_code: "required" })
       setMessage("市区町村を選択してください")
       setIsSubmitting(false)
@@ -227,8 +221,8 @@ export default function EntryForm({
 
         <AddressSelector
           options={addressState.options}
-          prefecture_code={prefectureCode}
-          city_code={cityCode}
+          prefecture_code={profile.prefecture_code}
+          city_code={profile.city_code}
           labels={{
             prefecture: "都道府県",
             city: "市区町村",
@@ -241,18 +235,23 @@ export default function EntryForm({
             select: fieldClass,
           }}
           onChange={(value) => {
-            setPrefectureCode(value.prefecture_code)
-            setCityCode(value.city_code)
+            setProfile({
+              prefecture_code: value.prefecture_code,
+              city_code: value.city_code,
+            })
           }}
         />
-        <input type="hidden" name="prefecture_code" value={prefectureCode} />
-        <input type="hidden" name="city_code" value={selectedCityCode} />
+        <input
+          type="hidden"
+          name="prefecture_code"
+          value={profile.prefecture_code}
+        />
+        <input type="hidden" name="city_code" value={profile.city_code} />
         <input
           type="hidden"
           name="prefecture"
           value={selectedLabels.prefecture ?? ""}
         />
-        <input type="hidden" name="city" value={selectedLabels.city ?? ""} />
 
         <label className={labelClass}>
           住所

@@ -25,7 +25,7 @@ type CityRow = {
 
 type AddressOptionsInput = {
   prefecture_code?: string | null
-  selected_city_code?: string | null
+  city_code?: string | null
 }
 
 function build_db_address_options(input: {
@@ -42,14 +42,14 @@ function build_db_address_options(input: {
 
   for (const city of input.cities) {
     const current = cities_by_prefecture[city.prefecture_code] ?? []
-    const selected_city_code = String(city.code)
-    const selected_city_label = city.city_name_ja ?? city.label
+    const city_code = String(city.code)
+    const city_label = city.city_name_ja ?? city.label
 
     current.push({
-      value: selected_city_code,
-      code: selected_city_code,
-      label: selected_city_label,
-      city_name_ja: selected_city_label,
+      value: city_code,
+      code: city_code,
+      label: city_label,
+      city_name_ja: city_label,
       city_type: city.city_type ?? null,
     })
 
@@ -76,11 +76,11 @@ async function debug_profile_city_select(
   const prefecture_code = input?.prefecture_code
     ? String(input.prefecture_code)
     : null
-  const selected_city_code = input?.selected_city_code
-    ? String(input.selected_city_code)
+  const city_code = input?.city_code
+    ? String(input.city_code)
     : null
 
-  if (!prefecture_code && !selected_city_code) {
+  if (!prefecture_code && !city_code) {
     return
   }
 
@@ -88,7 +88,7 @@ async function debug_profile_city_select(
     ? get_city_options(options, prefecture_code)
     : Object.values(options.cities_by_prefecture).flat()
   const selected_city = city_options.find(
-    (option) => option.value === selected_city_code,
+    (option) => option.value === city_code,
   )
   const city_types = Array.from(
     new Set(
@@ -102,7 +102,7 @@ async function debug_profile_city_select(
     prefecture_code,
     loaded_city_count: city_options.length,
     city_types,
-    selected_city_code,
+    city_code,
     selected_city_label:
       selected_city?.city_name_ja ?? selected_city?.label ?? null,
   })
