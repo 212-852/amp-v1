@@ -5,7 +5,6 @@ import type {
   DriverLicenseRequestContext,
   DriverProgressRequestContext,
 } from "@/core/driver/progress/context"
-import { parse_driver_license_image } from "@/core/driver/progress/ocr"
 import {
   append_progress_entry,
   build_driver_progress_state,
@@ -539,20 +538,11 @@ export async function append_driver_progress(
 
 export async function save_driver_license_progress(
   context: DriverLicenseRequestContext,
-): Promise<{ state: DriverProgressState; parsed: Record<string, string> }> {
+): Promise<{ state: DriverProgressState }> {
   const user_uuid = context.session.user_uuid
 
   if (!user_uuid) {
     throw new Error("Driver license upload requires user_uuid")
-  }
-
-  const parsed_result = await parse_driver_license_image(context.input.image_url)
-  const parsed = {
-    last_name: context.input.parsed?.last_name ?? parsed_result.last_name,
-    first_name: context.input.parsed?.first_name ?? parsed_result.first_name,
-    license_number:
-      context.input.parsed?.license_number ?? parsed_result.license_number,
-    expiry_date: context.input.parsed?.expiry_date ?? parsed_result.expiry_date,
   }
 
   const row = await ensure_driver_record(user_uuid)
@@ -565,11 +555,16 @@ export async function save_driver_license_progress(
   const next = append_progress_entry(current, "driver_license", {
     status: "uploaded",
     image_url: context.input.image_url,
+    license_name: context.input.license_name || null,
+    license_address: context.input.license_address || null,
+    license_birth_date: context.input.license_birth_date || null,
+    license_number: context.input.license_number || null,
+    license_expiration_date: context.input.license_expiration_date || null,
   })
 
   const state = await save_driver_progress(row.driver_uuid, next, user_uuid)
 
-  return { state, parsed }
+  return { state }
 }
 
 export async function create_driver_from_entry(input: {

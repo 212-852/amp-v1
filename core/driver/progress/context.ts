@@ -9,7 +9,11 @@ export type DriverProgressAppendInput = {
 
 export type DriverLicenseUploadInput = {
   image_url: string
-  parsed?: Record<string, string>
+  license_name?: string
+  license_address?: string
+  license_birth_date?: string
+  license_number?: string
+  license_expiration_date?: string
 }
 
 export type DriverProgressRequestContext = {
@@ -42,6 +46,25 @@ function readString(value: unknown) {
   return typeof value === "string" ? value.trim() : ""
 }
 
+function readLicenseFields(body: Record<string, unknown>) {
+  const parsed_record =
+    body.parsed &&
+    typeof body.parsed === "object" &&
+    !Array.isArray(body.parsed)
+      ? (body.parsed as Record<string, unknown>)
+      : null
+
+  const source = parsed_record ?? body
+
+  return {
+    license_name: readString(source.license_name),
+    license_address: readString(source.license_address),
+    license_birth_date: readString(source.license_birth_date),
+    license_number: readString(source.license_number),
+    license_expiration_date: readString(source.license_expiration_date),
+  }
+}
+
 export function build_driver_progress_context(input: {
   auth: AuthContext
   session: Session
@@ -63,27 +86,14 @@ export function build_driver_license_context(input: {
   session: Session
   body: Record<string, unknown>
 }): DriverLicenseRequestContext {
-  const parsed_record =
-    input.body.parsed &&
-    typeof input.body.parsed === "object" &&
-    !Array.isArray(input.body.parsed)
-      ? (input.body.parsed as Record<string, unknown>)
-      : null
-
-  const parsed = parsed_record
-    ? Object.fromEntries(
-        Object.entries(parsed_record).flatMap(([key, value]) =>
-          typeof value === "string" ? [[key, value]] : [],
-        ),
-      )
-    : undefined
+  const fields = readLicenseFields(input.body)
 
   return {
     auth: input.auth,
     session: input.session,
     input: {
       image_url: readString(input.body.image_url),
-      parsed,
+      ...fields,
     },
   }
 }

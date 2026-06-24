@@ -13,6 +13,12 @@ export type DriverProgressEntry = {
   status: string
   created_at: string
   image_url?: string | null
+  entry_answer?: string | null
+  license_name?: string | null
+  license_address?: string | null
+  license_birth_date?: string | null
+  license_number?: string | null
+  license_expiration_date?: string | null
 }
 
 export type DriverProgress = Record<DriverProgressKey, DriverProgressEntry[]>
@@ -32,6 +38,8 @@ export type DriverChecklistItem = {
   label: string
   complete: boolean
   latest_status: string | null
+  current_answer: string | null
+  latest_entry: DriverProgressEntry | null
 }
 
 export type DriverProgressState = {
@@ -63,6 +71,29 @@ export const DRIVER_PROGRESS_LABELS: Record<DriverProgressKey, string> = {
   freight_operator: "貨物軽自動車運送事業者",
   black_plate: "黒ナンバー",
   safety_manager: "貨物軽自動車安全管理者",
+}
+
+const DRIVER_LICENSE_ENTRY_ANSWER = "運転免許証を所持しています"
+
+function read_optional_string(value: unknown) {
+  return typeof value === "string" ? value.trim() : null
+}
+
+function normalize_progress_entry(entry: Record<string, unknown>) {
+  return {
+    status: typeof entry.status === "string" ? entry.status.trim() : "",
+    created_at:
+      typeof entry.created_at === "string"
+        ? entry.created_at
+        : new Date().toISOString(),
+    image_url: read_optional_string(entry.image_url),
+    entry_answer: read_optional_string(entry.entry_answer),
+    license_name: read_optional_string(entry.license_name),
+    license_address: read_optional_string(entry.license_address),
+    license_birth_date: read_optional_string(entry.license_birth_date),
+    license_number: read_optional_string(entry.license_number),
+    license_expiration_date: read_optional_string(entry.license_expiration_date),
+  }
 }
 
 const COMPLETE_STATUSES: Record<DriverProgressKey, Set<string>> = {
@@ -108,15 +139,7 @@ export function normalize_driver_progress_value(value: unknown): DriverProgress 
       .filter((entry): entry is Record<string, unknown> => {
         return Boolean(entry) && typeof entry === "object" && !Array.isArray(entry)
       })
-      .map((entry) => ({
-        status: typeof entry.status === "string" ? entry.status.trim() : "",
-        created_at:
-          typeof entry.created_at === "string"
-            ? entry.created_at
-            : new Date().toISOString(),
-        image_url:
-          typeof entry.image_url === "string" ? entry.image_url.trim() : null,
-      }))
+      .map((entry) => normalize_progress_entry(entry))
       .filter((entry) => entry.status.length > 0)
   }
 
@@ -153,10 +176,59 @@ export function get_latest_progress_status(
   return get_latest_progress_entry(progress, key)?.status ?? null
 }
 
+export function get_checklist_current_answer(
+  progress: DriverProgress,
+  key: DriverProgressKey,
+) {
+  const latest = get_latest_progress_entry(progress, key)
+
+  if (key === "driver_license") {
+    if (latest?.image_url) {
+      return "運転免許証を登録済み"
+    }
+
+    if (latest?.entry_answer) {
+      return latest.entry_answer
+    }
+
+    const declared = progress.driver_license.find((entry) => entry.entry_answer)
+
+    if (declared?.entry_answer) {
+      return declared.entry_answer
+    }
+
+    return "未回答"
+  }
+
+  if (!latest?.status) {
+    return "未回答"
+  }
+
+  return latest.status
+}
+
+export function is_driver_license_complete(progress: DriverProgress) {
+  const latest = get_latest_progress_entry(progress, "driver_license")
+
+  if (!latest?.status) {
+    return false
+  }
+
+  if (!latest.image_url?.trim()) {
+    return false
+  }
+
+  return COMPLETE_STATUSES.driver_license.has(latest.status)
+}
+
 export function is_progress_item_complete(
   progress: DriverProgress,
   key: DriverProgressKey,
 ) {
+  if (key === "driver_license") {
+    return is_driver_license_complete(progress)
+  }
+
   const latest = get_latest_progress_status(progress, key)
 
   if (!latest) {
@@ -172,6 +244,8 @@ export function build_checklist_items(progress: DriverProgress): DriverChecklist
     label: DRIVER_PROGRESS_LABELS[key],
     complete: is_progress_item_complete(progress, key),
     latest_status: get_latest_progress_status(progress, key),
+    current_answer: get_checklist_current_answer(progress, key),
+    latest_entry: get_latest_progress_entry(progress, key),
   }))
 }
 
@@ -196,6 +270,12 @@ export function append_progress_entry(
       status: entry.status,
       created_at: entry.created_at ?? new Date().toISOString(),
       image_url: entry.image_url ?? null,
+      entry_answer: entry.entry_answer ?? null,
+      license_name: entry.license_name ?? null,
+      license_address: entry.license_address ?? null,
+      license_birth_date: entry.license_birth_date ?? null,
+      license_number: entry.license_number ?? null,
+      license_expiration_date: entry.license_expiration_date ?? null,
     },
   ]
 
@@ -262,7 +342,11 @@ export function seed_driver_progress_from_entry(
   const created_at = new Date().toISOString()
 
   if (questionnaire.has_driver_license) {
-    progress.driver_license.push({ status: "uploaded", created_at })
+    progress.driver_license.push({
+      status: "declared",
+      entry_answer: DRIVER_LICENSE_ENTRY_ANSWER,
+      created_at,
+    })
   }
 
   if (questionnaire.vehicle) {

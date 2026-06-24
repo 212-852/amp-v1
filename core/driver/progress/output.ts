@@ -57,7 +57,6 @@ export function build_driver_progress_success_output(input: {
 
 export function build_driver_license_success_output(input: {
   state: DriverProgressState
-  parsed: Record<string, string>
 }): DriverProgressOutput {
   return {
     ok: true,
