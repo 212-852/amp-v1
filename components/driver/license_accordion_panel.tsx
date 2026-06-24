@@ -77,6 +77,7 @@ const DriverLicenseAccordionPanel = forwardRef<
     initial_entry: DriverProgressEntry | null
     camera_stream?: MediaStream | null
     camera_error?: string | null
+    camera_error_kind?: "permission_denied" | "unavailable" | "failed" | null
     onComplete: () => void
   }
 >(function DriverLicenseAccordionPanel(
@@ -85,6 +86,7 @@ const DriverLicenseAccordionPanel = forwardRef<
     initial_entry,
     camera_stream = null,
     camera_error = null,
+    camera_error_kind = null,
     onComplete,
   },
   ref,
@@ -115,6 +117,7 @@ const DriverLicenseAccordionPanel = forwardRef<
           error: "scanner_unavailable",
           error_name: "ScannerUnavailable",
           error_message: "Scanner is unavailable",
+          error_kind: "failed",
         }),
     }),
     [],
@@ -275,6 +278,7 @@ const DriverLicenseAccordionPanel = forwardRef<
             disabled={isSubmitting || ocr_loading}
             camera_stream={camera_stream}
             camera_error={camera_error}
+            camera_error_kind={camera_error_kind}
           />
         )}
       </section>

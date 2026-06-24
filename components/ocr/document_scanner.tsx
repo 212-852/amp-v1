@@ -10,6 +10,7 @@ import {
   useState,
 } from "react"
 
+import OcrCameraFallback from "@/components/ocr/camera_fallback"
 import {
   capture_video_frame,
   read_file_as_data_url,
@@ -20,6 +21,7 @@ import {
   type FrameRect,
   type OcrCameraStartResult,
 } from "@/core/ocr/camera"
+import { read_camera_permission_denied_session } from "@/core/ocr/camera_debug"
 import {
   OCR_AUTO_CAPTURE_STABLE_MS,
   OCR_AUTO_SCAN_TIMEOUT_MS,
@@ -38,6 +40,7 @@ type DocumentScannerProps = {
   disabled?: boolean
   camera_stream?: MediaStream | null
   camera_error?: string | null
+  camera_error_kind?: "permission_denied" | "unavailable" | "failed" | null
 }
 
 const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
@@ -48,6 +51,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       disabled = false,
       camera_stream = null,
       camera_error = null,
+      camera_error_kind = null,
     },
     ref,
   ) {
@@ -58,7 +62,16 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
     const captured_ref = useRef(false)
 
     const [camera_active, setCameraActive] = useState(false)
-    const [fallback_mode, setFallbackMode] = useState(false)
+    const [fallback_mode, setFallbackMode] = useState(
+      () =>
+        read_camera_permission_denied_session() ||
+        camera_error_kind === "permission_denied",
+    )
+    const [permission_denied_fallback, setPermissionDeniedFallback] = useState(
+      () =>
+        read_camera_permission_denied_session() ||
+        camera_error_kind === "permission_denied",
+    )
     const [fallback_message, setFallbackMessage] = useState<string | null>(null)
     const [frame, setFrame] = useState<FrameRect>({ x: 0, y: 0, width: 0, height: 0 })
     const [quality, setQuality] = useState<FrameQualityResult | null>(null)
@@ -70,10 +83,14 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
     }, [])
 
     const enter_fallback = useCallback(
-      (message: string) => {
+      (input: {
+        message: string
+        permission_denied?: boolean
+      }) => {
         stop_camera()
         setFallbackMode(true)
-        setFallbackMessage(message)
+        setPermissionDeniedFallback(Boolean(input.permission_denied))
+        setFallbackMessage(input.message)
       },
       [stop_camera],
     )
@@ -88,6 +105,9 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       }
 
       setCameraActive(true)
+      setFallbackMode(false)
+      setPermissionDeniedFallback(false)
+      setFallbackMessage(null)
     }, [])
 
     const start_camera = useCallback(async (): Promise<DocumentScannerStartResult> => {
@@ -98,11 +118,26 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
           error: disabled ? "disabled" : "already_captured",
           error_name: disabled ? "Disabled" : "AlreadyCaptured",
           error_message: disabled ? "Scanner is disabled" : "Image already captured",
+          error_kind: disabled ? "failed" : "failed",
         }
       }
 
-      setFallbackMode(false)
-      setFallbackMessage(null)
+      if (read_camera_permission_denied_session()) {
+        enter_fallback({
+          message: "カメラを起動できませんでした。画像を選択してください。",
+          permission_denied: true,
+        })
+
+        return {
+          started: false,
+          stream: null,
+          error: "カメラを起動できませんでした。画像を選択してください。",
+          error_name: "NotAllowedError",
+          error_message: "Permission denied",
+          error_kind: "permission_denied",
+        }
+      }
+
       captured_ref.current = false
       stable_since_ref.current = null
 
@@ -113,8 +148,16 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
 
       if (result.stream) {
         await attach_stream(result.stream)
+      } else if (result.error_kind === "permission_denied") {
+        enter_fallback({
+          message: result.error ?? "カメラを起動できませんでした。画像を選択してください。",
+          permission_denied: true,
+        })
       } else if (result.error) {
-        enter_fallback(result.error)
+        enter_fallback({
+          message: result.error,
+          permission_denied: false,
+        })
       }
 
       return result
@@ -154,8 +197,6 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
         return
       }
 
-      setFallbackMode(false)
-      setFallbackMessage(null)
       captured_ref.current = false
       stable_since_ref.current = null
       void attach_stream(camera_stream)
@@ -166,11 +207,22 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
         return
       }
 
-      enter_fallback(camera_error)
-    }, [camera_error, camera_stream, enter_fallback])
+      enter_fallback({
+        message: camera_error,
+        permission_denied:
+          camera_error_kind === "permission_denied" ||
+          read_camera_permission_denied_session(),
+      })
+    }, [camera_error, camera_error_kind, camera_stream, enter_fallback])
 
     useEffect(() => {
-      if (!camera_active || disabled || captured_ref.current || fallback_mode) {
+      if (
+        !camera_active ||
+        disabled ||
+        captured_ref.current ||
+        fallback_mode ||
+        permission_denied_fallback
+      ) {
         return
       }
 
@@ -207,10 +259,23 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       animation_id = window.requestAnimationFrame(tick)
 
       return () => window.cancelAnimationFrame(animation_id)
-    }, [camera_active, disabled, fallback_mode, frame, on_capture, stop_camera])
+    }, [
+      camera_active,
+      disabled,
+      fallback_mode,
+      frame,
+      on_capture,
+      permission_denied_fallback,
+      stop_camera,
+    ])
 
     useEffect(() => {
-      if (!camera_active || captured_ref.current || fallback_mode) {
+      if (
+        !camera_active ||
+        captured_ref.current ||
+        fallback_mode ||
+        permission_denied_fallback
+      ) {
         return
       }
 
@@ -219,28 +284,44 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
           return
         }
 
-        enter_fallback("自動スキャンできませんでした。画像を選択してください。")
+        enter_fallback({
+          message: "自動スキャンできませんでした。画像を選択してください。",
+          permission_denied: false,
+        })
       }, OCR_AUTO_SCAN_TIMEOUT_MS)
 
       return () => window.clearTimeout(timer)
-    }, [camera_active, enter_fallback, fallback_mode])
+    }, [camera_active, enter_fallback, fallback_mode, permission_denied_fallback])
 
-    async function handle_file_select(event: ChangeEvent<HTMLInputElement>) {
+    async function handle_file_select(file: File) {
+      captured_ref.current = true
+      stop_camera()
+
+      const image_url = await read_file_as_data_url(file)
+      on_capture(image_url)
+    }
+
+    async function handle_file_input(event: ChangeEvent<HTMLInputElement>) {
       const file = event.target.files?.[0]
 
       if (!file) {
         return
       }
 
-      captured_ref.current = true
-      stop_camera()
-
-      const image_url = await read_file_as_data_url(file)
-      on_capture(image_url)
+      await handle_file_select(file)
       event.target.value = ""
     }
 
     const guidance = quality?.guidance_message ?? "枠内に合わせてください"
+
+    if (permission_denied_fallback) {
+      return (
+        <OcrCameraFallback
+          disabled={disabled}
+          on_file_select={handle_file_select}
+        />
+      )
+    }
 
     return (
       <div className="space-y-3">
@@ -292,7 +373,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
                 type="file"
                 accept="image/*"
                 disabled={disabled}
-                onChange={(event) => void handle_file_select(event)}
+                onChange={(event) => void handle_file_input(event)}
                 className="sr-only"
               />
             </label>

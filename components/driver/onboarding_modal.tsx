@@ -14,6 +14,7 @@ import type {
 } from "@/core/driver/context"
 import { log_driver_license_step_opened } from "@/core/driver/progress/output"
 import { start_ocr_camera } from "@/core/ocr/camera"
+import { read_camera_permission_denied_session } from "@/core/ocr/camera_debug"
 
 function ProgressStatusIcon({ complete }: Readonly<{ complete: boolean }>) {
   if (complete) {
@@ -88,6 +89,9 @@ export default function DriverOnboardingModal({
   const [license_camera_stream, setLicenseCameraStream] =
     useState<MediaStream | null>(null)
   const [license_camera_error, setLicenseCameraError] = useState<string | null>(null)
+  const [license_camera_error_kind, setLicenseCameraErrorKind] = useState<
+    "permission_denied" | "unavailable" | "failed" | null
+  >(read_camera_permission_denied_session() ? "permission_denied" : null)
   const item_refs = useRef<Partial<Record<DriverProgressKey, HTMLLIElement | null>>>({})
   const license_panel_ref = useRef<DriverLicenseAccordionPanelHandle>(null)
   const license_camera_stream_ref = useRef<MediaStream | null>(null)
@@ -140,6 +144,9 @@ export default function DriverOnboardingModal({
 
     setExpandedKey("driver_license")
     setLicenseCameraError(null)
+    setLicenseCameraErrorKind(
+      read_camera_permission_denied_session() ? "permission_denied" : null,
+    )
     stop_license_camera()
 
     log_driver_license_step_opened({
@@ -163,10 +170,13 @@ export default function DriverOnboardingModal({
     if (result.stream) {
       license_camera_stream_ref.current = result.stream
       setLicenseCameraStream(result.stream)
+      setLicenseCameraError(null)
+      setLicenseCameraErrorKind(null)
     } else {
       setLicenseCameraError(
         result.error ?? "カメラを起動できませんでした。画像を選択してください。",
       )
+      setLicenseCameraErrorKind(result.error_kind)
     }
 
     log_driver_license_step_opened({
@@ -207,6 +217,7 @@ export default function DriverOnboardingModal({
           initial_entry={item.latest_entry}
           camera_stream={license_camera_stream}
           camera_error={license_camera_error}
+          camera_error_kind={license_camera_error_kind}
           onComplete={handleLicenseComplete}
         />
       )

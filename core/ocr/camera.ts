@@ -5,6 +5,20 @@ import {
   OCR_FRAME_ASPECT,
   compute_document_frame,
 } from "@/core/ocr/rules"
+import {
+  mark_camera_permission_denied_session,
+  read_camera_permission_denied_session,
+  resolve_ocr_camera_debug_event,
+  resolve_ocr_camera_error_kind,
+  send_ocr_camera_debug,
+  type OcrCameraErrorKind,
+} from "@/core/ocr/camera_debug"
+
+const CAMERA_PERMISSION_DENIED_MESSAGE =
+  "カメラを起動できませんでした。画像を選択してください。"
+
+const CAMERA_UNAVAILABLE_MESSAGE =
+  "カメラを使用できません。画像を選択してください。"
 
 const CAMERA_START_FAILED_MESSAGE =
   "カメラを起動できませんでした。画像を選択してください。"
@@ -43,12 +57,14 @@ export type OcrCameraStartResult = {
   error: string | null
   error_name: string | null
   error_message: string | null
+  error_kind: OcrCameraErrorKind | null
 }
 
 function build_camera_debug_payload(input: {
   document_type: OcrDocumentType
   error_name?: string | null
   error_message?: string | null
+  error_kind?: OcrCameraErrorKind | null
 }) {
   const has_media_devices =
     typeof navigator !== "undefined" && Boolean(navigator.mediaDevices)
@@ -65,37 +81,54 @@ function build_camera_debug_payload(input: {
     user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
     error_name: input.error_name ?? null,
     error_message: input.error_message ?? null,
+    error_kind: input.error_kind ?? null,
   }
 }
 
-async function send_ocr_camera_debug(
-  event: "OCR_CAMERA_START_REQUESTED" | "OCR_CAMERA_STARTED" | "OCR_CAMERA_FAILED",
-  payload: Record<string, unknown>,
-) {
-  try {
-    await fetch("/api/debug/client", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        event,
-        ...payload,
-      }),
-    })
-  } catch {
-    // Client-side debug must never block camera startup.
+async function send_ocr_camera_failure_debug(input: {
+  document_type: OcrDocumentType
+  error_name: string
+  error_message: string
+  error_kind: OcrCameraErrorKind
+}) {
+  await send_ocr_camera_debug(
+    resolve_ocr_camera_debug_event(input.error_kind),
+    build_camera_debug_payload({
+      document_type: input.document_type,
+      error_name: input.error_name,
+      error_message: input.error_message,
+      error_kind: input.error_kind,
+    }),
+  )
+}
+
+function resolve_camera_error_message(error_kind: OcrCameraErrorKind) {
+  if (error_kind === "permission_denied") {
+    return CAMERA_PERMISSION_DENIED_MESSAGE
   }
+
+  if (error_kind === "unavailable") {
+    return CAMERA_UNAVAILABLE_MESSAGE
+  }
+
+  return CAMERA_START_FAILED_MESSAGE
 }
 
 export async function start_ocr_camera(
   input: OcrCameraStartInput,
 ): Promise<OcrCameraStartResult> {
-  const requested_payload = build_camera_debug_payload({
-    document_type: input.document_type,
-  })
+  if (read_camera_permission_denied_session()) {
+    const error_kind = "permission_denied" as const
 
-  void send_ocr_camera_debug("OCR_CAMERA_START_REQUESTED", requested_payload)
+    return {
+      started: false,
+      stream: null,
+      error: resolve_camera_error_message(error_kind),
+      error_name: "NotAllowedError",
+      error_message: "Permission denied",
+      error_kind,
+    }
+  }
 
   try {
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
@@ -111,39 +144,37 @@ export async function start_ocr_camera(
       },
     })
 
-    void send_ocr_camera_debug(
-      "OCR_CAMERA_STARTED",
-      build_camera_debug_payload({
-        document_type: input.document_type,
-      }),
-    )
-
     return {
       started: true,
       stream,
       error: null,
       error_name: null,
       error_message: null,
+      error_kind: null,
     }
   } catch (error) {
     const error_name = error instanceof Error ? error.name : "UnknownError"
     const error_message = error instanceof Error ? error.message : String(error)
+    const error_kind = resolve_ocr_camera_error_kind(error_name)
 
-    void send_ocr_camera_debug(
-      "OCR_CAMERA_FAILED",
-      build_camera_debug_payload({
-        document_type: input.document_type,
-        error_name,
-        error_message,
-      }),
-    )
+    if (error_kind === "permission_denied") {
+      mark_camera_permission_denied_session()
+    }
+
+    void send_ocr_camera_failure_debug({
+      document_type: input.document_type,
+      error_name,
+      error_message,
+      error_kind,
+    })
 
     return {
       started: false,
       stream: null,
-      error: CAMERA_START_FAILED_MESSAGE,
+      error: resolve_camera_error_message(error_kind),
       error_name,
       error_message,
+      error_kind,
     }
   }
 }

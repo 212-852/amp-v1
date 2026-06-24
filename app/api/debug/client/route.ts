@@ -5,8 +5,8 @@ import { resolveRequestIdFromHeaders } from "@/core/auth/session"
 
 const ALLOWED_CLIENT_DEBUG_EVENTS = new Set([
   "liff_client_checked",
-  "OCR_CAMERA_START_REQUESTED",
-  "OCR_CAMERA_STARTED",
+  "OCR_CAMERA_PERMISSION_DENIED",
+  "OCR_CAMERA_UNAVAILABLE",
   "OCR_CAMERA_FAILED",
 ])
 
