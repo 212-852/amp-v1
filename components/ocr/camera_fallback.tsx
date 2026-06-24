@@ -16,7 +16,7 @@ const ENVIRONMENT_ROWS = [
   { label: "LINEブラウザ", supported: false },
   { label: "Chrome", supported: true },
   { label: "Safari", supported: true },
-  { label: "PWA", supported: true },
+  { label: "アプリ", supported: true },
 ] as const
 
 const IMAGE_UPLOAD_BUTTON_CLASS =
@@ -99,11 +99,10 @@ export default function OcrCameraFallback({
             </ul>
           </section>
 
-          <p className="text-sm leading-7 text-neutral-800">
-            LINEブラウザではカメラが利用できません。
-            <br />
-            免許証の画像を選択してください。
-          </p>
+          <div className="space-y-3 text-sm leading-7 text-neutral-800">
+            <p>LINEブラウザではカメラが利用できません。</p>
+            <p>免許証の画像を選択してください。</p>
+          </div>
         </>
       ) : (
         <div className="space-y-2">
