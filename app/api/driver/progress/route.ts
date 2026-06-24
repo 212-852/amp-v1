@@ -3,17 +3,18 @@ import { unstable_rethrow } from "next/navigation"
 
 import { resolveAuthContext } from "@/core/auth/context"
 import { resolveSession } from "@/core/auth/session"
-import { build_driver_preparation_context } from "@/core/driver/context"
-import { update_driver_preparation, load_driver_state } from "@/core/driver/action"
+import { load_driver_progress_state } from "@/core/driver/progress/action"
+import { build_driver_progress_context } from "@/core/driver/progress/context"
+import { append_driver_progress } from "@/core/driver/progress/action"
 import {
-  build_driver_preparation_access_denied_output,
-  build_driver_preparation_success_output,
-  build_driver_preparation_validation_output,
-} from "@/core/driver/output"
+  build_driver_progress_access_denied_output,
+  build_driver_progress_success_output,
+  build_driver_progress_validation_output,
+} from "@/core/driver/progress/output"
 import {
-  can_update_driver_preparation,
-  validate_driver_preparation_update,
-} from "@/core/driver/rules"
+  can_update_driver_progress,
+  validate_progress_append,
+} from "@/core/driver/progress/rules"
 
 export async function PATCH(request: Request) {
   try {
@@ -23,32 +24,35 @@ export async function PATCH(request: Request) {
       string,
       unknown
     >
-    const context = build_driver_preparation_context({
+    const context = build_driver_progress_context({
       auth,
       session,
       body,
     })
-    const access = can_update_driver_preparation(context)
+    const access = can_update_driver_progress({
+      role: session.role,
+      user_uuid: session.user_uuid,
+    })
 
     if (!access.allowed) {
-      const output = build_driver_preparation_access_denied_output(
+      const output = build_driver_progress_access_denied_output(
         access.reason ?? "driver_role_required",
       )
 
       return NextResponse.json(output, { status: 403 })
     }
 
-    const validation = validate_driver_preparation_update(context.input)
+    const validation = validate_progress_append(context.input)
 
     if (!validation.ok) {
-      const output = build_driver_preparation_validation_output(validation)
+      const output = build_driver_progress_validation_output(validation)
 
       return NextResponse.json(output, { status: 400 })
     }
 
-    const before = await load_driver_state(session.user_uuid)
-    const state = await update_driver_preparation(context)
-    const output = build_driver_preparation_success_output({
+    const before = await load_driver_progress_state(session.user_uuid)
+    const state = await append_driver_progress(context)
+    const output = build_driver_progress_success_output({
       state,
       previous_status: before.status,
     })
