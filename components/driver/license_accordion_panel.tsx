@@ -1,8 +1,8 @@
 "use client"
 
-import type { ChangeEvent } from "react"
 import { useMemo, useState } from "react"
 
+import DocumentScanner from "@/components/ocr/document_scanner"
 import type { DriverProgressEntry } from "@/core/driver/context"
 import { build_ocr_status_label } from "@/core/ocr/rules"
 
@@ -17,18 +17,16 @@ type LicenseFormFields = {
 type OcrResponse = {
   ok?: boolean
   message?: string
-  fields?: Partial<LicenseFormFields>
+  image_url?: string
+  parsed?: Partial<LicenseFormFields>
+  confidence?: number
+  warnings?: string[]
   errors?: Record<string, string>
 }
 
 type LicenseSaveResponse = {
   ok?: boolean
   message?: string
-  state?: {
-    items: Array<{ key: string; complete: boolean }>
-    status: string
-    all_complete: boolean
-  }
 }
 
 function empty_form(): LicenseFormFields {
@@ -55,6 +53,16 @@ function form_from_entry(entry: DriverProgressEntry | null | undefined): License
   }
 }
 
+function form_is_complete(form: LicenseFormFields) {
+  return (
+    Boolean(form.license_name.trim()) &&
+    Boolean(form.license_address.trim()) &&
+    Boolean(form.license_birth_date.trim()) &&
+    Boolean(form.license_number.trim()) &&
+    Boolean(form.license_expiration_date.trim())
+  )
+}
+
 export default function DriverLicenseAccordionPanel({
   current_answer,
   initial_entry,
@@ -74,6 +82,7 @@ export default function DriverLicenseAccordionPanel({
         initial_entry?.license_address,
     ),
   )
+  const [ocr_warnings, setOcrWarnings] = useState<string[]>([])
   const [message, setMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -89,11 +98,13 @@ export default function DriverLicenseAccordionPanel({
     has_image: Boolean(image_url),
     has_result: ocr_has_result,
     is_loading: ocr_loading,
+    warnings: ocr_warnings,
   })
 
-  async function run_ocr(next_image_url: string) {
+  async function request_ocr(next_image_url: string) {
     setOcrLoading(true)
     setMessage(null)
+    setOcrWarnings([])
 
     try {
       const response = await fetch("/api/ocr", {
@@ -108,26 +119,29 @@ export default function DriverLicenseAccordionPanel({
       })
       const result = (await response.json().catch(() => null)) as OcrResponse | null
 
-      if (!response.ok || result?.ok !== true || !result.fields) {
+      if (!response.ok || result?.ok !== true) {
         setOcrHasResult(false)
         setMessage(result?.message ?? "OCR読み込みに失敗しました。手入力してください。")
         return
       }
 
+      const parsed = result.parsed ?? {}
+
       setForm((current) => ({
-        license_name: result.fields?.license_name || current.license_name,
-        license_address: result.fields?.license_address || current.license_address,
-        license_birth_date:
-          result.fields?.license_birth_date || current.license_birth_date,
-        license_number: result.fields?.license_number || current.license_number,
+        license_name: parsed.license_name || current.license_name,
+        license_address: parsed.license_address || current.license_address,
+        license_birth_date: parsed.license_birth_date || current.license_birth_date,
+        license_number: parsed.license_number || current.license_number,
         license_expiration_date:
-          result.fields?.license_expiration_date || current.license_expiration_date,
+          parsed.license_expiration_date || current.license_expiration_date,
       }))
+      setOcrWarnings(result.warnings ?? [])
       setOcrHasResult(
         Boolean(
-          result.fields.license_name ||
-            result.fields.license_number ||
-            result.fields.license_address,
+          parsed.license_name ||
+            parsed.license_number ||
+            parsed.license_address ||
+            (result.confidence ?? 0) > 0,
         ),
       )
     } catch {
@@ -138,30 +152,24 @@ export default function DriverLicenseAccordionPanel({
     }
   }
 
-  async function handle_image_select(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
-
-    if (!file) {
-      return
-    }
-
-    const reader = new FileReader()
-
-    reader.onload = () => {
-      const result = typeof reader.result === "string" ? reader.result : ""
-
-      setImageUrl(result)
-      setOcrHasResult(false)
-      void run_ocr(result)
-    }
-
-    reader.readAsDataURL(file)
-    event.target.value = ""
+  function handle_capture(next_image_url: string) {
+    setImageUrl(next_image_url)
+    setOcrHasResult(false)
+    void request_ocr(next_image_url)
   }
 
   async function submit_license() {
-    if (isSubmitting || !image_url.trim()) {
+    if (isSubmitting) {
+      return
+    }
+
+    if (!image_url.trim()) {
       setMessage("免許証画像を登録してください。")
+      return
+    }
+
+    if (!form_is_complete(form)) {
+      setMessage("確認フォームの必須項目を入力してください。")
       return
     }
 
@@ -197,6 +205,9 @@ export default function DriverLicenseAccordionPanel({
     }
   }
 
+  const can_save =
+    Boolean(image_url.trim()) && form_is_complete(form) && !isSubmitting && !ocr_loading
+
   return (
     <div className="space-y-4 border-t border-neutral-100 px-4 pb-4 pt-3">
       <section className="space-y-1">
@@ -208,29 +219,14 @@ export default function DriverLicenseAccordionPanel({
 
       <section className="space-y-2">
         <h4 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-          免許証画像
+          免許証スキャン
         </h4>
-        <div className="flex flex-wrap gap-2">
-          <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-neutral-300 px-4 py-2 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50">
-            免許証の表面をスキャン
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handle_image_select}
-              className="sr-only"
-            />
-          </label>
-          <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-neutral-300 px-4 py-2 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50">
-            画像を選択
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handle_image_select}
-              className="sr-only"
-            />
-          </label>
-        </div>
+        <DocumentScanner
+          document_type="driver_license_front"
+          on_capture={handle_capture}
+          disabled={isSubmitting || ocr_loading}
+          auto_start
+        />
         {preview_url ? (
           <img
             src={preview_url}
@@ -322,7 +318,7 @@ export default function DriverLicenseAccordionPanel({
 
       <button
         type="button"
-        disabled={isSubmitting || !image_url.trim()}
+        disabled={!can_save}
         onClick={() => void submit_license()}
         className="h-12 w-full rounded-full bg-neutral-900 text-sm font-bold text-white disabled:opacity-60"
       >

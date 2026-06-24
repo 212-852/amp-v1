@@ -1,30 +1,26 @@
 import type { OcrRequestContext } from "@/core/ocr/context"
-import {
-  empty_driver_license_ocr_fields,
-  normalize_driver_license_ocr_fields,
-  type DriverLicenseOcrFields,
-} from "@/core/ocr/rules"
+import { parse_document } from "@/core/ocr/parser"
+import type { OcrDocumentType } from "@/core/ocr/rules"
 
-async function run_driver_license_front_ocr(
-  _image_url: string,
-): Promise<DriverLicenseOcrFields> {
-  void _image_url
-
-  return empty_driver_license_ocr_fields()
+export type OcrActionResult = {
+  document_type: OcrDocumentType
+  image_url: string
+  parsed: Record<string, string>
+  confidence: number
+  warnings: string[]
 }
 
-export async function run_ocr(context: OcrRequestContext) {
-  if (context.input.document_type === "driver_license_front") {
-    const fields = await run_driver_license_front_ocr(context.input.image_url)
-
-    return {
-      document_type: context.input.document_type,
-      fields: normalize_driver_license_ocr_fields(fields),
-    }
-  }
+export async function run_ocr(context: OcrRequestContext): Promise<OcrActionResult> {
+  const parsed = await parse_document({
+    document_type: context.input.document_type,
+    image_url: context.input.image_url,
+  })
 
   return {
     document_type: context.input.document_type,
-    fields: empty_driver_license_ocr_fields(),
+    image_url: context.input.image_url,
+    parsed: parsed.parsed,
+    confidence: parsed.confidence,
+    warnings: parsed.warnings,
   }
 }

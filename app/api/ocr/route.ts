@@ -51,10 +51,7 @@ export async function POST(request: Request) {
     }
 
     const result = await run_ocr(context)
-    const output = build_ocr_success_output({
-      document_type: result.document_type,
-      fields: result.fields,
-    })
+    const output = build_ocr_success_output(result)
 
     return NextResponse.json(output, { status: 200 })
   } catch (error) {

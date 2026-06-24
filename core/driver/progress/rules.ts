@@ -1,6 +1,7 @@
 import type { EntryQuestionnaireInput } from "@/core/entry/context"
 import type { SessionRole } from "@/core/auth/types"
 import type { DriverStatus } from "@/core/driver/context"
+import { validate_license_save } from "@/core/ocr/rules"
 
 export type DriverProgressKey =
   | "driver_license"
@@ -396,17 +397,13 @@ export function validate_progress_append(input: {
 
 export function validate_license_upload(input: {
   image_url: string
+  license_name?: string
+  license_address?: string
+  license_birth_date?: string
+  license_number?: string
+  license_expiration_date?: string
 }) {
-  const errors: Record<string, string> = {}
-
-  if (!input.image_url.trim()) {
-    errors.image_url = "画像が必要です。"
-  }
-
-  return {
-    ok: Object.keys(errors).length === 0,
-    errors,
-  } satisfies DriverProgressValidationResult
+  return validate_license_save(input)
 }
 
 export function is_driver_provisional(status: DriverStatus | null | undefined) {

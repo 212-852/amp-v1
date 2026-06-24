@@ -1,12 +1,14 @@
-import type { DriverLicenseOcrFields } from "@/core/ocr/rules"
-import type { OcrDocumentType } from "@/core/ocr/rules"
+import type { OcrActionResult } from "@/core/ocr/action"
 import type { OcrValidationResult } from "@/core/ocr/rules"
 
 export type OcrOutput = {
   ok: boolean
   message: string
-  document_type?: OcrDocumentType
-  fields?: DriverLicenseOcrFields
+  document_type?: OcrActionResult["document_type"]
+  image_url?: string
+  parsed?: Record<string, string>
+  confidence?: number
+  warnings?: string[]
   errors?: Record<string, string>
 }
 
@@ -30,14 +32,14 @@ export function build_ocr_access_denied_output(reason: string): OcrOutput {
   }
 }
 
-export function build_ocr_success_output(input: {
-  document_type: OcrDocumentType
-  fields: DriverLicenseOcrFields
-}): OcrOutput {
+export function build_ocr_success_output(result: OcrActionResult): OcrOutput {
   return {
     ok: true,
     message: "OCR読み込みが完了しました。",
-    document_type: input.document_type,
-    fields: input.fields,
+    document_type: result.document_type,
+    image_url: result.image_url,
+    parsed: result.parsed,
+    confidence: result.confidence,
+    warnings: result.warnings,
   }
 }
