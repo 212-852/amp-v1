@@ -12,8 +12,7 @@ import type {
   DriverProgressKey,
   DriverStatus,
 } from "@/core/driver/context"
-import { start_ocr_camera } from "@/core/ocr/camera"
-import { read_camera_permission_denied_session } from "@/core/ocr/camera_debug"
+import { get_camera_permission_state } from "@/core/ocr/camera"
 
 function ProgressStatusIcon({ complete }: Readonly<{ complete: boolean }>) {
   if (complete) {
@@ -75,15 +74,8 @@ export default function DriverOnboardingModal({
 }>) {
   const router = useRouter()
   const [expanded_key, setExpandedKey] = useState<DriverProgressKey | null>(null)
-  const [license_camera_stream, setLicenseCameraStream] =
-    useState<MediaStream | null>(null)
-  const [license_camera_error, setLicenseCameraError] = useState<string | null>(null)
-  const [license_camera_error_kind, setLicenseCameraErrorKind] = useState<
-    "permission_denied" | "unavailable" | "failed" | null
-  >(read_camera_permission_denied_session() ? "permission_denied" : null)
   const item_refs = useRef<Partial<Record<DriverProgressKey, HTMLLIElement | null>>>({})
   const license_panel_ref = useRef<DriverLicenseAccordionPanelHandle>(null)
-  const license_camera_stream_ref = useRef<MediaStream | null>(null)
 
   useEffect(() => {
     if (!expanded_key) {
@@ -104,14 +96,6 @@ export default function DriverOnboardingModal({
     })
   }, [expanded_key])
 
-  useEffect(() => {
-    return () => {
-      license_camera_stream_ref.current
-        ?.getTracks()
-        .forEach((track) => track.stop())
-    }
-  }, [])
-
   if (initial_status !== "provisional") {
     return null
   }
@@ -120,56 +104,17 @@ export default function DriverOnboardingModal({
     router.refresh()
   }
 
-  function stop_license_camera() {
-    license_camera_stream_ref.current
-      ?.getTracks()
-      .forEach((track) => track.stop())
-    license_camera_stream_ref.current = null
-    setLicenseCameraStream(null)
-  }
-
-  async function open_license_step() {
-    setExpandedKey("driver_license")
-    stop_license_camera()
-
-    if (read_camera_permission_denied_session()) {
-      setLicenseCameraError(null)
-      setLicenseCameraErrorKind("permission_denied")
-      return
-    }
-
-    setLicenseCameraError(null)
-    setLicenseCameraErrorKind(null)
-
-    const result = await start_ocr_camera({
-      document_type: "driver_license_front",
-      facing_mode: "environment",
-    })
-
-    if (result.stream) {
-      license_camera_stream_ref.current = result.stream
-      setLicenseCameraStream(result.stream)
-      setLicenseCameraError(null)
-      setLicenseCameraErrorKind(null)
-      return
-    }
-
-    setLicenseCameraError(
-      result.error ?? "カメラを起動できませんでした。画像を選択してください。",
-    )
-    setLicenseCameraErrorKind(result.error_kind)
-  }
-
   function handle_item_click(item: DriverChecklistItem) {
     const will_open = expanded_key !== item.key
 
     if (item.key === "driver_license" && will_open) {
-      void open_license_step()
-      return
-    }
+      setExpandedKey("driver_license")
 
-    if (item.key === "driver_license") {
-      stop_license_camera()
+      if (get_camera_permission_state() === "granted") {
+        void license_panel_ref.current?.open_from_user_gesture()
+      }
+
+      return
     }
 
     setExpandedKey((current) => (current === item.key ? null : item.key))
@@ -182,9 +127,7 @@ export default function DriverOnboardingModal({
           ref={license_panel_ref}
           current_answer={item.current_answer ?? "未回答"}
           initial_entry={item.latest_entry}
-          camera_stream={license_camera_stream}
-          camera_error={license_camera_error}
-          camera_error_kind={license_camera_error_kind}
+          expanded={expanded_key === "driver_license"}
           onComplete={handleLicenseComplete}
         />
       )

@@ -1,22 +1,25 @@
 import {
   OCR_AUTO_CAPTURE_MIN_SCORE,
+  OCR_AUTO_CAPTURE_STABLE_MS,
   resolve_guidance_message,
   type OcrDocumentType,
   OCR_FRAME_ASPECT,
   compute_document_frame,
 } from "@/core/ocr/rules"
 import {
+  get_camera_permission_state,
   mark_camera_permission_denied_session,
+  mark_camera_permission_granted_session,
   read_camera_permission_denied_session,
-  resolve_ocr_camera_debug_event,
   resolve_ocr_camera_error_kind,
+  resolve_permission_debug_event,
   send_ocr_camera_debug,
-  should_attempt_ocr_camera,
+  type CameraPermissionState,
   type OcrCameraErrorKind,
 } from "@/core/ocr/camera_debug"
 
-const CAMERA_PERMISSION_DENIED_MESSAGE =
-  "カメラを起動できませんでした。画像を選択してください。"
+export type { CameraPermissionState } from "@/core/ocr/camera_debug"
+export { get_camera_permission_state } from "@/core/ocr/camera_debug"
 
 const CAMERA_UNAVAILABLE_MESSAGE =
   "カメラを使用できません。画像を選択してください。"
@@ -66,6 +69,7 @@ function build_camera_debug_payload(input: {
   error_name?: string | null
   error_message?: string | null
   error_kind?: OcrCameraErrorKind | null
+  permission_state?: CameraPermissionState
 }) {
   const has_media_devices =
     typeof navigator !== "undefined" && Boolean(navigator.mediaDevices)
@@ -83,6 +87,7 @@ function build_camera_debug_payload(input: {
     error_name: input.error_name ?? null,
     error_message: input.error_message ?? null,
     error_kind: input.error_kind ?? null,
+    permission_state: input.permission_state ?? get_camera_permission_state(),
   }
 }
 
@@ -92,8 +97,30 @@ async function send_ocr_camera_failure_debug(input: {
   error_message: string
   error_kind: OcrCameraErrorKind
 }) {
+  const permission_event = resolve_permission_debug_event({
+    error_kind: input.error_kind,
+  })
+
+  if (permission_event) {
+    await send_ocr_camera_debug(
+      permission_event,
+      build_camera_debug_payload({
+        document_type: input.document_type,
+        error_name: input.error_name,
+        error_message: input.error_message,
+        error_kind: input.error_kind,
+      }),
+    )
+    return
+  }
+
+  const event =
+    input.error_kind === "unavailable"
+      ? "OCR_CAMERA_UNAVAILABLE"
+      : "OCR_CAMERA_FAILED"
+
   await send_ocr_camera_debug(
-    resolve_ocr_camera_debug_event(input.error_kind),
+    event,
     build_camera_debug_payload({
       document_type: input.document_type,
       error_name: input.error_name,
@@ -104,8 +131,11 @@ async function send_ocr_camera_failure_debug(input: {
 }
 
 function resolve_camera_error_message(error_kind: OcrCameraErrorKind) {
-  if (error_kind === "permission_denied") {
-    return CAMERA_PERMISSION_DENIED_MESSAGE
+  if (
+    error_kind === "permission_denied" ||
+    error_kind === "permission_dismissed"
+  ) {
+    return "カメラの許可が必要です"
   }
 
   if (error_kind === "unavailable") {
@@ -115,10 +145,21 @@ function resolve_camera_error_message(error_kind: OcrCameraErrorKind) {
   return CAMERA_START_FAILED_MESSAGE
 }
 
-export async function start_ocr_camera(
+function build_get_user_media_request(input: OcrCameraStartInput) {
+  return {
+    audio: false,
+    video: {
+      facingMode: { ideal: input.facing_mode ?? "environment" },
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+    },
+  } as const
+}
+
+export async function start_camera_from_user_gesture(
   input: OcrCameraStartInput,
 ): Promise<OcrCameraStartResult> {
-  if (!should_attempt_ocr_camera()) {
+  if (read_camera_permission_denied_session()) {
     const error_kind = "permission_denied" as const
 
     return {
@@ -131,19 +172,31 @@ export async function start_ocr_camera(
     }
   }
 
+  void send_ocr_camera_debug(
+    "OCR_CAMERA_PERMISSION_REQUESTED",
+    build_camera_debug_payload({
+      document_type: input.document_type,
+      permission_state: get_camera_permission_state(),
+    }),
+  )
+
   try {
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
       throw new DOMException("mediaDevices.getUserMedia is unavailable", "NotSupportedError")
     }
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: {
-        facingMode: { ideal: input.facing_mode ?? "environment" },
-        width: { ideal: 1920 },
-        height: { ideal: 1080 },
-      },
-    })
+    const stream = await navigator.mediaDevices.getUserMedia(
+      build_get_user_media_request(input),
+    )
+
+    mark_camera_permission_granted_session()
+
+    void send_ocr_camera_debug(
+      "OCR_CAMERA_PERMISSION_GRANTED",
+      build_camera_debug_payload({
+        document_type: input.document_type,
+      }),
+    )
 
     return {
       started: true,
@@ -156,7 +209,10 @@ export async function start_ocr_camera(
   } catch (error) {
     const error_name = error instanceof Error ? error.name : "UnknownError"
     const error_message = error instanceof Error ? error.message : String(error)
-    const error_kind = resolve_ocr_camera_error_kind(error_name)
+    const error_kind = resolve_ocr_camera_error_kind({
+      error_name,
+      error_message,
+    })
 
     if (error_kind === "permission_denied") {
       mark_camera_permission_denied_session()
@@ -177,6 +233,63 @@ export async function start_ocr_camera(
       error_message,
       error_kind,
     }
+  }
+}
+
+/** @deprecated Use start_camera_from_user_gesture from a click handler. */
+export async function start_ocr_camera(
+  input: OcrCameraStartInput,
+): Promise<OcrCameraStartResult> {
+  return start_camera_from_user_gesture(input)
+}
+
+export function start_auto_scan(input: {
+  video: HTMLVideoElement
+  frame: FrameRect
+  on_quality: (quality: FrameQualityResult) => void
+  on_capture: (image_url: string) => void
+  stable_ms?: number
+  is_cancelled?: () => boolean
+}) {
+  const stable_ms = input.stable_ms ?? OCR_AUTO_CAPTURE_STABLE_MS
+  let stable_since: number | null = null
+  let animation_id = 0
+
+  const tick = () => {
+    if (input.is_cancelled?.()) {
+      return
+    }
+
+    if (input.video.readyState >= 2 && input.frame.width > 0) {
+      const next_quality = sample_video_frame_quality({
+        video: input.video,
+        frame: input.frame,
+      })
+      input.on_quality(next_quality)
+
+      if (next_quality.ready) {
+        if (stable_since == null) {
+          stable_since = performance.now()
+        } else if (performance.now() - stable_since >= stable_ms) {
+          const image_url = capture_video_frame({
+            video: input.video,
+            frame: input.frame,
+          })
+          input.on_capture(image_url)
+          return
+        }
+      } else {
+        stable_since = null
+      }
+    }
+
+    animation_id = window.requestAnimationFrame(tick)
+  }
+
+  animation_id = window.requestAnimationFrame(tick)
+
+  return () => {
+    window.cancelAnimationFrame(animation_id)
   }
 }
 

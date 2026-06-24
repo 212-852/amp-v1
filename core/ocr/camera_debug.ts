@@ -1,12 +1,33 @@
 export const OCR_CAMERA_PERMISSION_DENIED_SESSION_KEY =
   "amp_ocr_camera_permission_denied"
 
-export type OcrCameraDebugEvent =
+export const OCR_CAMERA_PERMISSION_GRANTED_SESSION_KEY =
+  "amp_ocr_camera_permission_granted"
+
+export type OcrCameraPermissionDebugEvent =
+  | "OCR_CAMERA_PERMISSION_REQUESTED"
+  | "OCR_CAMERA_PERMISSION_GRANTED"
+  | "OCR_CAMERA_PERMISSION_DISMISSED"
   | "OCR_CAMERA_PERMISSION_DENIED"
+
+export type OcrCameraDebugEvent =
+  | OcrCameraPermissionDebugEvent
   | "OCR_CAMERA_UNAVAILABLE"
   | "OCR_CAMERA_FAILED"
 
-export type OcrCameraErrorKind = "permission_denied" | "unavailable" | "failed"
+export type OcrCameraErrorKind =
+  | "permission_denied"
+  | "permission_dismissed"
+  | "unavailable"
+  | "failed"
+
+export type CameraPermissionState = "unknown" | "granted" | "denied"
+
+const ONCE_PER_SESSION_DEBUG_EVENTS = new Set<OcrCameraPermissionDebugEvent>([
+  "OCR_CAMERA_PERMISSION_GRANTED",
+  "OCR_CAMERA_PERMISSION_DISMISSED",
+  "OCR_CAMERA_PERMISSION_DENIED",
+])
 
 export function read_camera_permission_denied_session() {
   if (typeof sessionStorage === "undefined") {
@@ -14,6 +35,14 @@ export function read_camera_permission_denied_session() {
   }
 
   return sessionStorage.getItem(OCR_CAMERA_PERMISSION_DENIED_SESSION_KEY) === "1"
+}
+
+export function read_camera_permission_granted_session() {
+  if (typeof sessionStorage === "undefined") {
+    return false
+  }
+
+  return sessionStorage.getItem(OCR_CAMERA_PERMISSION_GRANTED_SESSION_KEY) === "1"
 }
 
 export function mark_camera_permission_denied_session() {
@@ -24,25 +53,50 @@ export function mark_camera_permission_denied_session() {
   sessionStorage.setItem(OCR_CAMERA_PERMISSION_DENIED_SESSION_KEY, "1")
 }
 
-export function should_attempt_ocr_camera() {
-  return !read_camera_permission_denied_session()
+export function mark_camera_permission_granted_session() {
+  if (typeof sessionStorage === "undefined") {
+    return
+  }
+
+  sessionStorage.setItem(OCR_CAMERA_PERMISSION_GRANTED_SESSION_KEY, "1")
 }
 
-export function resolve_ocr_camera_error_kind(
-  error_name: string | null | undefined,
-): OcrCameraErrorKind {
+export function get_camera_permission_state(): CameraPermissionState {
+  if (read_camera_permission_denied_session()) {
+    return "denied"
+  }
+
+  if (read_camera_permission_granted_session()) {
+    return "granted"
+  }
+
+  return "unknown"
+}
+
+export function is_permission_dismissed_message(error_message: string) {
+  return error_message.toLowerCase().includes("dismiss")
+}
+
+export function resolve_ocr_camera_error_kind(input: {
+  error_name: string | null | undefined
+  error_message?: string | null
+}): OcrCameraErrorKind {
   if (
-    error_name === "NotAllowedError" ||
-    error_name === "PermissionDeniedError" ||
-    error_name === "SecurityError"
+    input.error_name === "NotAllowedError" ||
+    input.error_name === "PermissionDeniedError" ||
+    input.error_name === "SecurityError"
   ) {
+    if (is_permission_dismissed_message(input.error_message ?? "")) {
+      return "permission_dismissed"
+    }
+
     return "permission_denied"
   }
 
   if (
-    error_name === "NotSupportedError" ||
-    error_name === "NotFoundError" ||
-    error_name === "OverconstrainedError"
+    input.error_name === "NotSupportedError" ||
+    input.error_name === "NotFoundError" ||
+    input.error_name === "OverconstrainedError"
   ) {
     return "unavailable"
   }
@@ -50,22 +104,22 @@ export function resolve_ocr_camera_error_kind(
   return "failed"
 }
 
-export function resolve_ocr_camera_debug_event(
-  error_kind: OcrCameraErrorKind,
-): OcrCameraDebugEvent {
-  if (error_kind === "permission_denied") {
+export function resolve_permission_debug_event(input: {
+  error_kind: OcrCameraErrorKind
+}): OcrCameraPermissionDebugEvent | null {
+  if (input.error_kind === "permission_dismissed") {
+    return "OCR_CAMERA_PERMISSION_DISMISSED"
+  }
+
+  if (input.error_kind === "permission_denied") {
     return "OCR_CAMERA_PERMISSION_DENIED"
   }
 
-  if (error_kind === "unavailable") {
-    return "OCR_CAMERA_UNAVAILABLE"
-  }
-
-  return "OCR_CAMERA_FAILED"
+  return null
 }
 
 export function should_log_ocr_camera_debug_event(event: OcrCameraDebugEvent) {
-  if (event !== "OCR_CAMERA_PERMISSION_DENIED") {
+  if (!ONCE_PER_SESSION_DEBUG_EVENTS.has(event as OcrCameraPermissionDebugEvent)) {
     return true
   }
 
@@ -73,7 +127,7 @@ export function should_log_ocr_camera_debug_event(event: OcrCameraDebugEvent) {
     return true
   }
 
-  const key = `${OCR_CAMERA_PERMISSION_DENIED_SESSION_KEY}:logged`
+  const key = `amp_ocr_camera_debug:${event}`
 
   if (sessionStorage.getItem(key) === "1") {
     return false

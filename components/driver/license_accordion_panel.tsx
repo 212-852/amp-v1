@@ -67,6 +67,7 @@ function form_is_complete(form: LicenseFormFields) {
 }
 
 export type DriverLicenseAccordionPanelHandle = {
+  open_from_user_gesture: () => Promise<DocumentScannerStartResult>
   start_camera: () => Promise<DocumentScannerStartResult>
 }
 
@@ -75,20 +76,11 @@ const DriverLicenseAccordionPanel = forwardRef<
   {
     current_answer: string
     initial_entry: DriverProgressEntry | null
-    camera_stream?: MediaStream | null
-    camera_error?: string | null
-    camera_error_kind?: "permission_denied" | "unavailable" | "failed" | null
+    expanded?: boolean
     onComplete: () => void
   }
 >(function DriverLicenseAccordionPanel(
-  {
-    current_answer,
-    initial_entry,
-    camera_stream = null,
-    camera_error = null,
-    camera_error_kind = null,
-    onComplete,
-  },
+  { current_answer, initial_entry, expanded = true, onComplete },
   ref,
 ) {
   const scanner_ref = useRef<DocumentScannerHandle>(null)
@@ -109,6 +101,16 @@ const DriverLicenseAccordionPanel = forwardRef<
   useImperativeHandle(
     ref,
     () => ({
+      open_from_user_gesture: () =>
+        scanner_ref.current?.open_from_user_gesture() ??
+        Promise.resolve({
+          started: false,
+          stream: null,
+          error: "scanner_unavailable",
+          error_name: "ScannerUnavailable",
+          error_message: "Scanner is unavailable",
+          error_kind: "failed",
+        }),
       start_camera: () =>
         scanner_ref.current?.start_camera() ??
         Promise.resolve({
@@ -276,9 +278,7 @@ const DriverLicenseAccordionPanel = forwardRef<
             document_type="driver_license_front"
             on_capture={handle_capture}
             disabled={isSubmitting || ocr_loading}
-            camera_stream={camera_stream}
-            camera_error={camera_error}
-            camera_error_kind={camera_error_kind}
+            expanded={expanded}
           />
         )}
       </section>

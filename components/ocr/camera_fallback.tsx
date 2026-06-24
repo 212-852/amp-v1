@@ -42,8 +42,7 @@ export default function OcrCameraFallback({
           カメラの許可が必要です
         </h3>
         <p className="text-sm leading-6 text-neutral-700">
-          この画面でカメラの使用が許可されていません。
-          画像を選択するか、外部ブラウザで開いてください。
+          カメラを許可できない場合は画像を選択してください。
         </p>
       </div>
 
