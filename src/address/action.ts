@@ -3,11 +3,9 @@ import { normalize_address_context } from "@/src/address/context"
 import { ADDRESS_OPTIONS } from "@/src/address/options"
 import { build_address_output } from "@/src/address/output"
 import {
-  get_city_options,
   validate_address_selection,
   type AddressOptions,
 } from "@/src/address/rules"
-import { sendAuthDebug } from "@/core/debug"
 
 type PrefectureRow = {
   prefecture_code: string
@@ -21,11 +19,6 @@ type CityRow = {
   label?: string | null
   city_name_ja?: string | null
   city_type?: string | null
-}
-
-type AddressOptionsInput = {
-  prefecture_code?: string | null
-  city_code?: string | null
 }
 
 function build_db_address_options(input: {
@@ -67,45 +60,6 @@ function build_db_address_options(input: {
         : ADDRESS_OPTIONS.prefectures,
     cities_by_prefecture,
   }
-}
-
-async function debug_profile_city_select(
-  options: AddressOptions,
-  input?: AddressOptionsInput,
-) {
-  const prefecture_code = input?.prefecture_code
-    ? String(input.prefecture_code)
-    : null
-  const city_code = input?.city_code
-    ? String(input.city_code)
-    : null
-
-  if (!prefecture_code && !city_code) {
-    return
-  }
-
-  const city_options = prefecture_code
-    ? get_city_options(options, prefecture_code)
-    : Object.values(options.cities_by_prefecture).flat()
-  const selected_city = city_options.find(
-    (option) => option.value === city_code,
-  )
-  const city_types = Array.from(
-    new Set(
-      city_options
-        .map((option) => option.city_type)
-        .filter((city_type): city_type is string => Boolean(city_type)),
-    ),
-  ).sort()
-
-  await sendAuthDebug("PROFILE_CITY_SELECT", {
-    prefecture_code,
-    loaded_city_count: city_options.length,
-    city_types,
-    city_code,
-    selected_city_label:
-      selected_city?.city_name_ja ?? selected_city?.label ?? null,
-  })
 }
 
 async function load_prefectures() {
@@ -195,15 +149,13 @@ async function load_cities() {
   }))
 }
 
-export async function get_address_options(input?: AddressOptionsInput) {
+export async function get_address_options() {
   normalize_address_context("api")
 
   const config = getRestConfig()
 
   if (!config) {
-    const output = build_address_output(ADDRESS_OPTIONS)
-    await debug_profile_city_select(output, input)
-    return output
+    return build_address_output(ADDRESS_OPTIONS)
   }
 
   const [prefectures, cities] = await Promise.all([
@@ -216,8 +168,6 @@ export async function get_address_options(input?: AddressOptionsInput) {
       ? build_db_address_options({ prefectures, cities })
       : ADDRESS_OPTIONS
   const output = build_address_output(options)
-
-  await debug_profile_city_select(output, input)
 
   return output
 }

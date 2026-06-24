@@ -159,6 +159,27 @@ Numeric values are stored as half-width digits only.
 UI may display formatted values, but DB save values must be normalized.
 
 #########################
+FORM RULE
+#########################
+
+All form validation must use shared validation UI.
+
+Use:
+
+* form/validation.ts
+* components/form/field.tsx
+
+Error field background must be light red (#fef2f2).
+Error border must be red.
+Error message must appear directly below the field.
+Error message font size must be smaller than the label.
+
+Do not show generic error banners when a field specific error exists.
+Users must immediately see which field requires correction.
+
+Do not duplicate validation styles inside components.
+
+#########################
 CHAT TRANSLATION RULE
 #########################
 

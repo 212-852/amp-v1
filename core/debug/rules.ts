@@ -26,9 +26,6 @@ const alwaysReportEvents = new Set([
   "chat_archive_insert_error",
   "chat_bootstrap_failed",
   "output_failed",
-  "PROFILE_CITY_SELECT",
-  "PROFILE_CITY_STATE",
-  "PROFILE_SAVE_PAYLOAD",
 ])
 
 const deniedDiscordEvents = new Set([
@@ -409,18 +406,6 @@ export function shouldSendAuthSessionDebug(event: string) {
 }
 
 export function resolveDebugTitle(event: string) {
-  if (event === "PROFILE_CITY_SELECT") {
-    return "PROFILE_CITY_SELECT"
-  }
-
-  if (event === "PROFILE_CITY_STATE") {
-    return "PROFILE_CITY_STATE"
-  }
-
-  if (event === "PROFILE_SAVE_PAYLOAD") {
-    return "PROFILE_SAVE_PAYLOAD"
-  }
-
   if (event === "admin_page_accessed") {
     return "ADMIN_ACCESS"
   }

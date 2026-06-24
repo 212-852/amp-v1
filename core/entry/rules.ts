@@ -14,16 +14,6 @@ export type EntryValidationResult = {
   errors: Record<string, string>
 }
 
-const profile_required_fields: Array<keyof EntryProfileInput> = [
-  "last_name",
-  "first_name",
-  "phone",
-  "email",
-  "prefecture_code",
-  "city_code",
-  "address",
-]
-
 const vehicle_status_values = new Set<DriverVehicleStatus>([
   "owned",
   "planned",
@@ -59,14 +49,34 @@ const transport_experience_values = new Set<DriverTransportExperience>([
 function validate_profile_input(profile: EntryProfileInput) {
   const errors: Record<string, string> = {}
 
-  for (const field of profile_required_fields) {
-    if (!profile[field]) {
-      errors[field] = "required"
-    }
+  if (!profile.last_name) {
+    errors.last_name = "姓を入力してください"
   }
 
-  if (profile.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email)) {
-    errors.email = "invalid"
+  if (!profile.first_name) {
+    errors.first_name = "名を入力してください"
+  }
+
+  if (!profile.phone) {
+    errors.phone = "電話番号を入力してください"
+  }
+
+  if (!profile.email) {
+    errors.email = "メールアドレスを入力してください"
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email)) {
+    errors.email = "メールアドレスの形式が正しくありません"
+  }
+
+  if (!profile.prefecture_code) {
+    errors.prefecture_code = "都道府県を選択してください"
+  }
+
+  if (!profile.city_code) {
+    errors.city_code = "市区町村を選択してください"
+  }
+
+  if (!profile.address) {
+    errors.address = "住所を入力してください"
   }
 
   return errors

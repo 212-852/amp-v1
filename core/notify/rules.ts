@@ -22,7 +22,7 @@ export type NotifyEventInput = {
   payload: Record<string, unknown>
 }
 
-export type NotifyFormat = "plain" | "security_alert"
+export type NotifyFormat = "plain" | "security_alert" | "title_only"
 
 export type NotifyDelivery = {
   channel: NotifyChannel
@@ -133,30 +133,18 @@ export function resolveNotifyDelivery(input: NotifyEventInput): NotifyDelivery {
   }
 
   if (input.event === "driver_entry") {
-    const payload = input.payload
-
     return {
       channel: "discord",
       webhook_url,
-      title: "新しいドライバー仮登録がありました",
+      title: "新しいドライバー仮登録",
       event: input.event,
       priority: "normal",
       mention,
-      summary: [
-        "新しいドライバー仮登録がありました",
-        `氏名: ${String(payload.name ?? "")}`,
-        `電話: ${String(payload.phone ?? "")}`,
-        `メール: ${String(payload.email ?? "")}`,
-        `user_uuid: ${String(payload.user_uuid ?? "")}`,
-        `driver_uuid: ${String(payload.driver_uuid ?? "")}`,
-      ].join("\n"),
-      format: "plain",
+      summary: "新しいドライバー仮登録",
+      format: "title_only",
       embed_color: null,
       request_id: input.request_id,
-      payload: {
-        category: "DRIVER_ENTRY",
-        ...payload,
-      },
+      payload: input.payload,
     }
   }
 

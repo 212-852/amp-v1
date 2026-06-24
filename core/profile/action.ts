@@ -8,9 +8,7 @@ import type {
 import type { NotificationType } from "@/core/chat/types"
 import type { Session } from "@/core/auth/types"
 import { assert_valid_address_selection } from "@/src/address/action"
-import { resolve_address_labels } from "@/src/address/rules"
 import { get_address_options } from "@/src/address/action"
-import { sendAuthDebug } from "@/core/debug"
 
 export type ProfileNameRow = {
   user_uuid: string
@@ -297,7 +295,6 @@ function patch_has_address_fields(patch: ProfileSettingsPatch) {
 }
 
 async function assert_profile_save_address_allowed(input: {
-  session: Session
   patch: ProfileSettingsPatch
   existing_profile?: ProfileRow | null
 }) {
@@ -305,83 +302,19 @@ async function assert_profile_save_address_allowed(input: {
     return
   }
 
-  const profile_uuid = input.existing_profile?.profile_uuid ?? null
-  const prefecture_code =
-    "prefecture_code" in input.patch
-      ? input.patch.prefecture_code
-      : input.existing_profile?.prefecture_code ?? null
   const raw_city_code =
     "city_code" in input.patch
       ? input.patch.city_code
       : input.existing_profile?.city_code ?? null
   const city_code = raw_city_code ? String(raw_city_code).trim() : ""
-  const selected_labels = await get_address_options().then((options) =>
-    resolve_address_labels(options, {
-      prefecture_code,
-      city_code,
-    }),
-  )
-  const submitted_city_label =
-    "city" in input.patch && typeof input.patch.city === "string"
-      ? input.patch.city
-      : null
 
   if (!city_code) {
-    await sendAuthDebug("PROFILE_CITY_STATE", {
-      ui_city_select_value: raw_city_code ?? null,
-      profile_city_code: city_code || null,
-      payload_city_code: city_code || null,
-      selected_city_label: selected_labels.city ?? submitted_city_label,
-      prefecture_code: prefecture_code ?? null,
-      city_exists: false,
-      validation_passed: false,
-    })
-    await sendAuthDebug("PROFILE_SAVE_PAYLOAD", {
-      user_uuid: input.session.user_uuid,
-      profile_uuid,
-      prefecture_code: prefecture_code ?? null,
-      city_code: city_code || null,
-      city_code_type: typeof raw_city_code,
-      selected_city_label: selected_labels.city ?? submitted_city_label,
-      city_exists: false,
-      save_allowed: false,
-      blocked_reason: "city_code_missing",
-    })
     throw new Error("市区町村を選択してください")
   }
 
   const city_row = await load_city_code_row(city_code)
-  const city_exists = Boolean(city_row?.city_code)
-  const selected_city_label =
-    selected_labels.city ??
-    submitted_city_label ??
-    city_row?.city_name_ja ??
-    city_row?.label ??
-    null
 
-  await sendAuthDebug("PROFILE_CITY_STATE", {
-    ui_city_select_value: raw_city_code ?? null,
-    profile_city_code: city_code,
-    payload_city_code: city_code,
-    selected_city_label,
-    prefecture_code: prefecture_code ?? null,
-    city_exists,
-    validation_passed: city_exists,
-  })
-
-  await sendAuthDebug("PROFILE_SAVE_PAYLOAD", {
-    user_uuid: input.session.user_uuid,
-    profile_uuid,
-    prefecture_code: prefecture_code ?? null,
-    city_code,
-    city_code_type: typeof city_code,
-    selected_city_label,
-    city_exists,
-    save_allowed: city_exists,
-    blocked_reason: city_exists ? null : "city_code_not_found",
-  })
-
-  if (!city_exists) {
+  if (!city_row?.city_code) {
     throw new Error("市区町村を選択してください")
   }
 
@@ -558,7 +491,6 @@ export async function save_profile_patch(input: {
 }) {
   const existing_profile = await load_profile_row(input.session)
   await assert_profile_save_address_allowed({
-    session: input.session,
     patch: input.patch,
     existing_profile,
   })
@@ -606,7 +538,6 @@ export async function save_profile_settings(input: {
   const context = normalize_profile_context(input)
   const existing_profile = await load_profile_row(input.session)
   await assert_profile_save_address_allowed({
-    session: input.session,
     patch: context.patch,
     existing_profile,
   })

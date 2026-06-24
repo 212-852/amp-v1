@@ -4,8 +4,10 @@ import type { ChangeEvent, ClipboardEvent, FormEvent } from "react"
 import { useMemo, useState } from "react"
 
 import EntrySuccessScreen from "@/components/app/entry_success"
+import FormField from "@/components/form/field"
 import type { EntryFormInitialValues } from "@/core/entry/context"
 import { normalize_phone } from "@/form/normalize"
+import { should_show_generic_form_message } from "@/form/validation"
 import AddressSelector from "@/src/address/selector"
 import { useAddressOptions } from "@/src/address/use_options"
 import { resolve_address_labels } from "@/src/address/rules"
@@ -112,8 +114,7 @@ export default function EntryForm({
     setPhone(normalizedPhone)
 
     if (!profile.city_code) {
-      setErrors({ city_code: "required" })
-      setMessage("市区町村を選択してください")
+      setErrors({ city_code: "市区町村を選択してください" })
       setIsSubmitting(false)
       return
     }
@@ -139,8 +140,13 @@ export default function EntryForm({
         | null
 
       if (!response.ok || result?.ok !== true) {
-        setErrors(result?.errors ?? {})
-        setMessage(result?.message ?? "登録できませんでした。")
+        const nextErrors = result?.errors ?? {}
+        setErrors(nextErrors)
+        if (!should_show_generic_form_message(nextErrors, result?.message ?? null)) {
+          setMessage(null)
+        } else {
+          setMessage(result?.message ?? "登録できませんでした。")
+        }
         return
       }
 
@@ -167,57 +173,78 @@ export default function EntryForm({
         <h3 className={sectionTitleClass}>プロフィール</h3>
 
         <div className="grid grid-cols-2 gap-4 max-[480px]:grid-cols-1">
-          <label className={labelClass}>
-            姓
-            <input
-              type="text"
-              name="last_name"
-              className={fieldClass}
-              defaultValue={initial.last_name}
-              autoComplete="family-name"
-            />
-          </label>
+          <FormField
+            label="姓"
+            error={errors.last_name}
+            baseFieldClass={fieldClass}
+          >
+            {(fieldClassName) => (
+              <input
+                type="text"
+                name="last_name"
+                className={fieldClassName}
+                defaultValue={initial.last_name}
+                autoComplete="family-name"
+              />
+            )}
+          </FormField>
 
-          <label className={labelClass}>
-            名
-            <input
-              type="text"
-              name="first_name"
-              className={fieldClass}
-              defaultValue={initial.first_name}
-              autoComplete="given-name"
-            />
-          </label>
+          <FormField
+            label="名"
+            error={errors.first_name}
+            baseFieldClass={fieldClass}
+          >
+            {(fieldClassName) => (
+              <input
+                type="text"
+                name="first_name"
+                className={fieldClassName}
+                defaultValue={initial.first_name}
+                autoComplete="given-name"
+              />
+            )}
+          </FormField>
         </div>
 
-        <label className={labelClass}>
-          電話番号
-          <input
-            type="tel"
-            name="phone"
-            className={`${fieldClass} phone_input`}
-            value={phone}
-            onChange={(event: ChangeEvent<HTMLInputElement>) =>
-              handle_phone_change(event.target.value)
-            }
-            onPaste={handle_phone_paste}
-            onBlur={() => handle_phone_change(phone)}
-            inputMode="numeric"
-            autoComplete="tel"
-            pattern="[0-9]*"
-          />
-        </label>
+        <FormField
+          label="電話番号"
+          error={errors.phone}
+          baseFieldClass={fieldClass}
+        >
+          {(fieldClassName) => (
+            <input
+              type="tel"
+              name="phone"
+              className={`${fieldClassName} phone_input`}
+              value={phone}
+              onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                handle_phone_change(event.target.value)
+              }
+              onPaste={handle_phone_paste}
+              onBlur={() => handle_phone_change(phone)}
+              inputMode="numeric"
+              autoComplete="tel"
+              pattern="[0-9]*"
+            />
+          )}
+        </FormField>
 
-        <label className={labelClass}>
-          メールアドレス
-          <input
-            name="email"
-            type="email"
-            className={fieldClass}
-            defaultValue={initial.email}
-            autoComplete="email"
-          />
-        </label>
+        <FormField
+          label="メールアドレス"
+          error={errors.email}
+          baseFieldClass={fieldClass}
+        >
+          {(fieldClassName) => (
+            <input
+              name="email"
+              type="email"
+              className={fieldClassName}
+              defaultValue={initial.email}
+              inputMode="email"
+              autoComplete="email"
+            />
+          )}
+        </FormField>
 
         <AddressSelector
           options={addressState.options}
@@ -233,6 +260,10 @@ export default function EntryForm({
             label: labelClass,
             field_label: "",
             select: fieldClass,
+          }}
+          errors={{
+            prefecture_code: errors.prefecture_code,
+            city_code: errors.city_code,
           }}
           onChange={(value) => {
             setProfile({
@@ -253,16 +284,21 @@ export default function EntryForm({
           value={selectedLabels.prefecture ?? ""}
         />
 
-        <label className={labelClass}>
-          住所
-          <input
-            type="text"
-            name="address"
-            className={fieldClass}
-            defaultValue={initial.address}
-            autoComplete="street-address"
-          />
-        </label>
+        <FormField
+          label="住所"
+          error={errors.address}
+          baseFieldClass={fieldClass}
+        >
+          {(fieldClassName) => (
+            <input
+              type="text"
+              name="address"
+              className={fieldClassName}
+              defaultValue={initial.address}
+              autoComplete="street-address"
+            />
+          )}
+        </FormField>
 
       </section>
 
@@ -422,15 +458,7 @@ export default function EntryForm({
         </p>
       ) : null}
 
-      {Object.keys(errors).length > 0 ? (
-        <p className="text-[13px] font-semibold text-red-700">
-          {errors.city_code
-            ? "市区町村を選択してください"
-            : "未入力または形式が正しくない項目があります。"}
-        </p>
-      ) : null}
-
-      {message ? (
+      {should_show_generic_form_message(errors, message) ? (
         <p className="rounded-md bg-[#fffaf3] px-3 py-2 text-center text-[14px] font-semibold text-[#5b422b] ring-1 ring-[#d7b98f]">
           {message}
         </p>

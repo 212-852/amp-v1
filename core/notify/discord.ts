@@ -152,6 +152,18 @@ function buildSecurityAlertMessage(delivery: NotifyDelivery) {
   }
 }
 
+function buildTitleOnlyMessage(delivery: NotifyDelivery) {
+  const mention_prefix = delivery.mention ? `${delivery.mention} ` : ""
+
+  return {
+    username: delivery.title,
+    content: `${mention_prefix}${delivery.title}`,
+    allowed_mentions: {
+      parse: ["users", "roles"],
+    },
+  }
+}
+
 function buildPlainMessage(delivery: NotifyDelivery) {
   const mention_prefix = delivery.mention ? `${delivery.mention} ` : ""
   const fields = formatPayloadFields(delivery.payload)
@@ -184,7 +196,9 @@ export async function deliverDiscordNotification(delivery: NotifyDelivery) {
   const body =
     delivery.format === "security_alert"
       ? buildSecurityAlertMessage(delivery)
-      : buildPlainMessage(delivery)
+      : delivery.format === "title_only"
+        ? buildTitleOnlyMessage(delivery)
+        : buildPlainMessage(delivery)
 
   await fetch(delivery.webhook_url, {
     method: "POST",
