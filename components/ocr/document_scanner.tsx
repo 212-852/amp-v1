@@ -12,7 +12,6 @@ import {
 
 import OcrCameraFallback from "@/components/ocr/camera_fallback"
 import {
-  get_camera_permission_state,
   read_file_as_data_url,
   resolve_scanner_frame,
   start_auto_scan,
@@ -21,7 +20,9 @@ import {
   type FrameRect,
   type OcrCameraStartResult,
 } from "@/core/ocr/camera"
-import { read_camera_permission_denied_session } from "@/core/ocr/camera_debug"
+import { is_line_in_app_browser, should_auto_start_ocr_camera } from "@/core/ocr/browser"
+import { read_camera_permission_denied_session } from "@/core/ocr/debug"
+import type { OcrImageSource } from "@/core/ocr/client"
 import {
   OCR_AUTO_SCAN_TIMEOUT_MS,
   type OcrDocumentType,
@@ -36,7 +37,7 @@ export type DocumentScannerHandle = {
 
 type DocumentScannerProps = {
   document_type: OcrDocumentType
-  on_capture: (image_url: string) => void
+  on_capture: (input: { image_url: string; source: OcrImageSource }) => void
   disabled?: boolean
   expanded?: boolean
   line_linked?: boolean
@@ -56,21 +57,17 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
     const container_ref = useRef<HTMLDivElement>(null)
     const video_ref = useRef<HTMLVideoElement>(null)
     const stream_ref = useRef<MediaStream | null>(null)
-    const stable_since_ref = useRef<number | null>(null)
     const captured_ref = useRef(false)
+    const auto_start_attempted_ref = useRef(false)
     const stop_auto_scan_ref = useRef<(() => void) | null>(null)
 
+    const [is_line_browser] = useState(() => is_line_in_app_browser())
     const [camera_active, setCameraActive] = useState(false)
-    const [show_permission_button, setShowPermissionButton] = useState(
-      () => get_camera_permission_state() === "unknown",
+    const [upload_fallback, setUploadFallback] = useState(
+      () => is_line_in_app_browser() || read_camera_permission_denied_session(),
     )
-    const [permission_fallback, setPermissionFallback] = useState(
-      () => get_camera_permission_state() === "denied",
-    )
-    const [scan_timeout_fallback, setScanTimeoutFallback] = useState(false)
     const [frame, setFrame] = useState<FrameRect>({ x: 0, y: 0, width: 0, height: 0 })
     const [quality, setQuality] = useState<FrameQualityResult | null>(null)
-    const [requesting_permission, setRequestingPermission] = useState(false)
 
     const stop_camera = useCallback(() => {
       stop_auto_scan_ref.current?.()
@@ -90,15 +87,12 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       }
 
       setCameraActive(true)
-      setShowPermissionButton(false)
-      setPermissionFallback(false)
-      setScanTimeoutFallback(false)
+      setUploadFallback(false)
     }, [])
 
-    const enter_permission_fallback = useCallback(() => {
+    const enter_upload_fallback = useCallback(() => {
       stop_camera()
-      setShowPermissionButton(false)
-      setPermissionFallback(true)
+      setUploadFallback(true)
     }, [stop_camera])
 
     const apply_camera_result = useCallback(
@@ -110,21 +104,19 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
 
         if (
           result.error_kind === "permission_denied" ||
-          result.error_kind === "permission_dismissed"
+          result.error_kind === "permission_dismissed" ||
+          result.error_kind === "unavailable"
         ) {
-          enter_permission_fallback()
-        } else if (result.error) {
-          stop_camera()
-          setScanTimeoutFallback(true)
+          enter_upload_fallback()
         }
 
         return result
       },
-      [attach_stream, enter_permission_fallback, stop_camera],
+      [attach_stream, enter_upload_fallback],
     )
 
     const request_camera = useCallback(async (): Promise<DocumentScannerStartResult> => {
-      if (disabled || captured_ref.current || permission_fallback) {
+      if (disabled || captured_ref.current || is_line_browser || upload_fallback) {
         return {
           started: false,
           stream: null,
@@ -136,7 +128,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       }
 
       if (read_camera_permission_denied_session()) {
-        enter_permission_fallback()
+        enter_upload_fallback()
         return {
           started: false,
           stream: null,
@@ -147,40 +139,24 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
         }
       }
 
-      setRequestingPermission(true)
       captured_ref.current = false
-      stable_since_ref.current = null
 
-      try {
-        const result = await start_camera_from_user_gesture({
-          document_type,
-          facing_mode: "environment",
-        })
+      const result = await start_camera_from_user_gesture({
+        document_type,
+        facing_mode: "environment",
+      })
 
-        return apply_camera_result(result)
-      } finally {
-        setRequestingPermission(false)
-      }
+      return apply_camera_result(result)
     }, [
       apply_camera_result,
       disabled,
       document_type,
-      enter_permission_fallback,
-      permission_fallback,
+      enter_upload_fallback,
+      is_line_browser,
+      upload_fallback,
     ])
 
-    const open_from_user_gesture = useCallback(async () => {
-      if (get_camera_permission_state() !== "granted") {
-        return {
-          started: false,
-          stream: null,
-          error: null,
-          error_name: null,
-          error_message: null,
-          error_kind: null,
-        }
-      }
-
+    const open_from_user_gesture = useCallback(() => {
       return request_camera()
     }, [request_camera])
 
@@ -194,25 +170,22 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
     )
 
     useEffect(() => {
-      if (!expanded) {
+      if (!expanded || is_line_browser || disabled || captured_ref.current) {
         return
       }
 
-      const permission_state = get_camera_permission_state()
-
-      if (permission_state === "denied") {
-        setPermissionFallback(true)
-        setShowPermissionButton(false)
-        setScanTimeoutFallback(false)
+      if (read_camera_permission_denied_session()) {
+        setUploadFallback(true)
         return
       }
 
-      if (permission_state === "unknown" && !camera_active && !captured_ref.current) {
-        setPermissionFallback(false)
-        setShowPermissionButton(true)
-        setScanTimeoutFallback(false)
+      if (!should_auto_start_ocr_camera() || auto_start_attempted_ref.current) {
+        return
       }
-    }, [camera_active, expanded])
+
+      auto_start_attempted_ref.current = true
+      void request_camera()
+    }, [disabled, expanded, is_line_browser, request_camera])
 
     useEffect(() => {
       function update_frame() {
@@ -242,7 +215,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
     }, [stop_camera])
 
     useEffect(() => {
-      if (!camera_active || disabled || captured_ref.current || permission_fallback) {
+      if (!camera_active || disabled || captured_ref.current || upload_fallback) {
         return
       }
 
@@ -260,7 +233,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
         on_capture: (image_url) => {
           captured_ref.current = true
           stop_camera()
-          on_capture(image_url)
+          on_capture({ image_url, source: "camera_capture" })
         },
         is_cancelled: () => captured_ref.current,
       })
@@ -269,10 +242,10 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
         stop_auto_scan_ref.current?.()
         stop_auto_scan_ref.current = null
       }
-    }, [camera_active, disabled, frame, on_capture, permission_fallback, stop_camera])
+    }, [camera_active, disabled, frame, on_capture, upload_fallback, stop_camera])
 
     useEffect(() => {
-      if (!camera_active || captured_ref.current || permission_fallback) {
+      if (!camera_active || captured_ref.current || upload_fallback) {
         return
       }
 
@@ -281,20 +254,18 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
           return
         }
 
-        stop_camera()
-        setScanTimeoutFallback(true)
+        enter_upload_fallback()
       }, OCR_AUTO_SCAN_TIMEOUT_MS)
 
       return () => window.clearTimeout(timer)
-    }, [camera_active, permission_fallback, stop_camera])
+    }, [camera_active, enter_upload_fallback, upload_fallback])
 
     async function handle_file_select(file: File) {
       captured_ref.current = true
       stop_camera()
-      setScanTimeoutFallback(false)
 
       const image_url = await read_file_as_data_url(file)
-      on_capture(image_url)
+      on_capture({ image_url, source: "image_upload" })
     }
 
     async function handle_file_input(event: ChangeEvent<HTMLInputElement>) {
@@ -308,17 +279,14 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       event.target.value = ""
     }
 
-    function handle_permission_button_click() {
-      void request_camera()
-    }
-
     const guidance = quality?.guidance_message ?? "枠内に合わせてください"
 
-    if (permission_fallback) {
+    if (upload_fallback) {
       return (
         <OcrCameraFallback
           disabled={disabled}
           line_linked={line_linked}
+          show_browser_instructions={is_line_browser}
           on_file_select={handle_file_select}
         />
       )
@@ -363,33 +331,17 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
           </div>
         </div>
 
-        {show_permission_button ? (
-          <button
-            type="button"
-            disabled={disabled || requesting_permission}
-            onClick={handle_permission_button_click}
-            className="h-12 w-full rounded-full bg-neutral-900 text-sm font-bold text-white disabled:opacity-60"
-          >
-            {requesting_permission ? "カメラを確認中..." : "カメラを許可して読み取る"}
-          </button>
-        ) : null}
-
-        {scan_timeout_fallback ? (
-          <div className="space-y-2">
-            <p className="text-sm leading-6 text-neutral-600">
-              自動スキャンできませんでした。画像を選択してください。
-            </p>
-            <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-neutral-300 px-4 py-2 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50">
-              画像を選択
-              <input
-                type="file"
-                accept="image/*"
-                disabled={disabled}
-                onChange={(event) => void handle_file_input(event)}
-                className="sr-only"
-              />
-            </label>
-          </div>
+        {!camera_active ? (
+          <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-neutral-300 px-4 py-2 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50">
+            画像を選択
+            <input
+              type="file"
+              accept="image/*"
+              disabled={disabled}
+              onChange={(event) => void handle_file_input(event)}
+              className="sr-only"
+            />
+          </label>
         ) : null}
       </div>
     )

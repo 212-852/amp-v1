@@ -6,11 +6,12 @@ import { resolveRequestIdFromHeaders } from "@/core/auth/session"
 const ALLOWED_CLIENT_DEBUG_EVENTS = new Set([
   "liff_client_checked",
   "OCR_CAMERA_PERMISSION_REQUESTED",
-  "OCR_CAMERA_PERMISSION_GRANTED",
-  "OCR_CAMERA_PERMISSION_DISMISSED",
   "OCR_CAMERA_PERMISSION_DENIED",
-  "OCR_CAMERA_UNAVAILABLE",
-  "OCR_CAMERA_FAILED",
+  "OCR_IMAGE_SELECTED",
+  "OCR_READ_STARTED",
+  "OCR_READ_SUCCEEDED",
+  "OCR_READ_FAILED",
+  "OCR_FORM_FILLED",
 ])
 
 export async function POST(request: Request) {

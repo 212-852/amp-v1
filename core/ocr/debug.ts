@@ -4,16 +4,14 @@ export const OCR_CAMERA_PERMISSION_DENIED_SESSION_KEY =
 export const OCR_CAMERA_PERMISSION_GRANTED_SESSION_KEY =
   "amp_ocr_camera_permission_granted"
 
-export type OcrCameraPermissionDebugEvent =
+export type OcrDebugEvent =
   | "OCR_CAMERA_PERMISSION_REQUESTED"
-  | "OCR_CAMERA_PERMISSION_GRANTED"
-  | "OCR_CAMERA_PERMISSION_DISMISSED"
   | "OCR_CAMERA_PERMISSION_DENIED"
-
-export type OcrCameraDebugEvent =
-  | OcrCameraPermissionDebugEvent
-  | "OCR_CAMERA_UNAVAILABLE"
-  | "OCR_CAMERA_FAILED"
+  | "OCR_IMAGE_SELECTED"
+  | "OCR_READ_STARTED"
+  | "OCR_READ_SUCCEEDED"
+  | "OCR_READ_FAILED"
+  | "OCR_FORM_FILLED"
 
 export type OcrCameraErrorKind =
   | "permission_denied"
@@ -23,10 +21,10 @@ export type OcrCameraErrorKind =
 
 export type CameraPermissionState = "unknown" | "granted" | "denied"
 
-const ONCE_PER_SESSION_DEBUG_EVENTS = new Set<OcrCameraPermissionDebugEvent>([
-  "OCR_CAMERA_PERMISSION_GRANTED",
-  "OCR_CAMERA_PERMISSION_DISMISSED",
+const ONCE_PER_SESSION_DEBUG_EVENTS = new Set<OcrDebugEvent>([
   "OCR_CAMERA_PERMISSION_DENIED",
+  "OCR_READ_FAILED",
+  "OCR_FORM_FILLED",
 ])
 
 export function read_camera_permission_denied_session() {
@@ -104,22 +102,8 @@ export function resolve_ocr_camera_error_kind(input: {
   return "failed"
 }
 
-export function resolve_permission_debug_event(input: {
-  error_kind: OcrCameraErrorKind
-}): OcrCameraPermissionDebugEvent | null {
-  if (input.error_kind === "permission_dismissed") {
-    return "OCR_CAMERA_PERMISSION_DISMISSED"
-  }
-
-  if (input.error_kind === "permission_denied") {
-    return "OCR_CAMERA_PERMISSION_DENIED"
-  }
-
-  return null
-}
-
-export function should_log_ocr_camera_debug_event(event: OcrCameraDebugEvent) {
-  if (!ONCE_PER_SESSION_DEBUG_EVENTS.has(event as OcrCameraPermissionDebugEvent)) {
+export function should_log_ocr_debug_event(event: OcrDebugEvent) {
+  if (!ONCE_PER_SESSION_DEBUG_EVENTS.has(event)) {
     return true
   }
 
@@ -127,7 +111,7 @@ export function should_log_ocr_camera_debug_event(event: OcrCameraDebugEvent) {
     return true
   }
 
-  const key = `amp_ocr_camera_debug:${event}`
+  const key = `amp_ocr_debug:${event}`
 
   if (sessionStorage.getItem(key) === "1") {
     return false
@@ -137,11 +121,11 @@ export function should_log_ocr_camera_debug_event(event: OcrCameraDebugEvent) {
   return true
 }
 
-export async function send_ocr_camera_debug(
-  event: OcrCameraDebugEvent,
+export async function send_ocr_debug(
+  event: OcrDebugEvent,
   payload: Record<string, unknown>,
 ) {
-  if (!should_log_ocr_camera_debug_event(event)) {
+  if (!should_log_ocr_debug_event(event)) {
     return
   }
 
@@ -157,6 +141,6 @@ export async function send_ocr_camera_debug(
       }),
     })
   } catch {
-    // Client-side debug must never block camera startup.
+    // Client-side debug must never block OCR flow.
   }
 }

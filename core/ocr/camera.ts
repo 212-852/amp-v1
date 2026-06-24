@@ -12,14 +12,13 @@ import {
   mark_camera_permission_granted_session,
   read_camera_permission_denied_session,
   resolve_ocr_camera_error_kind,
-  resolve_permission_debug_event,
-  send_ocr_camera_debug,
+  send_ocr_debug,
   type CameraPermissionState,
   type OcrCameraErrorKind,
-} from "@/core/ocr/camera_debug"
+} from "@/core/ocr/debug"
 
-export type { CameraPermissionState } from "@/core/ocr/camera_debug"
-export { get_camera_permission_state } from "@/core/ocr/camera_debug"
+export type { CameraPermissionState } from "@/core/ocr/debug"
+export { get_camera_permission_state } from "@/core/ocr/debug"
 
 const CAMERA_UNAVAILABLE_MESSAGE =
   "カメラを使用できません。画像を選択してください。"
@@ -97,13 +96,12 @@ async function send_ocr_camera_failure_debug(input: {
   error_message: string
   error_kind: OcrCameraErrorKind
 }) {
-  const permission_event = resolve_permission_debug_event({
-    error_kind: input.error_kind,
-  })
-
-  if (permission_event) {
-    await send_ocr_camera_debug(
-      permission_event,
+  if (
+    input.error_kind === "permission_denied" ||
+    input.error_kind === "permission_dismissed"
+  ) {
+    await send_ocr_debug(
+      "OCR_CAMERA_PERMISSION_DENIED",
       build_camera_debug_payload({
         document_type: input.document_type,
         error_name: input.error_name,
@@ -111,23 +109,7 @@ async function send_ocr_camera_failure_debug(input: {
         error_kind: input.error_kind,
       }),
     )
-    return
   }
-
-  const event =
-    input.error_kind === "unavailable"
-      ? "OCR_CAMERA_UNAVAILABLE"
-      : "OCR_CAMERA_FAILED"
-
-  await send_ocr_camera_debug(
-    event,
-    build_camera_debug_payload({
-      document_type: input.document_type,
-      error_name: input.error_name,
-      error_message: input.error_message,
-      error_kind: input.error_kind,
-    }),
-  )
 }
 
 function resolve_camera_error_message(error_kind: OcrCameraErrorKind) {
@@ -172,7 +154,7 @@ export async function start_camera_from_user_gesture(
     }
   }
 
-  void send_ocr_camera_debug(
+  void send_ocr_debug(
     "OCR_CAMERA_PERMISSION_REQUESTED",
     build_camera_debug_payload({
       document_type: input.document_type,
@@ -190,13 +172,6 @@ export async function start_camera_from_user_gesture(
     )
 
     mark_camera_permission_granted_session()
-
-    void send_ocr_camera_debug(
-      "OCR_CAMERA_PERMISSION_GRANTED",
-      build_camera_debug_payload({
-        document_type: input.document_type,
-      }),
-    )
 
     return {
       started: true,

@@ -27,11 +27,12 @@ const alwaysReportEvents = new Set([
   "chat_bootstrap_failed",
   "output_failed",
   "OCR_CAMERA_PERMISSION_REQUESTED",
-  "OCR_CAMERA_PERMISSION_GRANTED",
-  "OCR_CAMERA_PERMISSION_DISMISSED",
   "OCR_CAMERA_PERMISSION_DENIED",
-  "OCR_CAMERA_UNAVAILABLE",
-  "OCR_CAMERA_FAILED",
+  "OCR_IMAGE_SELECTED",
+  "OCR_READ_STARTED",
+  "OCR_READ_SUCCEEDED",
+  "OCR_READ_FAILED",
+  "OCR_FORM_FILLED",
   "AUTH_LINE_LOGIN_FAILED",
   "AUTH_LINE_SESSION_FAILED",
   "AUTH_LINE_LOOP_BLOCKED",
@@ -427,8 +428,8 @@ export function shouldSendAuthSessionDebug(event: string) {
 }
 
 export function resolveDebugTitle(event: string) {
-  if (event.startsWith("OCR_CAMERA_")) {
-    return "OCR_CAMERA"
+  if (event.startsWith("OCR_")) {
+    return "OCR"
   }
 
   if (event === "admin_page_accessed") {

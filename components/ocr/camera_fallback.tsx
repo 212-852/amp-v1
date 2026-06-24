@@ -1,37 +1,39 @@
 "use client"
 
-import { Check, Copy } from "lucide-react"
+import { Copy } from "lucide-react"
 import type { ChangeEvent } from "react"
 import { useEffect, useState } from "react"
 
 import { useToast } from "@/components/ui/use_toast"
 import {
   build_line_login_url,
+  DRIVER_PAGE_FALLBACK_URL,
   resolve_driver_page_url,
 } from "@/core/ocr/browser"
 
-const BROWSER_STEPS = [
-  "下のURLをコピーしてください",
-  "Chrome または Safari を開いてください",
-  "URLを検索バーに貼り付けて開いてください",
-  "開いた画面で「LINEで連携」を押してください",
-  "連携後、免許証スキャンを開いてください",
+const LINE_BROWSER_STEPS = [
+  "下のURLをコピーしてください。",
+  "Chrome または Safari を開いてください。",
+  "検索バーにURLを貼り付けて開いてください。",
+  "開いた画面で「LINEで連携」を押してください。",
+  "連携後、免許証スキャンをもう一度開いてください。",
 ] as const
 
 type OcrCameraFallbackProps = {
   disabled?: boolean
   line_linked?: boolean
+  show_browser_instructions?: boolean
   on_file_select: (file: File) => void | Promise<void>
 }
 
 export default function OcrCameraFallback({
   disabled = false,
   line_linked = false,
+  show_browser_instructions = false,
   on_file_select,
 }: Readonly<OcrCameraFallbackProps>) {
   const { toast } = useToast()
-  const [instructions_open, setInstructionsOpen] = useState(false)
-  const [driver_url, setDriverUrl] = useState(resolve_driver_page_url())
+  const [driver_url, setDriverUrl] = useState(DRIVER_PAGE_FALLBACK_URL)
 
   useEffect(() => {
     setDriverUrl(resolve_driver_page_url())
@@ -80,55 +82,39 @@ export default function OcrCameraFallback({
           カメラの許可が必要です
         </h3>
         <p className="text-sm leading-6 text-neutral-700">
-          LINEアプリ内ブラウザではカメラが利用できない場合があります。
-          画像を選択するか、ChromeまたはSafariで開いてください。
+          {show_browser_instructions
+            ? "LINEアプリ内ブラウザではカメラが利用できない場合があります。画像を選択するか、Chrome または Safari で開いてください。"
+            : "カメラを開始できませんでした。画像を選択してください。"}
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50">
-          画像を選択
-          <input
-            type="file"
-            accept="image/*"
-            disabled={disabled}
-            onChange={(event) => void handle_file_change(event)}
-            className="sr-only"
-          />
-        </label>
-        <button
-          type="button"
+      <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50">
+        画像を選択
+        <input
+          type="file"
+          accept="image/*"
           disabled={disabled}
-          aria-expanded={instructions_open}
-          onClick={() => setInstructionsOpen((current) => !current)}
-          className="inline-flex items-center justify-center rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50 disabled:opacity-60"
-        >
-          ブラウザで開く手順
-        </button>
-      </div>
+          onChange={(event) => void handle_file_change(event)}
+          className="sr-only"
+        />
+      </label>
 
-      {instructions_open ? (
+      {show_browser_instructions ? (
         <section className="space-y-4 rounded-2xl border border-neutral-200 bg-white px-4 py-4">
           <div className="space-y-2">
             <h4 className="text-sm font-bold text-neutral-900">
               ブラウザで開く手順
             </h4>
-            <p className="text-sm leading-6 text-neutral-700">
-              LINEアプリ内ブラウザではカメラが利用できない場合があります。
-              Chrome または Safari で開いてから再度お試しください。
-            </p>
           </div>
 
           <ol className="list-decimal space-y-2 pl-5 text-sm leading-6 text-neutral-800">
-            {BROWSER_STEPS.map((step) => (
+            {LINE_BROWSER_STEPS.map((step) => (
               <li key={step}>{step}</li>
             ))}
           </ol>
 
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-              Current URL
-            </p>
+            <p className="text-xs font-semibold text-neutral-500">現在のURL</p>
             <div className="flex items-stretch gap-2">
               <input
                 readOnly
@@ -158,8 +144,7 @@ export default function OcrCameraFallback({
               URLをコピー
             </button>
             {line_linked ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800">
-                <Check className="h-4 w-4" aria-hidden="true" />
+              <span className="inline-flex items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800">
                 LINE連携済み
               </span>
             ) : (

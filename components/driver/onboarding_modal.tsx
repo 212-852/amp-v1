@@ -4,15 +4,12 @@ import { CheckCircle2, XCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState, type ReactNode } from "react"
 
-import DriverLicenseAccordionPanel, {
-  type DriverLicenseAccordionPanelHandle,
-} from "@/components/driver/license_accordion_panel"
+import DriverLicenseAccordionPanel from "@/components/driver/license_accordion_panel"
 import type {
   DriverChecklistItem,
   DriverProgressKey,
   DriverStatus,
 } from "@/core/driver/context"
-import { get_camera_permission_state } from "@/core/ocr/camera"
 
 function ProgressStatusIcon({ complete }: Readonly<{ complete: boolean }>) {
   if (complete) {
@@ -77,7 +74,6 @@ export default function DriverOnboardingModal({
   const router = useRouter()
   const [expanded_key, setExpandedKey] = useState<DriverProgressKey | null>(null)
   const item_refs = useRef<Partial<Record<DriverProgressKey, HTMLLIElement | null>>>({})
-  const license_panel_ref = useRef<DriverLicenseAccordionPanelHandle>(null)
 
   useEffect(() => {
     if (!expanded_key) {
@@ -111,11 +107,6 @@ export default function DriverOnboardingModal({
 
     if (item.key === "driver_license" && will_open) {
       setExpandedKey("driver_license")
-
-      if (get_camera_permission_state() === "granted") {
-        void license_panel_ref.current?.open_from_user_gesture()
-      }
-
       return
     }
 
@@ -126,7 +117,6 @@ export default function DriverOnboardingModal({
     if (item.key === "driver_license") {
       return (
         <DriverLicenseAccordionPanel
-          ref={license_panel_ref}
           current_answer={item.current_answer ?? "未回答"}
           initial_entry={item.latest_entry}
           expanded={expanded_key === "driver_license"}

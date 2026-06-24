@@ -108,6 +108,21 @@ export function normalize_driver_license_fields(
   }
 }
 
+export function merge_driver_license_parsed_fields(
+  current: DriverLicenseParsedFields,
+  parsed: Partial<DriverLicenseParsedFields>,
+): DriverLicenseParsedFields {
+  return {
+    license_name: parsed.license_name?.trim() || current.license_name,
+    license_address: parsed.license_address?.trim() || current.license_address,
+    license_birth_date:
+      parsed.license_birth_date?.trim() || current.license_birth_date,
+    license_number: parsed.license_number?.trim() || current.license_number,
+    license_expiration_date:
+      parsed.license_expiration_date?.trim() || current.license_expiration_date,
+  }
+}
+
 export function normalize_parsed_fields(
   document_type: OcrDocumentType,
   value: unknown,

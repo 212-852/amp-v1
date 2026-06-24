@@ -7,6 +7,12 @@ import DocumentScanner, {
   type DocumentScannerStartResult,
 } from "@/components/ocr/document_scanner"
 import type { DriverProgressEntry } from "@/core/driver/context"
+import {
+  apply_ocr_to_license_form,
+  has_ocr_license_result,
+  read_document_image,
+  type OcrImageSource,
+} from "@/core/ocr/client"
 import { build_ocr_status_label } from "@/core/ocr/rules"
 
 type LicenseFormFields = {
@@ -15,16 +21,6 @@ type LicenseFormFields = {
   license_birth_date: string
   license_number: string
   license_expiration_date: string
-}
-
-type OcrResponse = {
-  ok?: boolean
-  message?: string
-  image_url?: string
-  parsed?: Partial<LicenseFormFields>
-  confidence?: number
-  warnings?: string[]
-  errors?: Record<string, string>
 }
 
 type LicenseSaveResponse = {
@@ -141,61 +137,44 @@ const DriverLicenseAccordionPanel = forwardRef<
     warnings: ocr_warnings,
   })
 
-  async function request_ocr(next_image_url: string) {
+  async function request_ocr(next_image_url: string, source: OcrImageSource) {
     setOcrLoading(true)
     setMessage(null)
     setOcrWarnings([])
 
-    try {
-      const response = await fetch("/api/ocr", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          document_type: "driver_license_front",
-          image_url: next_image_url,
-        }),
-      })
-      const result = (await response.json().catch(() => null)) as OcrResponse | null
+    const result = await read_document_image({
+      document_type: "driver_license_front",
+      image_url: next_image_url,
+      source,
+    })
 
-      if (!response.ok || result?.ok !== true) {
-        setOcrHasResult(false)
-        setMessage(result?.message ?? "OCR読み込みに失敗しました。手入力してください。")
-        return
-      }
-
-      const parsed = result.parsed ?? {}
-
-      setForm((current) => ({
-        license_name: parsed.license_name || current.license_name,
-        license_address: parsed.license_address || current.license_address,
-        license_birth_date: parsed.license_birth_date || current.license_birth_date,
-        license_number: parsed.license_number || current.license_number,
-        license_expiration_date:
-          parsed.license_expiration_date || current.license_expiration_date,
-      }))
-      setOcrWarnings(result.warnings ?? [])
-      setOcrHasResult(
-        Boolean(
-          parsed.license_name ||
-            parsed.license_number ||
-            parsed.license_address ||
-            (result.confidence ?? 0) > 0,
-        ),
-      )
-    } catch {
+    if (!result.ok) {
       setOcrHasResult(false)
-      setMessage("OCR読み込みに失敗しました。手入力してください。")
-    } finally {
+      setMessage(result.message)
       setOcrLoading(false)
+      return
     }
+
+    setForm((current) =>
+      apply_ocr_to_license_form({
+        current,
+        parsed: result.parsed,
+      }),
+    )
+    setOcrWarnings(result.warnings)
+    setOcrHasResult(
+      has_ocr_license_result({
+        parsed: result.parsed,
+        confidence: result.confidence,
+      }),
+    )
+    setOcrLoading(false)
   }
 
-  function handle_capture(next_image_url: string) {
-    setImageUrl(next_image_url)
+  function handle_capture(input: { image_url: string; source: OcrImageSource }) {
+    setImageUrl(input.image_url)
     setOcrHasResult(false)
-    void request_ocr(next_image_url)
+    void request_ocr(input.image_url, input.source)
   }
 
   async function submit_license() {
