@@ -1,13 +1,30 @@
 "use client"
 
+import { CheckCircle2, XCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 
 import DriverLicenseStep from "@/components/driver/license_step"
 import type { DriverChecklistItem, DriverStatus } from "@/core/driver/context"
 
-function statusIcon(complete: boolean) {
-  return complete ? "✅" : "❌"
+function ProgressStatusIcon({ complete }: Readonly<{ complete: boolean }>) {
+  if (complete) {
+    return (
+      <CheckCircle2
+        aria-hidden="true"
+        className="h-5 w-5 shrink-0 text-emerald-600"
+        strokeWidth={2.25}
+      />
+    )
+  }
+
+  return (
+    <XCircle
+      aria-hidden="true"
+      className="h-5 w-5 shrink-0 text-red-600"
+      strokeWidth={2.25}
+    />
+  )
 }
 
 export default function DriverOnboardingModal({
@@ -66,18 +83,14 @@ export default function DriverOnboardingModal({
                     onClick={() => setLicenseStepOpen(true)}
                     className="flex w-full items-center gap-3 rounded-2xl border border-neutral-200 px-4 py-3 text-left transition hover:bg-neutral-50"
                   >
-                    <span aria-hidden="true" className="text-lg leading-none">
-                      {statusIcon(item.complete)}
-                    </span>
+                    <ProgressStatusIcon complete={item.complete} />
                     <span className="text-[15px] font-medium leading-6 text-neutral-900">
                       {item.label}
                     </span>
                   </button>
                 ) : (
                   <div className="flex w-full items-center gap-3 rounded-2xl border border-neutral-200 px-4 py-3">
-                    <span aria-hidden="true" className="text-lg leading-none">
-                      {statusIcon(item.complete)}
-                    </span>
+                    <ProgressStatusIcon complete={item.complete} />
                     <span className="text-[15px] font-medium leading-6 text-neutral-900">
                       {item.label}
                     </span>

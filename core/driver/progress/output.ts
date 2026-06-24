@@ -1,5 +1,7 @@
-import type { DriverProgressState, DriverProgressRow } from "@/core/driver/progress/rules"
-import type { DriverProgressValidationResult } from "@/core/driver/progress/rules"
+import type {
+  DriverProgressState,
+  DriverProgressValidationResult,
+} from "@/core/driver/progress/rules"
 
 export type DriverProgressOutput = {
   ok: boolean
@@ -60,4 +62,20 @@ export function build_driver_license_success_output(input: {
   }
 }
 
-export type { DriverProgressRow }
+export type DriverPageLoadResult = {
+  ok: boolean
+  state?: DriverProgressState
+  error_message?: string
+  has_driver?: boolean
+  has_driver_progress?: boolean
+  driver_uuid?: string | null
+}
+
+export function build_driver_page_error_output(input: {
+  error_message: string
+}): DriverPageLoadResult {
+  return {
+    ok: false,
+    error_message: input.error_message,
+  }
+}

@@ -8,6 +8,8 @@ export {
   DRIVER_PROGRESS_KEYS,
   DRIVER_PROGRESS_LABELS,
   empty_driver_progress,
+  normalize_driver_progress,
+  normalize_driver_progress_value,
   is_all_progress_complete,
   is_driver_provisional,
   seed_driver_progress_from_entry,

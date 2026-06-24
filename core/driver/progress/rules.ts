@@ -66,7 +66,7 @@ export const DRIVER_PROGRESS_LABELS: Record<DriverProgressKey, string> = {
 }
 
 const COMPLETE_STATUSES: Record<DriverProgressKey, Set<string>> = {
-  driver_license: new Set(["approved", "verified", "completed"]),
+  driver_license: new Set(["approved", "verified", "completed", "uploaded"]),
   vehicle: new Set(["owned", "registered", "approved"]),
   freight_operator: new Set(["acquired", "approved"]),
   black_plate: new Set(["issued", "approved"]),
@@ -83,8 +83,12 @@ export function empty_driver_progress(): DriverProgress {
   }
 }
 
-export function normalize_driver_progress(value: unknown): DriverProgress {
+export function normalize_driver_progress_value(value: unknown): DriverProgress {
   const empty = empty_driver_progress()
+
+  if (value == null) {
+    return empty
+  }
 
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return empty
@@ -117,6 +121,16 @@ export function normalize_driver_progress(value: unknown): DriverProgress {
   }
 
   return normalized
+}
+
+export function normalize_driver_progress(
+  driver: DriverProgressRow | null | undefined,
+): DriverProgress {
+  if (!driver) {
+    return empty_driver_progress()
+  }
+
+  return normalize_driver_progress_value(driver.driver_progress)
 }
 
 export function get_latest_progress_entry(
@@ -174,7 +188,7 @@ export function append_progress_entry(
   key: DriverProgressKey,
   entry: Omit<DriverProgressEntry, "created_at"> & { created_at?: string },
 ): DriverProgress {
-  const next = normalize_driver_progress(progress)
+  const next = normalize_driver_progress_value(progress)
 
   next[key] = [
     ...next[key],
@@ -189,7 +203,7 @@ export function append_progress_entry(
 }
 
 export function build_driver_progress_state(row: DriverProgressRow | null): DriverProgressState {
-  const progress = normalize_driver_progress(row?.driver_progress)
+  const progress = normalize_driver_progress(row)
   const items = build_checklist_items(progress)
 
   return {
