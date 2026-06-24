@@ -39,10 +39,10 @@ export default function OcrCameraFallback({
     <div className="space-y-4 rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-5">
       <div className="space-y-2">
         <h3 className="text-base font-bold text-neutral-900">
-          カメラを起動できませんでした
+          カメラの許可が必要です
         </h3>
         <p className="text-sm leading-6 text-neutral-700">
-          LINEアプリ内ブラウザではカメラが許可されない場合があります。
+          この画面でカメラの使用が許可されていません。
           画像を選択するか、外部ブラウザで開いてください。
         </p>
       </div>
