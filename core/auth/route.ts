@@ -10,6 +10,13 @@ import type {
   SessionRole,
 } from "@/core/auth/types"
 import { resolve_entry_line_identity } from "@/core/auth/identity"
+import {
+  has_line_authenticated_session,
+  read_line_browser_auth_state,
+  resolveLineBrowserAccess,
+  type LineBrowserAccessDecision,
+} from "@/core/auth/line_browser"
+import { send_line_auth_debug } from "@/core/auth/line_debug"
 import { resolveRequestIdFromHeaders } from "@/core/auth/session"
 import {
   is_line_in_app_browser,
@@ -121,6 +128,10 @@ export function resolveRoleRedirectPath(context: AuthContext, session: Session) 
   }
 
   if (pathname === "/" || pathname === "") {
+    if (session.role === "driver") {
+      return "/app"
+    }
+
     return homePathForRole(session.role)
   }
 
@@ -200,17 +211,78 @@ export function resolveAuthRoute(
   return resolveEntryPath(context, entrance, session, identity)
 }
 
+export type LineBrowserAccessResult =
+  | { allowed: true }
+  | { loop_blocked: true }
+  | { redirect_to: string; return_to: string }
+
+export async function enforceLineBrowserAccess(input: {
+  context: AuthContext
+  session: Session
+  identity: IdentityRecord
+  pathname: string
+  search?: string | null
+}): Promise<LineBrowserAccessResult> {
+  const decision = await resolveLineBrowserAccess(input)
+
+  if (decision.status === "allowed") {
+    return { allowed: true }
+  }
+
+  if (decision.status === "loop_blocked") {
+    return { loop_blocked: true }
+  }
+
+  redirect(decision.redirect_to)
+}
+
+export async function resolveLineBrowserAccessForRoute(
+  pathname: string,
+  search?: string | null,
+): Promise<LineBrowserAccessDecision> {
+  const { resolveAuthContext } = await import("@/core/auth/context")
+  const { resolveSession } = await import("@/core/auth/session")
+  const { resolveIdentity } = await import("@/core/auth/identity")
+
+  const context = await resolveAuthContext(pathname)
+  const session = await resolveSession(context)
+  const identity = await resolveIdentity(context, session)
+
+  return resolveLineBrowserAccess({
+    context,
+    session,
+    identity,
+    pathname,
+    search,
+  })
+}
+
 export async function enforceEntryLineAccess(
   context: AuthContext,
   session: Session,
 ) {
   const request_id = await resolveRequestIdFromHeaders()
   const entry_identity = await resolve_entry_line_identity(context, session)
+  const line_auth_state = await read_line_browser_auth_state({
+    context,
+    session,
+    identity: {
+      user_uuid: session.user_uuid,
+      identity_state: session.user_uuid ? "linked" : "anonymous",
+      linked_providers: [],
+    },
+    pathname: context.requested_route ?? "/entry",
+  })
   const has_verified_liff_session =
     Boolean(session.liff?.provider_user_id) ||
     (session.liff?.verified === true &&
       Boolean(entry_identity.liff_provider_user_id))
   const has_linked_line_identity =
+    has_line_authenticated_session(session, {
+      user_uuid: session.user_uuid,
+      identity_state: session.user_uuid ? "linked" : "anonymous",
+      linked_providers: [],
+    }) ||
     Boolean(entry_identity.line_user_id) ||
     Boolean(
       entry_identity.provider === "line" &&
@@ -219,13 +291,31 @@ export async function enforceEntryLineAccess(
     Boolean(
       session.provider === "line" &&
         session.provider_user_id,
-    )
-  const has_entry_access =
-    has_linked_line_identity || has_verified_liff_session
+    ) ||
+    has_verified_liff_session
+  const has_entry_access = has_linked_line_identity
   const login_url = `/api/auth/line/start?return_to=${encodeURIComponent(ENTRY_RETURN_TO)}`
   const redirect_required = !has_entry_access
   const redirect_to = redirect_required ? login_url : null
   const redirect_reason = redirect_required ? "line_identity_missing" : null
+
+  if (line_auth_state.loop_blocked && redirect_required) {
+    await send_line_auth_debug("LOOP_BLOCKED", {
+      pathname: context.requested_route ?? "/entry",
+      return_to: ENTRY_RETURN_TO,
+      has_session_cookie: line_auth_state.has_session_cookie,
+      visitor_uuid_exists: line_auth_state.visitor_uuid_exists,
+      user_uuid_exists: line_auth_state.user_uuid_exists,
+      provider: line_auth_state.provider,
+      provider_user_id_exists: line_auth_state.provider_user_id_exists,
+      identity_exists: line_auth_state.identity_exists,
+      session_write_success: false,
+      redirect_to: null,
+      redirect_reason: "callback_succeeded_without_session",
+    })
+
+    redirect("/entry?line_auth_loop=1")
+  }
 
   await send_entry_line_auth_debug("entry_guard_checked", {
     request_id,

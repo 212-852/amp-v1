@@ -26,6 +26,9 @@ const alwaysReportEvents = new Set([
   "chat_archive_insert_error",
   "chat_bootstrap_failed",
   "output_failed",
+  "AUTH_LINE_LOGIN_FAILED",
+  "AUTH_LINE_SESSION_FAILED",
+  "AUTH_LINE_LOOP_BLOCKED",
 ])
 
 const deniedDiscordEvents = new Set([
@@ -106,6 +109,14 @@ const identityAllowedEvents = new Set([
   "session_update_failed",
   "user_create_success",
   "identity_upsert_success",
+])
+
+const lineAuthDebugEvents = new Set([
+  "AUTH_LINE_ENTRY_OPENED",
+  "AUTH_LINE_LOGIN_STARTED",
+  "AUTH_LINE_CALLBACK_RECEIVED",
+  "AUTH_LINE_SESSION_WRITTEN",
+  "AUTH_LINE_ROUTE_GUARD_CHECKED",
 ])
 
 const entryLineAuthEvents = new Set([
@@ -386,6 +397,10 @@ export function shouldSendAuthSessionDebug(event: string) {
     return DEBUG_ENTRY_LINE_AUTH
   }
 
+  if (lineAuthDebugEvents.has(event)) {
+    return DEBUG_ENTRY_LINE_AUTH
+  }
+
   if (userChatLoadEvents.has(event)) {
     return CHAT_REALTIME_DEBUG
   }
@@ -431,7 +446,11 @@ export function resolveDebugTitle(event: string) {
     return "NOTIFY"
   }
 
-  if (entryLineAuthEvents.has(event)) {
+  if (entryLineAuthEvents.has(event) || lineAuthDebugEvents.has(event)) {
+    return "ENTRY_LINE_AUTH"
+  }
+
+  if (event.startsWith("AUTH_LINE_")) {
     return "ENTRY_LINE_AUTH"
   }
 

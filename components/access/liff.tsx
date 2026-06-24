@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect } from "react"
-import { useRouter } from "next/navigation"
 
 type LiffProfile = {
   userId: string
@@ -119,8 +118,6 @@ async function linkLineProfile(profile: LiffProfile, idToken: string | null) {
 }
 
 export function LiffAutoLogin() {
-  const router = useRouter()
-
   useEffect(() => {
     let cancelled = false
 
@@ -172,7 +169,6 @@ export function LiffAutoLogin() {
           await postLiffDebug("liff_login_required", {
             liff_id: LIFF_ID,
           })
-          liff.login()
           return
         }
 
@@ -195,7 +191,7 @@ export function LiffAutoLogin() {
         await linkLineProfile(profile, idToken)
 
         if (!cancelled) {
-          router.refresh()
+          window.location.reload()
         }
       } catch (error) {
         await postClientDebug({
@@ -215,7 +211,7 @@ export function LiffAutoLogin() {
     return () => {
       cancelled = true
     }
-  }, [router])
+  }, [])
 
   return null
 }

@@ -2,18 +2,40 @@ import AppFooter from "@/components/app/footer"
 import AppHeader from "@/components/app/header"
 import AppHome from "@/components/app/home"
 import AppLayoutShell from "@/components/app/layout_shell"
+import LineAuthLoopBlocked from "@/components/access/line_auth_loop_blocked"
 import { resolveAuthContext } from "@/core/auth/context"
+import { resolveIdentity } from "@/core/auth/identity"
+import { resolveLineBrowserAccess } from "@/core/auth/line_browser"
 import { resolveSession } from "@/core/auth/session"
 import { resolveChatSupportAccess } from "@/core/chat/support"
 import { resolveOutputLocaleDecision } from "@/core/chat/context"
 import { sendAuthDebug } from "@/core/debug"
 import { enforceAuthRouteRedirect } from "@/core/route/rules"
+import { headers } from "next/headers"
+import { redirect } from "next/navigation"
 
 export default async function AppPage() {
   await enforceAuthRouteRedirect("/app")
 
   const context = await resolveAuthContext("/app")
   const session = await resolveSession(context)
+  const identity = await resolveIdentity(context, session)
+  const requestHeaders = await headers()
+  const line_access = await resolveLineBrowserAccess({
+    context,
+    session,
+    identity,
+    pathname: "/app",
+    search: requestHeaders.get("x-amp-search"),
+  })
+
+  if (line_access.status === "loop_blocked") {
+    return <LineAuthLoopBlocked />
+  }
+
+  if (line_access.status === "redirect_login") {
+    redirect(line_access.redirect_to)
+  }
 
   const support_access = resolveChatSupportAccess({
     user_uuid: session.user_uuid,

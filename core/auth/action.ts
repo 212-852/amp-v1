@@ -19,6 +19,13 @@ import {
   type AppSession,
 } from "@/core/auth/session"
 import type { SessionRole, SessionTier, SourceChannel } from "@/core/auth/types"
+import {
+  LINE_LOGIN_GUARD_COOKIE,
+  parseLineLoginGuardCookie,
+  setLineLoginGuardAttemptedCookie,
+  setLineLoginGuardCallbackCookie,
+} from "@/core/auth/line_browser"
+import { send_line_auth_debug } from "@/core/auth/line_debug"
 import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/rest"
 import { sendAuthDebug } from "@/core/debug"
 import {
@@ -910,11 +917,35 @@ export async function completeLiffSession(request: NextRequest) {
     source_channel: result.source_channel,
   })
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     ok: true,
     success: true,
     session: result.session,
   })
+
+  await writeSessionVisitorCookie({
+    response,
+    visitor_uuid: result.visitor_uuid,
+    user_uuid: result.user_uuid,
+    pathname: "/api/auth/liff/session",
+  })
+  clearAuthLoggedOutCookie(response)
+
+  await send_line_auth_debug("SESSION_WRITTEN", {
+    pathname: "/api/auth/liff/session",
+    return_to: null,
+    has_session_cookie: true,
+    visitor_uuid_exists: Boolean(result.visitor_uuid),
+    user_uuid_exists: Boolean(result.user_uuid),
+    provider: "line",
+    provider_user_id_exists: Boolean(providerUserId),
+    identity_exists: Boolean(result.identity_uuid),
+    session_write_success: true,
+    redirect_to: null,
+    redirect_reason: null,
+  })
+
+  return response
 }
 
 function lineLoginConfig(request: NextRequest) {
@@ -1642,6 +1673,15 @@ export async function startLineLogin(request: NextRequest) {
 
     const response = NextResponse.redirect(url, 303)
     clearAuthLoggedOutCookie(response)
+    const login_guard = parseLineLoginGuardCookie(
+      request.cookies.get(LINE_LOGIN_GUARD_COOKIE)?.value,
+    )
+
+    setLineLoginGuardAttemptedCookie(response, {
+      visitor_uuid: session.visitor_uuid,
+      previous: login_guard,
+    })
+
     await sendAuthDebug("login_cleared_logout_block", {
       provider: "line",
       bridge_uuid: bridge?.otp_uuid ?? null,
@@ -1703,6 +1743,20 @@ export async function startLineLogin(request: NextRequest) {
       source_channel: bridge ? "pwa" : context.source_channel,
       final_url: url.toString(),
       return_to,
+    })
+
+    await send_line_auth_debug("LOGIN_STARTED", {
+      pathname: return_to ?? "/",
+      return_to,
+      has_session_cookie: Boolean(session.visitor_uuid),
+      visitor_uuid_exists: Boolean(session.visitor_uuid),
+      user_uuid_exists: Boolean(session.user_uuid),
+      provider: session.provider,
+      provider_user_id_exists: Boolean(session.provider_user_id),
+      identity_exists: Boolean(session.user_uuid),
+      session_write_success: false,
+      redirect_to: url.toString(),
+      redirect_reason: "line_login_start",
     })
 
     return response
@@ -2150,6 +2204,20 @@ export async function completeLineLogin(request: NextRequest) {
     const callback_request_id = await resolveRequestIdFromHeaders()
     const redirect_to = cookieState.return_to ?? "/"
 
+    await send_line_auth_debug("CALLBACK_RECEIVED", {
+      pathname: cookieState.return_to ?? "/",
+      return_to: cookieState.return_to,
+      has_session_cookie: Boolean(callbackVisitorUuid),
+      visitor_uuid_exists: Boolean(callbackVisitorUuid),
+      user_uuid_exists: Boolean(linkedSession.user_uuid),
+      provider: "line",
+      provider_user_id_exists: Boolean(profile.userId),
+      identity_exists: Boolean(result.identity_uuid),
+      session_write_success: true,
+      redirect_to: redirect_to,
+      redirect_reason: null,
+    })
+
     await send_entry_line_auth_debug("line_login_callback_received", {
       request_id: callback_request_id,
       state_exists: Boolean(state && cookieState.state),
@@ -2203,6 +2271,15 @@ export async function completeLineLogin(request: NextRequest) {
       pathname: "/api/auth/line/callback",
     })
 
+    const login_guard = parseLineLoginGuardCookie(
+      request.cookies.get(LINE_LOGIN_GUARD_COOKIE)?.value,
+    )
+
+    setLineLoginGuardCallbackCookie(response, {
+      visitor_uuid: result.visitor_uuid,
+      previous: login_guard,
+    })
+
     await send_entry_line_auth_debug("line_session_written", {
       request_id: callback_request_id,
       user_uuid: linkedSession.user_uuid,
@@ -2216,18 +2293,50 @@ export async function completeLineLogin(request: NextRequest) {
       cookie_names: [VISITOR_COOKIE_NAME],
     })
 
+    await send_line_auth_debug("SESSION_WRITTEN", {
+      pathname: cookieState.return_to ?? "/",
+      return_to: cookieState.return_to,
+      has_session_cookie: true,
+      visitor_uuid_exists: Boolean(linkedSession.visitor_uuid),
+      user_uuid_exists: Boolean(linkedSession.user_uuid),
+      provider: linkedSession.provider,
+      provider_user_id_exists: Boolean(linkedSession.provider_user_id),
+      identity_exists: Boolean(result.identity_uuid),
+      session_write_success: true,
+      redirect_to,
+      redirect_reason: null,
+    })
+
     clearLineOAuthStateCookie(response)
     clearAuthLoggedOutCookie(response)
 
     return response
   } catch (callbackError) {
     failureUrl.searchParams.set("auth_error", "line")
+    const error_message =
+      callbackError instanceof Error ? callbackError.message : String(callbackError)
+
+    await send_line_auth_debug("LOGIN_FAILED", {
+      pathname: cookieState?.return_to ?? "/",
+      return_to: cookieState?.return_to ?? null,
+      has_session_cookie: Boolean(session?.visitor_uuid ?? cookieState?.visitor_uuid),
+      visitor_uuid_exists: Boolean(session?.visitor_uuid ?? cookieState?.visitor_uuid),
+      user_uuid_exists: Boolean(session?.user_uuid),
+      provider: "line",
+      provider_user_id_exists: false,
+      identity_exists: false,
+      session_write_success: false,
+      redirect_to: failureUrl.toString(),
+      redirect_reason: error_message,
+      error_message,
+    })
+
     await sendIdentityDebug("identity_link_failed", {
       provider: "line",
       visitor_uuid: session?.visitor_uuid ?? cookieState?.visitor_uuid ?? null,
       user_uuid: session?.user_uuid ?? null,
       reason: "line_oauth_failed",
-      error: callbackError instanceof Error ? callbackError.message : String(callbackError),
+      error: error_message,
       source_channel: context.source_channel,
     })
 
