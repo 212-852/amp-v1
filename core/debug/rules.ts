@@ -26,6 +26,9 @@ const alwaysReportEvents = new Set([
   "chat_archive_insert_error",
   "chat_bootstrap_failed",
   "output_failed",
+  "OCR_CAMERA_START_REQUESTED",
+  "OCR_CAMERA_STARTED",
+  "OCR_CAMERA_FAILED",
   "AUTH_LINE_LOGIN_FAILED",
   "AUTH_LINE_SESSION_FAILED",
   "AUTH_LINE_LOOP_BLOCKED",
@@ -421,6 +424,10 @@ export function shouldSendAuthSessionDebug(event: string) {
 }
 
 export function resolveDebugTitle(event: string) {
+  if (event.startsWith("OCR_CAMERA_")) {
+    return "OCR_CAMERA"
+  }
+
   if (event === "admin_page_accessed") {
     return "ADMIN_ACCESS"
   }

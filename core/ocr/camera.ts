@@ -6,6 +6,9 @@ import {
   compute_document_frame,
 } from "@/core/ocr/rules"
 
+const CAMERA_START_FAILED_MESSAGE =
+  "カメラを起動できませんでした。画像を選択してください。"
+
 export type FrameRect = {
   x: number
   y: number
@@ -27,6 +30,122 @@ export type FrameQualityResult = {
   issues: FrameQualityIssue[]
   guidance_key: string
   guidance_message: string
+}
+
+export type OcrCameraStartInput = {
+  document_type: OcrDocumentType
+  facing_mode?: "environment" | "user"
+}
+
+export type OcrCameraStartResult = {
+  started: boolean
+  stream: MediaStream | null
+  error: string | null
+  error_name: string | null
+  error_message: string | null
+}
+
+function build_camera_debug_payload(input: {
+  document_type: OcrDocumentType
+  error_name?: string | null
+  error_message?: string | null
+}) {
+  const has_media_devices =
+    typeof navigator !== "undefined" && Boolean(navigator.mediaDevices)
+  const has_get_user_media =
+    typeof navigator !== "undefined" &&
+    typeof navigator.mediaDevices?.getUserMedia === "function"
+
+  return {
+    document_type: input.document_type,
+    is_secure_context:
+      typeof window !== "undefined" ? window.isSecureContext : false,
+    has_media_devices,
+    has_get_user_media,
+    user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+    error_name: input.error_name ?? null,
+    error_message: input.error_message ?? null,
+  }
+}
+
+async function send_ocr_camera_debug(
+  event: "OCR_CAMERA_START_REQUESTED" | "OCR_CAMERA_STARTED" | "OCR_CAMERA_FAILED",
+  payload: Record<string, unknown>,
+) {
+  try {
+    await fetch("/api/debug/client", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        event,
+        ...payload,
+      }),
+    })
+  } catch {
+    // Client-side debug must never block camera startup.
+  }
+}
+
+export async function start_ocr_camera(
+  input: OcrCameraStartInput,
+): Promise<OcrCameraStartResult> {
+  const requested_payload = build_camera_debug_payload({
+    document_type: input.document_type,
+  })
+
+  void send_ocr_camera_debug("OCR_CAMERA_START_REQUESTED", requested_payload)
+
+  try {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      throw new DOMException("mediaDevices.getUserMedia is unavailable", "NotSupportedError")
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        facingMode: { ideal: input.facing_mode ?? "environment" },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+      },
+    })
+
+    void send_ocr_camera_debug(
+      "OCR_CAMERA_STARTED",
+      build_camera_debug_payload({
+        document_type: input.document_type,
+      }),
+    )
+
+    return {
+      started: true,
+      stream,
+      error: null,
+      error_name: null,
+      error_message: null,
+    }
+  } catch (error) {
+    const error_name = error instanceof Error ? error.name : "UnknownError"
+    const error_message = error instanceof Error ? error.message : String(error)
+
+    void send_ocr_camera_debug(
+      "OCR_CAMERA_FAILED",
+      build_camera_debug_payload({
+        document_type: input.document_type,
+        error_name,
+        error_message,
+      }),
+    )
+
+    return {
+      started: false,
+      stream: null,
+      error: CAMERA_START_FAILED_MESSAGE,
+      error_name,
+      error_message,
+    }
+  }
 }
 
 function clamp(value: number, min: number, max: number) {

@@ -75,10 +75,18 @@ const DriverLicenseAccordionPanel = forwardRef<
   {
     current_answer: string
     initial_entry: DriverProgressEntry | null
+    camera_stream?: MediaStream | null
+    camera_error?: string | null
     onComplete: () => void
   }
 >(function DriverLicenseAccordionPanel(
-  { current_answer, initial_entry, onComplete },
+  {
+    current_answer,
+    initial_entry,
+    camera_stream = null,
+    camera_error = null,
+    onComplete,
+  },
   ref,
 ) {
   const scanner_ref = useRef<DocumentScannerHandle>(null)
@@ -101,7 +109,13 @@ const DriverLicenseAccordionPanel = forwardRef<
     () => ({
       start_camera: () =>
         scanner_ref.current?.start_camera() ??
-        Promise.resolve({ started: false, error: "scanner_unavailable" }),
+        Promise.resolve({
+          started: false,
+          stream: null,
+          error: "scanner_unavailable",
+          error_name: "ScannerUnavailable",
+          error_message: "Scanner is unavailable",
+        }),
     }),
     [],
   )
@@ -259,6 +273,8 @@ const DriverLicenseAccordionPanel = forwardRef<
             document_type="driver_license_front"
             on_capture={handle_capture}
             disabled={isSubmitting || ocr_loading}
+            camera_stream={camera_stream}
+            camera_error={camera_error}
           />
         )}
       </section>

@@ -13,6 +13,7 @@ import type {
   DriverStatus,
 } from "@/core/driver/context"
 import { log_driver_license_step_opened } from "@/core/driver/progress/output"
+import { start_ocr_camera } from "@/core/ocr/camera"
 
 function ProgressStatusIcon({ complete }: Readonly<{ complete: boolean }>) {
   if (complete) {
@@ -84,8 +85,12 @@ export default function DriverOnboardingModal({
 }>) {
   const router = useRouter()
   const [expanded_key, setExpandedKey] = useState<DriverProgressKey | null>(null)
+  const [license_camera_stream, setLicenseCameraStream] =
+    useState<MediaStream | null>(null)
+  const [license_camera_error, setLicenseCameraError] = useState<string | null>(null)
   const item_refs = useRef<Partial<Record<DriverProgressKey, HTMLLIElement | null>>>({})
   const license_panel_ref = useRef<DriverLicenseAccordionPanelHandle>(null)
+  const license_camera_stream_ref = useRef<MediaStream | null>(null)
 
   useEffect(() => {
     if (!expanded_key) {
@@ -106,6 +111,14 @@ export default function DriverOnboardingModal({
     })
   }, [expanded_key])
 
+  useEffect(() => {
+    return () => {
+      license_camera_stream_ref.current
+        ?.getTracks()
+        .forEach((track) => track.stop())
+    }
+  }, [])
+
   if (initial_status !== "provisional") {
     return null
   }
@@ -114,8 +127,20 @@ export default function DriverOnboardingModal({
     router.refresh()
   }
 
-  function open_license_step(item: DriverChecklistItem) {
+  function stop_license_camera() {
+    license_camera_stream_ref.current
+      ?.getTracks()
+      .forEach((track) => track.stop())
+    license_camera_stream_ref.current = null
+    setLicenseCameraStream(null)
+  }
+
+  async function open_license_step(item: DriverChecklistItem) {
     const current_answer_label = item.current_answer ?? "未回答"
+
+    setExpandedKey("driver_license")
+    setLicenseCameraError(null)
+    stop_license_camera()
 
     log_driver_license_step_opened({
       user_uuid,
@@ -130,37 +155,31 @@ export default function DriverOnboardingModal({
       camera_error: null,
     })
 
-    const camera_promise = license_panel_ref.current?.start_camera()
+    const result = await start_ocr_camera({
+      document_type: "driver_license_front",
+      facing_mode: "environment",
+    })
 
-    if (!camera_promise) {
-      log_driver_license_step_opened({
-        user_uuid,
-        driver_uuid,
-        has_driver,
-        has_driver_progress,
-        latest_license_status: item.latest_status,
-        legacy_has_driver_license,
-        current_answer_label,
-        camera_start_requested: true,
-        camera_started: false,
-        camera_error: "scanner_unavailable",
-      })
-      return
+    if (result.stream) {
+      license_camera_stream_ref.current = result.stream
+      setLicenseCameraStream(result.stream)
+    } else {
+      setLicenseCameraError(
+        result.error ?? "カメラを起動できませんでした。画像を選択してください。",
+      )
     }
 
-    void camera_promise.then((result) => {
-      log_driver_license_step_opened({
-        user_uuid,
-        driver_uuid,
-        has_driver,
-        has_driver_progress,
-        latest_license_status: item.latest_status,
-        legacy_has_driver_license,
-        current_answer_label,
-        camera_start_requested: true,
-        camera_started: result.started,
-        camera_error: result.error,
-      })
+    log_driver_license_step_opened({
+      user_uuid,
+      driver_uuid,
+      has_driver,
+      has_driver_progress,
+      latest_license_status: item.latest_status,
+      legacy_has_driver_license,
+      current_answer_label,
+      camera_start_requested: true,
+      camera_started: result.started,
+      camera_error: result.error,
     })
   }
 
@@ -168,7 +187,12 @@ export default function DriverOnboardingModal({
     const will_open = expanded_key !== item.key
 
     if (item.key === "driver_license" && will_open) {
-      open_license_step(item)
+      void open_license_step(item)
+      return
+    }
+
+    if (item.key === "driver_license") {
+      stop_license_camera()
     }
 
     setExpandedKey((current) => (current === item.key ? null : item.key))
@@ -181,6 +205,8 @@ export default function DriverOnboardingModal({
           ref={license_panel_ref}
           current_answer={item.current_answer ?? "未回答"}
           initial_entry={item.latest_entry}
+          camera_stream={license_camera_stream}
+          camera_error={license_camera_error}
           onComplete={handleLicenseComplete}
         />
       )

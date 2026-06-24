@@ -15,8 +15,10 @@ import {
   read_file_as_data_url,
   resolve_scanner_frame,
   sample_video_frame_quality,
+  start_ocr_camera,
   type FrameQualityResult,
   type FrameRect,
+  type OcrCameraStartResult,
 } from "@/core/ocr/camera"
 import {
   OCR_AUTO_CAPTURE_STABLE_MS,
@@ -24,10 +26,7 @@ import {
   type OcrDocumentType,
 } from "@/core/ocr/rules"
 
-export type DocumentScannerStartResult = {
-  started: boolean
-  error: string | null
-}
+export type DocumentScannerStartResult = OcrCameraStartResult
 
 export type DocumentScannerHandle = {
   start_camera: () => Promise<DocumentScannerStartResult>
@@ -37,11 +36,19 @@ type DocumentScannerProps = {
   document_type: OcrDocumentType
   on_capture: (image_url: string) => void
   disabled?: boolean
+  camera_stream?: MediaStream | null
+  camera_error?: string | null
 }
 
 const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
   function DocumentScanner(
-    { document_type, on_capture, disabled = false },
+    {
+      document_type,
+      on_capture,
+      disabled = false,
+      camera_stream = null,
+      camera_error = null,
+    },
     ref,
   ) {
     const container_ref = useRef<HTMLDivElement>(null)
@@ -71,12 +78,27 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       [stop_camera],
     )
 
-    const start_camera = useCallback((): Promise<DocumentScannerStartResult> => {
+    const attach_stream = useCallback(async (stream: MediaStream) => {
+      stream_ref.current = stream
+      const video = video_ref.current
+
+      if (video) {
+        video.srcObject = stream
+        await video.play()
+      }
+
+      setCameraActive(true)
+    }, [])
+
+    const start_camera = useCallback(async (): Promise<DocumentScannerStartResult> => {
       if (disabled || captured_ref.current) {
-        return Promise.resolve({
+        return {
           started: false,
+          stream: null,
           error: disabled ? "disabled" : "already_captured",
-        })
+          error_name: disabled ? "Disabled" : "AlreadyCaptured",
+          error_message: disabled ? "Scanner is disabled" : "Image already captured",
+        }
       }
 
       setFallbackMode(false)
@@ -84,35 +106,19 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       captured_ref.current = false
       stable_since_ref.current = null
 
-      const media_promise = navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-        },
+      const result = await start_ocr_camera({
+        document_type,
+        facing_mode: "environment",
       })
 
-      return media_promise
-        .then(async (stream) => {
-          stream_ref.current = stream
-          const video = video_ref.current
+      if (result.stream) {
+        await attach_stream(result.stream)
+      } else if (result.error) {
+        enter_fallback(result.error)
+      }
 
-          if (video) {
-            video.srcObject = stream
-            await video.play()
-          }
-
-          setCameraActive(true)
-
-          return { started: true, error: null }
-        })
-        .catch(() => {
-          const message = "カメラを起動できませんでした。画像を選択してください。"
-          enter_fallback(message)
-          return { started: false, error: message }
-        })
-    }, [disabled, enter_fallback])
+      return result
+    }, [attach_stream, disabled, document_type, enter_fallback])
 
     useImperativeHandle(ref, () => ({ start_camera }), [start_camera])
 
@@ -142,6 +148,26 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
         stream_ref.current?.getTracks().forEach((track) => track.stop())
       }
     }, [])
+
+    useEffect(() => {
+      if (!camera_stream || disabled || captured_ref.current) {
+        return
+      }
+
+      setFallbackMode(false)
+      setFallbackMessage(null)
+      captured_ref.current = false
+      stable_since_ref.current = null
+      void attach_stream(camera_stream)
+    }, [attach_stream, camera_stream, disabled])
+
+    useEffect(() => {
+      if (!camera_error || camera_stream || captured_ref.current) {
+        return
+      }
+
+      enter_fallback(camera_error)
+    }, [camera_error, camera_stream, enter_fallback])
 
     useEffect(() => {
       if (!camera_active || disabled || captured_ref.current || fallback_mode) {
@@ -224,6 +250,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
         >
           <video
             ref={video_ref}
+            autoPlay
             playsInline
             muted
             className={`absolute inset-0 h-full w-full object-cover ${

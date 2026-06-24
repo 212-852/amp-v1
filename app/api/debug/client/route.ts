@@ -3,7 +3,12 @@ import { NextResponse } from "next/server"
 import { sendAuthDebug } from "@/core/debug"
 import { resolveRequestIdFromHeaders } from "@/core/auth/session"
 
-const ALLOWED_CLIENT_DEBUG_EVENTS = new Set(["liff_client_checked"])
+const ALLOWED_CLIENT_DEBUG_EVENTS = new Set([
+  "liff_client_checked",
+  "OCR_CAMERA_START_REQUESTED",
+  "OCR_CAMERA_STARTED",
+  "OCR_CAMERA_FAILED",
+])
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as Record<
