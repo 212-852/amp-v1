@@ -4,12 +4,15 @@ import { CheckCircle2, XCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState, type ReactNode } from "react"
 
-import DriverLicenseAccordionPanel from "@/components/driver/license_accordion_panel"
+import DriverLicenseAccordionPanel, {
+  type DriverLicenseAccordionPanelHandle,
+} from "@/components/driver/license_accordion_panel"
 import type {
   DriverChecklistItem,
   DriverProgressKey,
   DriverStatus,
 } from "@/core/driver/context"
+import { log_driver_license_step_opened } from "@/core/driver/progress/output"
 
 function ProgressStatusIcon({ complete }: Readonly<{ complete: boolean }>) {
   if (complete) {
@@ -63,15 +66,26 @@ export default function DriverOnboardingModal({
   initial_status,
   completed_count,
   total_count,
+  user_uuid,
+  driver_uuid,
+  has_driver,
+  has_driver_progress,
+  legacy_has_driver_license,
 }: Readonly<{
   initial_items: DriverChecklistItem[]
   initial_status: DriverStatus
   completed_count: number
   total_count: number
+  user_uuid: string | null
+  driver_uuid: string | null
+  has_driver: boolean
+  has_driver_progress: boolean
+  legacy_has_driver_license: boolean
 }>) {
   const router = useRouter()
   const [expanded_key, setExpandedKey] = useState<DriverProgressKey | null>(null)
   const item_refs = useRef<Partial<Record<DriverProgressKey, HTMLLIElement | null>>>({})
+  const license_panel_ref = useRef<DriverLicenseAccordionPanelHandle>(null)
 
   useEffect(() => {
     if (!expanded_key) {
@@ -96,22 +110,77 @@ export default function DriverOnboardingModal({
     return null
   }
 
-  function toggle_item(key: DriverProgressKey) {
-    setExpandedKey((current) => (current === key ? null : key))
-  }
-
   function handleLicenseComplete() {
     router.refresh()
   }
 
+  function open_license_step(item: DriverChecklistItem) {
+    const current_answer_label = item.current_answer ?? "未回答"
+
+    log_driver_license_step_opened({
+      user_uuid,
+      driver_uuid,
+      has_driver,
+      has_driver_progress,
+      latest_license_status: item.latest_status,
+      legacy_has_driver_license,
+      current_answer_label,
+      camera_start_requested: true,
+      camera_started: false,
+      camera_error: null,
+    })
+
+    const camera_promise = license_panel_ref.current?.start_camera()
+
+    if (!camera_promise) {
+      log_driver_license_step_opened({
+        user_uuid,
+        driver_uuid,
+        has_driver,
+        has_driver_progress,
+        latest_license_status: item.latest_status,
+        legacy_has_driver_license,
+        current_answer_label,
+        camera_start_requested: true,
+        camera_started: false,
+        camera_error: "scanner_unavailable",
+      })
+      return
+    }
+
+    void camera_promise.then((result) => {
+      log_driver_license_step_opened({
+        user_uuid,
+        driver_uuid,
+        has_driver,
+        has_driver_progress,
+        latest_license_status: item.latest_status,
+        legacy_has_driver_license,
+        current_answer_label,
+        camera_start_requested: true,
+        camera_started: result.started,
+        camera_error: result.error,
+      })
+    })
+  }
+
+  function handle_item_click(item: DriverChecklistItem) {
+    const will_open = expanded_key !== item.key
+
+    if (item.key === "driver_license" && will_open) {
+      open_license_step(item)
+    }
+
+    setExpandedKey((current) => (current === item.key ? null : item.key))
+  }
+
   function render_panel(item: DriverChecklistItem) {
     if (item.key === "driver_license") {
-      const latest_entry = item.latest_entry?.image_url ? item.latest_entry : null
-
       return (
         <DriverLicenseAccordionPanel
+          ref={license_panel_ref}
           current_answer={item.current_answer ?? "未回答"}
-          initial_entry={latest_entry}
+          initial_entry={item.latest_entry}
           onComplete={handleLicenseComplete}
         />
       )
@@ -158,7 +227,7 @@ export default function DriverOnboardingModal({
                 <button
                   type="button"
                   aria-expanded={expanded}
-                  onClick={() => toggle_item(item.key)}
+                  onClick={() => handle_item_click(item)}
                   className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-neutral-50"
                 >
                   <ProgressStatusIcon complete={item.complete} />

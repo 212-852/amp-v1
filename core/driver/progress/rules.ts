@@ -29,6 +29,7 @@ export type DriverProgressRow = {
   user_uuid?: string | null
   status?: DriverStatus | null
   driver_progress?: DriverProgress | null
+  has_driver_license?: boolean | null
   pet_experience?: string[] | null
   transport_experience?: string | null
   application_reason?: string | null
@@ -51,6 +52,7 @@ export type DriverProgressState = {
   completed_count: number
   total_count: number
   all_complete: boolean
+  legacy_has_driver_license: boolean
 }
 
 export type DriverProgressValidationResult = {
@@ -177,35 +179,64 @@ export function get_latest_progress_status(
   return get_latest_progress_entry(progress, key)?.status ?? null
 }
 
+function format_progress_timestamp(created_at: string) {
+  const date = new Date(created_at)
+
+  if (Number.isNaN(date.getTime())) {
+    return created_at
+  }
+
+  return date.toLocaleString("ja-JP", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
+export function build_driver_license_current_answer(input: {
+  progress: DriverProgress
+  legacy_has_driver_license?: boolean | null
+}) {
+  const latest = get_latest_progress_entry(input.progress, "driver_license")
+
+  if (latest?.status) {
+    return `${latest.status} / ${format_progress_timestamp(latest.created_at)}`
+  }
+
+  if (input.legacy_has_driver_license === true) {
+    return DRIVER_LICENSE_ENTRY_ANSWER
+  }
+
+  const declared = input.progress.driver_license.find((entry) => entry.entry_answer)
+
+  if (declared?.entry_answer) {
+    return declared.entry_answer
+  }
+
+  return "未回答"
+}
+
 export function get_checklist_current_answer(
   progress: DriverProgress,
   key: DriverProgressKey,
+  options?: { legacy_has_driver_license?: boolean | null },
 ) {
-  const latest = get_latest_progress_entry(progress, key)
-
   if (key === "driver_license") {
-    if (latest?.image_url) {
-      return "運転免許証を登録済み"
-    }
-
-    if (latest?.entry_answer) {
-      return latest.entry_answer
-    }
-
-    const declared = progress.driver_license.find((entry) => entry.entry_answer)
-
-    if (declared?.entry_answer) {
-      return declared.entry_answer
-    }
-
-    return "未回答"
+    return build_driver_license_current_answer({
+      progress,
+      legacy_has_driver_license: options?.legacy_has_driver_license,
+    })
   }
+
+  const latest = get_latest_progress_entry(progress, key)
 
   if (!latest?.status) {
     return "未回答"
   }
 
-  return latest.status
+  return `${latest.status} / ${format_progress_timestamp(latest.created_at)}`
 }
 
 export function is_driver_license_complete(progress: DriverProgress) {
@@ -239,13 +270,16 @@ export function is_progress_item_complete(
   return COMPLETE_STATUSES[key].has(latest)
 }
 
-export function build_checklist_items(progress: DriverProgress): DriverChecklistItem[] {
+export function build_checklist_items(
+  progress: DriverProgress,
+  options?: { legacy_has_driver_license?: boolean | null },
+): DriverChecklistItem[] {
   return DRIVER_PROGRESS_KEYS.map((key) => ({
     key,
     label: DRIVER_PROGRESS_LABELS[key],
     complete: is_progress_item_complete(progress, key),
     latest_status: get_latest_progress_status(progress, key),
-    current_answer: get_checklist_current_answer(progress, key),
+    current_answer: get_checklist_current_answer(progress, key, options),
     latest_entry: get_latest_progress_entry(progress, key),
   }))
 }
@@ -307,9 +341,11 @@ export function normalize_driver_status(value: unknown): DriverStatus {
 }
 
 export function build_driver_progress_state(row: DriverProgressRow | null): DriverProgressState {
+  const legacy_has_driver_license = row?.has_driver_license === true
+
   try {
     const progress = normalize_driver_progress(row)
-    const items = build_checklist_items(progress)
+    const items = build_checklist_items(progress, { legacy_has_driver_license })
 
     return {
       driver_uuid: row?.driver_uuid ?? null,
@@ -319,10 +355,11 @@ export function build_driver_progress_state(row: DriverProgressRow | null): Driv
       completed_count: count_completed_items(items),
       total_count: DRIVER_PROGRESS_KEYS.length,
       all_complete: is_all_progress_complete(progress),
+      legacy_has_driver_license,
     }
   } catch {
     const progress = empty_driver_progress()
-    const items = build_checklist_items(progress)
+    const items = build_checklist_items(progress, { legacy_has_driver_license })
 
     return {
       driver_uuid: row?.driver_uuid ?? null,
@@ -332,6 +369,7 @@ export function build_driver_progress_state(row: DriverProgressRow | null): Driv
       completed_count: 0,
       total_count: DRIVER_PROGRESS_KEYS.length,
       all_complete: false,
+      legacy_has_driver_license,
     }
   }
 }

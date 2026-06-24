@@ -1,8 +1,11 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react"
 
-import DocumentScanner from "@/components/ocr/document_scanner"
+import DocumentScanner, {
+  type DocumentScannerHandle,
+  type DocumentScannerStartResult,
+} from "@/components/ocr/document_scanner"
 import type { DriverProgressEntry } from "@/core/driver/context"
 import { build_ocr_status_label } from "@/core/ocr/rules"
 
@@ -63,15 +66,22 @@ function form_is_complete(form: LicenseFormFields) {
   )
 }
 
-export default function DriverLicenseAccordionPanel({
-  current_answer,
-  initial_entry,
-  onComplete,
-}: Readonly<{
-  current_answer: string
-  initial_entry: DriverProgressEntry | null
-  onComplete: () => void
-}>) {
+export type DriverLicenseAccordionPanelHandle = {
+  start_camera: () => Promise<DocumentScannerStartResult>
+}
+
+const DriverLicenseAccordionPanel = forwardRef<
+  DriverLicenseAccordionPanelHandle,
+  {
+    current_answer: string
+    initial_entry: DriverProgressEntry | null
+    onComplete: () => void
+  }
+>(function DriverLicenseAccordionPanel(
+  { current_answer, initial_entry, onComplete },
+  ref,
+) {
+  const scanner_ref = useRef<DocumentScannerHandle>(null)
   const [image_url, setImageUrl] = useState(initial_entry?.image_url ?? "")
   const [form, setForm] = useState<LicenseFormFields>(() => form_from_entry(initial_entry))
   const [ocr_loading, setOcrLoading] = useState(false)
@@ -85,6 +95,16 @@ export default function DriverLicenseAccordionPanel({
   const [ocr_warnings, setOcrWarnings] = useState<string[]>([])
   const [message, setMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      start_camera: () =>
+        scanner_ref.current?.start_camera() ??
+        Promise.resolve({ started: false, error: "scanner_unavailable" }),
+    }),
+    [],
+  )
 
   const preview_url = useMemo(() => {
     if (!image_url.startsWith("data:")) {
@@ -235,6 +255,7 @@ export default function DriverLicenseAccordionPanel({
           )
         ) : (
           <DocumentScanner
+            ref={scanner_ref}
             document_type="driver_license_front"
             on_capture={handle_capture}
             disabled={isSubmitting || ocr_loading}
@@ -343,4 +364,6 @@ export default function DriverLicenseAccordionPanel({
       ) : null}
     </div>
   )
-}
+})
+
+export default DriverLicenseAccordionPanel

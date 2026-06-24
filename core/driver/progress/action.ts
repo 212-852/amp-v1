@@ -24,6 +24,7 @@ const DRIVER_PROGRESS_FIELDS = [
   "user_uuid",
   "status",
   "driver_progress",
+  "has_driver_license",
 ].join(",")
 
 const DRIVER_ENTRY_FIELDS = [
@@ -131,7 +132,7 @@ async function fetch_driver_row(user_uuid: string): Promise<FetchDriverRowResult
           "drivers",
           [
             `user_uuid=eq.${encodeURIComponent(user_uuid)}`,
-            "select=driver_progress",
+            "select=driver_progress,has_driver_license",
             "limit=0",
           ].join("&"),
         ),
@@ -161,9 +162,37 @@ async function fetch_driver_row(user_uuid: string): Promise<FetchDriverRowResult
             error_message: core.error,
           }
         }
+
+        if (is_missing_column_error(probe_error, "has_driver_license")) {
+          const without_legacy = await query_driver_row(
+            user_uuid,
+            DRIVER_PROGRESS_FIELDS.replace(",has_driver_license", ""),
+          )
+
+          if (without_legacy.ok) {
+            return {
+              row: without_legacy.row,
+              has_driver_progress_column: true,
+              error_message: null,
+            }
+          }
+        }
       }
     } catch {
       // Fall through to core-only fetch.
+    }
+  }
+
+  const without_legacy = await query_driver_row(
+    user_uuid,
+    DRIVER_PROGRESS_FIELDS.replace(",has_driver_license", ""),
+  )
+
+  if (without_legacy.ok) {
+    return {
+      row: without_legacy.row,
+      has_driver_progress_column: true,
+      error_message: null,
     }
   }
 

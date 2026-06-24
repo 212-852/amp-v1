@@ -76,6 +76,11 @@ export default async function DriverPage() {
             initial_status={driver.status}
             completed_count={driver.completed_count}
             total_count={driver.total_count}
+            user_uuid={session.user_uuid}
+            driver_uuid={driver.driver_uuid}
+            has_driver={progress_result.has_driver}
+            has_driver_progress={progress_result.has_driver_progress}
+            legacy_has_driver_license={driver.legacy_has_driver_license}
           />
         ) : null}
 
