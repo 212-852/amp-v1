@@ -23,22 +23,6 @@ export type ProfileSettingsPatch = {
   notification_type?: NotificationType
 }
 
-function read_address_field(
-  body: Record<string, unknown>,
-  canonical_key: "prefecture_code" | "city_code",
-  alias_key: "prefecture" | "city",
-) {
-  if (canonical_key in body) {
-    return body[canonical_key]
-  }
-
-  if (alias_key in body) {
-    return body[alias_key]
-  }
-
-  return undefined
-}
-
 export function normalize_profile_locale(value: unknown): ProfileLocale | null {
   return value === "ja" || value === "en" || value === "es" ? value : null
 }
@@ -126,7 +110,7 @@ export function validate_profile_patch(
     }
   }
 
-  const prefecture_input = read_address_field(body, "prefecture_code", "prefecture")
+  const prefecture_input = body.prefecture_code
 
   if (prefecture_input !== undefined) {
     const prefecture_code = normalize_address_code(prefecture_input)
@@ -136,7 +120,7 @@ export function validate_profile_patch(
     }
   }
 
-  const city_input = read_address_field(body, "city_code", "city")
+  const city_input = body.city_code
 
   if (city_input !== undefined) {
     const city_code = normalize_address_code(city_input)

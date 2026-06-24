@@ -114,6 +114,13 @@ export default function EntryForm({
     const normalizedPhone = normalize_phone(phone)
     setPhone(normalizedPhone)
 
+    if (!selectedCityCode) {
+      setErrors({ city_code: "required" })
+      setMessage("市区町村を選択してください")
+      setIsSubmitting(false)
+      return
+    }
+
     try {
       const form = new FormData(event.currentTarget)
       const payload = Object.fromEntries(form.entries())
@@ -415,7 +422,9 @@ export default function EntryForm({
 
       {Object.keys(errors).length > 0 ? (
         <p className="text-[13px] font-semibold text-red-700">
-          未入力または形式が正しくない項目があります。
+          {errors.city_code
+            ? "市区町村を選択してください"
+            : "未入力または形式が正しくない項目があります。"}
         </p>
       ) : null}
 

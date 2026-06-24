@@ -9,13 +9,15 @@ import {
 
 type PrefectureRow = {
   prefecture_code: string
-  label: string
+  label?: string | null
+  prefecture_name_ja?: string | null
 }
 
 type CityRow = {
   city_code: string
   prefecture_code: string
-  label: string
+  label?: string | null
+  city_name_ja?: string | null
 }
 
 function merge_address_options(input: {
@@ -65,17 +67,27 @@ async function load_prefectures() {
     return []
   }
 
-  const response = await fetch(
-    restUrl(
-      config,
-      "prefectures",
-      "select=prefecture_code,label&order=sort_order.asc",
-    ),
+  let response = await fetch(
+    restUrl(config, "prefectures", "select=prefecture_code,prefecture_name_ja&order=prefecture_code.asc"),
     {
       headers: restHeaders(config),
       cache: "no-store",
     },
   )
+
+  if (!response.ok) {
+    response = await fetch(
+      restUrl(
+        config,
+        "prefectures",
+        "select=prefecture_code,label&order=sort_order.asc",
+      ),
+      {
+        headers: restHeaders(config),
+        cache: "no-store",
+      },
+    )
+  }
 
   if (!response.ok) {
     return []
@@ -84,7 +96,7 @@ async function load_prefectures() {
   const rows = (await response.json()) as PrefectureRow[]
   return rows.map((row) => ({
     code: row.prefecture_code,
-    label: row.label,
+    label: row.prefecture_name_ja ?? row.label ?? row.prefecture_code,
   }))
 }
 
@@ -95,17 +107,27 @@ async function load_cities() {
     return []
   }
 
-  const response = await fetch(
-    restUrl(
-      config,
-      "cities",
-      "select=city_code,prefecture_code,label&order=sort_order.asc",
-    ),
+  let response = await fetch(
+    restUrl(config, "cities", "select=city_code,prefecture_code,city_name_ja&order=city_code.asc"),
     {
       headers: restHeaders(config),
       cache: "no-store",
     },
   )
+
+  if (!response.ok) {
+    response = await fetch(
+      restUrl(
+        config,
+        "cities",
+        "select=city_code,prefecture_code,label&order=sort_order.asc",
+      ),
+      {
+        headers: restHeaders(config),
+        cache: "no-store",
+      },
+    )
+  }
 
   if (!response.ok) {
     return []
@@ -114,7 +136,7 @@ async function load_cities() {
   const rows = (await response.json()) as CityRow[]
   return rows.map((row) => ({
     code: row.city_code,
-    label: row.label,
+    label: row.city_name_ja ?? row.label ?? row.city_code,
     prefecture_code: row.prefecture_code,
   }))
 }

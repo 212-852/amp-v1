@@ -9,11 +9,15 @@ export type AddressOptions = {
 }
 
 export function normalize_address_code(value: unknown) {
-  if (typeof value !== "string") {
+  if (value === undefined) {
     return undefined
   }
 
-  const trimmed = value.trim()
+  if (value === null) {
+    return null
+  }
+
+  const trimmed = String(value).trim()
   return trimmed ? trimmed : null
 }
 

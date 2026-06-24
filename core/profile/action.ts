@@ -8,6 +8,9 @@ import type {
 import type { NotificationType } from "@/core/chat/types"
 import type { Session } from "@/core/auth/types"
 import { assert_valid_address_selection } from "@/src/address/action"
+import { resolve_address_labels } from "@/src/address/rules"
+import { get_address_options } from "@/src/address/action"
+import { sendAuthDebug } from "@/core/debug"
 
 export type ProfileNameRow = {
   user_uuid: string
@@ -39,6 +42,12 @@ type ProfileRow = {
 type UserNameRow = {
   name?: string | null
   display_name?: string | null
+}
+
+type CityCodeRow = {
+  city_code?: string | null
+  city_name_ja?: string | null
+  label?: string | null
 }
 
 const PROFILE_REQUIRED_COLUMNS = new Set([
@@ -212,6 +221,153 @@ async function load_profile_row(session: Session) {
   return rows[0] ?? null
 }
 
+async function load_city_code_row(city_code: string | null | undefined) {
+  const normalized_city_code = city_code ? String(city_code).trim() : ""
+
+  if (!normalized_city_code) {
+    return null
+  }
+
+  const config = getRestConfig()
+
+  if (!config) {
+    const options = await get_address_options()
+    const all_cities = Object.values(options.cities_by_prefecture).flat()
+    const city = all_cities.find((option) => option.code === normalized_city_code)
+
+    return city
+      ? {
+          city_code: city.code,
+          city_name_ja: city.label,
+        }
+      : null
+  }
+
+  let response = await fetch(
+    restUrl(
+      config,
+      "cities",
+      [
+        `city_code=eq.${encodeURIComponent(normalized_city_code)}`,
+        "select=city_code,city_name_ja",
+        "limit=1",
+      ].join("&"),
+    ),
+    {
+      headers: restHeaders(config),
+      cache: "no-store",
+    },
+  )
+
+  if (!response.ok) {
+    response = await fetch(
+      restUrl(
+        config,
+        "cities",
+        [
+          `city_code=eq.${encodeURIComponent(normalized_city_code)}`,
+          "select=city_code,label",
+          "limit=1",
+        ].join("&"),
+      ),
+      {
+        headers: restHeaders(config),
+        cache: "no-store",
+      },
+    )
+  }
+
+  if (!response.ok) {
+    return null
+  }
+
+  const rows = (await response.json()) as CityCodeRow[]
+
+  return rows[0] ?? null
+}
+
+function patch_has_address_fields(patch: ProfileSettingsPatch) {
+  return (
+    "prefecture_code" in patch ||
+    "city_code" in patch ||
+    "prefecture" in patch ||
+    "city" in patch ||
+    "address" in patch
+  )
+}
+
+async function assert_profile_save_address_allowed(input: {
+  session: Session
+  patch: ProfileSettingsPatch
+  existing_profile?: ProfileRow | null
+}) {
+  if (!patch_has_address_fields(input.patch)) {
+    return
+  }
+
+  const profile_uuid = input.existing_profile?.profile_uuid ?? null
+  const prefecture_code =
+    "prefecture_code" in input.patch
+      ? input.patch.prefecture_code
+      : input.existing_profile?.prefecture_code ?? null
+  const raw_city_code =
+    "city_code" in input.patch
+      ? input.patch.city_code
+      : input.existing_profile?.city_code ?? null
+  const city_code = raw_city_code ? String(raw_city_code).trim() : ""
+  const selected_labels = await get_address_options().then((options) =>
+    resolve_address_labels(options, {
+      prefecture_code,
+      city_code,
+    }),
+  )
+  const submitted_city_label =
+    "city" in input.patch && typeof input.patch.city === "string"
+      ? input.patch.city
+      : null
+
+  if (!city_code) {
+    await sendAuthDebug("PROFILE_SAVE_PAYLOAD", {
+      user_uuid: input.session.user_uuid,
+      profile_uuid,
+      prefecture_code: prefecture_code ?? null,
+      city_code: city_code || null,
+      city_code_type: typeof raw_city_code,
+      selected_city_label: selected_labels.city ?? submitted_city_label,
+      city_exists: false,
+      save_allowed: false,
+      blocked_reason: "city_code_missing",
+    })
+    throw new Error("市区町村を選択してください")
+  }
+
+  const city_row = await load_city_code_row(city_code)
+  const city_exists = Boolean(city_row?.city_code)
+
+  await sendAuthDebug("PROFILE_SAVE_PAYLOAD", {
+    user_uuid: input.session.user_uuid,
+    profile_uuid,
+    prefecture_code: prefecture_code ?? null,
+    city_code,
+    city_code_type: typeof city_code,
+    selected_city_label:
+      selected_labels.city ??
+      submitted_city_label ??
+      city_row?.city_name_ja ??
+      city_row?.label ??
+      null,
+    city_exists,
+    save_allowed: city_exists,
+    blocked_reason: city_exists ? null : "city_code_not_found",
+  })
+
+  if (!city_exists) {
+    throw new Error("市区町村を選択してください")
+  }
+
+  input.patch.city_code = city_code
+}
+
 export async function load_profile_rows_for_users(user_uuids: string[]) {
   const config = getRestConfig()
 
@@ -380,6 +536,17 @@ export async function save_profile_patch(input: {
   session: Session
   patch: ProfileSettingsPatch
 }) {
+  const existing_profile = await load_profile_row(input.session)
+  await assert_profile_save_address_allowed({
+    session: input.session,
+    patch: input.patch,
+    existing_profile,
+  })
+  await assert_valid_address_selection({
+    prefecture_code: input.patch.prefecture_code,
+    city_code: input.patch.city_code,
+  })
+
   return upsert_profile_row({
     user_uuid: input.session.user_uuid,
     visitor_uuid: input.session.visitor_uuid,
@@ -417,6 +584,12 @@ export async function save_profile_settings(input: {
   body: unknown
 }) {
   const context = normalize_profile_context(input)
+  const existing_profile = await load_profile_row(input.session)
+  await assert_profile_save_address_allowed({
+    session: input.session,
+    patch: context.patch,
+    existing_profile,
+  })
   await assert_valid_address_selection({
     prefecture_code: context.patch.prefecture_code,
     city_code: context.patch.city_code,
