@@ -148,7 +148,10 @@ export default function ProfileSettings({
     initial_profile.locale,
   )
   const [is_saving, set_is_saving] = useState(false)
-  const address_state = useProfileAddressOptions()
+  const address_state = useProfileAddressOptions({
+    prefecture_code,
+    city_code,
+  })
   const address_options = address_state.options
   const selected_city_code = resolve_selected_city_code(
     address_options,
@@ -290,10 +293,7 @@ export default function ProfileSettings({
         duration_ms: 2400,
       })
       onClose()
-    } catch (error) {
-      const error_message =
-        error instanceof Error ? error.message : content.failed[locale]
-
+    } catch {
       toast({
         tone: "error",
         message: content.failed.ja,

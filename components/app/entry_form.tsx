@@ -46,9 +46,12 @@ export default function EntryForm({
 }: Readonly<{
   initial: EntryFormInitialValues
 }>) {
-  const addressState = useAddressOptions()
   const [prefectureCode, setPrefectureCode] = useState(initial.prefecture_code)
   const [cityCode, setCityCode] = useState(initial.city_code)
+  const addressState = useAddressOptions({
+    prefecture_code: prefectureCode,
+    city_code: cityCode,
+  })
   const [phone, setPhone] = useState(normalize_phone(initial.phone))
   const [petExperience, setPetExperience] = useState<string[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)

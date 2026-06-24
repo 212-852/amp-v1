@@ -5,7 +5,10 @@ import { useEffect, useState } from "react"
 import { ADDRESS_OPTIONS } from "@/src/address/options"
 import type { AddressOptions } from "@/src/address/rules"
 
-export function useAddressOptions() {
+export function useAddressOptions(input?: {
+  prefecture_code?: string | null
+  city_code?: string | null
+}) {
   const [address_options, set_address_options] = useState<AddressOptions>(
     ADDRESS_OPTIONS,
   )
@@ -17,7 +20,21 @@ export function useAddressOptions() {
 
     async function load_address_options() {
       try {
-        const response = await fetch("/api/address", { cache: "no-store" })
+        const search = new URLSearchParams()
+
+        if (input?.prefecture_code) {
+          search.set("prefecture_code", input.prefecture_code)
+        }
+
+        if (input?.city_code) {
+          search.set("city_code", input.city_code)
+        }
+
+        const query = search.toString()
+        const response = await fetch(
+          `/api/address${query ? `?${query}` : ""}`,
+          { cache: "no-store" },
+        )
 
         if (!response.ok) {
           const message = "Address options request failed"
@@ -61,7 +78,7 @@ export function useAddressOptions() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [input?.city_code, input?.prefecture_code])
 
   return {
     options: address_options,

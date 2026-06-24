@@ -137,6 +137,10 @@ const city_options = [
 ] as const
 
 export const ADDRESS_OPTIONS: AddressOptions = {
-  prefectures: [...prefecture_options],
+  prefectures: prefecture_options.map((option) => ({
+    value: option.code,
+    code: option.code,
+    label: option.label,
+  })),
   cities_by_prefecture: group_city_options([...city_options]),
 }

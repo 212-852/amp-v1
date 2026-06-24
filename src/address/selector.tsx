@@ -32,7 +32,7 @@ export default function AddressSelector({
 }>) {
   const city_options = get_city_options(options, prefecture_code)
   const selected_city_code = city_options.some(
-    (option) => option.code === city_code,
+    (option) => option.value === city_code,
   )
     ? city_code
     : ""
@@ -53,7 +53,7 @@ export default function AddressSelector({
         >
           <option value="">{labels.select_prefecture}</option>
           {options.prefectures.map((option) => (
-            <option key={option.code} value={option.code}>
+            <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
@@ -74,8 +74,8 @@ export default function AddressSelector({
         >
           <option value="">{labels.select_city}</option>
           {city_options.map((option) => (
-            <option key={option.code} value={option.code}>
-              {option.label}
+            <option key={option.value} value={option.value}>
+              {option.city_name_ja ?? option.label}
             </option>
           ))}
         </select>

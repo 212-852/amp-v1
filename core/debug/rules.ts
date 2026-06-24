@@ -26,6 +26,7 @@ const alwaysReportEvents = new Set([
   "chat_archive_insert_error",
   "chat_bootstrap_failed",
   "output_failed",
+  "PROFILE_CITY_SELECT",
   "PROFILE_SAVE_PAYLOAD",
 ])
 
@@ -407,6 +408,10 @@ export function shouldSendAuthSessionDebug(event: string) {
 }
 
 export function resolveDebugTitle(event: string) {
+  if (event === "PROFILE_CITY_SELECT") {
+    return "PROFILE_CITY_SELECT"
+  }
+
   if (event === "PROFILE_SAVE_PAYLOAD") {
     return "PROFILE_SAVE_PAYLOAD"
   }

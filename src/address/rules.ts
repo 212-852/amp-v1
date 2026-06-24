@@ -1,6 +1,9 @@
 export type AddressOption = {
+  value: string
   code: string
   label: string
+  city_name_ja?: string | null
+  city_type?: string | null
 }
 
 export type AddressOptions = {
@@ -22,7 +25,13 @@ export function normalize_address_code(value: unknown) {
 }
 
 export function group_city_options(
-  rows: Array<{ code: string; label: string; prefecture_code: string }>,
+  rows: Array<{
+    code: string
+    label: string
+    prefecture_code: string
+    city_name_ja?: string | null
+    city_type?: string | null
+  }>,
 ) {
   const grouped: Record<string, AddressOption[]> = {}
 
@@ -32,8 +41,11 @@ export function group_city_options(
     }
 
     grouped[row.prefecture_code].push({
+      value: row.code,
       code: row.code,
       label: row.label,
+      city_name_ja: row.city_name_ja ?? row.label,
+      city_type: row.city_type ?? null,
     })
   }
 
@@ -61,7 +73,7 @@ export function resolve_selected_city_code(
   }
 
   return get_city_options(options, prefecture_code).some(
-    (option) => option.code === city_code,
+    (option) => option.value === city_code,
   )
     ? city_code
     : ""
@@ -75,12 +87,12 @@ export function resolve_address_labels(
   },
 ) {
   const prefecture =
-    options.prefectures.find((option) => option.code === input.prefecture_code)
+    options.prefectures.find((option) => option.value === input.prefecture_code)
       ?.label ?? null
-  const city =
-    get_city_options(options, input.prefecture_code).find(
-      (option) => option.code === input.city_code,
-    )?.label ?? null
+  const city_option = get_city_options(options, input.prefecture_code).find(
+    (option) => option.value === input.city_code,
+  )
+  const city = city_option?.city_name_ja ?? city_option?.label ?? null
 
   return { prefecture, city }
 }
@@ -94,7 +106,7 @@ export function validate_address_selection(
 ) {
   if (
     input.prefecture_code &&
-    !options.prefectures.some((option) => option.code === input.prefecture_code)
+    !options.prefectures.some((option) => option.value === input.prefecture_code)
   ) {
     throw new Error("Invalid prefecture")
   }
@@ -102,7 +114,7 @@ export function validate_address_selection(
   if (
     input.city_code &&
     !get_city_options(options, input.prefecture_code).some(
-      (option) => option.code === input.city_code,
+      (option) => option.value === input.city_code,
     )
   ) {
     throw new Error("Invalid city")

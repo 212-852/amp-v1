@@ -233,12 +233,12 @@ async function load_city_code_row(city_code: string | null | undefined) {
   if (!config) {
     const options = await get_address_options()
     const all_cities = Object.values(options.cities_by_prefecture).flat()
-    const city = all_cities.find((option) => option.code === normalized_city_code)
+    const city = all_cities.find((option) => option.value === normalized_city_code)
 
     return city
       ? {
-          city_code: city.code,
-          city_name_ja: city.label,
+          city_code: city.value,
+          city_name_ja: city.city_name_ja ?? city.label,
         }
       : null
   }

@@ -3,9 +3,11 @@ import { normalize_address_context } from "@/src/address/context"
 import { ADDRESS_OPTIONS } from "@/src/address/options"
 import { build_address_output } from "@/src/address/output"
 import {
+  get_city_options,
   validate_address_selection,
   type AddressOptions,
 } from "@/src/address/rules"
+import { sendAuthDebug } from "@/core/debug"
 
 type PrefectureRow = {
   prefecture_code: string
@@ -18,46 +20,92 @@ type CityRow = {
   prefecture_code: string
   label?: string | null
   city_name_ja?: string | null
+  city_type?: string | null
 }
 
-function merge_address_options(input: {
+type AddressOptionsInput = {
+  prefecture_code?: string | null
+  selected_city_code?: string | null
+}
+
+function build_db_address_options(input: {
   prefectures: Array<{ code: string; label: string }>
-  cities: Array<{ code: string; label: string; prefecture_code: string }>
+  cities: Array<{
+    code: string
+    label: string
+    prefecture_code: string
+    city_name_ja?: string | null
+    city_type?: string | null
+  }>
 }): AddressOptions {
-  const prefectures_by_code = new Map(
-    ADDRESS_OPTIONS.prefectures.map((option) => [option.code, option]),
-  )
-
-  for (const prefecture of input.prefectures) {
-    prefectures_by_code.set(prefecture.code, prefecture)
-  }
-
   const cities_by_prefecture: AddressOptions["cities_by_prefecture"] = {}
-
-  for (const [prefecture_code, cities] of Object.entries(
-    ADDRESS_OPTIONS.cities_by_prefecture,
-  )) {
-    cities_by_prefecture[prefecture_code] = [...cities]
-  }
 
   for (const city of input.cities) {
     const current = cities_by_prefecture[city.prefecture_code] ?? []
-    const next = { code: city.code, label: city.label }
-    const existing_index = current.findIndex((option) => option.code === city.code)
+    const selected_city_code = String(city.code)
+    const selected_city_label = city.city_name_ja ?? city.label
 
-    if (existing_index >= 0) {
-      current[existing_index] = next
-    } else {
-      current.push(next)
-    }
+    current.push({
+      value: selected_city_code,
+      code: selected_city_code,
+      label: selected_city_label,
+      city_name_ja: selected_city_label,
+      city_type: city.city_type ?? null,
+    })
 
     cities_by_prefecture[city.prefecture_code] = current
   }
 
   return {
-    prefectures: [...prefectures_by_code.values()],
+    prefectures:
+      input.prefectures.length > 0
+        ? input.prefectures.map((prefecture) => ({
+            value: prefecture.code,
+            code: prefecture.code,
+            label: prefecture.label,
+          }))
+        : ADDRESS_OPTIONS.prefectures,
     cities_by_prefecture,
   }
+}
+
+async function debug_profile_city_select(
+  options: AddressOptions,
+  input?: AddressOptionsInput,
+) {
+  const prefecture_code = input?.prefecture_code
+    ? String(input.prefecture_code)
+    : null
+  const selected_city_code = input?.selected_city_code
+    ? String(input.selected_city_code)
+    : null
+
+  if (!prefecture_code && !selected_city_code) {
+    return
+  }
+
+  const city_options = prefecture_code
+    ? get_city_options(options, prefecture_code)
+    : Object.values(options.cities_by_prefecture).flat()
+  const selected_city = city_options.find(
+    (option) => option.value === selected_city_code,
+  )
+  const city_types = Array.from(
+    new Set(
+      city_options
+        .map((option) => option.city_type)
+        .filter((city_type): city_type is string => Boolean(city_type)),
+    ),
+  ).sort()
+
+  await sendAuthDebug("PROFILE_CITY_SELECT", {
+    prefecture_code,
+    loaded_city_count: city_options.length,
+    city_types,
+    selected_city_code,
+    selected_city_label:
+      selected_city?.city_name_ja ?? selected_city?.label ?? null,
+  })
 }
 
 async function load_prefectures() {
@@ -108,7 +156,11 @@ async function load_cities() {
   }
 
   let response = await fetch(
-    restUrl(config, "cities", "select=city_code,prefecture_code,city_name_ja&order=city_code.asc"),
+    restUrl(
+      config,
+      "cities",
+      "select=city_code,prefecture_code,city_name_ja,city_type&order=city_code.asc",
+    ),
     {
       headers: restHeaders(config),
       cache: "no-store",
@@ -137,17 +189,21 @@ async function load_cities() {
   return rows.map((row) => ({
     code: row.city_code,
     label: row.city_name_ja ?? row.label ?? row.city_code,
+    city_name_ja: row.city_name_ja ?? row.label ?? row.city_code,
+    city_type: row.city_type ?? null,
     prefecture_code: row.prefecture_code,
   }))
 }
 
-export async function get_address_options() {
+export async function get_address_options(input?: AddressOptionsInput) {
   normalize_address_context("api")
 
   const config = getRestConfig()
 
   if (!config) {
-    return build_address_output(ADDRESS_OPTIONS)
+    const output = build_address_output(ADDRESS_OPTIONS)
+    await debug_profile_city_select(output, input)
+    return output
   }
 
   const [prefectures, cities] = await Promise.all([
@@ -155,7 +211,15 @@ export async function get_address_options() {
     load_cities(),
   ])
 
-  return build_address_output(merge_address_options({ prefectures, cities }))
+  const options =
+    cities.length > 0
+      ? build_db_address_options({ prefectures, cities })
+      : ADDRESS_OPTIONS
+  const output = build_address_output(options)
+
+  await debug_profile_city_select(output, input)
+
+  return output
 }
 
 export async function assert_valid_address_selection(input: {
