@@ -39,11 +39,18 @@ type DocumentScannerProps = {
   on_capture: (image_url: string) => void
   disabled?: boolean
   expanded?: boolean
+  line_linked?: boolean
 }
 
 const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
   function DocumentScanner(
-    { document_type, on_capture, disabled = false, expanded = true },
+    {
+      document_type,
+      on_capture,
+      disabled = false,
+      expanded = true,
+      line_linked = false,
+    },
     ref,
   ) {
     const container_ref = useRef<HTMLDivElement>(null)
@@ -311,6 +318,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       return (
         <OcrCameraFallback
           disabled={disabled}
+          line_linked={line_linked}
           on_file_select={handle_file_select}
         />
       )

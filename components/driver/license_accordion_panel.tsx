@@ -77,10 +77,11 @@ const DriverLicenseAccordionPanel = forwardRef<
     current_answer: string
     initial_entry: DriverProgressEntry | null
     expanded?: boolean
+    line_linked?: boolean
     onComplete: () => void
   }
 >(function DriverLicenseAccordionPanel(
-  { current_answer, initial_entry, expanded = true, onComplete },
+  { current_answer, initial_entry, expanded = true, line_linked = false, onComplete },
   ref,
 ) {
   const scanner_ref = useRef<DocumentScannerHandle>(null)
@@ -279,6 +280,7 @@ const DriverLicenseAccordionPanel = forwardRef<
             on_capture={handle_capture}
             disabled={isSubmitting || ocr_loading}
             expanded={expanded}
+            line_linked={line_linked}
           />
         )}
       </section>
