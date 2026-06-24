@@ -124,14 +124,14 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
 
       if (read_camera_permission_denied_session()) {
         enter_fallback({
-          message: "カメラを起動できませんでした。画像を選択してください。",
+          message: "",
           permission_denied: true,
         })
 
         return {
           started: false,
           stream: null,
-          error: "カメラを起動できませんでした。画像を選択してください。",
+          error: null,
           error_name: "NotAllowedError",
           error_message: "Permission denied",
           error_kind: "permission_denied",
@@ -207,11 +207,20 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
         return
       }
 
+      if (
+        camera_error_kind === "permission_denied" ||
+        read_camera_permission_denied_session()
+      ) {
+        enter_fallback({
+          message: "",
+          permission_denied: true,
+        })
+        return
+      }
+
       enter_fallback({
         message: camera_error,
-        permission_denied:
-          camera_error_kind === "permission_denied" ||
-          read_camera_permission_denied_session(),
+        permission_denied: false,
       })
     }, [camera_error, camera_error_kind, camera_stream, enter_fallback])
 

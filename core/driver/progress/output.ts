@@ -74,21 +74,6 @@ export async function resolve_driver_page_state(
   return load_driver_page_state(user_uuid)
 }
 
-export function log_driver_license_step_opened(input: {
-  user_uuid: string | null
-  driver_uuid: string | null
-  has_driver: boolean
-  has_driver_progress: boolean
-  latest_license_status: string | null
-  legacy_has_driver_license: boolean
-  current_answer_label: string
-  camera_start_requested: boolean
-  camera_started: boolean
-  camera_error: string | null
-}) {
-  console.info("DRIVER_LICENSE_STEP_OPENED", input)
-}
-
 export function build_driver_page_error_output(input: {
   error_message: string
   user_uuid?: string | null

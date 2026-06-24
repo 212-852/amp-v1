@@ -24,6 +24,10 @@ export function mark_camera_permission_denied_session() {
   sessionStorage.setItem(OCR_CAMERA_PERMISSION_DENIED_SESSION_KEY, "1")
 }
 
+export function should_attempt_ocr_camera() {
+  return !read_camera_permission_denied_session()
+}
+
 export function resolve_ocr_camera_error_kind(
   error_name: string | null | undefined,
 ): OcrCameraErrorKind {

@@ -8,13 +8,11 @@ import { open_current_url_in_external_browser } from "@/core/ocr/browser"
 type OcrCameraFallbackProps = {
   disabled?: boolean
   on_file_select: (file: File) => void | Promise<void>
-  show_line_guidance?: boolean
 }
 
 export default function OcrCameraFallback({
   disabled = false,
   on_file_select,
-  show_line_guidance = true,
 }: Readonly<OcrCameraFallbackProps>) {
   const [external_browser_hint, setExternalBrowserHint] = useState(false)
 
@@ -43,16 +41,10 @@ export default function OcrCameraFallback({
         <h3 className="text-base font-bold text-neutral-900">
           カメラを起動できませんでした
         </h3>
-        {show_line_guidance ? (
-          <p className="text-sm leading-6 text-neutral-700">
-            LINEアプリ内ブラウザではカメラが許可されない場合があります。
-            画像を選択するか、外部ブラウザで開いてください。
-          </p>
-        ) : (
-          <p className="text-sm leading-6 text-neutral-700">
-            カメラの使用が許可されていません。画像を選択するか、外部ブラウザで開いてください。
-          </p>
-        )}
+        <p className="text-sm leading-6 text-neutral-700">
+          LINEアプリ内ブラウザではカメラが許可されない場合があります。
+          画像を選択するか、外部ブラウザで開いてください。
+        </p>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -78,7 +70,7 @@ export default function OcrCameraFallback({
 
       {external_browser_hint ? (
         <p className="text-sm leading-6 text-neutral-600">
-          右上メニューから「ブラウザで開く」を選択してください。
+          右下または右上のメニューから「ブラウザで開く」を選択してください。
         </p>
       ) : null}
     </div>

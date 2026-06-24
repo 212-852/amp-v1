@@ -12,7 +12,6 @@ import type {
   DriverProgressKey,
   DriverStatus,
 } from "@/core/driver/context"
-import { log_driver_license_step_opened } from "@/core/driver/progress/output"
 import { start_ocr_camera } from "@/core/ocr/camera"
 import { read_camera_permission_denied_session } from "@/core/ocr/camera_debug"
 
@@ -68,21 +67,11 @@ export default function DriverOnboardingModal({
   initial_status,
   completed_count,
   total_count,
-  user_uuid,
-  driver_uuid,
-  has_driver,
-  has_driver_progress,
-  legacy_has_driver_license,
 }: Readonly<{
   initial_items: DriverChecklistItem[]
   initial_status: DriverStatus
   completed_count: number
   total_count: number
-  user_uuid: string | null
-  driver_uuid: string | null
-  has_driver: boolean
-  has_driver_progress: boolean
-  legacy_has_driver_license: boolean
 }>) {
   const router = useRouter()
   const [expanded_key, setExpandedKey] = useState<DriverProgressKey | null>(null)
@@ -139,28 +128,18 @@ export default function DriverOnboardingModal({
     setLicenseCameraStream(null)
   }
 
-  async function open_license_step(item: DriverChecklistItem) {
-    const current_answer_label = item.current_answer ?? "未回答"
-
+  async function open_license_step() {
     setExpandedKey("driver_license")
-    setLicenseCameraError(null)
-    setLicenseCameraErrorKind(
-      read_camera_permission_denied_session() ? "permission_denied" : null,
-    )
     stop_license_camera()
 
-    log_driver_license_step_opened({
-      user_uuid,
-      driver_uuid,
-      has_driver,
-      has_driver_progress,
-      latest_license_status: item.latest_status,
-      legacy_has_driver_license,
-      current_answer_label,
-      camera_start_requested: true,
-      camera_started: false,
-      camera_error: null,
-    })
+    if (read_camera_permission_denied_session()) {
+      setLicenseCameraError(null)
+      setLicenseCameraErrorKind("permission_denied")
+      return
+    }
+
+    setLicenseCameraError(null)
+    setLicenseCameraErrorKind(null)
 
     const result = await start_ocr_camera({
       document_type: "driver_license_front",
@@ -172,32 +151,20 @@ export default function DriverOnboardingModal({
       setLicenseCameraStream(result.stream)
       setLicenseCameraError(null)
       setLicenseCameraErrorKind(null)
-    } else {
-      setLicenseCameraError(
-        result.error ?? "カメラを起動できませんでした。画像を選択してください。",
-      )
-      setLicenseCameraErrorKind(result.error_kind)
+      return
     }
 
-    log_driver_license_step_opened({
-      user_uuid,
-      driver_uuid,
-      has_driver,
-      has_driver_progress,
-      latest_license_status: item.latest_status,
-      legacy_has_driver_license,
-      current_answer_label,
-      camera_start_requested: true,
-      camera_started: result.started,
-      camera_error: result.error,
-    })
+    setLicenseCameraError(
+      result.error ?? "カメラを起動できませんでした。画像を選択してください。",
+    )
+    setLicenseCameraErrorKind(result.error_kind)
   }
 
   function handle_item_click(item: DriverChecklistItem) {
     const will_open = expanded_key !== item.key
 
     if (item.key === "driver_license" && will_open) {
-      void open_license_step(item)
+      void open_license_step()
       return
     }
 

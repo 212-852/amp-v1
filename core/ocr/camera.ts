@@ -11,6 +11,7 @@ import {
   resolve_ocr_camera_debug_event,
   resolve_ocr_camera_error_kind,
   send_ocr_camera_debug,
+  should_attempt_ocr_camera,
   type OcrCameraErrorKind,
 } from "@/core/ocr/camera_debug"
 
@@ -117,7 +118,7 @@ function resolve_camera_error_message(error_kind: OcrCameraErrorKind) {
 export async function start_ocr_camera(
   input: OcrCameraStartInput,
 ): Promise<OcrCameraStartResult> {
-  if (read_camera_permission_denied_session()) {
+  if (!should_attempt_ocr_camera()) {
     const error_kind = "permission_denied" as const
 
     return {
