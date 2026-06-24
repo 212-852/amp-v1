@@ -23,6 +23,7 @@ import {
   normalizeOpsHeaderDisplay,
   type HeaderSessionLike,
 } from "@/core/ops/header_session"
+import { resolve_ops_header_nav_items } from "@/core/ops/header_menu"
 import { concierge_toggle_content } from "@/core/ops/concierge_toggle_content"
 import { get_display_name } from "@/core/profile/display"
 import type { ProfilePayload } from "@/core/profile/output"
@@ -270,8 +271,11 @@ export default function OpsHeader({
   }
 
   const menu_items: HeaderMenuItem[] = [
-    { key: "admin-home", label: "Home", href: "/admin" },
-    { key: "chat", label: "Chat List", href: "/admin/list" },
+    ...resolve_ops_header_nav_items(safe_session.role).map((item) => ({
+      key: item.key,
+      label: item.label,
+      href: item.href,
+    })),
     { key: "settings", label: "Settings", onClick: open_profile_settings },
   ]
 
@@ -415,6 +419,7 @@ export default function OpsHeader({
                     <Link
                       key={item.key}
                       href={item.href}
+                      prefetch={false}
                       role="menuitem"
                       tabIndex={menu_open ? 0 : -1}
                       className={item_class}

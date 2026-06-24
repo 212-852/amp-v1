@@ -266,6 +266,7 @@ export type GuardedAccessMeta = {
   request_id?: string | null
   user_agent?: string | null
   ip?: string | null
+  access_request_kind?: "direct_navigation" | "prefetch" | "rsc_fetch"
 }
 
 function buildAccessPayload(
@@ -292,6 +293,13 @@ export async function emitGuardedAccessSecurityEvents(
   session: Session,
   meta: GuardedAccessMeta,
 ) {
+  if (
+    meta.access_request_kind === "prefetch" ||
+    meta.access_request_kind === "rsc_fetch"
+  ) {
+    return
+  }
+
   const pathname = context.requested_route ?? ""
   const base_payload = buildAccessPayload(context, session, meta)
 

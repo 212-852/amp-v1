@@ -3,6 +3,9 @@ import type { NextRequest } from "next/server"
 
 import type { AuthContext, SourceChannel } from "@/core/auth/types"
 import {
+  classifyAccessRequest,
+} from "@/core/access/request"
+import {
   emitGuardedAccessSecurityEvents,
   resolveRoleRedirectPath,
 } from "@/core/auth/route"
@@ -216,13 +219,21 @@ async function runProxy(request: NextRequest) {
   }
 
   if (pathname.startsWith("/admin") || pathname.startsWith("/driver")) {
-    await emitGuardedAccessSecurityEvents(context, session, {
-      request_id: requestId,
-      user_agent: request.headers.get("user-agent"),
-      ip:
-        request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-        request.headers.get("x-real-ip"),
-    }).catch(() => null)
+    const access_request_kind = classifyAccessRequest({
+      headers: request.headers,
+      search: request.nextUrl.search,
+    })
+
+    if (access_request_kind === "direct_navigation") {
+      await emitGuardedAccessSecurityEvents(context, session, {
+        request_id: requestId,
+        user_agent: request.headers.get("user-agent"),
+        ip:
+          request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+          request.headers.get("x-real-ip"),
+        access_request_kind,
+      }).catch(() => null)
+    }
   }
 
   const redirectPath = resolveRoleRedirectPath(context, session)
