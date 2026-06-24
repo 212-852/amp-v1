@@ -63,13 +63,11 @@ export default function DriverOnboardingModal({
   initial_status,
   completed_count,
   total_count,
-  line_linked = false,
 }: Readonly<{
   initial_items: DriverChecklistItem[]
   initial_status: DriverStatus
   completed_count: number
   total_count: number
-  line_linked?: boolean
 }>) {
   const router = useRouter()
   const [expanded_key, setExpandedKey] = useState<DriverProgressKey | null>(null)
@@ -120,7 +118,6 @@ export default function DriverOnboardingModal({
           current_answer={item.current_answer ?? "未回答"}
           initial_entry={item.latest_entry}
           expanded={expanded_key === "driver_license"}
-          line_linked={line_linked}
           onComplete={handleLicenseComplete}
         />
       )

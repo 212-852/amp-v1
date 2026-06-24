@@ -1,30 +1,29 @@
 "use client"
 
-import { Copy, X } from "lucide-react"
 import type { ChangeEvent } from "react"
-import { useEffect, useState } from "react"
 
 import { useToast } from "@/components/ui/use_toast"
-import {
-  build_line_login_url,
-  DRIVER_PAGE_FALLBACK_URL,
-  resolve_driver_page_url,
-} from "@/core/ocr/browser"
+import { OCR_APP_URL } from "@/core/ocr/browser"
 
-const LINE_BROWSER_STEPS = [
-  "下のURLをコピーしてください。",
-  "Chrome または Safari を開いてください。",
-  "検索バーにURLを貼り付けて開いてください。",
-  "開いた画面で「LINEで連携」を押してください。",
-  "連携後、免許証スキャンをもう一度開いてください。",
+const CHROME_SAFARI_STEPS = [
+  "Chrome または Safari を開く",
+  "下のURLを検索バーへ貼り付ける",
+  "LINEで連携する",
+  "免許証を撮影する",
+] as const
+
+const ENVIRONMENT_ROWS = [
+  { label: "LINEブラウザ", supported: false },
+  { label: "Chrome", supported: true },
+  { label: "Safari", supported: true },
+  { label: "PWA", supported: true },
 ] as const
 
 const IMAGE_UPLOAD_BUTTON_CLASS =
-  "mx-auto flex w-[80%] cursor-pointer items-center justify-center rounded-2xl border border-neutral-300 bg-white px-4 py-4 text-base font-bold text-neutral-900 shadow-sm transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60"
+  "mx-auto flex w-[80%] cursor-pointer items-center justify-center rounded-2xl border border-neutral-300 bg-white px-4 py-5 text-base font-bold text-neutral-900 shadow-sm transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60"
 
 type OcrCameraFallbackProps = {
   disabled?: boolean
-  line_linked?: boolean
   show_browser_instructions?: boolean
   reason?: "line_in_app" | "permission_denied" | "unavailable"
   on_file_select: (file: File) => void | Promise<void>
@@ -32,17 +31,11 @@ type OcrCameraFallbackProps = {
 
 export default function OcrCameraFallback({
   disabled = false,
-  line_linked = false,
   show_browser_instructions = false,
   reason = show_browser_instructions ? "line_in_app" : "unavailable",
   on_file_select,
 }: Readonly<OcrCameraFallbackProps>) {
   const { toast } = useToast()
-  const [driver_url, setDriverUrl] = useState(DRIVER_PAGE_FALLBACK_URL)
-
-  useEffect(() => {
-    setDriverUrl(resolve_driver_page_url())
-  }, [])
 
   async function handle_copy_url() {
     try {
@@ -50,7 +43,7 @@ export default function OcrCameraFallback({
         throw new Error("clipboard_unavailable")
       }
 
-      await navigator.clipboard.writeText(driver_url)
+      await navigator.clipboard.writeText(OCR_APP_URL)
       toast({
         message: "URLをコピーしました",
         tone: "success",
@@ -63,10 +56,6 @@ export default function OcrCameraFallback({
         placement: "center",
       })
     }
-  }
-
-  function handle_line_link() {
-    window.location.href = build_line_login_url("/driver")
   }
 
   async function handle_file_change(event: ChangeEvent<HTMLInputElement>) {
@@ -85,31 +74,54 @@ export default function OcrCameraFallback({
   return (
     <div className="space-y-4 rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-5">
       {is_line_browser ? (
-        <div className="space-y-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-bold text-red-900">LINEブラウザ</span>
-            <X className="h-4 w-4 text-red-600" aria-hidden="true" />
-          </div>
-          <p className="text-base font-bold text-red-900">カメラは使えません</p>
-          <p className="text-sm leading-6 text-red-800">画像を選択してください</p>
-        </div>
+        <>
+          <section className="space-y-3 rounded-2xl border border-neutral-200 bg-white px-4 py-4">
+            <h3 className="text-sm font-bold text-neutral-900">利用環境</h3>
+            <ul className="space-y-2">
+              {ENVIRONMENT_ROWS.map((row) => (
+                <li
+                  key={row.label}
+                  className="flex items-center justify-between text-sm leading-6 text-neutral-800"
+                >
+                  <span>{row.label}</span>
+                  <span
+                    className={
+                      row.supported
+                        ? "font-bold text-emerald-600"
+                        : "font-bold text-red-600"
+                    }
+                    aria-hidden="true"
+                  >
+                    {row.supported ? "○" : "×"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <p className="text-sm leading-7 text-neutral-800">
+            LINEブラウザではカメラが利用できません。
+            <br />
+            免許証の画像を選択してください。
+          </p>
+        </>
       ) : (
         <div className="space-y-2">
           <h3 className="text-base font-bold text-neutral-900">
             {reason === "permission_denied"
               ? "カメラの許可が必要です"
-              : "免許証画像を選択してください"}
+              : "免許証の画像を選択してください"}
           </h3>
           <p className="text-sm leading-6 text-neutral-700">
             {reason === "permission_denied"
               ? "カメラの使用が許可されていません。ブラウザの設定でカメラを許可するか、画像を選択してください。"
-              : "カメラを使用できません。画像を選択してください。"}
+              : "カメラを使用できません。免許証の画像を選択してください。"}
           </p>
         </div>
       )}
 
       <label className={IMAGE_UPLOAD_BUTTON_CLASS}>
-        画像を選択
+        免許証の画像を選択
         <input
           type="file"
           accept="image/*"
@@ -121,58 +133,28 @@ export default function OcrCameraFallback({
 
       {show_browser_instructions ? (
         <section className="space-y-4 rounded-2xl border border-neutral-200 bg-white px-4 py-4">
-          <h4 className="text-sm font-bold text-neutral-900">ブラウザで開く手順</h4>
+          <h4 className="text-sm font-bold text-neutral-900">
+            Chrome・Safariで利用する場合
+          </h4>
 
           <ol className="list-decimal space-y-2 pl-5 text-sm leading-6 text-neutral-800">
-            {LINE_BROWSER_STEPS.map((step) => (
+            {CHROME_SAFARI_STEPS.map((step) => (
               <li key={step}>{step}</li>
             ))}
           </ol>
 
-          <div className="space-y-2">
-            <p className="text-xs font-semibold text-neutral-500">現在のURL</p>
-            <div className="flex items-stretch gap-2">
-              <input
-                readOnly
-                value={driver_url}
-                aria-label="ドライバー画面のURL"
-                className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-900"
-              />
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() => void handle_copy_url()}
-                aria-label="URLをコピー"
-                className="inline-flex shrink-0 items-center justify-center rounded-xl border border-neutral-200 bg-white px-3 text-neutral-700 transition hover:bg-neutral-50 disabled:opacity-60"
-              >
-                <Copy className="h-4 w-4" aria-hidden="true" />
-              </button>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
+          <div className="flex items-center gap-3">
+            <p className="min-w-0 flex-1 break-all text-sm font-medium text-neutral-900">
+              {OCR_APP_URL}
+            </p>
             <button
               type="button"
               disabled={disabled}
               onClick={() => void handle_copy_url()}
-              className="inline-flex items-center justify-center rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50 disabled:opacity-60"
+              className="inline-flex shrink-0 items-center justify-center rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-bold text-neutral-900 transition hover:bg-neutral-50 disabled:opacity-60"
             >
-              URLをコピー
+              コピー
             </button>
-            {line_linked ? (
-              <span className="inline-flex items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800">
-                LINE連携済み
-              </span>
-            ) : (
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={handle_line_link}
-                className="inline-flex items-center justify-center rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50 disabled:opacity-60"
-              >
-                LINEで連携する
-              </button>
-            )}
           </div>
         </section>
       ) : null}

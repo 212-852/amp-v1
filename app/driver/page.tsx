@@ -2,7 +2,6 @@ import DriverOnboardingModal from "@/components/driver/onboarding_modal"
 import DriverProgressErrorCard from "@/components/driver/progress_error"
 import OpsComingSoon from "@/components/ops/coming-soon"
 import OpsShell from "@/components/ops/shell"
-import { resolve_line_user_id } from "@/core/auth/identity"
 import { resolveAuthContext } from "@/core/auth/context"
 import { resolveSession } from "@/core/auth/session"
 import {
@@ -60,9 +59,6 @@ export default async function DriverPage() {
       status: driver.status,
     })
     const can_operate = can_driver_operate(driver.status)
-    const line_linked = session.user_uuid
-      ? Boolean(await resolve_line_user_id(session.user_uuid))
-      : false
 
     return (
       <OpsShell
@@ -80,7 +76,6 @@ export default async function DriverPage() {
             initial_status={driver.status}
             completed_count={driver.completed_count}
             total_count={driver.total_count}
-            line_linked={line_linked}
           />
         ) : null}
 

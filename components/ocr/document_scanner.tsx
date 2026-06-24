@@ -44,7 +44,6 @@ type DocumentScannerProps = {
   on_capture: (input: { image_url: string; source: OcrImageSource }) => void
   disabled?: boolean
   expanded?: boolean
-  line_linked?: boolean
 }
 
 type ScannerFallbackReason = "line_in_app" | "permission_denied" | "unavailable"
@@ -56,7 +55,6 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       on_capture,
       disabled = false,
       expanded = true,
-      line_linked = false,
     },
     ref,
   ) {
@@ -311,7 +309,6 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       return (
         <OcrCameraFallback
           disabled={disabled}
-          line_linked={line_linked}
           show_browser_instructions={fallback_reason === "line_in_app"}
           reason={fallback_reason}
           on_file_select={handle_file_select}

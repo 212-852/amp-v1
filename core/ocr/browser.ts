@@ -1,5 +1,7 @@
 export const DRIVER_PAGE_FALLBACK_URL = "https://app.da-nya.com/driver"
 
+export const OCR_APP_URL = "https://app.da-nya.com/"
+
 export function is_line_in_app_browser(user_agent?: string | null) {
   const value =
     user_agent ??
