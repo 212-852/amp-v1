@@ -1,6 +1,14 @@
 "use client"
 
-import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react"
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 
 import DocumentScanner, {
   type DocumentScannerHandle,
@@ -73,15 +81,23 @@ const DriverLicenseAccordionPanel = forwardRef<
     current_answer: string
     initial_entry: DriverProgressEntry | null
     expanded?: boolean
+    on_ocr_running_change?: (running: boolean) => void
     onComplete: () => void
   }
 >(function DriverLicenseAccordionPanel(
-  { current_answer, initial_entry, expanded = true, onComplete },
+  {
+    current_answer,
+    initial_entry,
+    expanded = true,
+    on_ocr_running_change,
+    onComplete,
+  },
   ref,
 ) {
   const scanner_ref = useRef<DocumentScannerHandle>(null)
   const [image_url, setImageUrl] = useState(initial_entry?.image_url ?? "")
   const [form, setForm] = useState<LicenseFormFields>(() => form_from_entry(initial_entry))
+  const [scanner_running, setScannerRunning] = useState(false)
   const [ocr_loading, setOcrLoading] = useState(false)
   const [ocr_has_result, setOcrHasResult] = useState(
     Boolean(
@@ -121,6 +137,10 @@ const DriverLicenseAccordionPanel = forwardRef<
     [],
   )
 
+  useEffect(() => {
+    on_ocr_running_change?.(scanner_running || ocr_loading)
+  }, [ocr_loading, on_ocr_running_change, scanner_running])
+
   const preview_url = useMemo(() => {
     if (!image_url.startsWith("data:")) {
       return null
@@ -136,7 +156,12 @@ const DriverLicenseAccordionPanel = forwardRef<
     warnings: ocr_warnings,
   })
 
+  const handle_scanner_running_change = useCallback((running: boolean) => {
+    setScannerRunning(running)
+  }, [])
+
   async function request_ocr(next_image_url: string, source: OcrImageSource) {
+    setScannerRunning(false)
     setOcrLoading(true)
     setMessage(null)
     setOcrWarnings([])
@@ -171,6 +196,7 @@ const DriverLicenseAccordionPanel = forwardRef<
   }
 
   function handle_capture(input: { image_url: string; source: OcrImageSource }) {
+    setScannerRunning(false)
     setImageUrl(input.image_url)
     setOcrHasResult(false)
     void request_ocr(input.image_url, input.source)
@@ -256,6 +282,7 @@ const DriverLicenseAccordionPanel = forwardRef<
             ref={scanner_ref}
             document_type="driver_license_front"
             on_capture={handle_capture}
+            on_running_change={handle_scanner_running_change}
             disabled={isSubmitting || ocr_loading}
             expanded={expanded}
           />

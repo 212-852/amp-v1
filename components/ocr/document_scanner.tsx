@@ -42,6 +42,7 @@ export type DocumentScannerHandle = {
 type DocumentScannerProps = {
   document_type: OcrDocumentType
   on_capture: (input: { image_url: string; source: OcrImageSource }) => void
+  on_running_change?: (running: boolean) => void
   disabled?: boolean
   expanded?: boolean
 }
@@ -53,6 +54,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
     {
       document_type,
       on_capture,
+      on_running_change,
       disabled = false,
       expanded = true,
     },
@@ -92,7 +94,8 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       stream_ref.current?.getTracks().forEach((track) => track.stop())
       stream_ref.current = null
       setCameraActive(false)
-    }, [])
+      on_running_change?.(false)
+    }, [on_running_change])
 
     const attach_stream = useCallback(async (stream: MediaStream) => {
       stream_ref.current = stream
@@ -104,8 +107,9 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       }
 
       setCameraActive(true)
+      on_running_change?.(true)
       setFallbackReason(null)
-    }, [])
+    }, [on_running_change])
 
     const enter_upload_fallback = useCallback((reason: ScannerFallbackReason) => {
       stop_camera()
@@ -135,6 +139,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
 
     const request_camera = useCallback(async (): Promise<DocumentScannerStartResult> => {
       if (disabled || captured_ref.current || upload_only || fallback_reason) {
+        on_running_change?.(false)
         return {
           started: false,
           stream: null,
@@ -147,6 +152,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
 
       if (read_camera_permission_denied_session()) {
         enter_upload_fallback("permission_denied")
+        on_running_change?.(false)
         return {
           started: false,
           stream: null,
@@ -158,11 +164,16 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       }
 
       captured_ref.current = false
+      on_running_change?.(true)
 
       const result = await start_camera_from_user_gesture({
         document_type,
         facing_mode: "environment",
       })
+
+      if (!result.stream) {
+        on_running_change?.(false)
+      }
 
       return apply_camera_result(result)
     }, [
@@ -171,6 +182,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       document_type,
       enter_upload_fallback,
       fallback_reason,
+      on_running_change,
       upload_only,
     ])
 
@@ -233,10 +245,13 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
     }, [document_type])
 
     useEffect(() => {
+      console.log("[OCR_UI] camera_mount", document_type)
+
       return () => {
+        console.log("[OCR_UI] camera_unmount", document_type)
         stop_camera()
       }
-    }, [stop_camera])
+    }, [document_type, stop_camera])
 
     useEffect(() => {
       if (!camera_active || disabled || captured_ref.current || fallback_reason) {

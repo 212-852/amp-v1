@@ -11,6 +11,36 @@ import type {
   DriverStatus,
 } from "@/core/driver/context"
 
+const OCR_ACCORDION_STORAGE_KEY = "amp_driver_ocr_expanded_key"
+
+type AccordionCloseReason =
+  | "user_toggle"
+  | "ocr_success"
+  | "data_refresh"
+
+function read_stored_expanded_key(): DriverProgressKey | null {
+  if (typeof window === "undefined") {
+    return null
+  }
+
+  const value = window.sessionStorage.getItem(OCR_ACCORDION_STORAGE_KEY)
+
+  return value === "driver_license" ? value : null
+}
+
+function store_expanded_key(key: DriverProgressKey | null) {
+  if (typeof window === "undefined") {
+    return
+  }
+
+  if (key) {
+    window.sessionStorage.setItem(OCR_ACCORDION_STORAGE_KEY, key)
+    return
+  }
+
+  window.sessionStorage.removeItem(OCR_ACCORDION_STORAGE_KEY)
+}
+
 function ProgressStatusIcon({ complete }: Readonly<{ complete: boolean }>) {
   if (complete) {
     return (
@@ -70,7 +100,10 @@ export default function DriverOnboardingModal({
   total_count: number
 }>) {
   const router = useRouter()
-  const [expanded_key, setExpandedKey] = useState<DriverProgressKey | null>(null)
+  const [expanded_key, setExpandedKey] = useState<DriverProgressKey | null>(
+    read_stored_expanded_key,
+  )
+  const [ocr_running, setOcrRunning] = useState(false)
   const item_refs = useRef<Partial<Record<DriverProgressKey, HTMLLIElement | null>>>({})
 
   useEffect(() => {
@@ -96,19 +129,64 @@ export default function DriverOnboardingModal({
     return null
   }
 
+  function set_expanded_key(
+    next_key: DriverProgressKey | null,
+    options: { close_reason?: AccordionCloseReason } = {},
+  ) {
+    setExpandedKey((current_key) => {
+      if (current_key === next_key) {
+        return current_key
+      }
+
+      if (next_key) {
+        console.log("[OCR_UI] accordion_open", next_key)
+      }
+
+      if (current_key && !next_key) {
+        console.log("[OCR_UI] accordion_close", {
+          key: current_key,
+          reason: options.close_reason ?? "data_refresh",
+        })
+      }
+
+      if (current_key && next_key && current_key !== next_key) {
+        console.log("[OCR_UI] accordion_close", {
+          key: current_key,
+          reason: options.close_reason ?? "data_refresh",
+        })
+      }
+
+      store_expanded_key(next_key)
+
+      return next_key
+    })
+  }
+
   function handleLicenseComplete() {
+    setOcrRunning(false)
+    set_expanded_key(null, { close_reason: "ocr_success" })
     router.refresh()
   }
 
   function handle_item_click(item: DriverChecklistItem) {
     const will_open = expanded_key !== item.key
 
-    if (item.key === "driver_license" && will_open) {
-      setExpandedKey("driver_license")
+    if (ocr_running && expanded_key === "driver_license" && item.key !== "driver_license") {
+      console.log("[OCR_UI] accordion_close_blocked", {
+        key: expanded_key,
+        reason: "ocr_running",
+      })
       return
     }
 
-    setExpandedKey((current) => (current === item.key ? null : item.key))
+    if (item.key === "driver_license" && will_open) {
+      set_expanded_key("driver_license")
+      return
+    }
+
+    set_expanded_key(will_open ? item.key : null, {
+      close_reason: "user_toggle",
+    })
   }
 
   function render_panel(item: DriverChecklistItem) {
@@ -118,6 +196,7 @@ export default function DriverOnboardingModal({
           current_answer={item.current_answer ?? "未回答"}
           initial_entry={item.latest_entry}
           expanded={expanded_key === "driver_license"}
+          on_ocr_running_change={setOcrRunning}
           onComplete={handleLicenseComplete}
         />
       )
