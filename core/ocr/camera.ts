@@ -167,6 +167,11 @@ export async function start_camera_from_user_gesture(
       throw new DOMException("mediaDevices.getUserMedia is unavailable", "NotSupportedError")
     }
 
+    console.log("[OCR_FLOW] get_user_media_called", {
+      document_type: input.document_type,
+      permission_state: get_camera_permission_state(),
+    })
+
     const stream = await navigator.mediaDevices.getUserMedia(
       build_get_user_media_request(input),
     )

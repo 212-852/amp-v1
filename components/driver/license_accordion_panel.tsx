@@ -18,7 +18,7 @@ import type { DriverProgressEntry } from "@/core/driver/context"
 import {
   apply_ocr_to_license_form,
   has_ocr_license_result,
-  read_document_image,
+  read_driver_license_image,
   type OcrImageSource,
 } from "@/core/ocr/client"
 import { build_ocr_status_label } from "@/core/ocr/rules"
@@ -34,6 +34,7 @@ type LicenseFormFields = {
 type LicenseSaveResponse = {
   ok?: boolean
   message?: string
+  state?: unknown
 }
 
 function empty_form(): LicenseFormFields {
@@ -73,6 +74,7 @@ function form_is_complete(form: LicenseFormFields) {
 export type DriverLicenseAccordionPanelHandle = {
   open_from_user_gesture: () => Promise<DocumentScannerStartResult>
   start_camera: () => Promise<DocumentScannerStartResult>
+  stop_camera: () => void
 }
 
 const DriverLicenseAccordionPanel = forwardRef<
@@ -80,7 +82,6 @@ const DriverLicenseAccordionPanel = forwardRef<
   {
     current_answer: string
     initial_entry: DriverProgressEntry | null
-    expanded?: boolean
     on_ocr_running_change?: (running: boolean) => void
     onComplete: () => void
   }
@@ -88,7 +89,6 @@ const DriverLicenseAccordionPanel = forwardRef<
   {
     current_answer,
     initial_entry,
-    expanded = true,
     on_ocr_running_change,
     onComplete,
   },
@@ -133,6 +133,7 @@ const DriverLicenseAccordionPanel = forwardRef<
           error_message: "Scanner is unavailable",
           error_kind: "failed",
         }),
+      stop_camera: () => scanner_ref.current?.stop_camera(),
     }),
     [],
   )
@@ -160,13 +161,90 @@ const DriverLicenseAccordionPanel = forwardRef<
     setScannerRunning(running)
   }, [])
 
+  async function save_license(input: {
+    next_image_url: string
+    next_form: LicenseFormFields
+  }) {
+    if (isSubmitting) {
+      return
+    }
+
+    if (!input.next_image_url.trim()) {
+      setMessage("免許証画像を登録してください。")
+      return
+    }
+
+    if (!form_is_complete(input.next_form)) {
+      setMessage("確認フォームの必須項目を入力してください。")
+      return
+    }
+
+    setIsSubmitting(true)
+    setMessage(null)
+
+    try {
+      const saved_answer_payload = {
+        image_url: input.next_image_url,
+        ...input.next_form,
+      }
+
+      console.log("[OCR_FLOW] progress_update", {
+        phase: "before_save",
+        progress_before: {
+          current_answer,
+          latest_entry: initial_entry,
+        },
+        saved_answer_payload,
+      })
+
+      const response = await fetch("/api/driver/license", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(saved_answer_payload),
+      })
+      const result = (await response.json().catch(() => null)) as
+        | LicenseSaveResponse
+        | null
+
+      if (!response.ok || result?.ok !== true) {
+        setMessage(result?.message ?? "保存できませんでした。")
+        return
+      }
+
+      console.log("[OCR_FLOW] progress_update", {
+        phase: "after_save",
+        progress_before: {
+          current_answer,
+          latest_entry: initial_entry,
+        },
+        progress_after: result.state ?? null,
+        saved_answer_payload,
+      })
+      console.log("[OCR_FLOW] completed", {
+        document_type: "driver_license_front",
+      })
+      setMessage(result.message ?? "運転免許証を登録しました。")
+      onComplete()
+    } catch {
+      setMessage("保存できませんでした。")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   async function request_ocr(next_image_url: string, source: OcrImageSource) {
     setScannerRunning(false)
     setOcrLoading(true)
     setMessage(null)
     setOcrWarnings([])
+    console.log("[OCR_FLOW] analyze_start", {
+      document_type: "driver_license_front",
+      source,
+    })
 
-    const result = await read_document_image({
+    const result = await read_driver_license_image({
       document_type: "driver_license_front",
       image_url: next_image_url,
       source,
@@ -179,12 +257,19 @@ const DriverLicenseAccordionPanel = forwardRef<
       return
     }
 
-    setForm((current) =>
-      apply_ocr_to_license_form({
-        current,
-        parsed: result.parsed,
-      }),
-    )
+    console.log("[OCR_FLOW] analyze_success", {
+      document_type: "driver_license_front",
+      parsed_ocr_result: result.parsed,
+      confidence: result.confidence,
+      warnings: result.warnings,
+    })
+
+    const next_form = apply_ocr_to_license_form({
+      current: form,
+      parsed: result.parsed,
+    })
+
+    setForm(next_form)
     setOcrWarnings(result.warnings)
     setOcrHasResult(
       has_ocr_license_result({
@@ -193,6 +278,11 @@ const DriverLicenseAccordionPanel = forwardRef<
       }),
     )
     setOcrLoading(false)
+
+    if (result.saved) {
+      setMessage(result.message)
+      onComplete()
+    }
   }
 
   function handle_capture(input: { image_url: string; source: OcrImageSource }) {
@@ -203,50 +293,10 @@ const DriverLicenseAccordionPanel = forwardRef<
   }
 
   async function submit_license() {
-    if (isSubmitting) {
-      return
-    }
-
-    if (!image_url.trim()) {
-      setMessage("免許証画像を登録してください。")
-      return
-    }
-
-    if (!form_is_complete(form)) {
-      setMessage("確認フォームの必須項目を入力してください。")
-      return
-    }
-
-    setIsSubmitting(true)
-    setMessage(null)
-
-    try {
-      const response = await fetch("/api/driver/license", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          image_url,
-          ...form,
-        }),
-      })
-      const result = (await response.json().catch(() => null)) as
-        | LicenseSaveResponse
-        | null
-
-      if (!response.ok || result?.ok !== true) {
-        setMessage(result?.message ?? "保存できませんでした。")
-        return
-      }
-
-      setMessage(result.message ?? "運転免許証を登録しました。")
-      onComplete()
-    } catch {
-      setMessage("保存できませんでした。")
-    } finally {
-      setIsSubmitting(false)
-    }
+    await save_license({
+      next_image_url: image_url,
+      next_form: form,
+    })
   }
 
   const can_save =
@@ -284,7 +334,6 @@ const DriverLicenseAccordionPanel = forwardRef<
             on_capture={handle_capture}
             on_running_change={handle_scanner_running_change}
             disabled={isSubmitting || ocr_loading}
-            expanded={expanded}
           />
         )}
       </section>

@@ -4,7 +4,9 @@ import { CheckCircle2, XCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState, type ReactNode } from "react"
 
-import DriverLicenseAccordionPanel from "@/components/driver/license_accordion_panel"
+import DriverLicenseAccordionPanel, {
+  type DriverLicenseAccordionPanelHandle,
+} from "@/components/driver/license_accordion_panel"
 import type {
   DriverChecklistItem,
   DriverProgressKey,
@@ -104,6 +106,7 @@ export default function DriverOnboardingModal({
     read_stored_expanded_key,
   )
   const [ocr_running, setOcrRunning] = useState(false)
+  const license_panel_ref = useRef<DriverLicenseAccordionPanelHandle>(null)
   const item_refs = useRef<Partial<Record<DriverProgressKey, HTMLLIElement | null>>>({})
 
   useEffect(() => {
@@ -168,6 +171,10 @@ export default function DriverOnboardingModal({
     router.refresh()
   }
 
+  function start_license_camera_once() {
+    void license_panel_ref.current?.open_from_user_gesture()
+  }
+
   function handle_item_click(item: DriverChecklistItem) {
     const will_open = expanded_key !== item.key
 
@@ -181,7 +188,12 @@ export default function DriverOnboardingModal({
 
     if (item.key === "driver_license" && will_open) {
       set_expanded_key("driver_license")
+      start_license_camera_once()
       return
+    }
+
+    if (item.key === "driver_license" && !will_open) {
+      license_panel_ref.current?.stop_camera()
     }
 
     set_expanded_key(will_open ? item.key : null, {
@@ -193,9 +205,9 @@ export default function DriverOnboardingModal({
     if (item.key === "driver_license") {
       return (
         <DriverLicenseAccordionPanel
+          ref={license_panel_ref}
           current_answer={item.current_answer ?? "未回答"}
           initial_entry={item.latest_entry}
-          expanded={expanded_key === "driver_license"}
           on_ocr_running_change={setOcrRunning}
           onComplete={handleLicenseComplete}
         />
