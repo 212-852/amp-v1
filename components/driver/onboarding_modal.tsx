@@ -158,24 +158,9 @@ export default function DriverOnboardingModal({
       }
 
       if (next_key) {
-        console.log("[OCR_UI] accordion_open", next_key)
         if (next_key === "driver_license") {
           void send_ocr_debug("OCR_ACCORDION_OPEN", { key: next_key })
         }
-      }
-
-      if (current_key && !next_key) {
-        console.log("[OCR_UI] accordion_close", {
-          key: current_key,
-          reason: options.close_reason ?? "data_refresh",
-        })
-      }
-
-      if (current_key && next_key && current_key !== next_key) {
-        console.log("[OCR_UI] accordion_close", {
-          key: current_key,
-          reason: options.close_reason ?? "data_refresh",
-        })
       }
 
       store_expanded_key(next_key)
@@ -197,10 +182,6 @@ export default function DriverOnboardingModal({
     const will_open = expanded_key !== item.key
 
     if (ocr_running && expanded_key === "driver_license" && item.key !== "driver_license") {
-      console.log("[OCR_UI] accordion_close_blocked", {
-        key: expanded_key,
-        reason: "ocr_running",
-      })
       void send_ocr_debug("OCR_ACCORDION_CLOSE_BLOCKED", {
         key: expanded_key,
         reason: "ocr_flow_active",

@@ -10,6 +10,7 @@ export type OcrDebugEvent =
   | "OCR_ACCORDION_CLOSE_BLOCKED"
   | "OCR_COMPONENT_MOUNT"
   | "OCR_COMPONENT_UNMOUNT"
+  | "OCR_COMPONENT_RENDER"
   | "OCR_CAMERA_START_REQUESTED"
   | "OCR_CAMERA_START_SKIPPED"
   | "OCR_CAMERA_PERMISSION_REQUESTED"
@@ -23,6 +24,7 @@ export type OcrDebugEvent =
   | "OCR_SCAN_STATE_CHANGED"
   | "OCR_AUTO_CAPTURE_DISABLED_INITIAL_DELAY"
   | "OCR_FRAME_REJECTED_NOT_IN_GUIDE"
+  | "OCR_FRAME_REJECTED_BELOW_THRESHOLD"
   | "OCR_FRAME_REJECTED_MOVING"
   | "OCR_FRAME_REJECTED_BLUR"
   | "OCR_FRAME_REJECTED_DARK"
@@ -61,6 +63,62 @@ export type OcrCameraErrorKind =
   | "failed"
 
 export type CameraPermissionState = "unknown" | "granted" | "denied"
+
+type OcrDebugContext = {
+  component_instance_id: string
+  document_type: string
+  scan_state: string
+  camera_state: string
+}
+
+const OCR_DEBUG_ENABLED = process.env.NEXT_PUBLIC_OCR_DEBUG === "true"
+const OCR_DEBUG_VERBOSE =
+  process.env.NEXT_PUBLIC_OCR_DEBUG_VERBOSE === "true"
+const last_debug_at = new Map<string, number>()
+let active_debug_context: OcrDebugContext = {
+  component_instance_id: "unscoped",
+  document_type: "unknown",
+  scan_state: "unknown",
+  camera_state: "unknown",
+}
+
+const VERBOSE_DEBUG_EVENTS = new Set<OcrDebugEvent>([
+  "OCR_COMPONENT_RENDER",
+  "OCR_AUTO_CAPTURE_DISABLED_INITIAL_DELAY",
+  "OCR_VIDEO_CAN_PLAY",
+  "OCR_VIDEO_METADATA_LOADED",
+  "OCR_FRAME_REJECTED_NOT_IN_GUIDE",
+  "OCR_FRAME_REJECTED_BELOW_THRESHOLD",
+  "OCR_FRAME_REJECTED_MOVING",
+  "OCR_FRAME_REJECTED_BLUR",
+  "OCR_FRAME_REJECTED_DARK",
+  "OCR_FRAME_VALID",
+])
+
+export function is_ocr_debug_event_enabled(event: OcrDebugEvent) {
+  return (
+    OCR_DEBUG_ENABLED &&
+    (!VERBOSE_DEBUG_EVENTS.has(event) || OCR_DEBUG_VERBOSE)
+  )
+}
+
+export function set_ocr_debug_context(context: Partial<OcrDebugContext>) {
+  active_debug_context = { ...active_debug_context, ...context }
+}
+
+export function enrich_ocr_debug_payload(
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  return {
+    ...active_debug_context,
+    ...payload,
+    component_instance_id:
+      payload.component_instance_id ?? active_debug_context.component_instance_id,
+    document_type: payload.document_type ?? active_debug_context.document_type,
+    scan_state: payload.scan_state ?? active_debug_context.scan_state,
+    camera_state: payload.camera_state ?? active_debug_context.camera_state,
+  }
+}
 
 const ONCE_PER_SESSION_DEBUG_EVENTS = new Set<OcrDebugEvent>([
   "OCR_CAMERA_PERMISSION_DENIED",
@@ -165,10 +223,35 @@ export function should_log_ocr_debug_event(event: OcrDebugEvent) {
 export async function send_ocr_debug(
   event: OcrDebugEvent,
   payload: Record<string, unknown>,
+  interval_ms?: number,
 ) {
+  if (!is_ocr_debug_event_enabled(event)) {
+    return
+  }
+
   if (!should_log_ocr_debug_event(event)) {
     return
   }
+
+  const enriched_payload = enrich_ocr_debug_payload(payload)
+  const interval =
+    interval_ms ?? (VERBOSE_DEBUG_EVENTS.has(event) ? 3_000 : 2_000)
+  const key = [
+    event,
+    enriched_payload.component_instance_id,
+    enriched_payload.document_type,
+    enriched_payload.reason ?? "",
+    enriched_payload.scan_state,
+    enriched_payload.camera_state,
+  ].join(":")
+  const now = Date.now()
+  const last = last_debug_at.get(key) ?? 0
+
+  if (now - last < interval) {
+    return
+  }
+
+  last_debug_at.set(key, now)
 
   try {
     await fetch("/api/debug/client", {
@@ -178,10 +261,18 @@ export async function send_ocr_debug(
       },
       body: JSON.stringify({
         event,
-        ...payload,
+        ...enriched_payload,
       }),
     })
   } catch {
     // Client-side debug must never block OCR flow.
   }
+}
+
+export function debug_ocr_once_per_interval(
+  event: OcrDebugEvent,
+  payload: Record<string, unknown>,
+  interval_ms = 2_000,
+) {
+  void send_ocr_debug(event, payload, interval_ms)
 }

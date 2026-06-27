@@ -10,6 +10,7 @@ const ALLOWED_CLIENT_DEBUG_EVENTS = new Set([
   "OCR_ACCORDION_CLOSE_BLOCKED",
   "OCR_COMPONENT_MOUNT",
   "OCR_COMPONENT_UNMOUNT",
+  "OCR_COMPONENT_RENDER",
   "OCR_CAMERA_START_REQUESTED",
   "OCR_CAMERA_START_SKIPPED",
   "OCR_CAMERA_PERMISSION_REQUESTED",
@@ -23,6 +24,7 @@ const ALLOWED_CLIENT_DEBUG_EVENTS = new Set([
   "OCR_SCAN_STATE_CHANGED",
   "OCR_AUTO_CAPTURE_DISABLED_INITIAL_DELAY",
   "OCR_FRAME_REJECTED_NOT_IN_GUIDE",
+  "OCR_FRAME_REJECTED_BELOW_THRESHOLD",
   "OCR_FRAME_REJECTED_MOVING",
   "OCR_FRAME_REJECTED_BLUR",
   "OCR_FRAME_REJECTED_DARK",
@@ -55,6 +57,19 @@ const ALLOWED_CLIENT_DEBUG_EVENTS = new Set([
   "OCR_FORM_FILLED",
 ])
 
+const VERBOSE_OCR_DEBUG_EVENTS = new Set([
+  "OCR_COMPONENT_RENDER",
+  "OCR_AUTO_CAPTURE_DISABLED_INITIAL_DELAY",
+  "OCR_VIDEO_CAN_PLAY",
+  "OCR_VIDEO_METADATA_LOADED",
+  "OCR_FRAME_REJECTED_NOT_IN_GUIDE",
+  "OCR_FRAME_REJECTED_BELOW_THRESHOLD",
+  "OCR_FRAME_REJECTED_MOVING",
+  "OCR_FRAME_REJECTED_BLUR",
+  "OCR_FRAME_REJECTED_DARK",
+  "OCR_FRAME_VALID",
+])
+
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as Record<
     string,
@@ -65,6 +80,13 @@ export async function POST(request: Request) {
 
   if (!ALLOWED_CLIENT_DEBUG_EVENTS.has(event)) {
     return NextResponse.json({ ok: false, error: "unsupported_event" }, { status: 400 })
+  }
+
+  if (
+    VERBOSE_OCR_DEBUG_EVENTS.has(event) &&
+    process.env.NEXT_PUBLIC_OCR_DEBUG_VERBOSE !== "true"
+  ) {
+    return NextResponse.json({ ok: true, suppressed: true })
   }
 
   const request_id =

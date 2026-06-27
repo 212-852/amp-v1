@@ -33,7 +33,7 @@ import {
   type OcrFailureType,
   type OcrFlowState,
 } from "@/core/ocr/flow"
-import { send_ocr_debug } from "@/core/ocr/debug"
+import { send_ocr_debug, set_ocr_debug_context } from "@/core/ocr/debug"
 
 type LicenseFormFields = {
   license_name: string
@@ -121,6 +121,12 @@ const DriverLicenseAccordionPanel = forwardRef<
   const [ocr_loading, setOcrLoading] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  set_ocr_debug_context({
+    document_type: "driver_license_front",
+    scan_state: ocr_flow_state,
+    camera_state: scanner_running ? "running" : ocr_flow_state,
+  })
 
   useImperativeHandle(
     ref,
@@ -239,14 +245,6 @@ const DriverLicenseAccordionPanel = forwardRef<
         ...input.next_form,
       }
 
-      console.log("[OCR_FLOW] progress_update", {
-        phase: "before_save",
-        progress_before: {
-          current_answer,
-          latest_entry: initial_entry,
-        },
-        saved_answer_payload,
-      })
       void send_ocr_debug("OCR_SAVE_STARTED", {
         document_type: "driver_license_front",
         has_image: Boolean(saved_answer_payload.image_url),
@@ -272,18 +270,6 @@ const DriverLicenseAccordionPanel = forwardRef<
         return false
       }
 
-      console.log("[OCR_FLOW] progress_update", {
-        phase: "after_save",
-        progress_before: {
-          current_answer,
-          latest_entry: initial_entry,
-        },
-        progress_after: result.state ?? null,
-        saved_answer_payload,
-      })
-      console.log("[OCR_FLOW] completed", {
-        document_type: "driver_license_front",
-      })
       void send_ocr_debug("OCR_SAVE_COMPLETED", {
         document_type: "driver_license_front",
         target_fields: Object.keys(input.next_form),
@@ -318,10 +304,6 @@ const DriverLicenseAccordionPanel = forwardRef<
       document_type: "driver_license_front",
       source,
     })
-    console.log("[OCR_FLOW] analyze_start", {
-      document_type: "driver_license_front",
-      source,
-    })
 
     try {
       const result = await analyze_ocr_image({
@@ -341,12 +323,6 @@ const DriverLicenseAccordionPanel = forwardRef<
         return
       }
 
-      console.log("[OCR_FLOW] analyze_success", {
-        document_type: "driver_license_front",
-        parsed_ocr_result: result.parsed,
-        confidence: result.confidence,
-        warnings: result.warnings,
-      })
       void send_ocr_debug("OCR_ANALYZE_SUCCESS", {
         document_type: "driver_license_front",
         raw_result: result.parsed,

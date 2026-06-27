@@ -208,18 +208,6 @@ export function apply_ocr_to_license_form(input: {
   parsed: Partial<DriverLicenseParsedFields>
 }) {
   const next_form = merge_driver_license_fields(input.current, input.parsed)
-  const target_fields = [
-    "license_name",
-    "license_address",
-    "license_birth_date",
-    "license_number",
-    "license_expiration_date",
-  ]
-
-  console.log("[OCR_FLOW] autofill_start", {
-    parsed_ocr_result: input.parsed,
-    target_form_field_names: target_fields,
-  })
 
   void send_ocr_debug("OCR_FORM_FILLED", {
     has_license_name: Boolean(next_form.license_name),
@@ -227,11 +215,6 @@ export function apply_ocr_to_license_form(input: {
     has_license_birth_date: Boolean(next_form.license_birth_date),
     has_license_number: Boolean(next_form.license_number),
     has_license_expiration_date: Boolean(next_form.license_expiration_date),
-  })
-
-  console.log("[OCR_FLOW] autofill_success", {
-    normalized_result: next_form,
-    target_form_field_names: target_fields,
   })
 
   return next_form

@@ -617,9 +617,6 @@ export async function save_driver_license_progress_from_ocr(
   saved: boolean
   errors: Record<string, string>
 }> {
-  const progress_before = await load_driver_progress_state(
-    context.session.user_uuid,
-  )
   const ocr_result = await run_ocr({
     auth: context.auth,
     session: context.session,
@@ -638,24 +635,7 @@ export async function save_driver_license_progress_from_ocr(
   }
   const validation = validate_license_save(upload_input)
 
-  console.log("[OCR_FLOW] autofill_start", {
-    parsed_ocr_result: ocr_result.parsed,
-    target_form_field_names: Object.keys(parsed),
-  })
-  console.log("[OCR_FLOW] autofill_success", {
-    normalized_result: parsed,
-    target_form_field_names: Object.keys(parsed),
-  })
-
   if (!validation.ok) {
-    console.log("[OCR_FLOW] progress_update", {
-      phase: "skipped_incomplete_ocr",
-      progress_before,
-      progress_after: progress_before,
-      saved_answer_payload: upload_input,
-      errors: validation.errors,
-    })
-
     return {
       parsed,
       confidence: ocr_result.confidence,
@@ -666,26 +646,10 @@ export async function save_driver_license_progress_from_ocr(
     }
   }
 
-  console.log("[OCR_FLOW] progress_update", {
-    phase: "before_save",
-    progress_before,
-    saved_answer_payload: upload_input,
-  })
-
   const saved = await save_driver_license_progress({
     auth: context.auth,
     session: context.session,
     input: upload_input,
-  })
-
-  console.log("[OCR_FLOW] progress_update", {
-    phase: "after_save",
-    progress_before: saved.previous_state,
-    progress_after: saved.state,
-    saved_answer_payload: upload_input,
-  })
-  console.log("[OCR_FLOW] completed", {
-    document_type: context.input.document_type,
   })
 
   return {
