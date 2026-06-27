@@ -24,7 +24,6 @@ import {
   type OcrCameraStartResult,
 } from "@/core/ocr/camera"
 import {
-  is_camera_api_available,
   should_use_upload_only_for_ocr,
 } from "@/core/ocr/browser"
 import {
@@ -35,6 +34,7 @@ import {
 import {
   is_ocr_camera_start_blocked,
   reduce_ocr_flow,
+  type OcrFailureType,
   type OcrFlowEvent,
   type OcrFlowState,
 } from "@/core/ocr/flow"
@@ -51,6 +51,7 @@ export type DocumentScannerHandle = {
   open_from_user_gesture: () => Promise<DocumentScannerStartResult>
   start_camera: () => Promise<DocumentScannerStartResult>
   stop_camera: () => void
+  prepare_retry: () => void
 }
 
 type DocumentScannerProps = {
@@ -62,6 +63,8 @@ type DocumentScannerProps = {
   on_running_change?: (running: boolean) => void
   flow_state: OcrFlowState
   on_flow_event: (event: OcrFlowEvent) => void
+  failure_type?: OcrFailureType | null
+  on_failure: (failure_type: OcrFailureType) => void
   disabled?: boolean
 }
 
@@ -75,6 +78,8 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       on_running_change,
       flow_state,
       on_flow_event,
+      failure_type,
+      on_failure,
       disabled = false,
     },
     ref,
@@ -97,10 +102,12 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
     const on_capture_ref = useRef(on_capture)
     const on_running_change_ref = useRef(on_running_change)
     const on_flow_event_ref = useRef(on_flow_event)
+    const on_failure_ref = useRef(on_failure)
 
     on_capture_ref.current = on_capture
     on_running_change_ref.current = on_running_change
     on_flow_event_ref.current = on_flow_event
+    on_failure_ref.current = on_failure
     flow_state_ref.current = flow_state
 
     const [upload_only] = useState(() => should_use_upload_only_for_ocr())
@@ -109,14 +116,6 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       useState<ScannerFallbackReason | null>(() => {
         if (should_use_upload_only_for_ocr()) {
           return "line_in_app"
-        }
-
-        if (read_camera_permission_denied_session()) {
-          return "permission_denied"
-        }
-
-        if (!is_camera_api_available()) {
-          return "unavailable"
         }
 
         return null
@@ -197,10 +196,10 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       return true
     }, [debug_camera, document_type, emit_flow_event])
 
-    const enter_upload_fallback = useCallback((reason: ScannerFallbackReason) => {
+    const fail_camera = useCallback(() => {
       stop_camera("start_failed")
       emit_flow_event("flow_failed")
-      setFallbackReason(reason)
+      on_failure_ref.current("camera_failed")
     }, [emit_flow_event, stop_camera])
 
     const request_camera = useCallback(async (): Promise<DocumentScannerStartResult> => {
@@ -271,7 +270,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       }
 
       if (read_camera_permission_denied_session()) {
-        enter_upload_fallback("permission_denied")
+        fail_camera()
         on_running_change_ref.current?.(false)
         return {
           started: false,
@@ -319,12 +318,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
             error_kind: result.error_kind,
           })
 
-          const fallback_reason =
-            result.error_kind === "permission_denied" ||
-            result.error_kind === "permission_dismissed"
-              ? "permission_denied"
-              : "unavailable"
-          enter_upload_fallback(fallback_reason)
+          fail_camera()
           return result
         }
 
@@ -367,7 +361,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
         })
         stop_camera("start_failed")
         emit_flow_event("flow_failed")
-        setFallbackReason("unavailable")
+        on_failure_ref.current("camera_failed")
 
         return {
           started: false,
@@ -382,8 +376,8 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       debug_camera,
       disabled,
       document_type,
-      enter_upload_fallback,
       emit_flow_event,
+      fail_camera,
       fallback_reason,
       mark_camera_ready,
       stop_camera,
@@ -403,6 +397,22 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
           stop_camera("user_close", {
             reset_flow: true,
           }),
+        prepare_retry: () => {
+          stop_camera("retry")
+          flow_state_ref.current = reduce_ocr_flow(
+            flow_state_ref.current,
+            "retry_requested",
+          )
+          capture_done_ref.current = false
+          camera_starting_ref.current = false
+          camera_ready_ref.current = false
+          auto_capture_enabled_at_ref.current = null
+          valid_frame_count_ref.current = 0
+          stable_started_at_ref.current = null
+          last_capture_at_ref.current = null
+          last_frame_debug_reason_ref.current = null
+          last_frame_debug_at_ref.current = 0
+        },
       }),
       [open_from_user_gesture, request_camera, stop_camera],
     )
@@ -487,6 +497,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
         })
         stop_camera("capture_failed")
         emit_flow_event("flow_failed")
+        on_failure_ref.current("capture_failed")
       }
     }, [debug_camera, document_type, emit_flow_event, frame, stop_camera])
 
@@ -658,7 +669,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
           className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl bg-black"
           data-camera-state={flow_state}
         >
-          <OcrFlowStatus state={flow_state} />
+          <OcrFlowStatus state={flow_state} failure_type={failure_type} />
           <video
             ref={video_ref}
             autoPlay
@@ -705,7 +716,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
           </div>
         </div>
 
-        {!camera_active ? (
+        {!camera_active && flow_state !== "failed" ? (
           <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-neutral-300 px-4 py-2 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50">
             画像を選択
             <input

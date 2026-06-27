@@ -8,7 +8,14 @@ export type OcrFlowState =
   | "analyzing"
   | "filling_form"
   | "completed"
-  | "error"
+  | "failed"
+  | "retrying"
+
+export type OcrFailureType =
+  | "camera_failed"
+  | "capture_failed"
+  | "ocr_unreadable"
+  | "save_failed"
 
 export type OcrFlowEvent =
   | "scan_requested"
@@ -20,6 +27,7 @@ export type OcrFlowEvent =
   | "fill_started"
   | "flow_completed"
   | "flow_failed"
+  | "retry_requested"
   | "flow_reset"
 
 export type OcrFlowStatus = {
@@ -74,9 +82,37 @@ const OCR_FLOW_STATUS: Record<OcrFlowState, OcrFlowStatus> = {
     description: "入力が完了しました",
     progress: 100,
   },
-  error: {
-    label: "Failed",
-    description: "読み込みできませんでした",
+  failed: {
+    label: "読み取りできませんでした",
+    description: "免許証を枠内に合わせて、もう一度スキャンしてください",
+    progress: 0,
+  },
+  retrying: {
+    label: "Retrying…",
+    description: "スキャンを再開しています",
+    progress: 0,
+  },
+}
+
+const OCR_FAILURE_STATUS: Record<OcrFailureType, OcrFlowStatus> = {
+  camera_failed: {
+    label: "カメラを起動できませんでした",
+    description: "カメラ設定を確認して、もう一度スキャンしてください",
+    progress: 0,
+  },
+  capture_failed: {
+    label: "撮影できませんでした",
+    description: "免許証を枠内に合わせて、もう一度スキャンしてください",
+    progress: 0,
+  },
+  ocr_unreadable: {
+    label: "読み取りできませんでした",
+    description: "免許証を枠内に合わせて、もう一度スキャンしてください",
+    progress: 0,
+  },
+  save_failed: {
+    label: "保存できませんでした",
+    description: "もう一度スキャンして入力内容を確認してください",
     progress: 0,
   },
 }
@@ -90,7 +126,8 @@ const EVENT_STATE: Record<OcrFlowEvent, OcrFlowState> = {
   analyze_started: "analyzing",
   fill_started: "filling_form",
   flow_completed: "completed",
-  flow_failed: "error",
+  flow_failed: "failed",
+  retry_requested: "retrying",
   flow_reset: "idle",
 }
 
@@ -100,14 +137,33 @@ export function reduce_ocr_flow(
 ): OcrFlowState {
   const next = EVENT_STATE[event]
 
-  if (current === "completed" && event !== "flow_reset") {
+  if (
+    current === "completed" &&
+    event !== "flow_reset" &&
+    event !== "flow_failed"
+  ) {
+    return current
+  }
+
+  if (
+    current === "failed" &&
+    event !== "retry_requested" &&
+    event !== "flow_reset"
+  ) {
     return current
   }
 
   return next
 }
 
-export function get_ocr_flow_status(state: OcrFlowState): OcrFlowStatus {
+export function get_ocr_flow_status(
+  state: OcrFlowState,
+  failure_type?: OcrFailureType | null,
+): OcrFlowStatus {
+  if (state === "failed" && failure_type) {
+    return OCR_FAILURE_STATUS[failure_type]
+  }
+
   return OCR_FLOW_STATUS[state]
 }
 
@@ -120,6 +176,7 @@ export function is_ocr_camera_start_blocked(state: OcrFlowState) {
     state === "capturing" ||
     state === "analyzing" ||
     state === "filling_form" ||
-    state === "completed"
+    state === "completed" ||
+    state === "failed"
   )
 }

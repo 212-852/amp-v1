@@ -1,12 +1,17 @@
 import {
   get_ocr_flow_status,
+  type OcrFailureType,
   type OcrFlowState,
 } from "@/core/ocr/flow"
 
 export default function OcrFlowStatus({
   state,
-}: Readonly<{ state: OcrFlowState }>) {
-  const status = get_ocr_flow_status(state)
+  failure_type,
+}: Readonly<{
+  state: OcrFlowState
+  failure_type?: OcrFailureType | null
+}>) {
+  const status = get_ocr_flow_status(state, failure_type)
 
   return (
     <div

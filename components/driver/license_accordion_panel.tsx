@@ -1,6 +1,7 @@
 "use client"
 
 import {
+  type ChangeEvent,
   forwardRef,
   useCallback,
   useEffect,
@@ -16,6 +17,7 @@ import DocumentScanner, {
   type DocumentScannerStartResult,
 } from "@/components/ocr/document_scanner"
 import OcrFlowStatus from "@/components/ocr/flow_status"
+import { read_file_as_data_url } from "@/core/ocr/camera"
 import type { DriverProgressEntry } from "@/core/driver/context"
 import {
   apply_ocr_to_license_form,
@@ -26,6 +28,7 @@ import {
 import {
   reduce_ocr_flow,
   type OcrFlowEvent,
+  type OcrFailureType,
   type OcrFlowState,
 } from "@/core/ocr/flow"
 import { send_ocr_debug } from "@/core/ocr/debug"
@@ -109,6 +112,8 @@ const DriverLicenseAccordionPanel = forwardRef<
   const ocr_flow_state_ref = useRef<OcrFlowState>(ocr_flow_state)
   ocr_flow_state_ref.current = ocr_flow_state
   const [image_url, setImageUrl] = useState(initial_entry?.image_url ?? "")
+  const [ocr_failure_type, setOcrFailureType] =
+    useState<OcrFailureType | null>(null)
   const [form, setForm] = useState<LicenseFormFields>(() => form_from_entry(initial_entry))
   const [scanner_running, setScannerRunning] = useState(false)
   const [ocr_loading, setOcrLoading] = useState(false)
@@ -172,6 +177,27 @@ const DriverLicenseAccordionPanel = forwardRef<
     })
   }, [])
 
+  const report_scan_failure = useCallback((
+    failure_type: OcrFailureType,
+    details: Record<string, unknown> = {},
+  ) => {
+    setOcrFailureType(failure_type)
+    setMessage(null)
+
+    if (ocr_flow_state_ref.current !== "failed") {
+      handle_ocr_flow_event("flow_failed")
+    }
+
+    const payload = {
+      document_type: "driver_license_front",
+      failure_type,
+      ...details,
+    }
+    void send_ocr_debug("OCR_SCAN_FAILED", payload)
+    void send_ocr_debug("OCR_PAGE_RELOAD_BLOCKED", payload)
+    void send_ocr_debug("OCR_ENTRY_REFRESH_SKIPPED_ON_FAILURE", payload)
+  }, [handle_ocr_flow_event])
+
   async function save_license(input: {
     next_image_url: string
     next_form: LicenseFormFields
@@ -221,6 +247,9 @@ const DriverLicenseAccordionPanel = forwardRef<
 
       if (!response.ok || result?.ok !== true) {
         setMessage(result?.message ?? "保存できませんでした。")
+        report_scan_failure("save_failed", {
+          message: result?.message ?? "save_failed",
+        })
         return
       }
 
@@ -238,8 +267,11 @@ const DriverLicenseAccordionPanel = forwardRef<
       })
       setMessage(result.message ?? "運転免許証を登録しました。")
       onComplete()
-    } catch {
+    } catch (error) {
       setMessage("保存できませんでした。")
+      report_scan_failure("save_failed", {
+        message: error instanceof Error ? error.message : "save_failed",
+      })
     } finally {
       setIsSubmitting(false)
     }
@@ -267,8 +299,13 @@ const DriverLicenseAccordionPanel = forwardRef<
       })
 
       if (!result.ok) {
-        setMessage(result.message)
-        handle_ocr_flow_event("flow_failed")
+        void send_ocr_debug("OCR_ANALYZE_UNREADABLE", {
+          document_type: "driver_license_front",
+          message: result.message,
+        })
+        report_scan_failure("ocr_unreadable", {
+          message: result.message,
+        })
         return
       }
 
@@ -279,6 +316,25 @@ const DriverLicenseAccordionPanel = forwardRef<
         warnings: result.warnings,
       })
 
+      const has_result = has_ocr_license_result({
+        parsed: result.parsed,
+        confidence: result.confidence,
+      })
+
+      if (!has_result) {
+        void send_ocr_debug("OCR_ANALYZE_UNREADABLE", {
+          document_type: "driver_license_front",
+          confidence: result.confidence,
+          warnings: result.warnings,
+          parsed: result.parsed,
+        })
+        report_scan_failure("ocr_unreadable", {
+          confidence: result.confidence,
+          warnings: result.warnings,
+        })
+        return
+      }
+
       handle_ocr_flow_event("fill_started")
       void send_ocr_debug("OCR_FORM_FILL_STARTED", {
         document_type: "driver_license_front",
@@ -288,11 +344,6 @@ const DriverLicenseAccordionPanel = forwardRef<
         parsed: result.parsed,
       })
 
-      const has_result = has_ocr_license_result({
-        parsed: result.parsed,
-        confidence: result.confidence,
-      })
-
       setForm(next_form)
 
       void send_ocr_debug("OCR_FORM_FILL_COMPLETED", {
@@ -300,7 +351,8 @@ const DriverLicenseAccordionPanel = forwardRef<
         has_result,
         target_fields: Object.keys(next_form),
       })
-      handle_ocr_flow_event(has_result ? "flow_completed" : "flow_failed")
+      setOcrFailureType(null)
+      handle_ocr_flow_event("flow_completed")
 
       if (result.saved) {
         console.log("[OCR_FLOW] progress_update", {
@@ -322,12 +374,13 @@ const DriverLicenseAccordionPanel = forwardRef<
         onComplete()
       }
     } catch (error) {
-      handle_ocr_flow_event("flow_failed")
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "OCR読み込みに失敗しました。",
-      )
+      void send_ocr_debug("OCR_ANALYZE_UNREADABLE", {
+        document_type: "driver_license_front",
+        message: error instanceof Error ? error.message : "ocr_failed",
+      })
+      report_scan_failure("ocr_unreadable", {
+        message: error instanceof Error ? error.message : "ocr_failed",
+      })
     } finally {
       setOcrLoading(false)
     }
@@ -340,6 +393,73 @@ const DriverLicenseAccordionPanel = forwardRef<
     setScannerRunning(false)
     setImageUrl(input.image_url)
     await request_ocr(input.image_url, input.source)
+  }
+
+  function begin_retry(source: "camera" | "image_upload") {
+    void send_ocr_debug("OCR_RETRY_REQUESTED", {
+      document_type: "driver_license_front",
+      failure_type: ocr_failure_type,
+      source,
+    })
+    scanner_ref.current?.prepare_retry()
+    handle_ocr_flow_event("retry_requested")
+    setOcrFailureType(null)
+    setMessage(null)
+    setOcrLoading(false)
+  }
+
+  function retry_scan() {
+    begin_retry("camera")
+    setImageUrl("")
+
+    window.requestAnimationFrame(() => {
+      void send_ocr_debug("OCR_RETRY_RESET_COMPLETED", {
+        document_type: "driver_license_front",
+      })
+
+      const scanner = scanner_ref.current
+
+      if (!scanner) {
+        report_scan_failure("camera_failed", {
+          message: "scanner_not_mounted_after_retry",
+        })
+        return
+      }
+
+      void send_ocr_debug("OCR_RETRY_CAMERA_RESTART", {
+        document_type: "driver_license_front",
+      })
+      void scanner.open_from_user_gesture()
+    })
+  }
+
+  async function handle_failed_image_select(
+    event: ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = event.target.files?.[0]
+
+    if (!file) {
+      return
+    }
+
+    try {
+      begin_retry("image_upload")
+      const next_image_url = await read_file_as_data_url(file)
+      void send_ocr_debug("OCR_RETRY_RESET_COMPLETED", {
+        document_type: "driver_license_front",
+        source: "image_upload",
+      })
+      await handle_capture({
+        image_url: next_image_url,
+        source: "image_upload",
+      })
+    } catch (error) {
+      report_scan_failure("capture_failed", {
+        message: error instanceof Error ? error.message : "file_read_failed",
+      })
+    } finally {
+      event.target.value = ""
+    }
   }
 
   async function submit_license() {
@@ -376,7 +496,10 @@ const DriverLicenseAccordionPanel = forwardRef<
             ) : (
               <span>画像を読み込みました</span>
             )}
-            <OcrFlowStatus state={ocr_flow_state} />
+            <OcrFlowStatus
+              state={ocr_flow_state}
+              failure_type={ocr_failure_type}
+            />
           </div>
         ) : (
           <DocumentScanner
@@ -386,9 +509,32 @@ const DriverLicenseAccordionPanel = forwardRef<
             on_running_change={handle_scanner_running_change}
             flow_state={ocr_flow_state}
             on_flow_event={handle_ocr_flow_event}
+            failure_type={ocr_failure_type}
+            on_failure={report_scan_failure}
             disabled={isSubmitting || ocr_loading}
           />
         )}
+
+        {ocr_flow_state === "failed" ? (
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={retry_scan}
+              className="rounded-full bg-neutral-900 px-3 py-2.5 text-sm font-semibold text-white"
+            >
+              もう一度スキャン
+            </button>
+            <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-neutral-300 px-3 py-2.5 text-sm font-semibold text-neutral-800">
+              画像を選択
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) => void handle_failed_image_select(event)}
+                className="sr-only"
+              />
+            </label>
+          </div>
+        ) : null}
       </section>
 
       <section className="space-y-3">
