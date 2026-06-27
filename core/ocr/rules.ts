@@ -48,7 +48,10 @@ export const OCR_GUIDANCE: Record<string, string> = {
   document_missing: "枠内に合わせてください",
 }
 
-export const OCR_AUTO_CAPTURE_STABLE_MS = 500
+export const OCR_AUTO_CAPTURE_DELAY_MS = 2_000
+export const OCR_AUTO_CAPTURE_STABLE_MS = 1_500
+export const OCR_AUTO_CAPTURE_REQUIRED_VALID_FRAMES = 5
+export const OCR_CAPTURE_COOLDOWN_MS = 3_000
 export const OCR_AUTO_CAPTURE_MIN_SCORE = 0.72
 export const OCR_AUTO_SCAN_TIMEOUT_MS = 45_000
 

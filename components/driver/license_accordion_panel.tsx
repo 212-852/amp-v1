@@ -26,7 +26,9 @@ import {
 import {
   reduce_ocr_flow,
   type OcrFlowEvent,
+  type OcrFlowState,
 } from "@/core/ocr/flow"
+import { send_ocr_debug } from "@/core/ocr/debug"
 
 type LicenseFormFields = {
   license_name: string
@@ -104,6 +106,8 @@ const DriverLicenseAccordionPanel = forwardRef<
     reduce_ocr_flow,
     "idle",
   )
+  const ocr_flow_state_ref = useRef<OcrFlowState>(ocr_flow_state)
+  ocr_flow_state_ref.current = ocr_flow_state
   const [image_url, setImageUrl] = useState(initial_entry?.image_url ?? "")
   const [form, setForm] = useState<LicenseFormFields>(() => form_from_entry(initial_entry))
   const [scanner_running, setScannerRunning] = useState(false)
@@ -156,7 +160,16 @@ const DriverLicenseAccordionPanel = forwardRef<
   }, [])
 
   const handle_ocr_flow_event = useCallback((event: OcrFlowEvent) => {
+    const previous_state = ocr_flow_state_ref.current
+    const next_state = reduce_ocr_flow(previous_state, event)
+    ocr_flow_state_ref.current = next_state
     dispatch_ocr_flow(event)
+    void send_ocr_debug("OCR_SCAN_STATE_CHANGED", {
+      document_type: "driver_license_front",
+      previous_state,
+      next_state,
+      event,
+    })
   }, [])
 
   async function save_license(input: {
@@ -236,7 +249,11 @@ const DriverLicenseAccordionPanel = forwardRef<
     setScannerRunning(false)
     setOcrLoading(true)
     setMessage(null)
-    dispatch_ocr_flow("analyze_started")
+    handle_ocr_flow_event("analyze_started")
+    void send_ocr_debug("OCR_ANALYZE_STARTED", {
+      document_type: "driver_license_front",
+      source,
+    })
     console.log("[OCR_FLOW] analyze_start", {
       document_type: "driver_license_front",
       source,
@@ -251,7 +268,7 @@ const DriverLicenseAccordionPanel = forwardRef<
 
       if (!result.ok) {
         setMessage(result.message)
-        dispatch_ocr_flow("flow_failed")
+        handle_ocr_flow_event("flow_failed")
         return
       }
 
@@ -262,7 +279,10 @@ const DriverLicenseAccordionPanel = forwardRef<
         warnings: result.warnings,
       })
 
-      dispatch_ocr_flow("fill_started")
+      handle_ocr_flow_event("fill_started")
+      void send_ocr_debug("OCR_FORM_FILL_STARTED", {
+        document_type: "driver_license_front",
+      })
       const next_form = apply_ocr_to_license_form({
         current: form,
         parsed: result.parsed,
@@ -275,7 +295,12 @@ const DriverLicenseAccordionPanel = forwardRef<
 
       setForm(next_form)
 
-      dispatch_ocr_flow(has_result ? "flow_completed" : "flow_failed")
+      void send_ocr_debug("OCR_FORM_FILL_COMPLETED", {
+        document_type: "driver_license_front",
+        has_result,
+        target_fields: Object.keys(next_form),
+      })
+      handle_ocr_flow_event(has_result ? "flow_completed" : "flow_failed")
 
       if (result.saved) {
         console.log("[OCR_FLOW] progress_update", {
@@ -297,7 +322,7 @@ const DriverLicenseAccordionPanel = forwardRef<
         onComplete()
       }
     } catch (error) {
-      dispatch_ocr_flow("flow_failed")
+      handle_ocr_flow_event("flow_failed")
       setMessage(
         error instanceof Error
           ? error.message

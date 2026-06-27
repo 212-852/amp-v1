@@ -1,10 +1,10 @@
 export type OcrFlowState =
   | "idle"
-  | "starting_camera"
-  | "camera_preparing"
+  | "camera_starting"
   | "camera_ready"
+  | "detecting"
+  | "ready_to_capture"
   | "capturing"
-  | "captured"
   | "analyzing"
   | "filling_form"
   | "completed"
@@ -12,10 +12,10 @@ export type OcrFlowState =
 
 export type OcrFlowEvent =
   | "scan_requested"
-  | "stream_attached"
   | "camera_started"
+  | "detection_started"
+  | "document_stable"
   | "capture_started"
-  | "capture_completed"
   | "analyze_started"
   | "fill_started"
   | "flow_completed"
@@ -34,35 +34,35 @@ const OCR_FLOW_STATUS: Record<OcrFlowState, OcrFlowStatus> = {
     description: "スキャンを開始してください",
     progress: 0,
   },
-  starting_camera: {
+  camera_starting: {
     label: "Camera starting…",
     description: "カメラを起動しています",
-    progress: 20,
-  },
-  camera_preparing: {
-    label: "Camera starting…",
-    description: "カメラ映像を準備しています",
-    progress: 20,
+    progress: 10,
   },
   camera_ready: {
     label: "Camera ready",
-    description: "免許証を撮影してください",
+    description: "免許証を枠内に合わせてください",
     progress: 20,
+  },
+  detecting: {
+    label: "Detecting…",
+    description: "枠内で止めてください",
+    progress: 30,
+  },
+  ready_to_capture: {
+    label: "Ready to capture",
+    description: "そのまま動かさないでください",
+    progress: 45,
   },
   capturing: {
     label: "Capturing…",
-    description: "画像を取得しています",
-    progress: 40,
-  },
-  captured: {
-    label: "Image captured",
-    description: "画像を取得しました",
-    progress: 40,
+    description: "撮影しています",
+    progress: 60,
   },
   analyzing: {
     label: "Analyzing…",
     description: "文字を解析しています",
-    progress: 70,
+    progress: 80,
   },
   filling_form: {
     label: "Applying…",
@@ -76,17 +76,17 @@ const OCR_FLOW_STATUS: Record<OcrFlowState, OcrFlowStatus> = {
   },
   error: {
     label: "Failed",
-    description: "処理に失敗しました。もう一度お試しください",
+    description: "読み込みできませんでした",
     progress: 0,
   },
 }
 
 const EVENT_STATE: Record<OcrFlowEvent, OcrFlowState> = {
-  scan_requested: "starting_camera",
-  stream_attached: "camera_preparing",
+  scan_requested: "camera_starting",
   camera_started: "camera_ready",
+  detection_started: "detecting",
+  document_stable: "ready_to_capture",
   capture_started: "capturing",
-  capture_completed: "captured",
   analyze_started: "analyzing",
   fill_started: "filling_form",
   flow_completed: "completed",
@@ -100,7 +100,7 @@ export function reduce_ocr_flow(
 ): OcrFlowState {
   const next = EVENT_STATE[event]
 
-  if (current === "completed" && event !== "scan_requested" && event !== "flow_reset") {
+  if (current === "completed" && event !== "flow_reset") {
     return current
   }
 
@@ -113,11 +113,11 @@ export function get_ocr_flow_status(state: OcrFlowState): OcrFlowStatus {
 
 export function is_ocr_camera_start_blocked(state: OcrFlowState) {
   return (
-    state === "starting_camera" ||
-    state === "camera_preparing" ||
+    state === "camera_starting" ||
     state === "camera_ready" ||
+    state === "detecting" ||
+    state === "ready_to_capture" ||
     state === "capturing" ||
-    state === "captured" ||
     state === "analyzing" ||
     state === "filling_form" ||
     state === "completed"

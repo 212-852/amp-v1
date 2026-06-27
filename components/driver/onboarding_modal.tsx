@@ -17,7 +17,6 @@ const OCR_ACCORDION_STORAGE_KEY = "amp_driver_ocr_expanded_key"
 
 type AccordionCloseReason =
   | "user_toggle"
-  | "ocr_success"
   | "data_refresh"
 
 function read_stored_expanded_key(): DriverProgressKey | null {
@@ -167,7 +166,6 @@ export default function DriverOnboardingModal({
 
   function handleLicenseComplete() {
     setOcrRunning(false)
-    set_expanded_key(null, { close_reason: "ocr_success" })
     router.refresh()
   }
 

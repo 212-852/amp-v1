@@ -1,6 +1,7 @@
 import {
-  OCR_AUTO_CAPTURE_MIN_SCORE,
+  OCR_AUTO_CAPTURE_REQUIRED_VALID_FRAMES,
   OCR_AUTO_CAPTURE_STABLE_MS,
+  OCR_AUTO_CAPTURE_MIN_SCORE,
   resolve_guidance_message,
   type OcrDocumentType,
   OCR_FRAME_ASPECT,
@@ -44,9 +45,14 @@ export type FrameQualityIssue =
 export type FrameQualityResult = {
   score: number
   ready: boolean
+  is_inside_guide_frame: boolean
+  is_stable: boolean
+  is_brightness_ok: boolean
+  is_blur_ok: boolean
   issues: FrameQualityIssue[]
   guidance_key: string
   guidance_message: string
+  frame_signature: number[]
 }
 
 export type OcrCameraStartInput = {
@@ -61,6 +67,72 @@ export type OcrCameraStartResult = {
   error_name: string | null
   error_message: string | null
   error_kind: OcrCameraErrorKind | null
+}
+
+export type AutoCaptureFrameDecision = {
+  should_capture: boolean
+  rejection:
+    | "initial_delay"
+    | "not_in_guide"
+    | "moving"
+    | "blur"
+    | "brightness"
+    | null
+  valid_frame_count: number
+  stable_started_at: number | null
+  stable_ms: number
+}
+
+export function evaluate_auto_capture_frame(input: {
+  frame_result: FrameQualityResult
+  now: number
+  enabled_at: number | null
+  valid_frame_count: number
+  stable_started_at: number | null
+}): AutoCaptureFrameDecision {
+  if (input.enabled_at == null || input.now < input.enabled_at) {
+    return {
+      should_capture: false,
+      rejection: "initial_delay",
+      valid_frame_count: 0,
+      stable_started_at: null,
+      stable_ms: 0,
+    }
+  }
+
+  const rejection = !input.frame_result.is_inside_guide_frame
+    ? "not_in_guide"
+    : !input.frame_result.is_stable
+      ? "moving"
+      : !input.frame_result.is_blur_ok
+        ? "blur"
+        : !input.frame_result.is_brightness_ok
+          ? "brightness"
+          : null
+
+  if (rejection) {
+    return {
+      should_capture: false,
+      rejection,
+      valid_frame_count: 0,
+      stable_started_at: null,
+      stable_ms: 0,
+    }
+  }
+
+  const valid_frame_count = input.valid_frame_count + 1
+  const stable_started_at = input.stable_started_at ?? input.now
+  const stable_ms = input.now - stable_started_at
+
+  return {
+    should_capture:
+      valid_frame_count >= OCR_AUTO_CAPTURE_REQUIRED_VALID_FRAMES &&
+      stable_ms >= OCR_AUTO_CAPTURE_STABLE_MS,
+    rejection: null,
+    valid_frame_count,
+    stable_started_at,
+    stable_ms,
+  }
 }
 
 function build_camera_debug_payload(input: {
@@ -227,40 +299,38 @@ export function start_auto_scan(input: {
   video: HTMLVideoElement
   frame: FrameRect
   on_quality: (quality: FrameQualityResult) => void
-  on_capture: (image_url: string) => void
-  stable_ms?: number
   is_cancelled?: () => boolean
 }) {
-  const stable_ms = input.stable_ms ?? OCR_AUTO_CAPTURE_STABLE_MS
-  let stable_since: number | null = null
   let animation_id = 0
+  let last_sample_at = 0
+  let previous_signature: number[] | null = null
 
-  const tick = () => {
+  const tick = (now: number) => {
     if (input.is_cancelled?.()) {
       return
     }
 
-    if (input.video.readyState >= 2 && input.frame.width > 0) {
-      const next_quality = sample_video_frame_quality({
+    if (
+      now - last_sample_at >= 100 &&
+      input.video.readyState >= 2 &&
+      input.frame.width > 0
+    ) {
+      last_sample_at = now
+      const sampled = sample_video_frame_quality({
         video: input.video,
         frame: input.frame,
       })
-      input.on_quality(next_quality)
+      const motion_score = previous_signature
+        ? sampled.frame_signature.reduce((sum, value, index) => {
+            return sum + Math.abs(value - (previous_signature?.[index] ?? value))
+          }, 0) / Math.max(1, sampled.frame_signature.length)
+        : Number.POSITIVE_INFINITY
 
-      if (next_quality.ready) {
-        if (stable_since == null) {
-          stable_since = performance.now()
-        } else if (performance.now() - stable_since >= stable_ms) {
-          const image_url = capture_video_frame({
-            video: input.video,
-            frame: input.frame,
-          })
-          input.on_capture(image_url)
-          return
-        }
-      } else {
-        stable_since = null
-      }
+      previous_signature = sampled.frame_signature
+      input.on_quality({
+        ...sampled,
+        is_stable: motion_score <= 5,
+      })
     }
 
     animation_id = window.requestAnimationFrame(tick)
@@ -326,6 +396,10 @@ function sample_frame_pixels(image_data: ImageData, frame: FrameRect) {
 
   let laplacian_sum = 0
   let laplacian_count = 0
+  const quadrant_laplacian_sum = [0, 0, 0, 0]
+  const quadrant_laplacian_count = [0, 0, 0, 0]
+  const center_x = left + (right - left) / 2
+  const center_y = top + (bottom - top) / 2
 
   for (let y = top + 1; y < bottom - 1; y += 2) {
     for (let x = left + 1; x < right - 1; x += 2) {
@@ -357,16 +431,33 @@ function sample_frame_pixels(image_data: ImageData, frame: FrameRect) {
       const laplacian = Math.abs(4 * center - up - down - left_px - right_px)
       laplacian_sum += laplacian
       laplacian_count += 1
+      const quadrant = (y >= center_y ? 2 : 0) + (x >= center_x ? 1 : 0)
+      quadrant_laplacian_sum[quadrant] =
+        (quadrant_laplacian_sum[quadrant] ?? 0) + laplacian
+      quadrant_laplacian_count[quadrant] =
+        (quadrant_laplacian_count[quadrant] ?? 0) + 1
     }
   }
 
   const blur_score = laplacian_count > 0 ? laplacian_sum / laplacian_count : 0
+  const document_coverage_ratio = quadrant_laplacian_sum.filter((sum, index) => {
+    const quadrant_count = quadrant_laplacian_count[index] ?? 0
+    return quadrant_count > 0 && sum / quadrant_count >= 6
+  }).length / 4
 
   return {
     average_brightness,
     edge_density,
     glare_ratio,
     blur_score,
+    document_coverage_ratio,
+    frame_signature: Array.from({ length: 64 }, (_, index) => {
+      const signature_index = Math.min(
+        grayscale.length - 1,
+        Math.floor((index / 64) * grayscale.length),
+      )
+      return grayscale[Math.max(0, signature_index)] ?? 0
+    }),
   }
 }
 
@@ -405,7 +496,7 @@ export function evaluate_frame_quality(
   const metrics = sample_frame_pixels(image_data, frame)
   const issues: FrameQualityIssue[] = []
 
-  if (metrics.edge_density < 8) {
+  if (metrics.edge_density < 8 || metrics.document_coverage_ratio < 0.75) {
     issues.push("document_missing")
   }
 
@@ -452,9 +543,18 @@ export function evaluate_frame_quality(
   return {
     score,
     ready: score >= OCR_AUTO_CAPTURE_MIN_SCORE,
+    is_inside_guide_frame:
+      !issues.includes("document_missing") && !issues.includes("too_tilted"),
+    is_stable: false,
+    is_brightness_ok:
+      !issues.includes("too_dark") &&
+      !issues.includes("too_bright") &&
+      !issues.includes("too_reflective"),
+    is_blur_ok: !issues.includes("too_blurry"),
     issues,
     guidance_key,
     guidance_message: resolve_guidance_message(guidance_key),
+    frame_signature: metrics.frame_signature,
   }
 }
 
@@ -483,13 +583,54 @@ export async function read_file_as_data_url(file: File) {
   })
 }
 
+function map_display_frame_to_video(
+  video: HTMLVideoElement,
+  frame: FrameRect,
+): FrameRect {
+  const display_width = video.clientWidth
+  const display_height = video.clientHeight
+
+  if (
+    display_width <= 0 ||
+    display_height <= 0 ||
+    video.videoWidth <= 0 ||
+    video.videoHeight <= 0
+  ) {
+    return { x: 0, y: 0, width: 0, height: 0 }
+  }
+
+  const cover_scale = Math.max(
+    display_width / video.videoWidth,
+    display_height / video.videoHeight,
+  )
+  const rendered_width = video.videoWidth * cover_scale
+  const rendered_height = video.videoHeight * cover_scale
+  const crop_x = (rendered_width - display_width) / 2
+  const crop_y = (rendered_height - display_height) / 2
+  const x = clamp((frame.x + crop_x) / cover_scale, 0, video.videoWidth - 1)
+  const y = clamp((frame.y + crop_y) / cover_scale, 0, video.videoHeight - 1)
+
+  return {
+    x,
+    y,
+    width: clamp(frame.width / cover_scale, 1, video.videoWidth - x),
+    height: clamp(frame.height / cover_scale, 1, video.videoHeight - y),
+  }
+}
+
 export function capture_video_frame(input: {
   video: HTMLVideoElement
   frame: FrameRect
 }) {
+  const source_frame = map_display_frame_to_video(input.video, input.frame)
+
+  if (source_frame.width <= 0 || source_frame.height <= 0) {
+    throw new Error("Video frame is not ready")
+  }
+
   const canvas = document.createElement("canvas")
-  canvas.width = Math.floor(input.frame.width)
-  canvas.height = Math.floor(input.frame.height)
+  canvas.width = Math.floor(source_frame.width)
+  canvas.height = Math.floor(source_frame.height)
 
   const context = canvas.getContext("2d")
 
@@ -499,14 +640,14 @@ export function capture_video_frame(input: {
 
   context.drawImage(
     input.video,
-    input.frame.x,
-    input.frame.y,
-    input.frame.width,
-    input.frame.height,
+    source_frame.x,
+    source_frame.y,
+    source_frame.width,
+    source_frame.height,
     0,
     0,
-    input.frame.width,
-    input.frame.height,
+    source_frame.width,
+    source_frame.height,
   )
 
   return canvas.toDataURL("image/jpeg", 0.92)
@@ -516,32 +657,68 @@ export function sample_video_frame_quality(input: {
   video: HTMLVideoElement
   frame: FrameRect
 }) {
-  const canvas = document.createElement("canvas")
-  canvas.width = input.video.videoWidth
-  canvas.height = input.video.videoHeight
+  const source_frame = map_display_frame_to_video(input.video, input.frame)
 
-  const context = canvas.getContext("2d")
-
-  if (!context || canvas.width === 0 || canvas.height === 0) {
+  if (source_frame.width <= 0 || source_frame.height <= 0) {
     return {
       score: 0,
       ready: false,
+      is_inside_guide_frame: false,
+      is_stable: false,
+      is_brightness_ok: false,
+      is_blur_ok: false,
       issues: ["document_missing"] as FrameQualityIssue[],
       guidance_key: "align_frame",
       guidance_message: resolve_guidance_message("align_frame"),
+      frame_signature: [],
     } satisfies FrameQualityResult
   }
 
-  context.drawImage(input.video, 0, 0, canvas.width, canvas.height)
+  const canvas = document.createElement("canvas")
+  canvas.width = Math.min(480, Math.max(1, Math.floor(source_frame.width)))
+  canvas.height = Math.max(
+    1,
+    Math.floor(canvas.width * (source_frame.height / source_frame.width)),
+  )
+
+  const context = canvas.getContext("2d")
+
+  if (
+    !context ||
+    canvas.width === 0 ||
+    canvas.height === 0
+  ) {
+    return {
+      score: 0,
+      ready: false,
+      is_inside_guide_frame: false,
+      is_stable: false,
+      is_brightness_ok: false,
+      is_blur_ok: false,
+      issues: ["document_missing"] as FrameQualityIssue[],
+      guidance_key: "align_frame",
+      guidance_message: resolve_guidance_message("align_frame"),
+      frame_signature: [],
+    } satisfies FrameQualityResult
+  }
+
+  context.drawImage(
+    input.video,
+    source_frame.x,
+    source_frame.y,
+    source_frame.width,
+    source_frame.height,
+    0,
+    0,
+    canvas.width,
+    canvas.height,
+  )
   const image_data = context.getImageData(0, 0, canvas.width, canvas.height)
 
-  const scale_x = canvas.width / input.video.clientWidth
-  const scale_y = canvas.height / input.video.clientHeight
-
   return evaluate_frame_quality(image_data, {
-    x: input.frame.x * scale_x,
-    y: input.frame.y * scale_y,
-    width: input.frame.width * scale_x,
-    height: input.frame.height * scale_y,
+    x: 0,
+    y: 0,
+    width: canvas.width,
+    height: canvas.height,
   })
 }
