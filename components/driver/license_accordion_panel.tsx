@@ -160,8 +160,6 @@ const DriverLicenseAccordionPanel = forwardRef<
     const flow_blocks_data_close =
       ocr_flow_state === "camera_starting" ||
       ocr_flow_state === "camera_ready" ||
-      ocr_flow_state === "detecting" ||
-      ocr_flow_state === "ready_to_capture" ||
       ocr_flow_state === "capturing" ||
       ocr_flow_state === "analyzing" ||
       ocr_flow_state === "filling_form" ||
@@ -313,6 +311,10 @@ const DriverLicenseAccordionPanel = forwardRef<
       })
 
       if (!result.ok) {
+        void send_ocr_debug("OCR_ANALYZE_FAILED", {
+          document_type: "driver_license_front",
+          message: result.message,
+        })
         void send_ocr_debug("OCR_ANALYZE_UNREADABLE", {
           document_type: "driver_license_front",
           message: result.message,
@@ -410,6 +412,10 @@ const DriverLicenseAccordionPanel = forwardRef<
         handle_ocr_flow_event("flow_completed")
       }
     } catch (error) {
+      void send_ocr_debug("OCR_ANALYZE_FAILED", {
+        document_type: "driver_license_front",
+        message: error instanceof Error ? error.message : "ocr_failed",
+      })
       void send_ocr_debug("OCR_ANALYZE_UNREADABLE", {
         document_type: "driver_license_front",
         message: error instanceof Error ? error.message : "ocr_failed",

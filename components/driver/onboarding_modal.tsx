@@ -170,7 +170,6 @@ export default function DriverOnboardingModal({
   }
 
   function handleLicenseComplete() {
-    setOcrRunning(false)
     router.refresh()
   }
 
@@ -181,7 +180,14 @@ export default function DriverOnboardingModal({
   function handle_item_click(item: DriverChecklistItem) {
     const will_open = expanded_key !== item.key
 
-    if (ocr_running && expanded_key === "driver_license" && item.key !== "driver_license") {
+    if (ocr_running && expanded_key === "driver_license") {
+      void send_ocr_debug("OCR_ACCORDION_CLOSE_REQUESTED", {
+        key: expanded_key,
+        reason:
+          item.key === "driver_license"
+            ? "accordion_header"
+            : "accordion_switch",
+      })
       void send_ocr_debug("OCR_ACCORDION_CLOSE_BLOCKED", {
         key: expanded_key,
         reason: "ocr_flow_active",

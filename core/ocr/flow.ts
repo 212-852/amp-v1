@@ -2,8 +2,6 @@ export type OcrFlowState =
   | "idle"
   | "camera_starting"
   | "camera_ready"
-  | "detecting"
-  | "ready_to_capture"
   | "capturing"
   | "analyzing"
   | "filling_form"
@@ -20,8 +18,6 @@ export type OcrFailureType =
 export type OcrFlowEvent =
   | "scan_requested"
   | "camera_started"
-  | "detection_started"
-  | "document_stable"
   | "capture_started"
   | "analyze_started"
   | "fill_started"
@@ -52,16 +48,6 @@ const OCR_FLOW_STATUS: Record<OcrFlowState, OcrFlowStatus> = {
     description: "免許証を枠内に合わせてください",
     progress: 20,
   },
-  detecting: {
-    label: "Detecting…",
-    description: "枠内で止めてください",
-    progress: 30,
-  },
-  ready_to_capture: {
-    label: "Ready to capture",
-    description: "そのまま動かさないでください",
-    progress: 45,
-  },
   capturing: {
     label: "Capturing…",
     description: "撮影しています",
@@ -69,7 +55,7 @@ const OCR_FLOW_STATUS: Record<OcrFlowState, OcrFlowStatus> = {
   },
   analyzing: {
     label: "Analyzing…",
-    description: "文字を解析しています",
+    description: "文字を読み取っています",
     progress: 80,
   },
   filling_form: {
@@ -120,8 +106,6 @@ const OCR_FAILURE_STATUS: Record<OcrFailureType, OcrFlowStatus> = {
 const EVENT_STATE: Record<OcrFlowEvent, OcrFlowState> = {
   scan_requested: "camera_starting",
   camera_started: "camera_ready",
-  detection_started: "detecting",
-  document_stable: "ready_to_capture",
   capture_started: "capturing",
   analyze_started: "analyzing",
   fill_started: "filling_form",
@@ -171,8 +155,6 @@ export function is_ocr_camera_start_blocked(state: OcrFlowState) {
   return (
     state === "camera_starting" ||
     state === "camera_ready" ||
-    state === "detecting" ||
-    state === "ready_to_capture" ||
     state === "capturing" ||
     state === "analyzing" ||
     state === "filling_form" ||
