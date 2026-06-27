@@ -1,6 +1,7 @@
 export type OcrFlowState =
   | "idle"
   | "starting_camera"
+  | "camera_preparing"
   | "camera_ready"
   | "capturing"
   | "captured"
@@ -11,6 +12,7 @@ export type OcrFlowState =
 
 export type OcrFlowEvent =
   | "scan_requested"
+  | "stream_attached"
   | "camera_started"
   | "capture_started"
   | "capture_completed"
@@ -35,6 +37,11 @@ const OCR_FLOW_STATUS: Record<OcrFlowState, OcrFlowStatus> = {
   starting_camera: {
     label: "Camera starting…",
     description: "カメラを起動しています",
+    progress: 20,
+  },
+  camera_preparing: {
+    label: "Camera starting…",
+    description: "カメラ映像を準備しています",
     progress: 20,
   },
   camera_ready: {
@@ -76,6 +83,7 @@ const OCR_FLOW_STATUS: Record<OcrFlowState, OcrFlowStatus> = {
 
 const EVENT_STATE: Record<OcrFlowEvent, OcrFlowState> = {
   scan_requested: "starting_camera",
+  stream_attached: "camera_preparing",
   camera_started: "camera_ready",
   capture_started: "capturing",
   capture_completed: "captured",
@@ -106,6 +114,7 @@ export function get_ocr_flow_status(state: OcrFlowState): OcrFlowStatus {
 export function is_ocr_camera_start_blocked(state: OcrFlowState) {
   return (
     state === "starting_camera" ||
+    state === "camera_preparing" ||
     state === "camera_ready" ||
     state === "capturing" ||
     state === "captured" ||
