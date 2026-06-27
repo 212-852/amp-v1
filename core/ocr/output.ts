@@ -10,6 +10,9 @@ export type OcrOutput = {
   confidence?: number
   warnings?: string[]
   errors?: Record<string, string>
+  pipeline_steps?: OcrActionResult["pipeline_steps"]
+  pipeline_stopped_at?: string | null
+  pipeline_stop_reason?: string | null
 }
 
 export function build_ocr_validation_output(
@@ -41,5 +44,6 @@ export function build_ocr_success_output(result: OcrActionResult): OcrOutput {
     parsed: result.parsed,
     confidence: result.confidence,
     warnings: result.warnings,
+    pipeline_steps: result.pipeline_steps,
   }
 }

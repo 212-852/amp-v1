@@ -1,53 +1,34 @@
-import { empty_driver_license_fields } from "@/core/ocr/context"
+import { request_openai_chat_completion } from "@/core/ocr/openai"
+import { request_gemini_ocr } from "@/core/ocr/gemini"
+import {
+  is_provider_result_unreadable,
+  normalize_provider_parse_result,
+  OCR_FIELD_PROMPTS,
+  OCR_SYSTEM_PROMPT,
+} from "@/core/ocr/provider_shared"
+import {
+  read_fallback_provider,
+  read_primary_provider,
+  read_provider_api_key,
+  type OcrProviderName,
+} from "@/core/ocr/providers"
+import { send_ocr_server_debug } from "@/core/ocr/server_debug"
 import type { OcrDocumentType, OcrParseResult } from "@/core/ocr/rules"
 
-const OCR_FIELD_PROMPTS: Record<OcrDocumentType, string> = {
-  driver_license_front:
-    "Extract license_name, license_address, license_birth_date, license_number, and license_expiration_date. Dates must use YYYY-MM-DD. The license number must contain digits only.",
-  vehicle_inspection_certificate:
-    "Extract all clearly labeled vehicle inspection certificate fields using stable snake_case keys.",
-  black_plate:
-    "Extract all clearly visible black license plate fields using stable snake_case keys.",
-  safety_manager_document:
-    "Extract all clearly labeled safety manager document fields using stable snake_case keys.",
-}
-
-function read_json_object(value: string): Record<string, unknown> | null {
-  try {
-    const parsed = JSON.parse(value) as unknown
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : null
-  } catch {
-    return null
-  }
-}
-
-async function analyze_with_configured_provider(input: {
+async function analyze_with_openai(input: {
   document_type: OcrDocumentType
   image_url: string
-}): Promise<OcrParseResult | null> {
-  const api_key = process.env.OPENAI_API_KEY?.trim()
-
-  if (!api_key) {
-    return null
-  }
-
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${api_key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
+}): Promise<OcrParseResult> {
+  const payload = await request_openai_chat_completion({
+    document_type: input.document_type,
+    body: {
       model: process.env.OPENAI_OCR_MODEL ?? "gpt-4o-mini",
       temperature: 0,
       response_format: { type: "json_object" },
       messages: [
         {
           role: "system",
-          content:
-            "Read the supplied Japanese document. Return JSON with keys parsed, confidence, and warnings. parsed must be an object of strings, confidence must be from 0 to 1, and warnings must be an array of strings. Never infer a value that is not visible.",
+          content: OCR_SYSTEM_PROMPT,
         },
         {
           role: "user",
@@ -63,142 +44,156 @@ async function analyze_with_configured_provider(input: {
           ],
         },
       ],
-    }),
-    cache: "no-store",
+    },
   })
 
-  if (!response.ok) {
-    throw new Error(`OCR provider request failed (${response.status})`)
-  }
-
-  const payload = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string | null } }>
-  }
   const content = payload.choices?.[0]?.message?.content?.trim() ?? ""
-  const result = read_json_object(content)
-  const parsed = result?.parsed
-  const warnings = result?.warnings
 
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("OCR provider returned an invalid parsed result")
-  }
-
-  return {
-    parsed: Object.fromEntries(
-      Object.entries(parsed).flatMap(([key, value]) =>
-        typeof value === "string" ? [[key, value]] : [],
-      ),
-    ),
-    confidence:
-      typeof result.confidence === "number"
-        ? Math.min(1, Math.max(0, result.confidence))
-        : 0,
-    warnings: Array.isArray(warnings)
-      ? warnings.filter((warning): warning is string => typeof warning === "string")
-      : [],
-  }
+  return normalize_provider_parse_result(content)
 }
 
-async function parse_driver_license_front(
-  image_url: string,
-): Promise<OcrParseResult> {
-  const provider_result = await analyze_with_configured_provider({
-    document_type: "driver_license_front",
-    image_url,
+async function analyze_with_gemini(input: {
+  document_type: OcrDocumentType
+  image_url: string
+}): Promise<OcrParseResult> {
+  const response = await request_gemini_ocr({
+    document_type: input.document_type,
+    image_url: input.image_url,
+    prompt: `${OCR_SYSTEM_PROMPT}\n\n${OCR_FIELD_PROMPTS[input.document_type]}`,
   })
 
-  if (provider_result) {
-    return provider_result
-  }
-
-  return {
-    parsed: empty_driver_license_fields(),
-    confidence: 0,
-    warnings: ["OCR provider is not configured. Configure OPENAI_API_KEY."],
-  }
+  return normalize_provider_parse_result(response.content)
 }
 
-async function parse_vehicle_inspection_certificate(
-  image_url: string,
-): Promise<OcrParseResult> {
-  const provider_result = await analyze_with_configured_provider({
-    document_type: "vehicle_inspection_certificate",
-    image_url,
-  })
-
-  if (provider_result) {
-    return provider_result
+async function analyze_with_provider(input: {
+  provider: OcrProviderName
+  document_type: OcrDocumentType
+  image_url: string
+}): Promise<OcrParseResult> {
+  if (!read_provider_api_key(input.provider)) {
+    throw new Error(
+      input.provider === "openai"
+        ? "OPENAI_API_KEY is not configured"
+        : "GEMINI_API_KEY is not configured",
+    )
   }
 
-  return {
-    parsed: {},
-    confidence: 0,
-    warnings: ["Vehicle inspection OCR is not configured yet."],
-  }
-}
-
-async function parse_black_plate(_image_url: string): Promise<OcrParseResult> {
-  const provider_result = await analyze_with_configured_provider({
-    document_type: "black_plate",
-    image_url: _image_url,
-  })
-
-  if (provider_result) {
-    return provider_result
+  if (input.provider === "gemini") {
+    return analyze_with_gemini(input)
   }
 
-  return {
-    parsed: {},
-    confidence: 0,
-    warnings: ["Black plate OCR is not configured yet."],
-  }
-}
-
-async function parse_safety_manager_document(
-  image_url: string,
-): Promise<OcrParseResult> {
-  const provider_result = await analyze_with_configured_provider({
-    document_type: "safety_manager_document",
-    image_url,
-  })
-
-  if (provider_result) {
-    return provider_result
-  }
-
-  return {
-    parsed: {},
-    confidence: 0,
-    warnings: ["Safety manager document OCR is not configured yet."],
-  }
+  return analyze_with_openai(input)
 }
 
 export async function parse_document(input: {
   document_type: OcrDocumentType
   image_url: string
-}): Promise<OcrParseResult> {
-  let result: OcrParseResult
+}): Promise<OcrParseResult & { provider: OcrProviderName }> {
+  const primary_provider = read_primary_provider()
+  const fallback_provider = read_fallback_provider()
 
-  switch (input.document_type) {
-    case "driver_license_front":
-      result = await parse_driver_license_front(input.image_url)
-      break
-    case "vehicle_inspection_certificate":
-      result = await parse_vehicle_inspection_certificate(input.image_url)
-      break
-    case "black_plate":
-      result = await parse_black_plate(input.image_url)
-      break
-    case "safety_manager_document":
-      result = await parse_safety_manager_document(input.image_url)
-      break
-    default:
-      result = {
-        parsed: {},
-        confidence: 0,
-        warnings: ["Unsupported document type."],
+  await send_ocr_server_debug("OCR_PROVIDER_PRIMARY_STARTED", {
+    document_type: input.document_type,
+    provider: primary_provider,
+  })
+
+  let should_use_fallback = false
+
+  try {
+    const primary_result = await analyze_with_provider({
+      provider: primary_provider,
+      document_type: input.document_type,
+      image_url: input.image_url,
+    })
+
+    if (
+      is_provider_result_unreadable({
+        document_type: input.document_type,
+        result: primary_result,
+      })
+    ) {
+      await send_ocr_server_debug("OCR_PROVIDER_PRIMARY_UNREADABLE", {
+        document_type: input.document_type,
+        provider: primary_provider,
+        confidence: primary_result.confidence,
+        warnings: primary_result.warnings,
+      })
+      should_use_fallback = true
+    } else {
+      return {
+        ...primary_result,
+        provider: primary_provider,
       }
+    }
+  } catch (error) {
+    await send_ocr_server_debug("OCR_PROVIDER_PRIMARY_FAILED", {
+      document_type: input.document_type,
+      provider: primary_provider,
+      message: error instanceof Error ? error.message : "primary_provider_failed",
+    })
+    should_use_fallback = true
   }
 
-  return result
+  if (!should_use_fallback) {
+    throw new Error("Primary OCR provider did not return a readable result")
+  }
+
+  if (!fallback_provider || fallback_provider === primary_provider) {
+    throw new Error("OCR fallback provider is not configured")
+  }
+
+  await send_ocr_server_debug("OCR_PROVIDER_FALLBACK_STARTED", {
+    document_type: input.document_type,
+    provider: fallback_provider,
+  })
+
+  try {
+    const fallback_result = await analyze_with_provider({
+      provider: fallback_provider,
+      document_type: input.document_type,
+      image_url: input.image_url,
+    })
+
+    if (
+      is_provider_result_unreadable({
+        document_type: input.document_type,
+        result: fallback_result,
+      })
+    ) {
+      await send_ocr_server_debug("OCR_PROVIDER_FALLBACK_FAILED", {
+        document_type: input.document_type,
+        provider: fallback_provider,
+        reason: "unreadable",
+        confidence: fallback_result.confidence,
+        warnings: fallback_result.warnings,
+      })
+
+      throw new Error("Fallback OCR provider returned unreadable result")
+    }
+
+    await send_ocr_server_debug("OCR_PROVIDER_FALLBACK_SUCCESS", {
+      document_type: input.document_type,
+      provider: fallback_provider,
+      confidence: fallback_result.confidence,
+      warning_count: fallback_result.warnings.length,
+    })
+
+    return {
+      ...fallback_result,
+      provider: fallback_provider,
+    }
+  } catch (error) {
+    if (
+      !(error instanceof Error) ||
+      error.message !== "Fallback OCR provider returned unreadable result"
+    ) {
+      await send_ocr_server_debug("OCR_PROVIDER_FALLBACK_FAILED", {
+        document_type: input.document_type,
+        provider: fallback_provider,
+        message: error instanceof Error ? error.message : "fallback_provider_failed",
+      })
+    }
+
+    throw error
+  }
 }

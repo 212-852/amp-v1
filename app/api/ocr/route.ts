@@ -6,6 +6,7 @@ import { resolveSession } from "@/core/auth/session"
 import { can_update_driver_progress } from "@/core/driver/progress/rules"
 import { run_ocr } from "@/core/ocr/action"
 import { build_ocr_context } from "@/core/ocr/context"
+import { ensure_ocr_env_loaded } from "@/core/ocr/env"
 import {
   build_ocr_access_denied_output,
   build_ocr_success_output,
@@ -14,6 +15,8 @@ import {
 import { read_ocr_document_type, validate_ocr_request } from "@/core/ocr/rules"
 
 export async function POST(request: Request) {
+  ensure_ocr_env_loaded()
+
   try {
     const auth = await resolveAuthContext("/driver")
     const session = await resolveSession(auth)
@@ -57,11 +60,17 @@ export async function POST(request: Request) {
   } catch (error) {
     unstable_rethrow(error)
 
+    const message =
+      error instanceof Error ? error.message : "OCR読み込みに失敗しました。"
+
     return NextResponse.json(
       {
         ok: false,
-        message:
-          error instanceof Error ? error.message : "OCR読み込みに失敗しました。",
+        message,
+        pipeline_stopped_at: message.includes("OPENAI")
+          ? "OPENAI_REQUEST_STARTED"
+          : "OCR_ANALYZE_STARTED",
+        pipeline_stop_reason: message,
       },
       { status: 400 },
     )

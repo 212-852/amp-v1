@@ -107,6 +107,7 @@ export default function DriverOnboardingModal({
   )
   const [ocr_running, setOcrRunning] = useState(false)
   const license_panel_ref = useRef<DriverLicenseAccordionPanelHandle>(null)
+  const license_camera_started_ref = useRef(false)
   const item_refs = useRef<Partial<Record<DriverProgressKey, HTMLLIElement | null>>>({})
 
   useEffect(() => {
@@ -142,6 +143,22 @@ export default function DriverOnboardingModal({
       }
 
       if (
+        current_key === "driver_license" &&
+        ocr_running &&
+        next_key !== "driver_license"
+      ) {
+        void send_ocr_debug("OCR_ACCORDION_CLOSE_REQUESTED", {
+          key: current_key,
+          reason: options.close_reason ?? "ocr_flow_active",
+        })
+        void send_ocr_debug("OCR_ACCORDION_CLOSE_BLOCKED", {
+          key: current_key,
+          reason: "ocr_flow_active",
+        })
+        return current_key
+      }
+
+      if (
         options.close_reason === "data_refresh" &&
         current_key === "driver_license" &&
         ocr_running
@@ -161,6 +178,8 @@ export default function DriverOnboardingModal({
         if (next_key === "driver_license") {
           void send_ocr_debug("OCR_ACCORDION_OPEN", { key: next_key })
         }
+      } else if (current_key === "driver_license") {
+        license_camera_started_ref.current = false
       }
 
       store_expanded_key(next_key)
@@ -174,19 +193,21 @@ export default function DriverOnboardingModal({
   }
 
   function start_license_camera_once() {
+    if (license_camera_started_ref.current) {
+      return
+    }
+
+    license_camera_started_ref.current = true
     void license_panel_ref.current?.open_from_user_gesture()
   }
 
   function handle_item_click(item: DriverChecklistItem) {
     const will_open = expanded_key !== item.key
 
-    if (ocr_running && expanded_key === "driver_license") {
+    if (ocr_running) {
       void send_ocr_debug("OCR_ACCORDION_CLOSE_REQUESTED", {
         key: expanded_key,
-        reason:
-          item.key === "driver_license"
-            ? "accordion_header"
-            : "accordion_switch",
+        reason: item.key === expanded_key ? "accordion_header" : "accordion_switch",
       })
       void send_ocr_debug("OCR_ACCORDION_CLOSE_BLOCKED", {
         key: expanded_key,

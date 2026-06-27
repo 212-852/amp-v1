@@ -11,9 +11,12 @@ import {
   build_driver_progress_validation_output,
 } from "@/core/driver/progress/output"
 import { can_update_driver_progress } from "@/core/driver/progress/rules"
+import { ensure_ocr_env_loaded } from "@/core/ocr/env"
 import { read_ocr_document_type, validate_ocr_request } from "@/core/ocr/rules"
 
 export async function POST(request: Request) {
+  ensure_ocr_env_loaded()
+
   try {
     const auth = await resolveAuthContext("/driver")
     const session = await resolveSession(auth)

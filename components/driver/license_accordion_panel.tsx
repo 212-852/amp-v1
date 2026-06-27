@@ -21,10 +21,7 @@ import OcrFlowStatus from "@/components/ocr/flow_status"
 import { read_file_as_data_url } from "@/core/ocr/camera"
 import type { DriverProgressEntry } from "@/core/driver/context"
 import {
-  analyze_ocr_image,
-  apply_ocr_result_to_form,
-  has_ocr_license_result,
-  normalize_driver_license_result,
+  run_driver_license_ocr_pipeline,
   type OcrImageSource,
 } from "@/core/ocr/client"
 import {
@@ -298,128 +295,42 @@ const DriverLicenseAccordionPanel = forwardRef<
     setOcrLoading(true)
     setMessage(null)
     handle_ocr_flow_event("analyze_started")
-    void send_ocr_debug("OCR_ANALYZE_STARTED", {
-      document_type: "driver_license_front",
-      source,
-    })
 
     try {
-      const result = await analyze_ocr_image({
+      const result = await run_driver_license_ocr_pipeline({
         document_type: "driver_license_front",
         image_url: next_image_url,
         source,
+        current_form: form,
       })
 
       if (!result.ok) {
-        void send_ocr_debug("OCR_ANALYZE_FAILED", {
-          document_type: "driver_license_front",
-          message: result.message,
-        })
-        void send_ocr_debug("OCR_ANALYZE_UNREADABLE", {
-          document_type: "driver_license_front",
-          message: result.message,
-        })
-        report_scan_failure("ocr_unreadable", {
-          message: result.message,
-        })
-        return
-      }
-
-      void send_ocr_debug("OCR_ANALYZE_SUCCESS", {
-        document_type: "driver_license_front",
-        raw_result: result.parsed,
-        confidence: result.confidence,
-        warnings: result.warnings,
-      })
-
-      const normalized = normalize_driver_license_result(result.parsed)
-      void send_ocr_debug("OCR_NORMALIZE_SUCCESS", {
-        document_type: "driver_license_front",
-        normalized_result: normalized,
-      })
-
-      const has_result = has_ocr_license_result({
-        parsed: {
-          license_name: normalized.name,
-          license_address: normalized.address,
-          license_birth_date: normalized.birth_date,
-          license_number: normalized.license_number,
-          license_expiration_date: normalized.expiration_date,
-        },
-        confidence: result.confidence,
-      })
-
-      if (!has_result) {
-        void send_ocr_debug("OCR_ANALYZE_UNREADABLE", {
-          document_type: "driver_license_front",
-          confidence: result.confidence,
-          warnings: result.warnings,
-          parsed: result.parsed,
-        })
-        report_scan_failure("ocr_unreadable", {
-          confidence: result.confidence,
-          warnings: result.warnings,
-        })
+        report_scan_failure(
+          result.pipeline?.stopped_at === "OCR_SAVE_STARTED"
+            ? "save_failed"
+            : "ocr_unreadable",
+          {
+            message: result.message,
+            pipeline: result.pipeline ?? null,
+          },
+        )
         return
       }
 
       handle_ocr_flow_event("fill_started")
-      void send_ocr_debug("OCR_FORM_MAP_SUCCESS", {
-        document_type: "driver_license_front",
-        mapped_fields: {
-          name: normalized.name,
-          address: normalized.address,
-          birth_date: normalized.birth_date,
-          license_number: normalized.license_number,
-          expiration_date: normalized.expiration_date,
-        },
-      })
-      void send_ocr_debug("OCR_FORM_FILL_STARTED", {
-        document_type: "driver_license_front",
-      })
-      const next_form = apply_ocr_result_to_form({
-        current: form,
-        normalized,
-      })
-
-      setForm(next_form)
-
-      void send_ocr_debug("OCR_FORM_FILL_COMPLETED", {
-        document_type: "driver_license_front",
-        has_result,
-        target_fields: Object.keys(next_form),
-      })
+      setForm(result.parsed)
+      handle_ocr_flow_event("flow_completed")
       setOcrFailureType(null)
-
-      if (!form_is_complete(next_form)) {
-        void send_ocr_debug("OCR_ANALYZE_UNREADABLE", {
-          document_type: "driver_license_front",
-          reason: "required_fields_missing",
-          normalized_result: normalized,
-        })
-        report_scan_failure("ocr_unreadable", {
-          reason: "required_fields_missing",
-        })
-        return
-      }
-
-      const saved = await save_driver_readiness_answer({
-        next_image_url,
-        next_form,
+      setMessage(result.message ?? "運転免許証を登録しました。")
+      void send_ocr_debug("OCR_PROGRESS_REFRESH_STARTED", {
+        document_type: "driver_license_front",
       })
-
-      if (saved) {
-        handle_ocr_flow_event("flow_completed")
-      }
+      onComplete()
+      void send_ocr_debug("OCR_PROGRESS_REFRESH_COMPLETED", {
+        document_type: "driver_license_front",
+        progress_after: result.state ?? null,
+      })
     } catch (error) {
-      void send_ocr_debug("OCR_ANALYZE_FAILED", {
-        document_type: "driver_license_front",
-        message: error instanceof Error ? error.message : "ocr_failed",
-      })
-      void send_ocr_debug("OCR_ANALYZE_UNREADABLE", {
-        document_type: "driver_license_front",
-        message: error instanceof Error ? error.message : "ocr_failed",
-      })
       report_scan_failure("ocr_unreadable", {
         message: error instanceof Error ? error.message : "ocr_failed",
       })

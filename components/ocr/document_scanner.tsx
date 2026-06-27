@@ -1,6 +1,6 @@
 "use client"
 
-import type { ChangeEvent, MouseEvent } from "react"
+import type { ChangeEvent } from "react"
 import {
   forwardRef,
   useCallback,
@@ -14,9 +14,12 @@ import OcrCameraFallback from "@/components/ocr/camera_fallback"
 import OcrFlowStatus from "@/components/ocr/flow_status"
 import {
   capture_video_frame,
+  evaluate_auto_capture_frame,
   read_file_as_data_url,
   resolve_scanner_frame,
+  start_auto_scan,
   start_camera_from_user_gesture,
+  type FrameQualityResult,
   type FrameRect,
   type OcrCameraStartResult,
 } from "@/core/ocr/camera"
@@ -40,6 +43,7 @@ import {
 } from "@/core/ocr/flow"
 import type { OcrImageSource } from "@/core/ocr/client"
 import type { OcrDocumentType } from "@/core/ocr/rules"
+import { OCR_AUTO_CAPTURE_DELAY_MS } from "@/core/ocr/rules"
 
 export type DocumentScannerStartResult = OcrCameraStartResult
 export type OcrCameraStopReason =
@@ -109,6 +113,13 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
     const flow_state_ref = useRef<OcrFlowState>(flow_state)
     const camera_request_id_ref = useRef(0)
     const route_change_ref = useRef(false)
+    const stop_auto_scan_ref = useRef<(() => void) | null>(null)
+    const auto_capture_state_ref = useRef({
+      enabled_at: null as number | null,
+      valid_frame_count: 0,
+      stable_started_at: null as number | null,
+    })
+    const camera_start_once_ref = useRef(false)
     const on_capture_ref = useRef(on_capture)
     const on_running_change_ref = useRef(on_running_change)
     const on_flow_event_ref = useRef(on_flow_event)
@@ -134,6 +145,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
         return null
       })
     const [frame, setFrame] = useState<FrameRect>({ x: 0, y: 0, width: 0, height: 0 })
+    const [quality, setQuality] = useState<FrameQualityResult | null>(null)
 
     set_ocr_debug_context({
       component_instance_id: component_instance_id_ref.current,
@@ -168,6 +180,8 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
     const stop_camera = useCallback((reason: string, options?: {
       reset_flow?: boolean
     }) => {
+      stop_auto_scan_ref.current?.()
+      stop_auto_scan_ref.current = null
       debug_camera("OCR_CAMERA_STOP", { reason })
       camera_request_id_ref.current += 1
 
@@ -221,9 +235,25 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
         camera_state: flow_state_ref.current,
       })
 
+      if (camera_start_once_ref.current) {
+        debug_camera("OCR_CAMERA_START_SKIPPED", {
+          reason: "start_once_per_session",
+          camera_state: flow_state_ref.current,
+        })
+
+        return {
+          started: camera_ready_ref.current,
+          stream: stream_ref.current,
+          error: null,
+          error_name: null,
+          error_message: null,
+          error_kind: null,
+        }
+      }
+
       if (camera_starting_ref.current) {
         debug_camera("OCR_CAMERA_START_SKIPPED", {
-          reason: "already_starting_or_started",
+          reason: "already_starting",
           camera_state: flow_state_ref.current,
         })
 
@@ -297,6 +327,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
 
       capture_done_ref.current = false
       camera_starting_ref.current = true
+      camera_start_once_ref.current = true
       camera_ready_ref.current = false
       const request_id = camera_request_id_ref.current + 1
       camera_request_id_ref.current = request_id
@@ -413,6 +444,12 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
           capture_done_ref.current = false
           camera_starting_ref.current = false
           camera_ready_ref.current = false
+          camera_start_once_ref.current = false
+          auto_capture_state_ref.current = {
+            enabled_at: null,
+            valid_frame_count: 0,
+            stable_started_at: null,
+          }
         },
       }),
       [open_from_user_gesture, request_camera, stop_camera],
@@ -471,7 +508,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       }
     }, [])
 
-    const capture_once = useCallback(async (reason: "manual_button") => {
+    const capture_once = useCallback(async (reason: "auto_capture") => {
       if (capture_done_ref.current) {
         debug_camera("OCR_CAPTURE_SKIPPED_ALREADY_DONE", { reason })
         return
@@ -488,6 +525,8 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       }
 
       capture_done_ref.current = true
+      stop_auto_scan_ref.current?.()
+      stop_auto_scan_ref.current = null
       emit_flow_event("capture_started")
       debug_camera("OCR_CAPTURE_STARTED", { reason })
 
@@ -510,6 +549,78 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
         on_failure_ref.current("capture_failed")
       }
     }, [debug_camera, document_type, emit_flow_event, frame, stop_camera])
+
+    useEffect(() => {
+      if (!camera_active || capture_done_ref.current || fallback_reason) {
+        return
+      }
+
+      const video = video_ref.current
+
+      if (!video) {
+        return
+      }
+
+      auto_capture_state_ref.current = {
+        enabled_at: Date.now() + OCR_AUTO_CAPTURE_DELAY_MS,
+        valid_frame_count: 0,
+        stable_started_at: null,
+      }
+
+      debug_camera("OCR_AUTO_CAPTURE_DISABLED_INITIAL_DELAY", {
+        delay_ms: OCR_AUTO_CAPTURE_DELAY_MS,
+      })
+
+      stop_auto_scan_ref.current?.()
+      stop_auto_scan_ref.current = start_auto_scan({
+        video,
+        frame,
+        on_quality: (next_quality) => {
+          setQuality(next_quality)
+
+          const decision = evaluate_auto_capture_frame({
+            frame_result: next_quality,
+            now: Date.now(),
+            enabled_at: auto_capture_state_ref.current.enabled_at,
+            valid_frame_count: auto_capture_state_ref.current.valid_frame_count,
+            stable_started_at: auto_capture_state_ref.current.stable_started_at,
+          })
+
+          if (decision.rejection === "not_in_guide") {
+            debug_camera("OCR_FRAME_REJECTED_NOT_IN_GUIDE", {
+              guidance_key: next_quality.guidance_key,
+            })
+          } else if (decision.rejection === "moving") {
+            debug_camera("OCR_FRAME_REJECTED_MOVING", {
+              guidance_key: next_quality.guidance_key,
+            })
+          } else if (decision.rejection === "blur") {
+            debug_camera("OCR_FRAME_REJECTED_BLUR", {
+              guidance_key: next_quality.guidance_key,
+            })
+          } else if (decision.rejection === "brightness") {
+            debug_camera("OCR_FRAME_REJECTED_DARK", {
+              guidance_key: next_quality.guidance_key,
+            })
+          } else if (decision.should_capture) {
+            debug_camera("OCR_AUTO_CAPTURE_READY", {
+              valid_frame_count: decision.valid_frame_count,
+              stable_ms: decision.stable_ms,
+            })
+            void capture_once("auto_capture")
+          }
+
+          auto_capture_state_ref.current.valid_frame_count = decision.valid_frame_count
+          auto_capture_state_ref.current.stable_started_at = decision.stable_started_at
+        },
+        is_cancelled: () => capture_done_ref.current,
+      })
+
+      return () => {
+        stop_auto_scan_ref.current?.()
+        stop_auto_scan_ref.current = null
+      }
+    }, [camera_active, capture_once, debug_camera, fallback_reason, frame])
 
     async function handle_file_select(file: File) {
       debug_camera("OCR_CAPTURE_STARTED", { reason: "image_upload" })
@@ -551,16 +662,8 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       mark_camera_ready()
     }
 
-    function handle_capture_button_click(event: MouseEvent<HTMLButtonElement>) {
-      event.preventDefault()
-      event.stopPropagation()
-      debug_camera("OCR_CAPTURE_BUTTON_CLICKED", {
-        reason: "manual_button",
-      })
-      void capture_once("manual_button")
-    }
-
-    const guidance = "免許証を枠内に合わせてください"
+    const guidance =
+      quality?.guidance_message ?? "免許証を枠内に合わせてください"
 
     if (fallback_reason) {
       return (
@@ -638,15 +741,6 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
               className="sr-only"
             />
           </label>
-        ) : camera_active ? (
-          <button
-            type="button"
-            disabled={disabled || capture_done_ref.current}
-            onClick={handle_capture_button_click}
-            className="inline-flex items-center justify-center rounded-full bg-neutral-900 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-          >
-            撮影して読み込む
-          </button>
         ) : null}
       </div>
     )

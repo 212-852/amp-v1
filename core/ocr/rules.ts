@@ -128,6 +128,26 @@ export function validate_license_save(input: {
   } satisfies OcrValidationResult
 }
 
+export function is_ocr_parse_readable(input: {
+  document_type: OcrDocumentType
+  parsed: Record<string, string>
+  confidence: number
+}) {
+  void input.confidence
+
+  if (input.document_type === "driver_license_front") {
+    return (
+      Boolean(input.parsed.license_name) ||
+      Boolean(input.parsed.license_number) ||
+      Boolean(input.parsed.license_address) ||
+      Boolean(input.parsed.license_birth_date) ||
+      Boolean(input.parsed.license_expiration_date)
+    )
+  }
+
+  return Object.values(input.parsed).some((value) => Boolean(value.trim()))
+}
+
 export function resolve_guidance_message(guidance_key: string) {
   return OCR_GUIDANCE[guidance_key] ?? OCR_GUIDANCE.align_frame
 }
