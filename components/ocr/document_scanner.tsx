@@ -67,6 +67,8 @@ export type DocumentScannerHandle = {
 
 type DocumentScannerProps = {
   document_type: OcrDocumentType
+  is_open?: boolean
+  accordion_locked?: boolean
   on_capture: (input: {
     image_url: string
     source: OcrImageSource
@@ -74,6 +76,8 @@ type DocumentScannerProps = {
   on_running_change?: (running: boolean) => void
   flow_state: OcrFlowState
   on_flow_event: (event: OcrFlowEvent) => void
+  on_lock?: () => void
+  on_unlock?: () => void
   failure_type?: OcrFailureType | null
   on_failure: (failure_type: OcrFailureType) => void
   disabled?: boolean
@@ -94,10 +98,14 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
   function DocumentScanner(
     {
       document_type,
+      is_open = true,
+      accordion_locked = false,
       on_capture,
       on_running_change,
       flow_state,
       on_flow_event,
+      on_lock,
+      on_unlock,
       failure_type,
       on_failure,
       disabled = false,
@@ -127,6 +135,10 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
     const on_running_change_ref = useRef(on_running_change)
     const on_flow_event_ref = useRef(on_flow_event)
     const on_failure_ref = useRef(on_failure)
+    const on_lock_ref = useRef(on_lock)
+    const on_unlock_ref = useRef(on_unlock)
+    const ocr_locked_ref = useRef(false)
+    const is_open_ref = useRef(is_open)
     const stop_camera_ref = useRef<
       (reason: OcrCameraStopReason) => void
     >(() => undefined)
@@ -135,6 +147,19 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
     on_running_change_ref.current = on_running_change
     on_flow_event_ref.current = on_flow_event
     on_failure_ref.current = on_failure
+    on_lock_ref.current = on_lock
+    on_unlock_ref.current = on_unlock
+    is_open_ref.current = is_open
+
+    useEffect(() => {
+      ocr_locked_ref.current = accordion_locked
+    }, [accordion_locked])
+
+    useEffect(() => {
+      if (flow_state === "completed") {
+        ocr_locked_ref.current = false
+      }
+    }, [flow_state])
     flow_state_ref.current = flow_state
 
     const [upload_only] = useState(() => should_use_upload_only_for_ocr())
@@ -186,6 +211,17 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
     const stop_camera = useCallback((reason: string, options?: {
       reset_flow?: boolean
     }) => {
+      if (
+        ocr_locked_ref.current &&
+        (reason === "accordion_close" || reason === "component_unmount")
+      ) {
+        debug_camera("OCR_CAMERA_STOP_BLOCKED", {
+          reason,
+          scan_state: flow_state_ref.current,
+        })
+        return
+      }
+
       stop_auto_scan_ref.current?.()
       stop_auto_scan_ref.current = null
       debug_camera("OCR_CAMERA_STOP", { reason })
@@ -338,6 +374,8 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       const request_id = camera_request_id_ref.current + 1
       camera_request_id_ref.current = request_id
       on_running_change_ref.current?.(true)
+      ocr_locked_ref.current = true
+      on_lock_ref.current?.()
       emit_flow_event("scan_requested")
 
       try {
@@ -437,10 +475,22 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       () => ({
         open_from_user_gesture,
         start_camera: request_camera,
-        stop_camera: (reason) =>
+        stop_camera: (reason) => {
+          if (
+            ocr_locked_ref.current &&
+            (reason === "accordion_close" || reason === "component_unmount")
+          ) {
+            debug_camera("OCR_CAMERA_STOP_BLOCKED", {
+              reason,
+              scan_state: flow_state_ref.current,
+            })
+            return
+          }
+
           stop_camera(reason, {
             reset_flow: true,
-          }),
+          })
+        },
         prepare_retry: () => {
           stop_camera("retry")
           flow_state_ref.current = reduce_ocr_flow(
@@ -453,6 +503,8 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
           camera_start_once_ref.current = false
           detecting_started_ref.current = false
           ready_to_capture_emitted_ref.current = false
+          ocr_locked_ref.current = true
+          on_lock_ref.current?.()
           auto_capture_state_ref.current = {
             enabled_at: null,
             valid_frame_count: 0,
@@ -510,6 +562,15 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
           scan_state: flow_state_ref.current,
           camera_state: flow_state_ref.current,
         }
+
+        if (ocr_locked_ref.current) {
+          void send_ocr_debug("OCR_COMPONENT_UNMOUNT_BLOCKED", {
+            ...unmount_payload,
+            reason: "ocr_locked",
+          })
+          return
+        }
+
         void send_ocr_debug("OCR_COMPONENT_UNMOUNT", unmount_payload)
         stop_camera_ref.current(
           route_change_ref.current ? "route_change" : "component_unmount",

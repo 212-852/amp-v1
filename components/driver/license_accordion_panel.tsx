@@ -25,7 +25,6 @@ import {
   type OcrImageSource,
 } from "@/core/ocr/client"
 import {
-  is_ocr_accordion_locked,
   reduce_ocr_flow,
   type OcrFlowEvent,
   type OcrFailureType,
@@ -92,19 +91,33 @@ const DriverLicenseAccordionPanel = forwardRef<
   {
     current_answer: string
     initial_entry: DriverProgressEntry | null
-    on_ocr_running_change?: (running: boolean) => void
+    is_open: boolean
+    accordion_locked?: boolean
+    on_lock?: () => void
+    on_unlock?: () => void
+    on_cancel?: () => void
     onComplete: () => void
   }
 >(function DriverLicenseAccordionPanel(
   {
     current_answer,
     initial_entry,
-    on_ocr_running_change,
+    is_open,
+    accordion_locked = false,
+    on_lock,
+    on_unlock,
+    on_cancel,
     onComplete,
   },
   ref,
 ) {
   const scanner_ref = useRef<DocumentScannerHandle>(null)
+  const on_lock_ref = useRef(on_lock)
+  const on_unlock_ref = useRef(on_unlock)
+  const on_cancel_ref = useRef(on_cancel)
+  on_lock_ref.current = on_lock
+  on_unlock_ref.current = on_unlock
+  on_cancel_ref.current = on_cancel
   const [ocr_flow_state, dispatch_ocr_flow] = useReducer(
     reduce_ocr_flow,
     "idle",
@@ -155,10 +168,6 @@ const DriverLicenseAccordionPanel = forwardRef<
     [],
   )
 
-  useEffect(() => {
-    on_ocr_running_change?.(is_ocr_accordion_locked(ocr_flow_state))
-  }, [ocr_flow_state, on_ocr_running_change])
-
   const preview_url = useMemo(() => {
     if (!image_url.startsWith("data:")) {
       return null
@@ -176,6 +185,15 @@ const DriverLicenseAccordionPanel = forwardRef<
     const next_state = reduce_ocr_flow(previous_state, event)
     ocr_flow_state_ref.current = next_state
     dispatch_ocr_flow(event)
+
+    if (event === "scan_requested") {
+      on_lock_ref.current?.()
+    }
+
+    if (event === "flow_completed") {
+      on_unlock_ref.current?.()
+    }
+
     void send_ocr_debug("OCR_SCAN_STATE_CHANGED", {
       document_type: "driver_license_front",
       previous_state,
@@ -420,10 +438,11 @@ const DriverLicenseAccordionPanel = forwardRef<
     Boolean(image_url.trim()) && form_is_complete(form) && !isSubmitting && !ocr_loading
 
   const show_scanner =
-    ocr_flow_state === "failed" ||
-    ocr_flow_state === "retrying" ||
-    (ocr_flow_state !== "completed" &&
-      (ocr_flow_state !== "idle" || !image_url.trim()))
+    is_open &&
+    (ocr_flow_state === "failed" ||
+      ocr_flow_state === "retrying" ||
+      (ocr_flow_state !== "completed" &&
+        (ocr_flow_state !== "idle" || !image_url.trim())))
 
   return (
     <div className="space-y-3 border-t border-neutral-100 px-4 pb-4 pt-3">
@@ -443,10 +462,14 @@ const DriverLicenseAccordionPanel = forwardRef<
             key="driver_license_front"
             ref={scanner_ref}
             document_type="driver_license_front"
+            is_open={is_open}
+            accordion_locked={accordion_locked}
             on_capture={handle_capture}
             on_running_change={handle_scanner_running_change}
             flow_state={ocr_flow_state}
             on_flow_event={handle_ocr_flow_event}
+            on_lock={() => on_lock_ref.current?.()}
+            on_unlock={() => on_unlock_ref.current?.()}
             failure_type={ocr_failure_type}
             on_failure={report_scan_failure}
             disabled={isSubmitting || ocr_loading}

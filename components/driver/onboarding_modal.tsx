@@ -2,7 +2,7 @@
 
 import { CheckCircle2, XCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 
 import DriverLicenseAccordionPanel, {
   type DriverLicenseAccordionPanelHandle,
@@ -16,11 +16,7 @@ import { send_ocr_debug } from "@/core/ocr/debug"
 
 const OCR_ACCORDION_STORAGE_KEY = "amp_driver_ocr_expanded_key"
 
-type AccordionCloseReason =
-  | "accordion_close"
-  | "data_refresh"
-
-function read_stored_expanded_key(): DriverProgressKey | null {
+function read_stored_open_key(): DriverProgressKey | null {
   if (typeof window === "undefined") {
     return null
   }
@@ -30,7 +26,7 @@ function read_stored_expanded_key(): DriverProgressKey | null {
   return value === "driver_license" ? value : null
 }
 
-function store_expanded_key(key: DriverProgressKey | null) {
+function store_open_key(key: DriverProgressKey | null) {
   if (typeof window === "undefined") {
     return
   }
@@ -102,20 +98,55 @@ export default function DriverOnboardingModal({
   total_count: number
 }>) {
   const router = useRouter()
-  const [expanded_key, setExpandedKey] = useState<DriverProgressKey | null>(
-    read_stored_expanded_key,
+  const [open_key, setOpenKey] = useState<DriverProgressKey | null>(
+    read_stored_open_key,
   )
-  const [ocr_running, setOcrRunning] = useState(false)
+  const [locked_key, setLockedKey] = useState<DriverProgressKey | null>(null)
   const license_panel_ref = useRef<DriverLicenseAccordionPanelHandle>(null)
   const license_camera_started_ref = useRef(false)
   const item_refs = useRef<Partial<Record<DriverProgressKey, HTMLLIElement | null>>>({})
 
+  const handle_ocr_lock = useCallback(() => {
+    setOpenKey("driver_license")
+    setLockedKey("driver_license")
+    store_open_key("driver_license")
+  }, [])
+
+  const handle_ocr_unlock = useCallback(() => {
+    setLockedKey(null)
+  }, [])
+
+  const handle_ocr_cancel = useCallback(() => {
+    void send_ocr_debug("OCR_ACCORDION_CANCEL", {
+      key: "driver_license",
+    })
+    setLockedKey(null)
+    license_camera_started_ref.current = false
+    license_panel_ref.current?.stop_camera("user_close")
+  }, [])
+
   useEffect(() => {
-    if (!expanded_key) {
+    if (!locked_key) {
       return
     }
 
-    const node = item_refs.current[expanded_key]
+    if (open_key !== locked_key) {
+      void send_ocr_debug("OCR_ACCORDION_CLOSE_BLOCKED", {
+        key: locked_key,
+        reason: "forced_open_restore",
+        open_key,
+      })
+      setOpenKey(locked_key)
+      store_open_key(locked_key)
+    }
+  }, [locked_key, open_key])
+
+  useEffect(() => {
+    if (!open_key) {
+      return
+    }
+
+    const node = item_refs.current[open_key]
 
     if (!node) {
       return
@@ -127,65 +158,35 @@ export default function DriverOnboardingModal({
         block: "nearest",
       })
     })
-  }, [expanded_key])
+  }, [open_key])
 
   if (initial_status !== "provisional") {
     return null
   }
 
-  function set_expanded_key(
-    next_key: DriverProgressKey | null,
-    options: { close_reason?: AccordionCloseReason } = {},
-  ) {
-    setExpandedKey((current_key) => {
-      if (current_key === next_key) {
-        return current_key
+  function handle_accordion_value_change(next_key: DriverProgressKey | null) {
+    if (locked_key && next_key !== locked_key) {
+      void send_ocr_debug("OCR_ACCORDION_CLOSE_BLOCKED", {
+        key: locked_key,
+        reason: "accordion_value_change",
+        next_key,
+      })
+      setOpenKey(locked_key)
+      store_open_key(locked_key)
+      return
+    }
+
+    if (next_key === "driver_license") {
+      void send_ocr_debug("OCR_ACCORDION_OPEN", { key: next_key })
+    } else if (open_key === "driver_license") {
+      license_camera_started_ref.current = false
+      if (!locked_key) {
+        license_panel_ref.current?.stop_camera("accordion_close")
       }
+    }
 
-      if (
-        current_key === "driver_license" &&
-        ocr_running &&
-        next_key !== "driver_license"
-      ) {
-        void send_ocr_debug("OCR_ACCORDION_CLOSE_REQUESTED", {
-          key: current_key,
-          reason: options.close_reason ?? "ocr_flow_active",
-        })
-        void send_ocr_debug("OCR_ACCORDION_CLOSE_BLOCKED", {
-          key: current_key,
-          reason: "ocr_flow_active",
-        })
-        return current_key
-      }
-
-      if (
-        options.close_reason === "data_refresh" &&
-        current_key === "driver_license" &&
-        ocr_running
-      ) {
-        void send_ocr_debug("OCR_ACCORDION_CLOSE_REQUESTED", {
-          key: current_key,
-          reason: "data_refresh",
-        })
-        void send_ocr_debug("OCR_ACCORDION_CLOSE_BLOCKED", {
-          key: current_key,
-          reason: "ocr_flow_active",
-        })
-        return current_key
-      }
-
-      if (next_key) {
-        if (next_key === "driver_license") {
-          void send_ocr_debug("OCR_ACCORDION_OPEN", { key: next_key })
-        }
-      } else if (current_key === "driver_license") {
-        license_camera_started_ref.current = false
-      }
-
-      store_expanded_key(next_key)
-
-      return next_key
-    })
+    store_open_key(next_key)
+    setOpenKey(next_key)
   }
 
   function handleLicenseComplete() {
@@ -202,55 +203,56 @@ export default function DriverOnboardingModal({
   }
 
   function handle_item_click(item: DriverChecklistItem) {
-    const will_open = expanded_key !== item.key
+    const will_open = open_key !== item.key
 
-    if (ocr_running) {
-      void send_ocr_debug("OCR_ACCORDION_CLOSE_REQUESTED", {
-        key: expanded_key,
-        reason: item.key === expanded_key ? "accordion_header" : "accordion_switch",
-      })
+    if (locked_key === item.key) {
       void send_ocr_debug("OCR_ACCORDION_CLOSE_BLOCKED", {
-        key: expanded_key,
-        reason: "ocr_flow_active",
+        key: item.key,
+        reason: "locked_during_ocr",
       })
+      setOpenKey(item.key)
+      store_open_key(item.key)
       return
     }
 
     if (item.key === "driver_license" && will_open) {
-      set_expanded_key("driver_license")
+      handle_ocr_lock()
       start_license_camera_once()
       return
     }
 
-    if (item.key === "driver_license" && !will_open) {
-      void send_ocr_debug("OCR_ACCORDION_CLOSE_REQUESTED", {
-        key: item.key,
-        reason: "accordion_header",
-      })
+    if (item.key === "driver_license" && !will_open && !locked_key) {
       license_panel_ref.current?.stop_camera("accordion_close")
+      license_camera_started_ref.current = false
     }
 
-    if (expanded_key === "driver_license" && item.key !== "driver_license") {
-      void send_ocr_debug("OCR_ACCORDION_CLOSE_REQUESTED", {
-        key: "driver_license",
-        reason: "accordion_switch",
-      })
+    if (
+      open_key === "driver_license" &&
+      item.key !== "driver_license" &&
+      !locked_key
+    ) {
       license_panel_ref.current?.stop_camera("accordion_close")
+      license_camera_started_ref.current = false
     }
 
-    set_expanded_key(will_open ? item.key : null, {
-      close_reason: "accordion_close",
-    })
+    handle_accordion_value_change(will_open ? item.key : null)
   }
 
   function render_panel(item: DriverChecklistItem) {
     if (item.key === "driver_license") {
+      const license_is_open =
+        open_key === "driver_license" || locked_key === "driver_license"
+
       return (
         <DriverLicenseAccordionPanel
           ref={license_panel_ref}
           current_answer={item.current_answer ?? "未回答"}
           initial_entry={item.latest_entry}
-          on_ocr_running_change={setOcrRunning}
+          is_open={license_is_open}
+          accordion_locked={locked_key === "driver_license"}
+          on_lock={handle_ocr_lock}
+          on_unlock={handle_ocr_unlock}
+          on_cancel={handle_ocr_cancel}
           onComplete={handleLicenseComplete}
         />
       )
@@ -284,7 +286,8 @@ export default function DriverOnboardingModal({
 
         <ul className="flex-1 space-y-2 overflow-y-auto px-5 py-4">
           {(initial_items ?? []).map((item) => {
-            const expanded = expanded_key === item.key
+            const expanded =
+              open_key === item.key || locked_key === item.key
 
             return (
               <li
