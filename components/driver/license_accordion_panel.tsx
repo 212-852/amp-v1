@@ -25,6 +25,7 @@ import {
   type OcrImageSource,
 } from "@/core/ocr/client"
 import {
+  is_ocr_accordion_locked,
   reduce_ocr_flow,
   type OcrFlowEvent,
   type OcrFailureType,
@@ -111,6 +112,7 @@ const DriverLicenseAccordionPanel = forwardRef<
   const ocr_flow_state_ref = useRef<OcrFlowState>(ocr_flow_state)
   ocr_flow_state_ref.current = ocr_flow_state
   const [image_url, setImageUrl] = useState(initial_entry?.image_url ?? "")
+  const [captured_preview_url, setCapturedPreviewUrl] = useState("")
   const [ocr_failure_type, setOcrFailureType] =
     useState<OcrFailureType | null>(null)
   const [form, setForm] = useState<LicenseFormFields>(() => form_from_entry(initial_entry))
@@ -154,18 +156,8 @@ const DriverLicenseAccordionPanel = forwardRef<
   )
 
   useEffect(() => {
-    const flow_blocks_data_close =
-      ocr_flow_state === "camera_starting" ||
-      ocr_flow_state === "camera_ready" ||
-      ocr_flow_state === "capturing" ||
-      ocr_flow_state === "analyzing" ||
-      ocr_flow_state === "filling_form" ||
-      ocr_flow_state === "failed"
-
-    on_ocr_running_change?.(
-      scanner_running || ocr_loading || flow_blocks_data_close,
-    )
-  }, [ocr_flow_state, ocr_loading, on_ocr_running_change, scanner_running])
+    on_ocr_running_change?.(is_ocr_accordion_locked(ocr_flow_state))
+  }, [ocr_flow_state, on_ocr_running_change])
 
   const preview_url = useMemo(() => {
     if (!image_url.startsWith("data:")) {
@@ -291,7 +283,6 @@ const DriverLicenseAccordionPanel = forwardRef<
   }
 
   async function request_ocr(next_image_url: string, source: OcrImageSource) {
-    setScannerRunning(false)
     setOcrLoading(true)
     setMessage(null)
     handle_ocr_flow_event("analyze_started")
@@ -319,17 +310,12 @@ const DriverLicenseAccordionPanel = forwardRef<
 
       handle_ocr_flow_event("fill_started")
       setForm(result.parsed)
+      setImageUrl(next_image_url)
+      setCapturedPreviewUrl("")
       handle_ocr_flow_event("flow_completed")
       setOcrFailureType(null)
       setMessage(result.message ?? "運転免許証を登録しました。")
-      void send_ocr_debug("OCR_PROGRESS_REFRESH_STARTED", {
-        document_type: "driver_license_front",
-      })
       onComplete()
-      void send_ocr_debug("OCR_PROGRESS_REFRESH_COMPLETED", {
-        document_type: "driver_license_front",
-        progress_after: result.state ?? null,
-      })
     } catch (error) {
       report_scan_failure("ocr_unreadable", {
         message: error instanceof Error ? error.message : "ocr_failed",
@@ -343,8 +329,7 @@ const DriverLicenseAccordionPanel = forwardRef<
     image_url: string
     source: OcrImageSource
   }) {
-    setScannerRunning(false)
-    setImageUrl(input.image_url)
+    setCapturedPreviewUrl(input.image_url)
     await request_ocr(input.image_url, input.source)
   }
 
@@ -364,6 +349,7 @@ const DriverLicenseAccordionPanel = forwardRef<
   function retry_scan() {
     begin_retry("camera")
     setImageUrl("")
+    setCapturedPreviewUrl("")
 
     window.requestAnimationFrame(() => {
       void send_ocr_debug("OCR_RETRY_RESET_COMPLETED", {
@@ -398,7 +384,15 @@ const DriverLicenseAccordionPanel = forwardRef<
     try {
       begin_retry("image_upload")
       const next_image_url = await read_file_as_data_url(file)
+      void send_ocr_debug("OCR_CAPTURE_STARTED", {
+        document_type: "driver_license_front",
+        source: "image_upload",
+      })
       void send_ocr_debug("OCR_RETRY_RESET_COMPLETED", {
+        document_type: "driver_license_front",
+        source: "image_upload",
+      })
+      void send_ocr_debug("OCR_CAPTURE_COMPLETED", {
         document_type: "driver_license_front",
         source: "image_upload",
       })
@@ -425,6 +419,12 @@ const DriverLicenseAccordionPanel = forwardRef<
   const can_save =
     Boolean(image_url.trim()) && form_is_complete(form) && !isSubmitting && !ocr_loading
 
+  const show_scanner =
+    ocr_flow_state === "failed" ||
+    ocr_flow_state === "retrying" ||
+    (ocr_flow_state !== "completed" &&
+      (ocr_flow_state !== "idle" || !image_url.trim()))
+
   return (
     <div className="space-y-3 border-t border-neutral-100 px-4 pb-4 pt-3">
       <section className="space-y-1">
@@ -438,7 +438,21 @@ const DriverLicenseAccordionPanel = forwardRef<
         <h4 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
           免許証スキャン
         </h4>
-        {image_url ? (
+        {show_scanner ? (
+          <DocumentScanner
+            key="driver_license_front"
+            ref={scanner_ref}
+            document_type="driver_license_front"
+            on_capture={handle_capture}
+            on_running_change={handle_scanner_running_change}
+            flow_state={ocr_flow_state}
+            on_flow_event={handle_ocr_flow_event}
+            failure_type={ocr_failure_type}
+            on_failure={report_scan_failure}
+            disabled={isSubmitting || ocr_loading}
+            frozen_preview_url={captured_preview_url}
+          />
+        ) : (
           <div className="relative flex aspect-[3/4] w-full items-center justify-center overflow-hidden rounded-2xl bg-black text-sm text-white/80">
             {preview_url ? (
               <img
@@ -454,19 +468,6 @@ const DriverLicenseAccordionPanel = forwardRef<
               failure_type={ocr_failure_type}
             />
           </div>
-        ) : (
-          <DocumentScanner
-            key="driver_license_front"
-            ref={scanner_ref}
-            document_type="driver_license_front"
-            on_capture={handle_capture}
-            on_running_change={handle_scanner_running_change}
-            flow_state={ocr_flow_state}
-            on_flow_event={handle_ocr_flow_event}
-            failure_type={ocr_failure_type}
-            on_failure={report_scan_failure}
-            disabled={isSubmitting || ocr_loading}
-          />
         )}
 
         {ocr_flow_state === "failed" ? (

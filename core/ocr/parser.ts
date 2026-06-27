@@ -120,6 +120,13 @@ export async function parse_document(input: {
       })
       should_use_fallback = true
     } else {
+      await send_ocr_server_debug("OCR_PROVIDER_PRIMARY_SUCCESS", {
+        document_type: input.document_type,
+        provider: primary_provider,
+        confidence: primary_result.confidence,
+        warning_count: primary_result.warnings.length,
+      })
+
       return {
         ...primary_result,
         provider: primary_provider,

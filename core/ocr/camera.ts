@@ -1,7 +1,8 @@
 import {
   OCR_AUTO_CAPTURE_REQUIRED_VALID_FRAMES,
   OCR_AUTO_CAPTURE_STABLE_MS,
-  OCR_AUTO_CAPTURE_MIN_SCORE,
+  OCR_EDGE_ALIGNMENT_THRESHOLD,
+  OCR_GUIDE_SCORE_THRESHOLD,
   resolve_guidance_message,
   type OcrDocumentType,
   OCR_FRAME_ASPECT,
@@ -44,8 +45,12 @@ export type FrameQualityIssue =
 
 export type FrameQualityResult = {
   score: number
+  guide_score: number
+  edge_alignment_score: number
   ready: boolean
+  is_document_detected: boolean
   is_inside_guide_frame: boolean
+  is_edge_aligned: boolean
   is_stable: boolean
   is_brightness_ok: boolean
   is_blur_ok: boolean
@@ -74,6 +79,7 @@ export type AutoCaptureFrameDecision = {
   rejection:
     | "initial_delay"
     | "not_in_guide"
+    | "not_aligned"
     | "moving"
     | "blur"
     | "brightness"
@@ -81,6 +87,7 @@ export type AutoCaptureFrameDecision = {
   valid_frame_count: number
   stable_started_at: number | null
   stable_ms: number
+  ready_to_capture: boolean
 }
 
 export function evaluate_auto_capture_frame(input: {
@@ -97,18 +104,34 @@ export function evaluate_auto_capture_frame(input: {
       valid_frame_count: 0,
       stable_started_at: null,
       stable_ms: 0,
+      ready_to_capture: false,
+    }
+  }
+
+  if (!input.frame_result.is_document_detected) {
+    return {
+      should_capture: false,
+      rejection: "not_in_guide",
+      valid_frame_count: 0,
+      stable_started_at: null,
+      stable_ms: 0,
+      ready_to_capture: false,
     }
   }
 
   const rejection = !input.frame_result.is_inside_guide_frame
     ? "not_in_guide"
-    : !input.frame_result.is_stable
-      ? "moving"
-      : !input.frame_result.is_blur_ok
-        ? "blur"
-        : !input.frame_result.is_brightness_ok
-          ? "brightness"
-          : null
+    : !input.frame_result.is_edge_aligned
+      ? "not_aligned"
+      : !input.frame_result.is_stable
+        ? "moving"
+        : !input.frame_result.is_blur_ok
+          ? "blur"
+          : !input.frame_result.is_brightness_ok
+            ? "brightness"
+            : input.frame_result.guide_score < OCR_GUIDE_SCORE_THRESHOLD
+              ? "not_aligned"
+              : null
 
   if (rejection) {
     return {
@@ -117,21 +140,24 @@ export function evaluate_auto_capture_frame(input: {
       valid_frame_count: 0,
       stable_started_at: null,
       stable_ms: 0,
+      ready_to_capture: false,
     }
   }
 
   const valid_frame_count = input.valid_frame_count + 1
   const stable_started_at = input.stable_started_at ?? input.now
   const stable_ms = input.now - stable_started_at
+  const ready_to_capture =
+    valid_frame_count >= OCR_AUTO_CAPTURE_REQUIRED_VALID_FRAMES &&
+    stable_ms >= OCR_AUTO_CAPTURE_STABLE_MS
 
   return {
-    should_capture:
-      valid_frame_count >= OCR_AUTO_CAPTURE_REQUIRED_VALID_FRAMES &&
-      stable_ms >= OCR_AUTO_CAPTURE_STABLE_MS,
+    should_capture: ready_to_capture,
     rejection: null,
     valid_frame_count,
     stable_started_at,
     stable_ms,
+    ready_to_capture,
   }
 }
 
@@ -530,16 +556,28 @@ export function evaluate_frame_quality(
 
   score = clamp(score, 0, 1)
 
+  const is_document_detected =
+    metrics.document_coverage_ratio >= 0.75 && metrics.edge_density >= 8
+  const edge_alignment_score = clamp(metrics.document_coverage_ratio, 0, 1)
+  const is_edge_aligned =
+    edge_alignment_score >= OCR_EDGE_ALIGNMENT_THRESHOLD &&
+    !issues.includes("too_tilted")
+  const guide_score = score
+
   const guidance_key =
-    score >= OCR_AUTO_CAPTURE_MIN_SCORE
+    guide_score >= OCR_GUIDE_SCORE_THRESHOLD
       ? "hold_steady"
       : resolve_primary_issue(issues)
 
   return {
     score,
-    ready: score >= OCR_AUTO_CAPTURE_MIN_SCORE,
+    guide_score,
+    edge_alignment_score,
+    ready: guide_score >= OCR_GUIDE_SCORE_THRESHOLD && is_edge_aligned,
+    is_document_detected,
     is_inside_guide_frame:
-      !issues.includes("document_missing") && !issues.includes("too_tilted"),
+      is_document_detected && !issues.includes("too_tilted"),
+    is_edge_aligned,
     is_stable: false,
     is_brightness_ok:
       !issues.includes("too_dark") &&
@@ -657,8 +695,12 @@ export function sample_video_frame_quality(input: {
   if (source_frame.width <= 0 || source_frame.height <= 0) {
     return {
       score: 0,
+      guide_score: 0,
+      edge_alignment_score: 0,
       ready: false,
+      is_document_detected: false,
       is_inside_guide_frame: false,
+      is_edge_aligned: false,
       is_stable: false,
       is_brightness_ok: false,
       is_blur_ok: false,
@@ -685,8 +727,12 @@ export function sample_video_frame_quality(input: {
   ) {
     return {
       score: 0,
+      guide_score: 0,
+      edge_alignment_score: 0,
       ready: false,
+      is_document_detected: false,
       is_inside_guide_frame: false,
+      is_edge_aligned: false,
       is_stable: false,
       is_brightness_ok: false,
       is_blur_ok: false,

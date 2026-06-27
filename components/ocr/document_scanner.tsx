@@ -37,6 +37,7 @@ import {
 import {
   is_ocr_camera_start_blocked,
   reduce_ocr_flow,
+  resolve_auto_scan_status,
   type OcrFailureType,
   type OcrFlowEvent,
   type OcrFlowState,
@@ -76,6 +77,7 @@ type DocumentScannerProps = {
   failure_type?: OcrFailureType | null
   on_failure: (failure_type: OcrFailureType) => void
   disabled?: boolean
+  frozen_preview_url?: string
 }
 
 type ScannerFallbackReason = "line_in_app" | "permission_denied" | "unavailable"
@@ -99,6 +101,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       failure_type,
       on_failure,
       disabled = false,
+      frozen_preview_url = "",
     },
     ref,
   ) {
@@ -146,6 +149,9 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       })
     const [frame, setFrame] = useState<FrameRect>({ x: 0, y: 0, width: 0, height: 0 })
     const [quality, setQuality] = useState<FrameQualityResult | null>(null)
+    const [scan_status, setScanStatus] = useState("免許証を枠内に合わせてください")
+    const detecting_started_ref = useRef(false)
+    const ready_to_capture_emitted_ref = useRef(false)
 
     set_ocr_debug_context({
       component_instance_id: component_instance_id_ref.current,
@@ -445,11 +451,14 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
           camera_starting_ref.current = false
           camera_ready_ref.current = false
           camera_start_once_ref.current = false
+          detecting_started_ref.current = false
+          ready_to_capture_emitted_ref.current = false
           auto_capture_state_ref.current = {
             enabled_at: null,
             valid_frame_count: 0,
             stable_started_at: null,
           }
+          setScanStatus("免許証を枠内に合わせてください")
         },
       }),
       [open_from_user_gesture, request_camera, stop_camera],
@@ -551,7 +560,12 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
     }, [debug_camera, document_type, emit_flow_event, frame, stop_camera])
 
     useEffect(() => {
-      if (!camera_active || capture_done_ref.current || fallback_reason) {
+      if (
+        !camera_active ||
+        capture_done_ref.current ||
+        fallback_reason ||
+        frozen_preview_url
+      ) {
         return
       }
 
@@ -578,6 +592,16 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
         on_quality: (next_quality) => {
           setQuality(next_quality)
 
+          if (
+            camera_ready_ref.current &&
+            !detecting_started_ref.current &&
+            (flow_state_ref.current === "camera_ready" ||
+              flow_state_ref.current === "camera_starting")
+          ) {
+            detecting_started_ref.current = true
+            emit_flow_event("detecting_started")
+          }
+
           const decision = evaluate_auto_capture_frame({
             frame_result: next_quality,
             now: Date.now(),
@@ -586,9 +610,32 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
             stable_started_at: auto_capture_state_ref.current.stable_started_at,
           })
 
+          if (
+            decision.ready_to_capture &&
+            !ready_to_capture_emitted_ref.current
+          ) {
+            ready_to_capture_emitted_ref.current = true
+            emit_flow_event("ready_to_capture")
+          }
+
+          setScanStatus(
+            resolve_auto_scan_status({
+              is_document_detected: next_quality.is_document_detected,
+              is_edge_aligned: next_quality.is_edge_aligned,
+              rejection: decision.rejection,
+              ready_to_capture: decision.ready_to_capture,
+            }),
+          )
+
           if (decision.rejection === "not_in_guide") {
             debug_camera("OCR_FRAME_REJECTED_NOT_IN_GUIDE", {
               guidance_key: next_quality.guidance_key,
+            })
+          } else if (decision.rejection === "not_aligned") {
+            debug_camera("OCR_FRAME_REJECTED_NOT_ALIGNED", {
+              guidance_key: next_quality.guidance_key,
+              guide_score: next_quality.guide_score,
+              edge_alignment_score: next_quality.edge_alignment_score,
             })
           } else if (decision.rejection === "moving") {
             debug_camera("OCR_FRAME_REJECTED_MOVING", {
@@ -620,7 +667,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
         stop_auto_scan_ref.current?.()
         stop_auto_scan_ref.current = null
       }
-    }, [camera_active, capture_once, debug_camera, fallback_reason, frame])
+    }, [camera_active, capture_once, debug_camera, fallback_reason, frame, frozen_preview_url])
 
     async function handle_file_select(file: File) {
       debug_camera("OCR_CAPTURE_STARTED", { reason: "image_upload" })
@@ -662,8 +709,9 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       mark_camera_ready()
     }
 
-    const guidance =
-      quality?.guidance_message ?? "免許証を枠内に合わせてください"
+    const guidance = frozen_preview_url
+      ? "読み取り中です"
+      : scan_status
 
     if (fallback_reason) {
       return (
@@ -692,11 +740,19 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
             onLoadedMetadata={handle_loaded_metadata}
             onCanPlay={handle_can_play}
             className={`absolute inset-0 h-full w-full object-cover ${
-              camera_active ? "opacity-100" : "opacity-0"
+              camera_active && !frozen_preview_url ? "opacity-100" : "opacity-0"
             }`}
           />
 
-          {!camera_active ? (
+          {frozen_preview_url ? (
+            <img
+              src={frozen_preview_url}
+              alt="撮影した免許証"
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          ) : null}
+
+          {!camera_active && !frozen_preview_url ? (
             <div className="absolute inset-0 bg-black" aria-hidden="true" />
           ) : null}
 

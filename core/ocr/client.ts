@@ -83,19 +83,12 @@ export async function run_driver_license_ocr_pipeline(input: {
   current_form: DriverLicenseParsedFields
 }): Promise<ClientOcrReadResult> {
   const empty_parsed = empty_driver_license_fields()
-  const pipeline = create_ocr_pipeline_tracker()
+  const pipeline = create_ocr_pipeline_tracker([
+    "OCR_CAPTURE_STARTED",
+    "OCR_CAPTURE_COMPLETED",
+  ])
 
   try {
-    await emit_pipeline_step("OCR_CAPTURE_STARTED", {
-      document_type: input.document_type,
-      source: input.source,
-    })
-    pipeline.complete_step("OCR_CAPTURE_STARTED")
-    await emit_pipeline_step("OCR_CAPTURE_COMPLETED", {
-      document_type: input.document_type,
-      source: input.source,
-    })
-    pipeline.complete_step("OCR_CAPTURE_COMPLETED")
     await emit_pipeline_step("OCR_ANALYZE_STARTED", {
       document_type: input.document_type,
       source: input.source,
@@ -152,7 +145,16 @@ export async function run_driver_license_ocr_pipeline(input: {
     }
 
     if (result.pipeline_steps?.length) {
+      const completed_before_merge = pipeline.snapshot().completed_steps.length
       pipeline.merge_completed_steps(result.pipeline_steps)
+      const merged_steps = pipeline.snapshot().completed_steps.slice(completed_before_merge)
+
+      for (const step of merged_steps) {
+        await emit_pipeline_step(step, {
+          document_type: input.document_type,
+          source: input.source,
+        })
+      }
     }
 
     const parsed = map_ocr_to_license_form(result.parsed ?? {})
@@ -280,6 +282,14 @@ export async function run_driver_license_ocr_pipeline(input: {
     await emit_pipeline_step("OCR_SAVE_COMPLETED", {
       document_type: input.document_type,
       target_fields: Object.keys(next_form),
+    })
+
+    await send_ocr_debug("OCR_PROGRESS_REFRESH_STARTED", {
+      document_type: input.document_type,
+    })
+    await send_ocr_debug("OCR_PROGRESS_REFRESH_COMPLETED", {
+      document_type: input.document_type,
+      progress_after: save_result.state ?? null,
     })
 
     return {

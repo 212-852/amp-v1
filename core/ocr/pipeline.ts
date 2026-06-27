@@ -71,6 +71,10 @@ export function create_ocr_pipeline_tracker(
 
   function merge_completed_steps(steps: OcrPipelineStep[]) {
     for (const step of steps) {
+      if (completed_steps.includes(step)) {
+        continue
+      }
+
       complete_step(step)
     }
   }

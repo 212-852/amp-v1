@@ -2,6 +2,8 @@ export type OcrFlowState =
   | "idle"
   | "camera_starting"
   | "camera_ready"
+  | "detecting"
+  | "ready_to_capture"
   | "capturing"
   | "analyzing"
   | "filling_form"
@@ -18,6 +20,8 @@ export type OcrFailureType =
 export type OcrFlowEvent =
   | "scan_requested"
   | "camera_started"
+  | "detecting_started"
+  | "ready_to_capture"
   | "capture_started"
   | "analyze_started"
   | "fill_started"
@@ -48,9 +52,19 @@ const OCR_FLOW_STATUS: Record<OcrFlowState, OcrFlowStatus> = {
     description: "免許証を枠内に合わせてください",
     progress: 20,
   },
+  detecting: {
+    label: "Detecting…",
+    description: "免許証を枠内に合わせてください",
+    progress: 30,
+  },
+  ready_to_capture: {
+    label: "Ready to capture",
+    description: "読み取り中です",
+    progress: 50,
+  },
   capturing: {
     label: "Capturing…",
-    description: "撮影しています",
+    description: "読み取り中です",
     progress: 60,
   },
   analyzing: {
@@ -106,6 +120,8 @@ const OCR_FAILURE_STATUS: Record<OcrFailureType, OcrFlowStatus> = {
 const EVENT_STATE: Record<OcrFlowEvent, OcrFlowState> = {
   scan_requested: "camera_starting",
   camera_started: "camera_ready",
+  detecting_started: "detecting",
+  ready_to_capture: "ready_to_capture",
   capture_started: "capturing",
   analyze_started: "analyzing",
   fill_started: "filling_form",
@@ -137,6 +153,17 @@ export function reduce_ocr_flow(
     return current
   }
 
+  if (
+    event === "detecting_started" &&
+    (current === "detecting" || current === "ready_to_capture")
+  ) {
+    return current
+  }
+
+  if (event === "ready_to_capture" && current === "ready_to_capture") {
+    return current
+  }
+
   return next
 }
 
@@ -151,14 +178,53 @@ export function get_ocr_flow_status(
   return OCR_FLOW_STATUS[state]
 }
 
-export function is_ocr_camera_start_blocked(state: OcrFlowState) {
+export function is_ocr_accordion_locked(state: OcrFlowState) {
   return (
     state === "camera_starting" ||
     state === "camera_ready" ||
+    state === "detecting" ||
+    state === "ready_to_capture" ||
     state === "capturing" ||
     state === "analyzing" ||
     state === "filling_form" ||
-    state === "completed" ||
     state === "failed"
   )
 }
+
+export function is_ocr_camera_start_blocked(state: OcrFlowState) {
+  return is_ocr_accordion_locked(state) || state === "completed" || state === "retrying"
+}
+
+export function resolve_auto_scan_status(input: {
+  is_document_detected: boolean
+  is_edge_aligned: boolean
+  rejection: AutoScanRejection
+  ready_to_capture: boolean
+}) {
+  if (!input.is_document_detected || input.rejection === "not_in_guide") {
+    return "免許証を枠内に合わせてください"
+  }
+
+  if (!input.is_edge_aligned || input.rejection === "not_aligned") {
+    return "枠にぴったり合わせてください"
+  }
+
+  if (input.rejection === "moving") {
+    return "そのまま動かさないでください"
+  }
+
+  if (input.ready_to_capture || input.rejection === null) {
+    return "読み取り中です"
+  }
+
+  return "免許証を枠内に合わせてください"
+}
+
+export type AutoScanRejection =
+  | "initial_delay"
+  | "not_in_guide"
+  | "not_aligned"
+  | "moving"
+  | "blur"
+  | "brightness"
+  | null
