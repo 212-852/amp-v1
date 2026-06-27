@@ -33,7 +33,7 @@ const OCR_FLOW_STATUS: Record<OcrFlowState, OcrFlowStatus> = {
     progress: 0,
   },
   starting_camera: {
-    label: "Camera starting...",
+    label: "Camera starting…",
     description: "カメラを起動しています",
     progress: 20,
   },
@@ -43,7 +43,7 @@ const OCR_FLOW_STATUS: Record<OcrFlowState, OcrFlowStatus> = {
     progress: 20,
   },
   capturing: {
-    label: "Capturing image...",
+    label: "Capturing…",
     description: "画像を取得しています",
     progress: 40,
   },
@@ -53,18 +53,18 @@ const OCR_FLOW_STATUS: Record<OcrFlowState, OcrFlowStatus> = {
     progress: 40,
   },
   analyzing: {
-    label: "OCR analyzing...",
-    description: "Extracting text... / 文字を解析しています",
+    label: "Analyzing…",
+    description: "文字を解析しています",
     progress: 70,
   },
   filling_form: {
-    label: "Filling form...",
+    label: "Applying…",
     description: "フォームへ入力しています",
     progress: 90,
   },
   completed: {
     label: "Completed",
-    description: "完了しました",
+    description: "入力が完了しました",
     progress: 100,
   },
   error: {

@@ -10,19 +10,22 @@ export default function OcrFlowStatus({
 
   return (
     <div
-      className="sticky top-0 z-20 rounded-xl border border-neutral-200 bg-white px-3 py-3 shadow-sm"
+      className="pointer-events-none absolute inset-x-0 top-0 z-20 bg-gradient-to-b from-black/90 via-black/70 to-transparent px-3 pb-7 pt-3 text-white"
       role="status"
       aria-live="polite"
       data-ocr-flow-state={state}
     >
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-semibold text-neutral-900">{status.label}</p>
-        <span className="text-xs font-semibold tabular-nums text-neutral-600">
+        <p className="text-sm font-semibold text-white">{status.label}</p>
+        <span className="text-xs font-semibold tabular-nums text-white/80">
           {status.progress}%
         </span>
       </div>
+      <p className="mt-0.5 text-xs leading-5 text-white/80">
+        {status.description}
+      </p>
       <div
-        className="mt-2 h-2 overflow-hidden rounded-full bg-neutral-200"
+        className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/25"
         role="progressbar"
         aria-label={status.label}
         aria-valuemin={0}
@@ -30,13 +33,10 @@ export default function OcrFlowStatus({
         aria-valuenow={status.progress}
       >
         <div
-          className="h-full rounded-full bg-neutral-900 transition-[width] duration-300 ease-out"
+          className="h-full rounded-full bg-white transition-[width] duration-300 ease-out"
           style={{ width: `${status.progress}%` }}
         />
       </div>
-      <p className="mt-2 text-xs leading-5 text-neutral-600">
-        {status.description}
-      </p>
     </div>
   )
 }

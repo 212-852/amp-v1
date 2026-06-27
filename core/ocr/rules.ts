@@ -129,35 +129,6 @@ export function resolve_guidance_message(guidance_key: string) {
   return OCR_GUIDANCE[guidance_key] ?? OCR_GUIDANCE.align_frame
 }
 
-export function build_ocr_status_label(input: {
-  has_image: boolean
-  has_result: boolean
-  is_loading: boolean
-  warnings?: string[]
-}) {
-  if (input.is_loading) {
-    return "読み込み中..."
-  }
-
-  if (!input.has_image) {
-    return "読み込み前"
-  }
-
-  if (!input.has_result) {
-    if (input.warnings?.length) {
-      return input.warnings.join(" ")
-    }
-
-    return "読み込み結果なし（手入力してください）"
-  }
-
-  if (input.warnings?.length) {
-    return `読み込み完了（${input.warnings.join(" ")}）`
-  }
-
-  return "読み込み完了"
-}
-
 export function compute_document_frame(input: {
   viewport_width: number
   viewport_height: number

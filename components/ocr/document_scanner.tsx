@@ -11,6 +11,7 @@ import {
 } from "react"
 
 import OcrCameraFallback from "@/components/ocr/camera_fallback"
+import OcrFlowStatus from "@/components/ocr/flow_status"
 import {
   read_file_as_data_url,
   resolve_scanner_frame,
@@ -425,6 +426,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
           className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl bg-black"
           data-camera-state={flow_state}
         >
+          <OcrFlowStatus state={flow_state} />
           <video
             ref={video_ref}
             autoPlay
@@ -451,7 +453,18 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
             />
           ) : null}
 
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-4 pb-4 pt-10">
+          <div
+            className={
+              frame.width > 0
+                ? "pointer-events-none absolute inset-x-0 px-3 pt-2"
+                : "pointer-events-none absolute inset-x-0 bottom-0 px-3 pb-3"
+            }
+            style={
+              frame.width > 0
+                ? { top: frame.y + frame.height }
+                : undefined
+            }
+          >
             <p className="text-center text-sm font-medium leading-6 text-white">
               {guidance}
             </p>

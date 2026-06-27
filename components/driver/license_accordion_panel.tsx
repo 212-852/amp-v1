@@ -27,7 +27,6 @@ import {
   reduce_ocr_flow,
   type OcrFlowEvent,
 } from "@/core/ocr/flow"
-import { build_ocr_status_label } from "@/core/ocr/rules"
 
 type LicenseFormFields = {
   license_name: string
@@ -109,14 +108,6 @@ const DriverLicenseAccordionPanel = forwardRef<
   const [form, setForm] = useState<LicenseFormFields>(() => form_from_entry(initial_entry))
   const [scanner_running, setScannerRunning] = useState(false)
   const [ocr_loading, setOcrLoading] = useState(false)
-  const [ocr_has_result, setOcrHasResult] = useState(
-    Boolean(
-      initial_entry?.license_name ||
-        initial_entry?.license_number ||
-        initial_entry?.license_address,
-    ),
-  )
-  const [ocr_warnings, setOcrWarnings] = useState<string[]>([])
   const [message, setMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -159,13 +150,6 @@ const DriverLicenseAccordionPanel = forwardRef<
 
     return image_url
   }, [image_url])
-
-  const ocr_status = build_ocr_status_label({
-    has_image: Boolean(image_url),
-    has_result: ocr_has_result,
-    is_loading: ocr_loading,
-    warnings: ocr_warnings,
-  })
 
   const handle_scanner_running_change = useCallback((running: boolean) => {
     setScannerRunning(running)
@@ -252,7 +236,6 @@ const DriverLicenseAccordionPanel = forwardRef<
     setScannerRunning(false)
     setOcrLoading(true)
     setMessage(null)
-    setOcrWarnings([])
     dispatch_ocr_flow("analyze_started")
     console.log("[OCR_FLOW] analyze_start", {
       document_type: "driver_license_front",
@@ -267,7 +250,6 @@ const DriverLicenseAccordionPanel = forwardRef<
       })
 
       if (!result.ok) {
-        setOcrHasResult(false)
         setMessage(result.message)
         dispatch_ocr_flow("flow_failed")
         return
@@ -292,8 +274,6 @@ const DriverLicenseAccordionPanel = forwardRef<
       })
 
       setForm(next_form)
-      setOcrWarnings(result.warnings)
-      setOcrHasResult(has_result)
 
       dispatch_ocr_flow(has_result ? "flow_completed" : "flow_failed")
 
@@ -318,7 +298,6 @@ const DriverLicenseAccordionPanel = forwardRef<
       }
     } catch (error) {
       dispatch_ocr_flow("flow_failed")
-      setOcrHasResult(false)
       setMessage(
         error instanceof Error
           ? error.message
@@ -335,7 +314,6 @@ const DriverLicenseAccordionPanel = forwardRef<
   }) {
     setScannerRunning(false)
     setImageUrl(input.image_url)
-    setOcrHasResult(false)
     await request_ocr(input.image_url, input.source)
   }
 
@@ -350,7 +328,7 @@ const DriverLicenseAccordionPanel = forwardRef<
     Boolean(image_url.trim()) && form_is_complete(form) && !isSubmitting && !ocr_loading
 
   return (
-    <div className="space-y-4 border-t border-neutral-100 px-4 pb-4 pt-3">
+    <div className="space-y-3 border-t border-neutral-100 px-4 pb-4 pt-3">
       <section className="space-y-1">
         <h4 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
           現在の回答
@@ -362,19 +340,19 @@ const DriverLicenseAccordionPanel = forwardRef<
         <h4 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
           免許証スキャン
         </h4>
-        <OcrFlowStatus state={ocr_flow_state} />
         {image_url ? (
-          preview_url ? (
-            <img
-              src={preview_url}
-              alt="運転免許証プレビュー"
-              className="aspect-[3/4] w-full rounded-2xl bg-black object-contain"
-            />
-          ) : (
-            <div className="flex aspect-[3/4] w-full items-center justify-center rounded-2xl bg-black text-sm text-white/80">
-              画像を読み込みました
-            </div>
-          )
+          <div className="relative flex aspect-[3/4] w-full items-center justify-center overflow-hidden rounded-2xl bg-black text-sm text-white/80">
+            {preview_url ? (
+              <img
+                src={preview_url}
+                alt="運転免許証プレビュー"
+                className="h-full w-full object-contain"
+              />
+            ) : (
+              <span>画像を読み込みました</span>
+            )}
+            <OcrFlowStatus state={ocr_flow_state} />
+          </div>
         ) : (
           <DocumentScanner
             ref={scanner_ref}
@@ -386,13 +364,6 @@ const DriverLicenseAccordionPanel = forwardRef<
             disabled={isSubmitting || ocr_loading}
           />
         )}
-      </section>
-
-      <section className="space-y-1">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-          OCR読み込み結果
-        </h4>
-        <p className="text-sm leading-6 text-neutral-700">{ocr_status}</p>
       </section>
 
       <section className="space-y-3">
