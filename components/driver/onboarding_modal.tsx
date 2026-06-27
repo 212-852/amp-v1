@@ -75,7 +75,7 @@ function AccordionPanel({
       className="grid transition-[grid-template-rows] duration-300 ease-in-out motion-reduce:transition-none"
       style={{ gridTemplateRows: expanded ? "1fr" : "0fr" }}
     >
-      <div className="overflow-hidden">{children}</div>
+      <div className="overflow-clip">{children}</div>
     </div>
   )
 }
@@ -250,7 +250,7 @@ export default function DriverOnboardingModal({
                 ref={(node) => {
                   item_refs.current[item.key] = node
                 }}
-                className="overflow-hidden rounded-2xl border border-neutral-200 bg-white"
+                className="overflow-clip rounded-2xl border border-neutral-200 bg-white"
               >
                 <button
                   type="button"

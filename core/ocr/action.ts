@@ -1,4 +1,7 @@
-import type { OcrRequestContext } from "@/core/ocr/context"
+import {
+  normalize_ocr_result,
+  type OcrRequestContext,
+} from "@/core/ocr/context"
 import { parse_document } from "@/core/ocr/parser"
 import type { OcrDocumentType } from "@/core/ocr/rules"
 
@@ -15,11 +18,15 @@ export async function run_ocr(context: OcrRequestContext): Promise<OcrActionResu
     document_type: context.input.document_type,
     image_url: context.input.image_url,
   })
+  const normalized = normalize_ocr_result(
+    context.input.document_type,
+    parsed.parsed,
+  )
 
   return {
     document_type: context.input.document_type,
     image_url: context.input.image_url,
-    parsed: parsed.parsed,
+    parsed: normalized,
     confidence: parsed.confidence,
     warnings: parsed.warnings,
   }

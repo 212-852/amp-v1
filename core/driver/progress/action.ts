@@ -20,9 +20,9 @@ import {
 import { run_ocr } from "@/core/ocr/action"
 import {
   empty_driver_license_fields,
-  merge_driver_license_parsed_fields,
-  validate_license_save,
-} from "@/core/ocr/rules"
+  merge_driver_license_fields,
+} from "@/core/ocr/context"
+import { validate_license_save } from "@/core/ocr/rules"
 
 const DRIVER_CORE_FIELDS = ["driver_uuid", "user_uuid", "status"].join(",")
 
@@ -574,7 +574,10 @@ export async function append_driver_progress(
 
 export async function save_driver_license_progress(
   context: DriverLicenseRequestContext,
-): Promise<{ state: DriverProgressState }> {
+): Promise<{
+  state: DriverProgressState
+  previous_state: DriverProgressState
+}> {
   const user_uuid = context.session.user_uuid
 
   if (!user_uuid) {
@@ -588,6 +591,7 @@ export async function save_driver_license_progress(
   }
 
   const current = normalize_driver_progress(row)
+  const previous_state = build_driver_progress_state(row)
   const next = append_progress_entry(current, "driver_license", {
     status: "uploaded",
     image_url: context.input.image_url,
@@ -600,7 +604,7 @@ export async function save_driver_license_progress(
 
   const state = await save_driver_progress(row.driver_uuid, next, user_uuid)
 
-  return { state }
+  return { state, previous_state }
 }
 
 export async function save_driver_license_progress_from_ocr(
@@ -613,6 +617,9 @@ export async function save_driver_license_progress_from_ocr(
   saved: boolean
   errors: Record<string, string>
 }> {
+  const progress_before = await load_driver_progress_state(
+    context.session.user_uuid,
+  )
   const ocr_result = await run_ocr({
     auth: context.auth,
     session: context.session,
@@ -621,7 +628,7 @@ export async function save_driver_license_progress_from_ocr(
       image_url: context.input.image_url,
     },
   })
-  const parsed = merge_driver_license_parsed_fields(
+  const parsed = merge_driver_license_fields(
     empty_driver_license_fields(),
     ocr_result.parsed,
   )
@@ -643,6 +650,8 @@ export async function save_driver_license_progress_from_ocr(
   if (!validation.ok) {
     console.log("[OCR_FLOW] progress_update", {
       phase: "skipped_incomplete_ocr",
+      progress_before,
+      progress_after: progress_before,
       saved_answer_payload: upload_input,
       errors: validation.errors,
     })
@@ -659,6 +668,7 @@ export async function save_driver_license_progress_from_ocr(
 
   console.log("[OCR_FLOW] progress_update", {
     phase: "before_save",
+    progress_before,
     saved_answer_payload: upload_input,
   })
 
@@ -670,6 +680,7 @@ export async function save_driver_license_progress_from_ocr(
 
   console.log("[OCR_FLOW] progress_update", {
     phase: "after_save",
+    progress_before: saved.previous_state,
     progress_after: saved.state,
     saved_answer_payload: upload_input,
   })

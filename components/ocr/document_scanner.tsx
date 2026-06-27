@@ -25,6 +25,12 @@ import {
   should_use_upload_only_for_ocr,
 } from "@/core/ocr/browser"
 import { read_camera_permission_denied_session } from "@/core/ocr/debug"
+import {
+  is_ocr_camera_start_blocked,
+  reduce_ocr_flow,
+  type OcrFlowEvent,
+  type OcrFlowState,
+} from "@/core/ocr/flow"
 import type { OcrImageSource } from "@/core/ocr/client"
 import {
   OCR_AUTO_SCAN_TIMEOUT_MS,
@@ -41,31 +47,17 @@ export type DocumentScannerHandle = {
 
 type DocumentScannerProps = {
   document_type: OcrDocumentType
-  on_capture: (input: { image_url: string; source: OcrImageSource }) => void
+  on_capture: (input: {
+    image_url: string
+    source: OcrImageSource
+  }) => void | Promise<void>
   on_running_change?: (running: boolean) => void
+  flow_state: OcrFlowState
+  on_flow_event: (event: OcrFlowEvent) => void
   disabled?: boolean
 }
 
 type ScannerFallbackReason = "line_in_app" | "permission_denied" | "unavailable"
-
-type OcrCameraState =
-  | "idle"
-  | "requesting"
-  | "running"
-  | "capturing"
-  | "analyzing"
-  | "completed"
-  | "error"
-
-function is_camera_start_blocked(state: OcrCameraState) {
-  return (
-    state === "requesting" ||
-    state === "running" ||
-    state === "capturing" ||
-    state === "analyzing" ||
-    state === "completed"
-  )
-}
 
 const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
   function DocumentScanner(
@@ -73,6 +65,8 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       document_type,
       on_capture,
       on_running_change,
+      flow_state,
+      on_flow_event,
       disabled = false,
     },
     ref,
@@ -82,12 +76,20 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
     const stream_ref = useRef<MediaStream | null>(null)
     const captured_ref = useRef(false)
     const camera_started_ref = useRef(false)
-    const camera_state_ref = useRef<OcrCameraState>("idle")
+    const flow_state_ref = useRef<OcrFlowState>(flow_state)
+    const camera_request_id_ref = useRef(0)
     const stop_auto_scan_ref = useRef<(() => void) | null>(null)
+    const on_capture_ref = useRef(on_capture)
+    const on_running_change_ref = useRef(on_running_change)
+    const on_flow_event_ref = useRef(on_flow_event)
+
+    on_capture_ref.current = on_capture
+    on_running_change_ref.current = on_running_change
+    on_flow_event_ref.current = on_flow_event
+    flow_state_ref.current = flow_state
 
     const [upload_only] = useState(() => should_use_upload_only_for_ocr())
     const [camera_active, setCameraActive] = useState(false)
-    const [camera_state, setCameraState] = useState<OcrCameraState>("idle")
     const [fallback_reason, setFallbackReason] =
       useState<ScannerFallbackReason | null>(() => {
         if (should_use_upload_only_for_ocr()) {
@@ -107,29 +109,36 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
     const [frame, setFrame] = useState<FrameRect>({ x: 0, y: 0, width: 0, height: 0 })
     const [quality, setQuality] = useState<FrameQualityResult | null>(null)
 
-    const update_camera_state = useCallback((next_state: OcrCameraState) => {
-      camera_state_ref.current = next_state
-      setCameraState(next_state)
+    const emit_flow_event = useCallback((event: OcrFlowEvent) => {
+      flow_state_ref.current = reduce_ocr_flow(flow_state_ref.current, event)
+      on_flow_event_ref.current(event)
     }, [])
 
     const stop_camera = useCallback((options?: {
       reset_started?: boolean
-      next_state?: OcrCameraState
+      cancel_pending?: boolean
+      reset_flow?: boolean
     }) => {
+      if (options?.cancel_pending) {
+        camera_request_id_ref.current += 1
+      }
+
       stop_auto_scan_ref.current?.()
       stop_auto_scan_ref.current = null
       stream_ref.current?.getTracks().forEach((track) => track.stop())
       stream_ref.current = null
       setCameraActive(false)
-      on_running_change?.(false)
+      on_running_change_ref.current?.(false)
       console.log("[OCR_FLOW] camera_stopped", document_type)
 
       if (options?.reset_started) {
         camera_started_ref.current = false
       }
 
-      update_camera_state(options?.next_state ?? "idle")
-    }, [document_type, on_running_change, update_camera_state])
+      if (options?.reset_flow) {
+        emit_flow_event("flow_reset")
+      }
+    }, [document_type, emit_flow_event])
 
     const attach_stream = useCallback(async (stream: MediaStream) => {
       stream_ref.current = stream
@@ -141,16 +150,17 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       }
 
       setCameraActive(true)
-      on_running_change?.(true)
-      update_camera_state("running")
+      on_running_change_ref.current?.(true)
+      emit_flow_event("camera_started")
       console.log("[OCR_FLOW] camera_running", document_type)
       setFallbackReason(null)
-    }, [document_type, on_running_change, update_camera_state])
+    }, [document_type, emit_flow_event])
 
     const enter_upload_fallback = useCallback((reason: ScannerFallbackReason) => {
-      stop_camera({ reset_started: true, next_state: "error" })
+      stop_camera()
+      emit_flow_event("flow_failed")
       setFallbackReason(reason)
-    }, [stop_camera])
+    }, [emit_flow_event, stop_camera])
 
     const apply_camera_result = useCallback(
       async (result: OcrCameraStartResult) => {
@@ -178,15 +188,15 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
 
       if (
         camera_started_ref.current ||
-        is_camera_start_blocked(camera_state_ref.current)
+        is_ocr_camera_start_blocked(flow_state_ref.current)
       ) {
         console.log("[OCR_FLOW] camera_request_skipped_already_started", {
           document_type,
-          camera_state: camera_state_ref.current,
+          camera_state: flow_state_ref.current,
         })
 
         return {
-          started: camera_state_ref.current === "running",
+          started: flow_state_ref.current === "camera_ready",
           stream: stream_ref.current,
           error: null,
           error_name: null,
@@ -196,8 +206,8 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       }
 
       if (disabled || captured_ref.current || upload_only || fallback_reason) {
-        on_running_change?.(false)
-        update_camera_state("error")
+        on_running_change_ref.current?.(false)
+        emit_flow_event("flow_failed")
         return {
           started: false,
           stream: null,
@@ -210,7 +220,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
 
       if (read_camera_permission_denied_session()) {
         enter_upload_fallback("permission_denied")
-        on_running_change?.(false)
+        on_running_change_ref.current?.(false)
         return {
           started: false,
           stream: null,
@@ -223,8 +233,10 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
 
       captured_ref.current = false
       camera_started_ref.current = true
-      on_running_change?.(true)
-      update_camera_state("requesting")
+      const request_id = camera_request_id_ref.current + 1
+      camera_request_id_ref.current = request_id
+      on_running_change_ref.current?.(true)
+      emit_flow_event("scan_requested")
       console.log("[OCR_FLOW] camera_permission_request", document_type)
 
       const result = await start_camera_from_user_gesture({
@@ -232,10 +244,18 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
         facing_mode: "environment",
       })
 
+      if (camera_request_id_ref.current !== request_id) {
+        result.stream?.getTracks().forEach((track) => track.stop())
+        return {
+          ...result,
+          started: false,
+          stream: null,
+        }
+      }
+
       if (!result.stream) {
-        camera_started_ref.current = false
-        on_running_change?.(false)
-        update_camera_state("error")
+        on_running_change_ref.current?.(false)
+        emit_flow_event("flow_failed")
       }
 
       return apply_camera_result(result)
@@ -244,9 +264,8 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       disabled,
       document_type,
       enter_upload_fallback,
+      emit_flow_event,
       fallback_reason,
-      on_running_change,
-      update_camera_state,
       upload_only,
     ])
 
@@ -259,7 +278,12 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       () => ({
         open_from_user_gesture,
         start_camera: request_camera,
-        stop_camera: () => stop_camera({ reset_started: true }),
+        stop_camera: () =>
+          stop_camera({
+            reset_started: true,
+            cancel_pending: true,
+            reset_flow: true,
+          }),
       }),
       [open_from_user_gesture, request_camera, stop_camera],
     )
@@ -290,7 +314,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
 
       return () => {
         console.log("[OCR_UI] camera_unmount", document_type)
-        stop_camera()
+        stop_camera({ cancel_pending: true })
       }
     }, [document_type, stop_camera])
 
@@ -313,10 +337,17 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
         on_capture: (image_url) => {
           console.log("[OCR_FLOW] capture_start", document_type)
           captured_ref.current = true
-          update_camera_state("capturing")
-          stop_camera({ next_state: "analyzing" })
-          on_capture({ image_url, source: "camera_capture" })
-          update_camera_state("completed")
+          emit_flow_event("capture_started")
+          stop_camera()
+          emit_flow_event("capture_completed")
+          void Promise.resolve(
+            on_capture_ref.current({ image_url, source: "camera_capture" }),
+          ).then(
+            () => {
+              camera_started_ref.current = false
+            },
+            () => emit_flow_event("flow_failed"),
+          )
         },
         is_cancelled: () => captured_ref.current,
       })
@@ -329,11 +360,10 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       camera_active,
       disabled,
       document_type,
+      emit_flow_event,
       fallback_reason,
       frame,
-      on_capture,
       stop_camera,
-      update_camera_state,
     ])
 
     useEffect(() => {
@@ -355,11 +385,13 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
     async function handle_file_select(file: File) {
       console.log("[OCR_FLOW] capture_start", document_type)
       captured_ref.current = true
-      stop_camera({ next_state: "analyzing" })
+      emit_flow_event("capture_started")
+      stop_camera()
 
       const image_url = await read_file_as_data_url(file)
-      on_capture({ image_url, source: "image_upload" })
-      update_camera_state("completed")
+      emit_flow_event("capture_completed")
+      await on_capture_ref.current({ image_url, source: "image_upload" })
+      camera_started_ref.current = false
     }
 
     async function handle_file_input(event: ChangeEvent<HTMLInputElement>) {
@@ -391,7 +423,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
         <div
           ref={container_ref}
           className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl bg-black"
-          data-camera-state={camera_state}
+          data-camera-state={flow_state}
         >
           <video
             ref={video_ref}

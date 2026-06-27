@@ -4,6 +4,11 @@ import {
   read_ocr_document_type,
   type OcrDocumentType,
 } from "@/core/ocr/rules"
+import {
+  normalize_number,
+  normalize_text,
+  normalize_textarea,
+} from "@/form/normalize"
 
 export type DriverProgressAppendInput = {
   item: DriverProgressKey
@@ -73,11 +78,11 @@ function readLicenseFields(body: Record<string, unknown>) {
   const source = parsed_record ?? body
 
   return {
-    license_name: readString(source.license_name),
-    license_address: readString(source.license_address),
-    license_birth_date: readString(source.license_birth_date),
-    license_number: readString(source.license_number),
-    license_expiration_date: readString(source.license_expiration_date),
+    license_name: normalize_text(source.license_name),
+    license_address: normalize_textarea(source.license_address),
+    license_birth_date: normalize_text(source.license_birth_date),
+    license_number: normalize_number(source.license_number),
+    license_expiration_date: normalize_text(source.license_expiration_date),
   }
 }
 
