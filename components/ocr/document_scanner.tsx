@@ -46,11 +46,21 @@ import {
 } from "@/core/ocr/rules"
 
 export type DocumentScannerStartResult = OcrCameraStartResult
+export type OcrCameraStopReason =
+  | "user_close"
+  | "accordion_close"
+  | "component_unmount"
+  | "route_change"
+  | "retry"
+  | "captured"
+  | "completed"
+  | "start_failed"
+  | "capture_failed"
 
 export type DocumentScannerHandle = {
   open_from_user_gesture: () => Promise<DocumentScannerStartResult>
   start_camera: () => Promise<DocumentScannerStartResult>
-  stop_camera: () => void
+  stop_camera: (reason: OcrCameraStopReason) => void
   prepare_retry: () => void
 }
 
@@ -92,6 +102,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
     const camera_ready_ref = useRef(false)
     const flow_state_ref = useRef<OcrFlowState>(flow_state)
     const camera_request_id_ref = useRef(0)
+    const route_change_ref = useRef(false)
     const stop_auto_scan_ref = useRef<(() => void) | null>(null)
     const auto_capture_enabled_at_ref = useRef<number | null>(null)
     const valid_frame_count_ref = useRef(0)
@@ -393,8 +404,8 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       () => ({
         open_from_user_gesture,
         start_camera: request_camera,
-        stop_camera: () =>
-          stop_camera("user_close", {
+        stop_camera: (reason) =>
+          stop_camera(reason, {
             reset_flow: true,
           }),
         prepare_retry: () => {
@@ -440,12 +451,23 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
 
     useEffect(() => {
       console.log("[OCR_UI] camera_mount", document_type)
+      debug_camera("OCR_COMPONENT_MOUNT")
+
+      const mark_route_change = () => {
+        route_change_ref.current = true
+      }
+
+      window.addEventListener("pagehide", mark_route_change)
 
       return () => {
+        window.removeEventListener("pagehide", mark_route_change)
         console.log("[OCR_UI] camera_unmount", document_type)
-        stop_camera("component_unmount")
+        debug_camera("OCR_COMPONENT_UNMOUNT")
+        stop_camera(
+          route_change_ref.current ? "route_change" : "component_unmount",
+        )
       }
-    }, [document_type, stop_camera])
+    }, [debug_camera, document_type, stop_camera])
 
     const capture_once = useCallback(async (
       reason: "auto" | "manual",
@@ -487,7 +509,8 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
 
       try {
         const image_url = capture_video_frame({ video, frame })
-        stop_camera("scan_completed")
+        debug_camera("OCR_CAPTURE_COMPLETED", { reason })
+        stop_camera("captured")
         await on_capture_ref.current({ image_url, source: "camera_capture" })
       } catch (error) {
         console.error("[OCR_FLOW] OCR_CAPTURE_FAILED", {
@@ -616,10 +639,11 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       emit_flow_event("capture_started")
 
       if (stream_ref.current || camera_starting_ref.current) {
-        stop_camera("scan_completed")
+        stop_camera("captured")
       }
 
       const image_url = await read_file_as_data_url(file)
+      debug_camera("OCR_CAPTURE_COMPLETED", { reason: "image_upload" })
       await on_capture_ref.current({ image_url, source: "image_upload" })
     }
 
@@ -727,7 +751,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
               className="sr-only"
             />
           </label>
-        ) : (
+        ) : camera_active ? (
           <button
             type="button"
             disabled={disabled || capture_done_ref.current}
@@ -736,7 +760,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
           >
             撮影する
           </button>
-        )}
+        ) : null}
       </div>
     )
   },

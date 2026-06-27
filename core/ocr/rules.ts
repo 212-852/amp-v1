@@ -45,7 +45,7 @@ export const OCR_GUIDANCE: Record<string, string> = {
   increase_light: "明るい場所で撮影してください",
   reduce_glare: "反射を避けてください",
   hold_steady: "そのままお待ちください",
-  document_missing: "枠内に合わせてください",
+  document_missing: "免許証を枠内に合わせてください",
 }
 
 export const OCR_AUTO_CAPTURE_DELAY_MS = 2_000

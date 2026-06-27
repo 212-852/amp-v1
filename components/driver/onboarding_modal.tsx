@@ -12,11 +12,12 @@ import type {
   DriverProgressKey,
   DriverStatus,
 } from "@/core/driver/context"
+import { send_ocr_debug } from "@/core/ocr/debug"
 
 const OCR_ACCORDION_STORAGE_KEY = "amp_driver_ocr_expanded_key"
 
 type AccordionCloseReason =
-  | "user_toggle"
+  | "accordion_close"
   | "data_refresh"
 
 function read_stored_expanded_key(): DriverProgressKey | null {
@@ -140,8 +141,27 @@ export default function DriverOnboardingModal({
         return current_key
       }
 
+      if (
+        options.close_reason === "data_refresh" &&
+        current_key === "driver_license" &&
+        ocr_running
+      ) {
+        void send_ocr_debug("OCR_ACCORDION_CLOSE_REQUESTED", {
+          key: current_key,
+          reason: "data_refresh",
+        })
+        void send_ocr_debug("OCR_ACCORDION_CLOSE_BLOCKED", {
+          key: current_key,
+          reason: "ocr_flow_active",
+        })
+        return current_key
+      }
+
       if (next_key) {
         console.log("[OCR_UI] accordion_open", next_key)
+        if (next_key === "driver_license") {
+          void send_ocr_debug("OCR_ACCORDION_OPEN", { key: next_key })
+        }
       }
 
       if (current_key && !next_key) {
@@ -181,6 +201,10 @@ export default function DriverOnboardingModal({
         key: expanded_key,
         reason: "ocr_running",
       })
+      void send_ocr_debug("OCR_ACCORDION_CLOSE_BLOCKED", {
+        key: expanded_key,
+        reason: "ocr_flow_active",
+      })
       return
     }
 
@@ -191,11 +215,23 @@ export default function DriverOnboardingModal({
     }
 
     if (item.key === "driver_license" && !will_open) {
-      license_panel_ref.current?.stop_camera()
+      void send_ocr_debug("OCR_ACCORDION_CLOSE_REQUESTED", {
+        key: item.key,
+        reason: "accordion_header",
+      })
+      license_panel_ref.current?.stop_camera("accordion_close")
+    }
+
+    if (expanded_key === "driver_license" && item.key !== "driver_license") {
+      void send_ocr_debug("OCR_ACCORDION_CLOSE_REQUESTED", {
+        key: "driver_license",
+        reason: "accordion_switch",
+      })
+      license_panel_ref.current?.stop_camera("accordion_close")
     }
 
     set_expanded_key(will_open ? item.key : null, {
-      close_reason: "user_toggle",
+      close_reason: "accordion_close",
     })
   }
 

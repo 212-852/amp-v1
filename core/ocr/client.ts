@@ -1,6 +1,7 @@
 import {
   empty_driver_license_fields,
   merge_driver_license_fields,
+  normalize_ocr_result,
 } from "@/core/ocr/context"
 import type {
   DriverLicenseParsedFields,
@@ -9,6 +10,14 @@ import type {
 import { send_ocr_debug } from "@/core/ocr/debug"
 
 export type OcrImageSource = "camera_capture" | "image_upload"
+
+export type NormalizedDriverLicenseResult = {
+  name: string
+  address: string
+  birth_date: string
+  license_number: string
+  expiration_date: string
+}
 
 export type ClientOcrReadInput = {
   document_type: OcrDocumentType
@@ -152,6 +161,40 @@ export async function read_document_image(
   input: ClientOcrReadInput,
 ): Promise<ClientOcrReadResult> {
   return request_document_image(input, "/api/ocr")
+}
+
+export async function analyze_ocr_image(input: ClientOcrReadInput) {
+  return read_document_image(input)
+}
+
+export function normalize_driver_license_result(
+  parsed: Partial<DriverLicenseParsedFields>,
+): NormalizedDriverLicenseResult {
+  const normalized = normalize_ocr_result(
+    "driver_license_front",
+    parsed,
+  ) as DriverLicenseParsedFields
+
+  return {
+    name: normalized.license_name,
+    address: normalized.license_address,
+    birth_date: normalized.license_birth_date,
+    license_number: normalized.license_number,
+    expiration_date: normalized.license_expiration_date,
+  }
+}
+
+export function apply_ocr_result_to_form(input: {
+  current: DriverLicenseParsedFields
+  normalized: NormalizedDriverLicenseResult
+}) {
+  return merge_driver_license_fields(input.current, {
+    license_name: input.normalized.name,
+    license_address: input.normalized.address,
+    license_birth_date: input.normalized.birth_date,
+    license_number: input.normalized.license_number,
+    license_expiration_date: input.normalized.expiration_date,
+  })
 }
 
 export async function read_driver_license_image(

@@ -15,14 +15,16 @@ import {
 import DocumentScanner, {
   type DocumentScannerHandle,
   type DocumentScannerStartResult,
+  type OcrCameraStopReason,
 } from "@/components/ocr/document_scanner"
 import OcrFlowStatus from "@/components/ocr/flow_status"
 import { read_file_as_data_url } from "@/core/ocr/camera"
 import type { DriverProgressEntry } from "@/core/driver/context"
 import {
-  apply_ocr_to_license_form,
+  analyze_ocr_image,
+  apply_ocr_result_to_form,
   has_ocr_license_result,
-  read_driver_license_image,
+  normalize_driver_license_result,
   type OcrImageSource,
 } from "@/core/ocr/client"
 import {
@@ -84,7 +86,7 @@ function form_is_complete(form: LicenseFormFields) {
 export type DriverLicenseAccordionPanelHandle = {
   open_from_user_gesture: () => Promise<DocumentScannerStartResult>
   start_camera: () => Promise<DocumentScannerStartResult>
-  stop_camera: () => void
+  stop_camera: (reason: OcrCameraStopReason) => void
 }
 
 const DriverLicenseAccordionPanel = forwardRef<
@@ -143,14 +145,26 @@ const DriverLicenseAccordionPanel = forwardRef<
           error_message: "Scanner is unavailable",
           error_kind: "failed",
         }),
-      stop_camera: () => scanner_ref.current?.stop_camera(),
+      stop_camera: (reason) => scanner_ref.current?.stop_camera(reason),
     }),
     [],
   )
 
   useEffect(() => {
-    on_ocr_running_change?.(scanner_running || ocr_loading)
-  }, [ocr_loading, on_ocr_running_change, scanner_running])
+    const flow_blocks_data_close =
+      ocr_flow_state === "camera_starting" ||
+      ocr_flow_state === "camera_ready" ||
+      ocr_flow_state === "detecting" ||
+      ocr_flow_state === "ready_to_capture" ||
+      ocr_flow_state === "capturing" ||
+      ocr_flow_state === "analyzing" ||
+      ocr_flow_state === "filling_form" ||
+      ocr_flow_state === "failed"
+
+    on_ocr_running_change?.(
+      scanner_running || ocr_loading || flow_blocks_data_close,
+    )
+  }, [ocr_flow_state, ocr_loading, on_ocr_running_change, scanner_running])
 
   const preview_url = useMemo(() => {
     if (!image_url.startsWith("data:")) {
@@ -198,22 +212,22 @@ const DriverLicenseAccordionPanel = forwardRef<
     void send_ocr_debug("OCR_ENTRY_REFRESH_SKIPPED_ON_FAILURE", payload)
   }, [handle_ocr_flow_event])
 
-  async function save_license(input: {
+  async function save_driver_readiness_answer(input: {
     next_image_url: string
     next_form: LicenseFormFields
   }) {
     if (isSubmitting) {
-      return
+      return false
     }
 
     if (!input.next_image_url.trim()) {
       setMessage("免許証画像を登録してください。")
-      return
+      return false
     }
 
     if (!form_is_complete(input.next_form)) {
       setMessage("確認フォームの必須項目を入力してください。")
-      return
+      return false
     }
 
     setIsSubmitting(true)
@@ -233,6 +247,11 @@ const DriverLicenseAccordionPanel = forwardRef<
         },
         saved_answer_payload,
       })
+      void send_ocr_debug("OCR_SAVE_STARTED", {
+        document_type: "driver_license_front",
+        has_image: Boolean(saved_answer_payload.image_url),
+        target_fields: Object.keys(input.next_form),
+      })
 
       const response = await fetch("/api/driver/license", {
         method: "POST",
@@ -250,7 +269,7 @@ const DriverLicenseAccordionPanel = forwardRef<
         report_scan_failure("save_failed", {
           message: result?.message ?? "save_failed",
         })
-        return
+        return false
       }
 
       console.log("[OCR_FLOW] progress_update", {
@@ -265,13 +284,26 @@ const DriverLicenseAccordionPanel = forwardRef<
       console.log("[OCR_FLOW] completed", {
         document_type: "driver_license_front",
       })
+      void send_ocr_debug("OCR_SAVE_COMPLETED", {
+        document_type: "driver_license_front",
+        target_fields: Object.keys(input.next_form),
+      })
+      void send_ocr_debug("OCR_PROGRESS_REFRESH_STARTED", {
+        document_type: "driver_license_front",
+      })
       setMessage(result.message ?? "運転免許証を登録しました。")
       onComplete()
+      void send_ocr_debug("OCR_PROGRESS_REFRESH_COMPLETED", {
+        document_type: "driver_license_front",
+        progress_after: result.state ?? null,
+      })
+      return true
     } catch (error) {
       setMessage("保存できませんでした。")
       report_scan_failure("save_failed", {
         message: error instanceof Error ? error.message : "save_failed",
       })
+      return false
     } finally {
       setIsSubmitting(false)
     }
@@ -292,7 +324,7 @@ const DriverLicenseAccordionPanel = forwardRef<
     })
 
     try {
-      const result = await read_driver_license_image({
+      const result = await analyze_ocr_image({
         document_type: "driver_license_front",
         image_url: next_image_url,
         source,
@@ -315,9 +347,27 @@ const DriverLicenseAccordionPanel = forwardRef<
         confidence: result.confidence,
         warnings: result.warnings,
       })
+      void send_ocr_debug("OCR_ANALYZE_SUCCESS", {
+        document_type: "driver_license_front",
+        raw_result: result.parsed,
+        confidence: result.confidence,
+        warnings: result.warnings,
+      })
+
+      const normalized = normalize_driver_license_result(result.parsed)
+      void send_ocr_debug("OCR_NORMALIZE_SUCCESS", {
+        document_type: "driver_license_front",
+        normalized_result: normalized,
+      })
 
       const has_result = has_ocr_license_result({
-        parsed: result.parsed,
+        parsed: {
+          license_name: normalized.name,
+          license_address: normalized.address,
+          license_birth_date: normalized.birth_date,
+          license_number: normalized.license_number,
+          license_expiration_date: normalized.expiration_date,
+        },
         confidence: result.confidence,
       })
 
@@ -336,12 +386,22 @@ const DriverLicenseAccordionPanel = forwardRef<
       }
 
       handle_ocr_flow_event("fill_started")
+      void send_ocr_debug("OCR_FORM_MAP_SUCCESS", {
+        document_type: "driver_license_front",
+        mapped_fields: {
+          name: normalized.name,
+          address: normalized.address,
+          birth_date: normalized.birth_date,
+          license_number: normalized.license_number,
+          expiration_date: normalized.expiration_date,
+        },
+      })
       void send_ocr_debug("OCR_FORM_FILL_STARTED", {
         document_type: "driver_license_front",
       })
-      const next_form = apply_ocr_to_license_form({
+      const next_form = apply_ocr_result_to_form({
         current: form,
-        parsed: result.parsed,
+        normalized,
       })
 
       setForm(next_form)
@@ -352,26 +412,26 @@ const DriverLicenseAccordionPanel = forwardRef<
         target_fields: Object.keys(next_form),
       })
       setOcrFailureType(null)
-      handle_ocr_flow_event("flow_completed")
 
-      if (result.saved) {
-        console.log("[OCR_FLOW] progress_update", {
-          phase: "client_received_saved_state",
-          progress_before: {
-            current_answer,
-            latest_entry: initial_entry,
-          },
-          progress_after: result.state ?? null,
-          saved_answer_payload: {
-            image_url: next_image_url,
-            ...next_form,
-          },
-        })
-        console.log("[OCR_FLOW] completed", {
+      if (!form_is_complete(next_form)) {
+        void send_ocr_debug("OCR_ANALYZE_UNREADABLE", {
           document_type: "driver_license_front",
+          reason: "required_fields_missing",
+          normalized_result: normalized,
         })
-        setMessage(result.message)
-        onComplete()
+        report_scan_failure("ocr_unreadable", {
+          reason: "required_fields_missing",
+        })
+        return
+      }
+
+      const saved = await save_driver_readiness_answer({
+        next_image_url,
+        next_form,
+      })
+
+      if (saved) {
+        handle_ocr_flow_event("flow_completed")
       }
     } catch (error) {
       void send_ocr_debug("OCR_ANALYZE_UNREADABLE", {
@@ -463,7 +523,7 @@ const DriverLicenseAccordionPanel = forwardRef<
   }
 
   async function submit_license() {
-    await save_license({
+    await save_driver_readiness_answer({
       next_image_url: image_url,
       next_form: form,
     })
@@ -503,6 +563,7 @@ const DriverLicenseAccordionPanel = forwardRef<
           </div>
         ) : (
           <DocumentScanner
+            key="driver_license_front"
             ref={scanner_ref}
             document_type="driver_license_front"
             on_capture={handle_capture}
