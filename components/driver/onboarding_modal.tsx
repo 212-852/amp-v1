@@ -102,28 +102,67 @@ export default function DriverOnboardingModal({
     read_stored_open_key,
   )
   const [locked_key, setLockedKey] = useState<DriverProgressKey | null>(null)
+  const locked_key_ref = useRef<DriverProgressKey | null>(null)
+  const pending_refresh_ref = useRef(false)
   const license_panel_ref = useRef<DriverLicenseAccordionPanelHandle>(null)
   const license_camera_started_ref = useRef(false)
   const item_refs = useRef<Partial<Record<DriverProgressKey, HTMLLIElement | null>>>({})
 
   const handle_ocr_lock = useCallback(() => {
+    locked_key_ref.current = "driver_license"
     setOpenKey("driver_license")
     setLockedKey("driver_license")
     store_open_key("driver_license")
   }, [])
 
   const handle_ocr_unlock = useCallback(() => {
+    locked_key_ref.current = null
     setLockedKey(null)
-  }, [])
+
+    if (!pending_refresh_ref.current) {
+      return
+    }
+
+    pending_refresh_ref.current = false
+    void send_ocr_debug("OCR_PROGRESS_REFRESH_STARTED", {
+      key: "driver_license",
+      reason: "post_unlock",
+    })
+    router.refresh()
+    void send_ocr_debug("OCR_PROGRESS_REFRESH_COMPLETED", {
+      key: "driver_license",
+      reason: "post_unlock",
+    })
+  }, [router])
 
   const handle_ocr_cancel = useCallback(() => {
     void send_ocr_debug("OCR_ACCORDION_CANCEL", {
       key: "driver_license",
     })
+    locked_key_ref.current = null
     setLockedKey(null)
     license_camera_started_ref.current = false
     license_panel_ref.current?.stop_camera("user_close")
   }, [])
+
+  const handleLicenseComplete = useCallback(() => {
+    if (locked_key_ref.current === "driver_license") {
+      pending_refresh_ref.current = true
+      void send_ocr_debug("OCR_PAGE_RELOAD_BLOCKED", {
+        key: "driver_license",
+        reason: "deferred_until_unlock",
+      })
+      return
+    }
+
+    void send_ocr_debug("OCR_PROGRESS_REFRESH_STARTED", {
+      key: "driver_license",
+    })
+    router.refresh()
+    void send_ocr_debug("OCR_PROGRESS_REFRESH_COMPLETED", {
+      key: "driver_license",
+    })
+  }, [router])
 
   useEffect(() => {
     if (!locked_key) {
@@ -189,10 +228,6 @@ export default function DriverOnboardingModal({
     setOpenKey(next_key)
   }
 
-  function handleLicenseComplete() {
-    router.refresh()
-  }
-
   function start_license_camera_once() {
     if (license_camera_started_ref.current) {
       return
@@ -217,7 +252,9 @@ export default function DriverOnboardingModal({
 
     if (item.key === "driver_license" && will_open) {
       handle_ocr_lock()
-      start_license_camera_once()
+      window.requestAnimationFrame(() => {
+        start_license_camera_once()
+      })
       return
     }
 

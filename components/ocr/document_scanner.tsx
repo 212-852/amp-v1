@@ -69,6 +69,7 @@ type DocumentScannerProps = {
   document_type: OcrDocumentType
   is_open?: boolean
   accordion_locked?: boolean
+  is_locked?: boolean
   on_capture: (input: {
     image_url: string
     source: OcrImageSource
@@ -86,6 +87,25 @@ type DocumentScannerProps = {
 
 type ScannerFallbackReason = "line_in_app" | "permission_denied" | "unavailable"
 
+const CAMERA_STOP_ALLOWED_DURING_LOCK = new Set([
+  "user_close",
+  "retry",
+  "route_change",
+  "completed",
+  "start_failed",
+  "capture_failed",
+])
+
+function read_video_track_diagnostics(stream: MediaStream | null) {
+  const track = stream?.getVideoTracks()[0] ?? null
+
+  return {
+    track_ready_state: track?.readyState ?? null,
+    track_enabled: track?.enabled ?? null,
+    track_muted: track?.muted ?? null,
+  }
+}
+
 function create_component_instance_id() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID()
@@ -100,6 +120,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       document_type,
       is_open = true,
       accordion_locked = false,
+      is_locked = false,
       on_capture,
       on_running_change,
       flow_state,
@@ -116,8 +137,9 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
     const container_ref = useRef<HTMLDivElement>(null)
     const component_instance_id_ref = useRef(create_component_instance_id())
     const document_type_ref = useRef(document_type)
-    const video_ref = useRef<HTMLVideoElement>(null)
+    const video_ref = useRef<HTMLVideoElement | null>(null)
     const stream_ref = useRef<MediaStream | null>(null)
+    const pending_stream_ref = useRef<MediaStream | null>(null)
     const capture_done_ref = useRef(false)
     const camera_starting_ref = useRef(false)
     const camera_ready_ref = useRef(false)
@@ -152,8 +174,8 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
     is_open_ref.current = is_open
 
     useEffect(() => {
-      ocr_locked_ref.current = accordion_locked
-    }, [accordion_locked])
+      ocr_locked_ref.current = accordion_locked || is_locked
+    }, [accordion_locked, is_locked])
 
     useEffect(() => {
       if (flow_state === "completed") {
@@ -208,13 +230,121 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       void send_ocr_debug(event, debug_payload)
     }, [camera_active, document_type])
 
+    const attach_stream_to_video = useCallback(async (stream: MediaStream) => {
+      stream_ref.current = stream
+
+      const video = video_ref.current
+
+      if (!video) {
+        pending_stream_ref.current = stream
+        debug_camera("OCR_CAMERA_STREAM_PENDING", {
+          track_count: stream.getTracks().length,
+        })
+        return false
+      }
+
+      pending_stream_ref.current = null
+      video.srcObject = stream
+      video.muted = true
+      video.playsInline = true
+
+      try {
+        await video.play()
+      } catch (error) {
+        debug_camera("OCR_CAMERA_PLAY_FAILED", {
+          error_name: error instanceof Error ? error.name : "UnknownError",
+          error_message: error instanceof Error ? error.message : String(error),
+        })
+      }
+
+      camera_starting_ref.current = false
+      setCameraActive(true)
+      on_running_change_ref.current?.(true)
+
+      debug_camera("OCR_CAMERA_PLAYING", {
+        video_width: video.videoWidth,
+        video_height: video.videoHeight,
+        ...read_video_track_diagnostics(stream),
+      })
+
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        if (!camera_ready_ref.current) {
+          camera_ready_ref.current = true
+          emit_flow_event("camera_started")
+        }
+      }
+
+      return true
+    }, [debug_camera, emit_flow_event])
+
+    const check_black_preview = useCallback(() => {
+      if (!camera_active || frozen_preview_url) {
+        return
+      }
+
+      const video = video_ref.current
+      const stream = stream_ref.current
+      const has_src_object = Boolean(video?.srcObject)
+      const payload = {
+        has_video_ref: Boolean(video),
+        has_src_object,
+        video_width: video?.videoWidth ?? 0,
+        video_height: video?.videoHeight ?? 0,
+        ready_state: video?.readyState ?? null,
+        paused: video?.paused ?? null,
+        ended: video?.ended ?? null,
+        ...read_video_track_diagnostics(stream),
+      }
+
+      const looks_black =
+        camera_active &&
+        (!has_src_object ||
+          (video?.videoWidth ?? 0) === 0 ||
+          video?.paused)
+
+      if (!looks_black) {
+        return
+      }
+
+      void send_ocr_debug("OCR_VIDEO_BLACK_PREVIEW_CHECK", payload)
+
+      if (stream && video && !has_src_object) {
+        void attach_stream_to_video(stream)
+        return
+      }
+
+      if (video?.paused) {
+        void video.play().catch(() => undefined)
+      }
+    }, [attach_stream_to_video, camera_active, frozen_preview_url])
+
+    const set_video_element = useCallback((node: HTMLVideoElement | null) => {
+      video_ref.current = node
+
+      if (!node) {
+        return
+      }
+
+      const stream = pending_stream_ref.current ?? stream_ref.current
+
+      if (stream) {
+        void attach_stream_to_video(stream)
+      }
+    }, [attach_stream_to_video])
+
+    const should_block_camera_stop = useCallback((reason: string) => {
+      if (!ocr_locked_ref.current) {
+        return false
+      }
+
+      return !CAMERA_STOP_ALLOWED_DURING_LOCK.has(reason)
+    }, [])
+
     const stop_camera = useCallback((reason: string, options?: {
       reset_flow?: boolean
+      release_stream?: boolean
     }) => {
-      if (
-        ocr_locked_ref.current &&
-        (reason === "accordion_close" || reason === "component_unmount")
-      ) {
+      if (should_block_camera_stop(reason)) {
         debug_camera("OCR_CAMERA_STOP_BLOCKED", {
           reason,
           scan_state: flow_state_ref.current,
@@ -224,25 +354,33 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
 
       stop_auto_scan_ref.current?.()
       stop_auto_scan_ref.current = null
-      debug_camera("OCR_CAMERA_STOP", { reason })
-      camera_request_id_ref.current += 1
 
-      stream_ref.current?.getTracks().forEach((track) => track.stop())
-      stream_ref.current = null
-      camera_starting_ref.current = false
-      camera_ready_ref.current = false
+      const release_stream = options?.release_stream ?? true
 
-      if (video_ref.current) {
-        video_ref.current.srcObject = null
+      if (release_stream) {
+        debug_camera("OCR_CAMERA_STOP", { reason })
+        camera_request_id_ref.current += 1
+
+        stream_ref.current?.getTracks().forEach((track) => track.stop())
+        stream_ref.current = null
+        pending_stream_ref.current = null
+
+        if (video_ref.current) {
+          video_ref.current.srcObject = null
+        }
+
+        camera_starting_ref.current = false
+        camera_ready_ref.current = false
+        setCameraActive(false)
+        on_running_change_ref.current?.(false)
+      } else {
+        debug_camera("OCR_CAMERA_SCAN_PAUSED", { reason })
       }
-
-      setCameraActive(false)
-      on_running_change_ref.current?.(false)
 
       if (options?.reset_flow) {
         emit_flow_event("flow_reset")
       }
-    }, [debug_camera, emit_flow_event])
+    }, [debug_camera, emit_flow_event, should_block_camera_stop])
 
     stop_camera_ref.current = (reason) => stop_camera(reason)
 
@@ -283,8 +421,12 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
           camera_state: flow_state_ref.current,
         })
 
+        if (stream_ref.current) {
+          await attach_stream_to_video(stream_ref.current)
+        }
+
         return {
-          started: camera_ready_ref.current,
+          started: camera_ready_ref.current || camera_active,
           stream: stream_ref.current,
           error: null,
           error_name: null,
@@ -315,8 +457,10 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
           camera_state: flow_state_ref.current,
         })
 
+        await attach_stream_to_video(stream_ref.current)
+
         return {
-          started: camera_ready_ref.current,
+          started: camera_ready_ref.current || camera_active,
           stream: stream_ref.current,
           error: null,
           error_name: null,
@@ -409,29 +553,12 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
           track_count: result.stream.getTracks().length,
         })
 
-        const video = video_ref.current
-
-        if (!video) {
-          throw new Error("OCR video element is not mounted")
-        }
-
-        video.srcObject = result.stream
-        video.muted = true
-        video.playsInline = true
         setFallbackReason(null)
-
-        await video.play()
-
-        debug_camera("OCR_CAMERA_PLAYING", {
-          video_width: video.videoWidth,
-          video_height: video.videoHeight,
-        })
-
-        mark_camera_ready()
+        await attach_stream_to_video(result.stream)
 
         return {
           ...result,
-          started: camera_ready_ref.current,
+          started: camera_ready_ref.current || camera_active,
         }
       } catch (error) {
         const error_name = error instanceof Error ? error.name : "UnknownError"
@@ -464,6 +591,8 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       mark_camera_ready,
       stop_camera,
       upload_only,
+      attach_stream_to_video,
+      camera_active,
     ])
 
     const open_from_user_gesture = useCallback(() => {
@@ -476,10 +605,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
         open_from_user_gesture,
         start_camera: request_camera,
         stop_camera: (reason) => {
-          if (
-            ocr_locked_ref.current &&
-            (reason === "accordion_close" || reason === "component_unmount")
-          ) {
+          if (should_block_camera_stop(reason)) {
             debug_camera("OCR_CAMERA_STOP_BLOCKED", {
               reason,
               scan_state: flow_state_ref.current,
@@ -513,8 +639,29 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
           setScanStatus("免許証を枠内に合わせてください")
         },
       }),
-      [open_from_user_gesture, request_camera, stop_camera],
+      [open_from_user_gesture, request_camera, stop_camera, should_block_camera_stop, debug_camera],
     )
+
+    useEffect(() => {
+      if (flow_state !== "completed") {
+        return
+      }
+
+      ocr_locked_ref.current = false
+      stop_camera("completed")
+    }, [flow_state, stop_camera])
+
+    useEffect(() => {
+      if (!camera_active || frozen_preview_url) {
+        return
+      }
+
+      const interval_id = window.setInterval(() => {
+        check_black_preview()
+      }, 1500)
+
+      return () => window.clearInterval(interval_id)
+    }, [camera_active, check_black_preview, frozen_preview_url])
 
     useEffect(() => {
       function update_frame() {
@@ -603,7 +750,6 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       try {
         const image_url = capture_video_frame({ video, frame })
         debug_camera("OCR_CAPTURE_COMPLETED", { reason })
-        stop_camera("captured")
         await on_capture_ref.current({ image_url, source: "camera_capture" })
       } catch (error) {
         console.error("[OCR_FLOW] OCR_CAPTURE_FAILED", enrich_ocr_debug_payload({
@@ -736,7 +882,8 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       emit_flow_event("capture_started")
 
       if (stream_ref.current || camera_starting_ref.current) {
-        stop_camera("captured")
+        stop_auto_scan_ref.current?.()
+        stop_auto_scan_ref.current = null
       }
 
       const image_url = await read_file_as_data_url(file)
@@ -794,27 +941,28 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
         >
           <OcrFlowStatus state={flow_state} failure_type={failure_type} />
           <video
-            ref={video_ref}
+            ref={set_video_element}
             autoPlay
             playsInline
             muted
             onLoadedMetadata={handle_loaded_metadata}
             onCanPlay={handle_can_play}
-            className={`absolute inset-0 h-full w-full object-cover ${
-              camera_active && !frozen_preview_url ? "opacity-100" : "opacity-0"
-            }`}
+            className="absolute inset-0 h-full w-full object-cover"
           />
 
           {frozen_preview_url ? (
             <img
               src={frozen_preview_url}
               alt="撮影した免許証"
-              className="absolute inset-0 h-full w-full object-cover"
+              className="absolute inset-0 z-[1] h-full w-full object-cover"
             />
           ) : null}
 
           {!camera_active && !frozen_preview_url ? (
-            <div className="absolute inset-0 bg-black" aria-hidden="true" />
+            <div
+              className="pointer-events-none absolute inset-0 z-[2] bg-black/40"
+              aria-hidden="true"
+            />
           ) : null}
 
           {frame.width > 0 ? (

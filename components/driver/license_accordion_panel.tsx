@@ -437,12 +437,12 @@ const DriverLicenseAccordionPanel = forwardRef<
   const can_save =
     Boolean(image_url.trim()) && form_is_complete(form) && !isSubmitting && !ocr_loading
 
-  const show_scanner =
-    is_open &&
-    (ocr_flow_state === "failed" ||
-      ocr_flow_state === "retrying" ||
-      (ocr_flow_state !== "completed" &&
-        (ocr_flow_state !== "idle" || !image_url.trim())))
+  const show_completed_preview =
+    (ocr_flow_state === "completed" && Boolean(image_url.trim())) ||
+    (ocr_flow_state === "idle" &&
+      Boolean(image_url.trim()) &&
+      !accordion_locked &&
+      !captured_preview_url)
 
   return (
     <div className="space-y-3 border-t border-neutral-100 px-4 pb-4 pt-3">
@@ -457,12 +457,13 @@ const DriverLicenseAccordionPanel = forwardRef<
         <h4 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
           免許証スキャン
         </h4>
-        {show_scanner ? (
+        <div className={show_completed_preview ? "hidden" : undefined}>
           <DocumentScanner
             key="driver_license_front"
             ref={scanner_ref}
             document_type="driver_license_front"
             is_open={is_open}
+            is_locked={accordion_locked}
             accordion_locked={accordion_locked}
             on_capture={handle_capture}
             on_running_change={handle_scanner_running_change}
@@ -475,7 +476,9 @@ const DriverLicenseAccordionPanel = forwardRef<
             disabled={isSubmitting || ocr_loading}
             frozen_preview_url={captured_preview_url}
           />
-        ) : (
+        </div>
+
+        {show_completed_preview ? (
           <div className="relative flex aspect-[3/4] w-full items-center justify-center overflow-hidden rounded-2xl bg-black text-sm text-white/80">
             {preview_url ? (
               <img
@@ -491,7 +494,7 @@ const DriverLicenseAccordionPanel = forwardRef<
               failure_type={ocr_failure_type}
             />
           </div>
-        )}
+        ) : null}
 
         {ocr_flow_state === "failed" ? (
           <div className="grid grid-cols-2 gap-2">
