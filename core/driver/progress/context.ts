@@ -1,10 +1,6 @@
 import type { AuthContext, Session } from "@/core/auth/types"
 import type { DriverProgressKey } from "@/core/driver/progress/rules"
 import {
-  read_ocr_document_type,
-  type OcrDocumentType,
-} from "@/core/ocr/rules"
-import {
   normalize_number,
   normalize_text,
   normalize_textarea,
@@ -25,12 +21,6 @@ export type DriverLicenseUploadInput = {
   license_expiration_date?: string
 }
 
-export type DriverLicenseOcrInput = {
-  document_type: OcrDocumentType
-  image_url: string
-  source: string
-}
-
 export type DriverProgressRequestContext = {
   auth: AuthContext
   session: Session
@@ -41,12 +31,6 @@ export type DriverLicenseRequestContext = {
   auth: AuthContext
   session: Session
   input: DriverLicenseUploadInput
-}
-
-export type DriverLicenseOcrRequestContext = {
-  auth: AuthContext
-  session: Session
-  input: DriverLicenseOcrInput
 }
 
 function readProgressKey(value: unknown): DriverProgressKey {
@@ -115,23 +99,6 @@ export function build_driver_license_context(input: {
     input: {
       image_url: readString(input.body.image_url),
       ...fields,
-    },
-  }
-}
-
-export function build_driver_license_ocr_context(input: {
-  auth: AuthContext
-  session: Session
-  body: Record<string, unknown>
-}): DriverLicenseOcrRequestContext {
-  return {
-    auth: input.auth,
-    session: input.session,
-    input: {
-      document_type:
-        read_ocr_document_type(input.body.document_type) ?? "driver_license_front",
-      image_url: readString(input.body.image_url),
-      source: readString(input.body.source),
     },
   }
 }

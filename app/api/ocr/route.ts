@@ -4,75 +4,45 @@ import { unstable_rethrow } from "next/navigation"
 import { resolveAuthContext } from "@/core/auth/context"
 import { resolveSession } from "@/core/auth/session"
 import { can_update_driver_progress } from "@/core/driver/progress/rules"
-import { run_ocr } from "@/core/ocr/action"
-import { build_ocr_context } from "@/core/ocr/context"
-import { ensure_ocr_env_loaded } from "@/core/ocr/env"
-import {
-  build_ocr_access_denied_output,
-  build_ocr_success_output,
-  build_ocr_validation_output,
-} from "@/core/ocr/output"
-import { read_ocr_document_type, validate_ocr_request } from "@/core/ocr/rules"
+import { run_ocr_action } from "@/ocr/action"
+import { build_ocr_result } from "@/ocr/result"
+import type { OcrDocumentType, OcrProviderPreference } from "@/ocr/type"
+
+function read_string(value: unknown) {
+  return typeof value === "string" ? value.trim() : ""
+}
 
 export async function POST(request: Request) {
-  ensure_ocr_env_loaded()
-
   try {
     const auth = await resolveAuthContext("/driver")
     const session = await resolveSession(auth)
-    const body = (await request.json().catch(() => ({}))) as Record<
-      string,
-      unknown
-    >
-    const context = build_ocr_context({
-      auth,
-      session,
-      body,
-    })
     const access = can_update_driver_progress({
       role: session.role,
       user_uuid: session.user_uuid,
     })
 
     if (!access.allowed) {
-      const output = build_ocr_access_denied_output(
-        access.reason ?? "driver_role_required",
-      )
-
-      return NextResponse.json(output, { status: 403 })
+      return NextResponse.json({ ok: false, message: "ドライバー権限が必要です。" }, { status: 403 })
     }
 
-    const validation = validate_ocr_request({
-      document_type: read_ocr_document_type(context.input.document_type),
-      image_url: context.input.image_url,
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
+    const result = await run_ocr_action({
+      document_type: read_string(body.document_type) as OcrDocumentType,
+      image_base64: read_string(body.image_base64) || read_string(body.image_url),
+      provider_preference:
+        (read_string(body.provider_preference) || "default") as OcrProviderPreference,
+      request_id: read_string(body.request_id),
+      component_instance_id: read_string(body.component_instance_id),
     })
 
-    if (!validation.ok) {
-      const output = build_ocr_validation_output(validation)
-
-      return NextResponse.json(output, { status: 400 })
-    }
-
-    const result = await run_ocr(context)
-    const output = build_ocr_success_output(result)
-
-    return NextResponse.json(output, { status: 200 })
+    return NextResponse.json(build_ocr_result(result), {
+      status: result.ok ? 200 : 422,
+    })
   } catch (error) {
     unstable_rethrow(error)
-
-    const message =
-      error instanceof Error ? error.message : "OCR読み込みに失敗しました。"
-
-    return NextResponse.json(
-      {
-        ok: false,
-        message,
-        pipeline_stopped_at: message.includes("OPENAI")
-          ? "OPENAI_REQUEST_STARTED"
-          : "OCR_ANALYZE_STARTED",
-        pipeline_stop_reason: message,
-      },
-      { status: 400 },
-    )
+    return NextResponse.json({
+      ok: false,
+      message: error instanceof Error ? error.message : "OCR読み込みに失敗しました。",
+    }, { status: 400 })
   }
 }

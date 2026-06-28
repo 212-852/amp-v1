@@ -48,15 +48,6 @@ export const OCR_GUIDANCE: Record<string, string> = {
   document_missing: "免許証を枠内に合わせてください",
 }
 
-export const OCR_AUTO_CAPTURE_DELAY_MS = 2_500
-export const OCR_AUTO_CAPTURE_STABLE_MS = 2_200
-export const OCR_AUTO_CAPTURE_REQUIRED_VALID_FRAMES = 10
-export const OCR_CAPTURE_COOLDOWN_MS = 3_000
-export const OCR_GUIDE_SCORE_THRESHOLD = 0.9
-export const OCR_EDGE_ALIGNMENT_THRESHOLD = 0.85
-export const OCR_AUTO_CAPTURE_MIN_SCORE = OCR_GUIDE_SCORE_THRESHOLD
-export const OCR_AUTO_SCAN_TIMEOUT_MS = 45_000
-
 export function read_ocr_document_type(value: unknown): OcrDocumentType | null {
   if (
     value === "driver_license_front" ||

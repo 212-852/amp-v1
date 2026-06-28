@@ -1,13 +1,15 @@
 import {
-  OCR_AUTO_CAPTURE_REQUIRED_VALID_FRAMES,
-  OCR_AUTO_CAPTURE_STABLE_MS,
-  OCR_EDGE_ALIGNMENT_THRESHOLD,
-  OCR_GUIDE_SCORE_THRESHOLD,
   resolve_guidance_message,
   type OcrDocumentType,
   OCR_FRAME_ASPECT,
   compute_document_frame,
 } from "@/core/ocr/rules"
+import {
+  edge_alignment_threshold,
+  guide_score_threshold,
+  required_valid_frames,
+  stable_required_ms,
+} from "@/ocr/rules"
 import {
   get_camera_permission_state,
   mark_camera_permission_denied_session,
@@ -129,7 +131,7 @@ export function evaluate_auto_capture_frame(input: {
           ? "blur"
           : !input.frame_result.is_brightness_ok
             ? "brightness"
-            : input.frame_result.guide_score < OCR_GUIDE_SCORE_THRESHOLD
+            : input.frame_result.guide_score < guide_score_threshold
               ? "not_aligned"
               : null
 
@@ -148,8 +150,8 @@ export function evaluate_auto_capture_frame(input: {
   const stable_started_at = input.stable_started_at ?? input.now
   const stable_ms = input.now - stable_started_at
   const ready_to_capture =
-    valid_frame_count >= OCR_AUTO_CAPTURE_REQUIRED_VALID_FRAMES &&
-    stable_ms >= OCR_AUTO_CAPTURE_STABLE_MS
+    valid_frame_count >= required_valid_frames &&
+    stable_ms >= stable_required_ms
 
   return {
     should_capture: ready_to_capture,
@@ -560,12 +562,12 @@ export function evaluate_frame_quality(
     metrics.document_coverage_ratio >= 0.75 && metrics.edge_density >= 8
   const edge_alignment_score = clamp(metrics.document_coverage_ratio, 0, 1)
   const is_edge_aligned =
-    edge_alignment_score >= OCR_EDGE_ALIGNMENT_THRESHOLD &&
+    edge_alignment_score >= edge_alignment_threshold &&
     !issues.includes("too_tilted")
   const guide_score = score
 
   const guidance_key =
-    guide_score >= OCR_GUIDE_SCORE_THRESHOLD
+    guide_score >= guide_score_threshold
       ? "hold_steady"
       : resolve_primary_issue(issues)
 
@@ -573,7 +575,7 @@ export function evaluate_frame_quality(
     score,
     guide_score,
     edge_alignment_score,
-    ready: guide_score >= OCR_GUIDE_SCORE_THRESHOLD && is_edge_aligned,
+    ready: guide_score >= guide_score_threshold && is_edge_aligned,
     is_document_detected,
     is_inside_guide_frame:
       is_document_detected && !issues.includes("too_tilted"),

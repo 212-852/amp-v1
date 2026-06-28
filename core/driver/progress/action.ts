@@ -2,7 +2,6 @@ import { getRestConfig, readRestError, restHeaders, restUrl } from "@/core/db/re
 import type { EntryQuestionnaireInput } from "@/core/entry/context"
 import type { DriverStatus } from "@/core/driver/context"
 import type {
-  DriverLicenseOcrRequestContext,
   DriverLicenseRequestContext,
   DriverProgressRequestContext,
 } from "@/core/driver/progress/context"
@@ -17,12 +16,6 @@ import {
   type DriverProgressRow,
   type DriverProgressState,
 } from "@/core/driver/progress/rules"
-import { run_ocr } from "@/core/ocr/action"
-import {
-  empty_driver_license_fields,
-  merge_driver_license_fields,
-} from "@/core/ocr/context"
-import { validate_license_save } from "@/core/ocr/rules"
 
 const DRIVER_CORE_FIELDS = ["driver_uuid", "user_uuid", "status"].join(",")
 
@@ -605,61 +598,6 @@ export async function save_driver_license_progress(
   const state = await save_driver_progress(row.driver_uuid, next, user_uuid)
 
   return { state, previous_state }
-}
-
-export async function save_driver_license_progress_from_ocr(
-  context: DriverLicenseOcrRequestContext,
-): Promise<{
-  parsed: ReturnType<typeof empty_driver_license_fields>
-  confidence: number
-  warnings: string[]
-  state: DriverProgressState | null
-  saved: boolean
-  errors: Record<string, string>
-}> {
-  const ocr_result = await run_ocr({
-    auth: context.auth,
-    session: context.session,
-    input: {
-      document_type: context.input.document_type,
-      image_url: context.input.image_url,
-    },
-  })
-  const parsed = merge_driver_license_fields(
-    empty_driver_license_fields(),
-    ocr_result.parsed,
-  )
-  const upload_input = {
-    image_url: context.input.image_url,
-    ...parsed,
-  }
-  const validation = validate_license_save(upload_input)
-
-  if (!validation.ok) {
-    return {
-      parsed,
-      confidence: ocr_result.confidence,
-      warnings: ocr_result.warnings,
-      state: null,
-      saved: false,
-      errors: validation.errors,
-    }
-  }
-
-  const saved = await save_driver_license_progress({
-    auth: context.auth,
-    session: context.session,
-    input: upload_input,
-  })
-
-  return {
-    parsed,
-    confidence: ocr_result.confidence,
-    warnings: ocr_result.warnings,
-    state: saved.state,
-    saved: true,
-    errors: {},
-  }
 }
 
 export async function create_driver_from_entry(input: {

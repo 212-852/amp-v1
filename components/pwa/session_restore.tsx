@@ -67,6 +67,11 @@ export function PwaSessionRestore() {
 
         if (active_driver_task) {
           void send_ocr_debug("OCR_NAVIGATION_BLOCKED_DURING_OCR", {
+            request_id: "pwa-session-restore",
+            component_instance_id: "pwa-session-restore",
+            document_type: "driver_license_front",
+            scan_state: "active",
+            camera_state: "unknown",
             action: "refresh",
             from: window.location.pathname,
             to: window.location.pathname,

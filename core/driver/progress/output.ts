@@ -7,7 +7,6 @@ import {
   log_driver_page_render_failed,
   type DriverPageLoadResult,
 } from "@/core/driver/progress/action"
-import type { DriverLicenseParsedFields } from "@/core/ocr/rules"
 
 export type DriverProgressOutput = {
   ok: boolean
@@ -15,13 +14,6 @@ export type DriverProgressOutput = {
   state?: DriverProgressState
   status_activated?: boolean
   errors?: Record<string, string>
-}
-
-export type DriverLicenseOcrOutput = DriverProgressOutput & {
-  parsed?: DriverLicenseParsedFields
-  confidence?: number
-  warnings?: string[]
-  saved?: boolean
 }
 
 export function build_driver_progress_validation_output(
@@ -71,28 +63,6 @@ export function build_driver_license_success_output(input: {
     message: "運転免許証を登録しました。",
     state: input.state,
     errors: undefined,
-  }
-}
-
-export function build_driver_license_ocr_output(input: {
-  parsed: DriverLicenseParsedFields
-  confidence: number
-  warnings: string[]
-  state: DriverProgressState | null
-  saved: boolean
-  errors: Record<string, string>
-}): DriverLicenseOcrOutput {
-  return {
-    ok: true,
-    message: input.saved
-      ? "運転免許証を登録しました。"
-      : "OCR読み込みが完了しました。確認フォームを入力してください。",
-    parsed: input.parsed,
-    confidence: input.confidence,
-    warnings: input.warnings,
-    state: input.state ?? undefined,
-    saved: input.saved,
-    errors: input.errors,
   }
 }
 
