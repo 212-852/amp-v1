@@ -13,6 +13,10 @@ import {
 import OcrCameraFallback from "@/components/ocr/camera_fallback"
 import OcrFlowStatus from "@/components/ocr/flow_status"
 import {
+  get_driver_task_unmount_reason,
+  record_driver_license_mount,
+} from "@/components/driver/task_modal_runtime"
+import {
   capture_video_frame,
   evaluate_auto_capture_frame,
   read_file_as_data_url,
@@ -698,6 +702,24 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       }
       if (!lifecycle_mount_logged_ref.current) {
         lifecycle_mount_logged_ref.current = true
+
+        if (mount_document_type === "driver_license_front") {
+          const mount_result = record_driver_license_mount(
+            component_instance_id,
+            "document_scanner",
+          )
+
+          if (mount_result.duplicate_detected) {
+            void send_ocr_debug("REACT_STRICT_MODE_DUPLICATE_MOUNT_DETECTED", {
+              mount_surface: "document_scanner",
+              document_type: mount_document_type,
+              component_instance_id,
+              previous_component_instance_id:
+                mount_result.previous_component_instance_id,
+            })
+          }
+        }
+
         void send_ocr_debug("OCR_COMPONENT_MOUNT", mount_payload)
       }
 
@@ -719,6 +741,12 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
             document_type: mount_document_type,
             scan_state: flow_state_ref.current,
             camera_state: flow_state_ref.current,
+            reason:
+              mount_document_type === "driver_license_front"
+                ? get_driver_task_unmount_reason()
+                : route_change_ref.current
+                  ? "route_changed"
+                  : "unknown",
           }
 
           if (ocr_locked_ref.current) {

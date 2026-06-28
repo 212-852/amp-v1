@@ -1,6 +1,8 @@
 "use client"
 
 import {
+  forwardRef,
+  useImperativeHandle,
   type ChangeEvent,
   useCallback,
   useEffect,
@@ -10,7 +12,10 @@ import {
   useState,
 } from "react"
 
-import { use_driver_preparation } from "@/components/driver/preparation_provider"
+import {
+  get_driver_task_unmount_reason,
+  record_driver_license_mount,
+} from "@/components/driver/task_modal_runtime"
 import DocumentScanner, {
   type DocumentScannerHandle,
 } from "@/components/ocr/document_scanner"
@@ -30,6 +35,16 @@ import {
   type OcrFailureType,
   type OcrFlowState,
 } from "@/core/ocr/flow"
+
+import { use_driver_preparation } from "@/components/driver/preparation_provider"
+
+function create_page_instance_id() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID()
+  }
+
+  return `license-page-${Date.now()}`
+}
 
 type LicenseFormFields = {
   license_name: string
@@ -73,13 +88,20 @@ function form_is_complete(form: LicenseFormFields) {
   )
 }
 
-export default function DriverLicenseTaskModalContent({
-  initial_entry,
-  on_save_success,
-}: Readonly<{
-  initial_entry: DriverProgressEntry | null
-  on_save_success: (state?: unknown) => void
-}>) {
+export type DriverLicenseTaskModalContentHandle = {
+  prepare_modal_close: () => void
+}
+
+const DriverLicenseTaskModalContent = forwardRef<
+  DriverLicenseTaskModalContentHandle,
+  Readonly<{
+    initial_entry: DriverProgressEntry | null
+    on_save_success: (state?: unknown) => void
+  }>
+>(function DriverLicenseTaskModalContent(
+  { initial_entry, on_save_success },
+  ref,
+) {
   const {
     update_item,
     get_item,
@@ -90,11 +112,13 @@ export default function DriverLicenseTaskModalContent({
   const camera_started_ref = useRef(false)
   const lifecycle_generation_ref = useRef(0)
   const lifecycle_mount_logged_ref = useRef(false)
+  const page_instance_id_ref = useRef(create_page_instance_id())
   const [ocr_flow_state, dispatch_ocr_flow] = useReducer(
     reduce_ocr_flow,
     "idle",
   )
   const ocr_flow_state_ref = useRef<OcrFlowState>(ocr_flow_state)
+  ocr_flow_state_ref.current = ocr_flow_state
   const [image_url, setImageUrl] = useState(initial_entry?.image_url ?? "")
   const [captured_preview_url, setCapturedPreviewUrl] = useState("")
   const [ocr_failure_type, setOcrFailureType] =
@@ -111,11 +135,24 @@ export default function DriverLicenseTaskModalContent({
   useEffect(() => {
     const lifecycle_generation = ++lifecycle_generation_ref.current
     const scanner = scanner_ref.current
+    const page_instance_id = page_instance_id_ref.current
+    const mount_result = record_driver_license_mount(page_instance_id, "license_page")
+
+    if (mount_result.duplicate_detected) {
+      void send_ocr_debug("REACT_STRICT_MODE_DUPLICATE_MOUNT_DETECTED", {
+        mount_surface: "license_page",
+        document_type: "driver_license_front",
+        component_instance_id: page_instance_id,
+        previous_component_instance_id:
+          mount_result.previous_component_instance_id,
+      })
+    }
 
     if (!lifecycle_mount_logged_ref.current) {
       lifecycle_mount_logged_ref.current = true
       void send_ocr_debug("OCR_LICENSE_PAGE_MOUNT", {
         document_type: "driver_license_front",
+        component_instance_id: page_instance_id,
       })
     }
 
@@ -127,7 +164,9 @@ export default function DriverLicenseTaskModalContent({
 
         void send_ocr_debug("OCR_LICENSE_PAGE_UNMOUNT", {
           document_type: "driver_license_front",
+          component_instance_id: page_instance_id,
           scan_state: ocr_flow_state_ref.current,
+          reason: get_driver_task_unmount_reason(),
         })
         scanner?.stop_camera("component_unmount")
       })
@@ -421,6 +460,19 @@ export default function DriverLicenseTaskModalContent({
     }
   }, [get_item, mark_license_in_progress])
 
+  useImperativeHandle(ref, () => ({
+    prepare_modal_close: () => {
+      scanner_ref.current?.stop_camera("user_close")
+      set_modal_locked(false)
+      set_modal_ocr_state("idle", "idle")
+      handle_ocr_flow_event("flow_reset")
+      setOcrFailureType(null)
+      setOcrLoading(false)
+      setShowCameraStart(true)
+      camera_started_ref.current = false
+    },
+  }), [handle_ocr_flow_event, set_modal_locked, set_modal_ocr_state])
+
   const can_save =
     Boolean(image_url.trim()) && form_is_complete(form) && !isSubmitting && !ocr_loading
 
@@ -445,6 +497,7 @@ export default function DriverLicenseTaskModalContent({
 
         <div className={show_completed_preview ? "hidden" : undefined}>
           <DocumentScanner
+            key="driver_license_front"
             ref={scanner_ref}
             document_type="driver_license_front"
             is_open
@@ -596,4 +649,6 @@ export default function DriverLicenseTaskModalContent({
       ) : null}
     </div>
   )
-}
+})
+
+export default DriverLicenseTaskModalContent

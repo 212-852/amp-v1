@@ -11,15 +11,23 @@ import {
   type ReactNode,
 } from "react"
 
+import DriverTaskModal from "@/components/driver/driver_task_modal"
+import type { DriverTaskOpenSource } from "@/components/driver/task_modal_runtime"
+import {
+  clear_driver_license_mount_history,
+  confirm_driver_task_modal_open,
+  consume_driver_task_unmount_reason,
+  mark_driver_task_modal_closed,
+  resolve_driver_task_unmount_reason,
+  set_driver_task_unmount_reason,
+  should_emit_driver_task_modal_open,
+  try_begin_driver_task_open,
+} from "@/components/driver/task_modal_runtime"
 import type {
   DriverChecklistItem,
   DriverOnboardingTaskKey,
 } from "@/core/driver/context"
 import { send_ocr_debug } from "@/core/ocr/debug"
-import {
-  mark_driver_task_modal_closed,
-  mark_driver_task_modal_open,
-} from "@/components/driver/task_modal_runtime"
 
 type DriverPreparationContextValue = {
   items: DriverChecklistItem[]
@@ -32,11 +40,15 @@ type DriverPreparationContextValue = {
     key: DriverOnboardingTaskKey,
     patch: Partial<DriverChecklistItem>,
   ) => void
-  open_driver_task: (key: DriverOnboardingTaskKey) => void
+  open_driver_task: (
+    key: DriverOnboardingTaskKey,
+    source: DriverTaskOpenSource,
+  ) => void
   set_modal_locked: (locked: boolean) => void
   set_modal_ocr_state: (scan_state: string, camera_state: string) => void
   request_close_modal: (reason: string) => boolean
   close_modal: (reason: string) => void
+  force_close_modal: (reason: string) => void
   request_driver_refresh: (reason: string) => boolean
 }
 
@@ -76,7 +88,6 @@ export function DriverPreparationProvider({
   const [active_task, set_active_task] =
     useState<DriverOnboardingTaskKey | null>(null)
   const active_task_ref = useRef<DriverOnboardingTaskKey | null>(null)
-  const modal_opening_ref = useRef(false)
   const modal_locked_ref = useRef(false)
   const pending_close_debug_ref = useRef<{
     active_task: DriverOnboardingTaskKey | null
@@ -120,45 +131,41 @@ export function DriverPreparationProvider({
     [items],
   )
 
-  const open_driver_task = useCallback((key: DriverOnboardingTaskKey) => {
-    if (modal_opening_ref.current) {
+  const open_driver_task = useCallback((
+    key: DriverOnboardingTaskKey,
+    source: DriverTaskOpenSource,
+  ) => {
+    const begin_result = try_begin_driver_task_open(key)
+
+    if (!begin_result.ok) {
       void send_ocr_debug("DRIVER_TASK_MODAL_OPEN_SKIPPED", {
         task_key: key,
-        reason: "already_opening",
+        reason: begin_result.reason,
+        ...source,
       })
       return
     }
 
-    if (active_task_ref.current === key) {
-      void send_ocr_debug("DRIVER_TASK_MODAL_OPEN_SKIPPED", {
-        task_key: key,
-        reason: "already_open",
-      })
-      return
-    }
-
-    if (active_task_ref.current !== null) {
-      void send_ocr_debug("DRIVER_TASK_MODAL_OPEN_SKIPPED", {
-        task_key: key,
-        active_task: active_task_ref.current,
-        reason: "another_task_open",
-      })
-      return
-    }
-
-    modal_opening_ref.current = true
     active_task_ref.current = key
-    mark_driver_task_modal_open(key)
     modal_ocr_state_ref.current = {
       scan_state: "idle",
       camera_state: "idle",
     }
-    const pathname = window.location.pathname
-    void send_ocr_debug("DRIVER_TASK_MODAL_OPEN", {
-      task_key: key,
-      from: pathname,
-      to: pathname,
-    })
+    clear_driver_license_mount_history()
+
+    const pathname =
+      typeof window === "undefined" ? "/driver" : window.location.pathname
+
+    if (should_emit_driver_task_modal_open(key, source)) {
+      void send_ocr_debug("DRIVER_TASK_MODAL_OPEN", {
+        task_key: key,
+        from: pathname,
+        to: pathname,
+        ...source,
+      })
+    }
+
+    confirm_driver_task_modal_open(key)
     set_active_task(key)
   }, [])
 
@@ -173,10 +180,13 @@ export function DriverPreparationProvider({
     modal_ocr_state_ref.current = { scan_state, camera_state }
   }, [])
 
-  const commit_close_modal = useCallback((reason: string) => {
-    const active_task = active_task_ref.current
+  const commit_close_modal = useCallback((reason: string, forced = false) => {
+    const current_task = active_task_ref.current
+    set_driver_task_unmount_reason(
+      resolve_driver_task_unmount_reason(forced ? "user_cancel" : reason),
+    )
     pending_close_debug_ref.current = {
-      active_task,
+      active_task: current_task,
       reason,
       ...modal_ocr_state_ref.current,
     }
@@ -190,7 +200,6 @@ export function DriverPreparationProvider({
       return
     }
 
-    modal_opening_ref.current = false
     mark_driver_task_modal_closed()
     const close_debug = pending_close_debug_ref.current
 
@@ -202,36 +211,45 @@ export function DriverPreparationProvider({
     void send_ocr_debug("DRIVER_TASK_MODAL_CLOSED", {
       ...close_debug,
       task_key: close_debug.active_task,
+      unmount_reason: consume_driver_task_unmount_reason(),
     })
   }, [active_task])
 
   const close_modal = useCallback((reason: string) => {
-    const active_task = active_task_ref.current
     void send_ocr_debug("DRIVER_TASK_MODAL_CLOSE_REQUESTED", {
-      active_task,
-      task_key: active_task,
+      active_task: active_task_ref.current,
+      task_key: active_task_ref.current,
       reason,
       ...modal_ocr_state_ref.current,
     })
     commit_close_modal(reason)
   }, [commit_close_modal])
 
-  const request_close_modal = useCallback((reason: string) => {
-    const active_task = active_task_ref.current
-    const runtime_state = modal_ocr_state_ref.current
+  const force_close_modal = useCallback((reason: string) => {
     void send_ocr_debug("DRIVER_TASK_MODAL_CLOSE_REQUESTED", {
-      active_task,
-      task_key: active_task,
+      active_task: active_task_ref.current,
+      task_key: active_task_ref.current,
       reason,
-      ...runtime_state,
+      forced: true,
+      ...modal_ocr_state_ref.current,
+    })
+    commit_close_modal(reason, true)
+  }, [commit_close_modal])
+
+  const request_close_modal = useCallback((reason: string) => {
+    void send_ocr_debug("DRIVER_TASK_MODAL_CLOSE_REQUESTED", {
+      active_task: active_task_ref.current,
+      task_key: active_task_ref.current,
+      reason,
+      ...modal_ocr_state_ref.current,
     })
 
     if (modal_locked_ref.current) {
       void send_ocr_debug("DRIVER_TASK_MODAL_CLOSE_BLOCKED", {
-        active_task,
-        task_key: active_task,
+        active_task: active_task_ref.current,
+        task_key: active_task_ref.current,
         reason,
-        ...runtime_state,
+        ...modal_ocr_state_ref.current,
       })
       log_navigation_blocked({
         action: "push",
@@ -280,16 +298,18 @@ export function DriverPreparationProvider({
       set_modal_ocr_state,
       request_close_modal,
       close_modal,
+      force_close_modal,
       request_driver_refresh,
     }),
     [
+      active_task,
       all_complete,
       can_operate,
       close_modal,
+      force_close_modal,
       get_item,
       items,
       open_driver_task,
-      active_task,
       replace_items,
       request_close_modal,
       request_driver_refresh,
@@ -302,6 +322,7 @@ export function DriverPreparationProvider({
   return (
     <DriverPreparationContext.Provider value={value}>
       {children}
+      <DriverTaskModal active_task={active_task} />
     </DriverPreparationContext.Provider>
   )
 }
