@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -20,7 +21,7 @@ type DriverPreparationContextValue = {
   items: DriverChecklistItem[]
   all_complete: boolean
   can_operate: boolean
-  open_task_key: DriverOnboardingTaskKey | null
+  active_task: DriverOnboardingTaskKey | null
   get_item: (key: DriverOnboardingTaskKey) => DriverChecklistItem | null
   replace_items: (items: DriverChecklistItem[]) => void
   update_item: (
@@ -71,7 +72,14 @@ export function DriverPreparationProvider({
   const [active_task, set_active_task] =
     useState<DriverOnboardingTaskKey | null>(null)
   const active_task_ref = useRef<DriverOnboardingTaskKey | null>(null)
+  const modal_opening_ref = useRef(false)
   const modal_locked_ref = useRef(false)
+  const pending_close_debug_ref = useRef<{
+    active_task: DriverOnboardingTaskKey | null
+    reason: string
+    scan_state: string
+    camera_state: string
+  } | null>(null)
   const modal_ocr_state_ref = useRef({
     scan_state: "idle",
     camera_state: "idle",
@@ -109,16 +117,26 @@ export function DriverPreparationProvider({
   )
 
   const open_task = useCallback((key: DriverOnboardingTaskKey) => {
-    void send_ocr_debug("DRIVER_TASK_MODAL_OPEN", {
-      task_key: key,
-      from: "/driver",
-      to: "/driver",
-    })
+    if (modal_opening_ref.current || active_task_ref.current !== null) {
+      void send_ocr_debug("DRIVER_TASK_MODAL_OPEN_SKIPPED", {
+        task_key: key,
+        active_task: active_task_ref.current,
+        reason: "already_opening",
+      })
+      return
+    }
+
+    modal_opening_ref.current = true
     active_task_ref.current = key
     modal_ocr_state_ref.current = {
       scan_state: "idle",
       camera_state: "idle",
     }
+    void send_ocr_debug("DRIVER_TASK_MODAL_OPEN", {
+      task_key: key,
+      from: "/driver",
+      to: "/driver",
+    })
     set_active_task(key)
   }, [])
 
@@ -135,16 +153,34 @@ export function DriverPreparationProvider({
 
   const commit_close_modal = useCallback((reason: string) => {
     const active_task = active_task_ref.current
-    void send_ocr_debug("DRIVER_TASK_MODAL_CLOSED", {
+    pending_close_debug_ref.current = {
       active_task,
-      task_key: active_task,
       reason,
       ...modal_ocr_state_ref.current,
-    })
+    }
     active_task_ref.current = null
     modal_locked_ref.current = false
     set_active_task(null)
   }, [])
+
+  useEffect(() => {
+    if (active_task !== null) {
+      return
+    }
+
+    modal_opening_ref.current = false
+    const close_debug = pending_close_debug_ref.current
+
+    if (!close_debug) {
+      return
+    }
+
+    pending_close_debug_ref.current = null
+    void send_ocr_debug("DRIVER_TASK_MODAL_CLOSED", {
+      ...close_debug,
+      task_key: close_debug.active_task,
+    })
+  }, [active_task])
 
   const close_modal = useCallback((reason: string) => {
     const active_task = active_task_ref.current
@@ -212,7 +248,7 @@ export function DriverPreparationProvider({
       items,
       all_complete,
       can_operate,
-      open_task_key: active_task,
+      active_task,
       get_item,
       replace_items,
       update_item,

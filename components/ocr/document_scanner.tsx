@@ -153,6 +153,8 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
       stable_started_at: null as number | null,
     })
     const camera_start_once_ref = useRef(false)
+    const lifecycle_generation_ref = useRef(0)
+    const lifecycle_mount_logged_ref = useRef(false)
     const on_capture_ref = useRef(on_capture)
     const on_running_change_ref = useRef(on_running_change)
     const on_flow_event_ref = useRef(on_flow_event)
@@ -685,6 +687,7 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
     }, [document_type])
 
     useEffect(() => {
+      const lifecycle_generation = ++lifecycle_generation_ref.current
       const component_instance_id = component_instance_id_ref.current
       const mount_document_type = document_type_ref.current
       const mount_payload = {
@@ -693,7 +696,10 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
         scan_state: flow_state_ref.current,
         camera_state: flow_state_ref.current,
       }
-      void send_ocr_debug("OCR_COMPONENT_MOUNT", mount_payload)
+      if (!lifecycle_mount_logged_ref.current) {
+        lifecycle_mount_logged_ref.current = true
+        void send_ocr_debug("OCR_COMPONENT_MOUNT", mount_payload)
+      }
 
       const mark_route_change = () => {
         route_change_ref.current = true
@@ -703,25 +709,31 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
 
       return () => {
         window.removeEventListener("pagehide", mark_route_change)
-        const unmount_payload = {
-          component_instance_id,
-          document_type: mount_document_type,
-          scan_state: flow_state_ref.current,
-          camera_state: flow_state_ref.current,
-        }
+        queueMicrotask(() => {
+          if (lifecycle_generation_ref.current !== lifecycle_generation) {
+            return
+          }
 
-        if (ocr_locked_ref.current) {
-          void send_ocr_debug("OCR_COMPONENT_UNMOUNT_BLOCKED", {
-            ...unmount_payload,
-            reason: "ocr_locked",
-          })
-          return
-        }
+          const unmount_payload = {
+            component_instance_id,
+            document_type: mount_document_type,
+            scan_state: flow_state_ref.current,
+            camera_state: flow_state_ref.current,
+          }
 
-        void send_ocr_debug("OCR_COMPONENT_UNMOUNT", unmount_payload)
-        stop_camera_ref.current(
-          route_change_ref.current ? "route_change" : "component_unmount",
-        )
+          if (ocr_locked_ref.current) {
+            void send_ocr_debug("OCR_COMPONENT_UNMOUNT_BLOCKED", {
+              ...unmount_payload,
+              reason: "ocr_locked",
+            })
+            return
+          }
+
+          void send_ocr_debug("OCR_COMPONENT_UNMOUNT", unmount_payload)
+          stop_camera_ref.current(
+            route_change_ref.current ? "route_change" : "component_unmount",
+          )
+        })
       }
     }, [])
 

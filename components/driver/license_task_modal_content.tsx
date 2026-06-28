@@ -88,6 +88,8 @@ export default function DriverLicenseTaskModalContent({
   } = use_driver_preparation()
   const scanner_ref = useRef<DocumentScannerHandle>(null)
   const camera_started_ref = useRef(false)
+  const lifecycle_generation_ref = useRef(0)
+  const lifecycle_mount_logged_ref = useRef(false)
   const [ocr_flow_state, dispatch_ocr_flow] = useReducer(
     reduce_ocr_flow,
     "idle",
@@ -107,17 +109,28 @@ export default function DriverLicenseTaskModalContent({
   )
 
   useEffect(() => {
+    const lifecycle_generation = ++lifecycle_generation_ref.current
     const scanner = scanner_ref.current
-    void send_ocr_debug("OCR_LICENSE_PAGE_MOUNT", {
-      document_type: "driver_license_front",
-    })
+
+    if (!lifecycle_mount_logged_ref.current) {
+      lifecycle_mount_logged_ref.current = true
+      void send_ocr_debug("OCR_LICENSE_PAGE_MOUNT", {
+        document_type: "driver_license_front",
+      })
+    }
 
     return () => {
-      void send_ocr_debug("OCR_LICENSE_PAGE_UNMOUNT", {
-        document_type: "driver_license_front",
-        scan_state: ocr_flow_state_ref.current,
+      queueMicrotask(() => {
+        if (lifecycle_generation_ref.current !== lifecycle_generation) {
+          return
+        }
+
+        void send_ocr_debug("OCR_LICENSE_PAGE_UNMOUNT", {
+          document_type: "driver_license_front",
+          scan_state: ocr_flow_state_ref.current,
+        })
+        scanner?.stop_camera("component_unmount")
       })
-      scanner?.stop_camera("component_unmount")
     }
   }, [])
 
@@ -158,6 +171,8 @@ export default function DriverLicenseTaskModalContent({
     const previous_state = ocr_flow_state_ref.current
     const next_state = reduce_ocr_flow(previous_state, event)
     ocr_flow_state_ref.current = next_state
+    set_modal_ocr_state(next_state, next_state)
+    set_modal_locked(is_ocr_accordion_locked(next_state))
     dispatch_ocr_flow(event)
 
     void send_ocr_debug("OCR_SCAN_STATE_CHANGED", {
@@ -166,7 +181,7 @@ export default function DriverLicenseTaskModalContent({
       next_state,
       event,
     })
-  }, [])
+  }, [set_modal_locked, set_modal_ocr_state])
 
   const apply_saved_license_state = useCallback((state: unknown) => {
     const progress_state = state as DriverProgressState | undefined

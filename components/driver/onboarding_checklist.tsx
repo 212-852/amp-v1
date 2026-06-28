@@ -13,7 +13,7 @@ export default function DriverOnboardingChecklist() {
   const {
     items,
     all_complete,
-    open_task_key,
+    active_task,
     open_task,
     request_driver_refresh,
   } = use_driver_preparation()
@@ -60,7 +60,7 @@ export default function DriverOnboardingChecklist() {
         </div>
       </div>
 
-      {open_task_key ? <DriverTaskModal task_key={open_task_key} /> : null}
+      {active_task ? <DriverTaskModal task_key={active_task} /> : null}
     </>
   )
 }

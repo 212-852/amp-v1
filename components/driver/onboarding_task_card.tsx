@@ -50,7 +50,11 @@ function OnboardingTaskCard({
   return (
     <button
       type="button"
-      onClick={on_open}
+      onClick={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        on_open()
+      }}
       className="group flex w-full items-center gap-4 rounded-2xl border border-neutral-200 bg-white px-4 py-4 text-left shadow-sm transition hover:border-neutral-300 hover:shadow-md"
     >
       <TaskStatusIcon status={item.task_status} />
