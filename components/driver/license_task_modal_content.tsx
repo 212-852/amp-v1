@@ -1,17 +1,17 @@
 "use client"
 
 import {
+  forwardRef,
   type ChangeEvent,
   useCallback,
   useEffect,
+  useImperativeHandle,
   useMemo,
   useReducer,
   useRef,
   useState,
 } from "react"
-import { useRouter } from "next/navigation"
 
-import OnboardingTaskShell from "@/components/driver/onboarding_task_shell"
 import { use_driver_preparation } from "@/components/driver/preparation_provider"
 import DocumentScanner, {
   type DocumentScannerHandle,
@@ -24,13 +24,14 @@ import {
   run_driver_license_ocr_pipeline,
   type OcrImageSource,
 } from "@/core/ocr/client"
+import { send_ocr_debug, set_ocr_debug_context } from "@/core/ocr/debug"
 import {
+  is_ocr_accordion_locked,
   reduce_ocr_flow,
   type OcrFlowEvent,
   type OcrFailureType,
   type OcrFlowState,
 } from "@/core/ocr/flow"
-import { send_ocr_debug, set_ocr_debug_context } from "@/core/ocr/debug"
 
 type LicenseFormFields = {
   license_name: string
@@ -74,13 +75,21 @@ function form_is_complete(form: LicenseFormFields) {
   )
 }
 
-export default function DriverLicenseTaskPage({
-  initial_entry,
-}: Readonly<{
-  initial_entry: DriverProgressEntry | null
-}>) {
-  const router = useRouter()
-  const { update_item, get_item } = use_driver_preparation()
+export type DriverLicenseTaskModalContentHandle = {
+  prepare_modal_close: () => void
+}
+
+const DriverLicenseTaskModalContent = forwardRef<
+  DriverLicenseTaskModalContentHandle,
+  Readonly<{
+    initial_entry: DriverProgressEntry | null
+    on_save_success: (state?: unknown) => void
+  }>
+>(function DriverLicenseTaskModalContent(
+  { initial_entry, on_save_success },
+  ref,
+) {
+  const { update_item, get_item, set_modal_locked } = use_driver_preparation()
   const scanner_ref = useRef<DocumentScannerHandle>(null)
   const camera_started_ref = useRef(false)
   const [ocr_flow_state, dispatch_ocr_flow] = useReducer(
@@ -101,6 +110,24 @@ export default function DriverLicenseTaskPage({
   const [show_camera_start, setShowCameraStart] = useState(
     () => !initial_entry?.image_url?.trim(),
   )
+
+  useEffect(() => {
+    void send_ocr_debug("OCR_LICENSE_PAGE_MOUNT", {
+      document_type: "driver_license_front",
+    })
+
+    return () => {
+      void send_ocr_debug("OCR_LICENSE_PAGE_UNMOUNT", {
+        document_type: "driver_license_front",
+        scan_state: ocr_flow_state_ref.current,
+      })
+      scanner_ref.current?.stop_camera("component_unmount")
+    }
+  }, [])
+
+  useEffect(() => {
+    set_modal_locked(is_ocr_accordion_locked(ocr_flow_state))
+  }, [ocr_flow_state, set_modal_locked])
 
   set_ocr_debug_context({
     document_type: "driver_license_front",
@@ -155,13 +182,14 @@ export default function DriverLicenseTaskPage({
     })
   }, [update_item])
 
-  const return_to_checklist = useCallback((state?: unknown) => {
+  const finish_save = useCallback((state?: unknown) => {
     if (state) {
       apply_saved_license_state(state)
     }
 
-    router.push("/driver")
-  }, [apply_saved_license_state, router])
+    set_modal_locked(false)
+    on_save_success(state)
+  }, [apply_saved_license_state, on_save_success, set_modal_locked])
 
   const mark_license_in_progress = useCallback(() => {
     update_item("driver_license", {
@@ -234,7 +262,10 @@ export default function DriverLicenseTaskPage({
         return false
       }
 
-      return_to_checklist(result.state)
+      void send_ocr_debug("OCR_SAVE_COMPLETED", {
+        document_type: "driver_license_front",
+      })
+      finish_save(result.state)
       return true
     } catch (error) {
       setMessage("保存できませんでした。")
@@ -280,7 +311,10 @@ export default function DriverLicenseTaskPage({
       handle_ocr_flow_event("flow_completed")
       setOcrFailureType(null)
       setMessage(result.message ?? "運転免許証を登録しました。")
-      return_to_checklist(result.state)
+      void send_ocr_debug("OCR_FORM_FILL_COMPLETED", {
+        document_type: "driver_license_front",
+      })
+      finish_save(result.state)
     } catch (error) {
       report_scan_failure("ocr_unreadable", {
         message: error instanceof Error ? error.message : "ocr_failed",
@@ -348,13 +382,6 @@ export default function DriverLicenseTaskPage({
     }
   }
 
-  async function submit_license() {
-    await save_driver_readiness_answer({
-      next_image_url: image_url,
-      next_form: form,
-    })
-  }
-
   function start_camera_from_gesture() {
     if (camera_started_ref.current) {
       return
@@ -374,6 +401,18 @@ export default function DriverLicenseTaskPage({
     }
   }, [get_item, mark_license_in_progress])
 
+  useImperativeHandle(ref, () => ({
+    prepare_modal_close: () => {
+      scanner_ref.current?.stop_camera("user_close")
+      set_modal_locked(false)
+      handle_ocr_flow_event("flow_reset")
+      setOcrFailureType(null)
+      setOcrLoading(false)
+      setShowCameraStart(true)
+      camera_started_ref.current = false
+    },
+  }), [handle_ocr_flow_event, set_modal_locked])
+
   const can_save =
     Boolean(image_url.trim()) && form_is_complete(form) && !isSubmitting && !ocr_loading
 
@@ -384,167 +423,172 @@ export default function DriverLicenseTaskPage({
       !captured_preview_url)
 
   return (
-    <OnboardingTaskShell title="普通自動車運転免許証">
-      <div className="space-y-6">
-        <section className="space-y-3">
-          {show_camera_start && !scanner_running && ocr_flow_state !== "failed" ? (
-            <button
-              type="button"
-              onClick={start_camera_from_gesture}
-              className="h-12 w-full rounded-full bg-neutral-900 text-sm font-bold text-white"
-            >
-              カメラを起動してスキャン
-            </button>
-          ) : null}
+    <div className="space-y-6">
+      <section className="space-y-3">
+        {show_camera_start && !scanner_running && ocr_flow_state !== "failed" ? (
+          <button
+            type="button"
+            onClick={start_camera_from_gesture}
+            className="h-12 w-full rounded-full bg-neutral-900 text-sm font-bold text-white"
+          >
+            カメラを起動してスキャン
+          </button>
+        ) : null}
 
-          <div className={show_completed_preview ? "hidden" : undefined}>
-            <DocumentScanner
-              key="driver_license_front"
-              ref={scanner_ref}
-              document_type="driver_license_front"
-              is_open
-              on_capture={handle_capture}
-              on_running_change={handle_scanner_running_change}
-              flow_state={ocr_flow_state}
-              on_flow_event={handle_ocr_flow_event}
+        <div className={show_completed_preview ? "hidden" : undefined}>
+          <DocumentScanner
+            key="driver_license_front"
+            ref={scanner_ref}
+            document_type="driver_license_front"
+            is_open
+            accordion_locked={is_ocr_accordion_locked(ocr_flow_state)}
+            is_locked={is_ocr_accordion_locked(ocr_flow_state)}
+            on_capture={handle_capture}
+            on_running_change={handle_scanner_running_change}
+            flow_state={ocr_flow_state}
+            on_flow_event={handle_ocr_flow_event}
+            failure_type={ocr_failure_type}
+            on_failure={report_scan_failure}
+            disabled={isSubmitting || ocr_loading}
+            frozen_preview_url={captured_preview_url}
+          />
+        </div>
+
+        {show_completed_preview ? (
+          <div className="relative flex aspect-[3/4] w-full items-center justify-center overflow-hidden rounded-2xl bg-black text-sm text-white/80">
+            {preview_url ? (
+              <img
+                src={preview_url}
+                alt="運転免許証プレビュー"
+                className="h-full w-full object-contain"
+              />
+            ) : (
+              <span>画像を読み込みました</span>
+            )}
+            <OcrFlowStatus
+              state={ocr_flow_state}
               failure_type={ocr_failure_type}
-              on_failure={report_scan_failure}
-              disabled={isSubmitting || ocr_loading}
-              frozen_preview_url={captured_preview_url}
             />
           </div>
-
-          {show_completed_preview ? (
-            <div className="relative flex aspect-[3/4] w-full items-center justify-center overflow-hidden rounded-2xl bg-black text-sm text-white/80">
-              {preview_url ? (
-                <img
-                  src={preview_url}
-                  alt="運転免許証プレビュー"
-                  className="h-full w-full object-contain"
-                />
-              ) : (
-                <span>画像を読み込みました</span>
-              )}
-              <OcrFlowStatus
-                state={ocr_flow_state}
-                failure_type={ocr_failure_type}
-              />
-            </div>
-          ) : null}
-
-          {ocr_flow_state === "failed" ? (
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={retry_scan}
-                className="rounded-full bg-neutral-900 px-3 py-2.5 text-sm font-semibold text-white"
-              >
-                もう一度スキャン
-              </button>
-              <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-neutral-300 px-3 py-2.5 text-sm font-semibold text-neutral-800">
-                画像を選択
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) => void handle_failed_image_select(event)}
-                  className="sr-only"
-                />
-              </label>
-            </div>
-          ) : null}
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold text-neutral-900">確認フォーム</h2>
-          <label className="grid gap-1 text-sm text-neutral-700">
-            氏名
-            <input
-              value={form.license_name}
-              disabled={!image_url.trim() || ocr_loading}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  license_name: event.target.value,
-                }))
-              }
-              className="h-11 rounded-xl border border-neutral-200 px-3 text-neutral-900 disabled:bg-neutral-50 disabled:text-neutral-400"
-            />
-          </label>
-          <label className="grid gap-1 text-sm text-neutral-700">
-            住所
-            <input
-              value={form.license_address}
-              disabled={!image_url.trim() || ocr_loading}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  license_address: event.target.value,
-                }))
-              }
-              className="h-11 rounded-xl border border-neutral-200 px-3 text-neutral-900 disabled:bg-neutral-50 disabled:text-neutral-400"
-            />
-          </label>
-          <label className="grid gap-1 text-sm text-neutral-700">
-            生年月日
-            <input
-              type="date"
-              value={form.license_birth_date}
-              disabled={!image_url.trim() || ocr_loading}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  license_birth_date: event.target.value,
-                }))
-              }
-              className="h-11 rounded-xl border border-neutral-200 px-3 text-neutral-900 disabled:bg-neutral-50 disabled:text-neutral-400"
-            />
-          </label>
-          <label className="grid gap-1 text-sm text-neutral-700">
-            免許証番号
-            <input
-              value={form.license_number}
-              disabled={!image_url.trim() || ocr_loading}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  license_number: event.target.value,
-                }))
-              }
-              className="h-11 rounded-xl border border-neutral-200 px-3 text-neutral-900 disabled:bg-neutral-50 disabled:text-neutral-400"
-            />
-          </label>
-          <label className="grid gap-1 text-sm text-neutral-700">
-            有効期限
-            <input
-              type="date"
-              value={form.license_expiration_date}
-              disabled={!image_url.trim() || ocr_loading}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  license_expiration_date: event.target.value,
-                }))
-              }
-              className="h-11 rounded-xl border border-neutral-200 px-3 text-neutral-900 disabled:bg-neutral-50 disabled:text-neutral-400"
-            />
-          </label>
-        </section>
-
-        <button
-          type="button"
-          disabled={!can_save}
-          onClick={() => void submit_license()}
-          className="h-12 w-full rounded-full bg-neutral-900 text-sm font-bold text-white disabled:opacity-60"
-        >
-          {isSubmitting ? "保存中..." : "保存する"}
-        </button>
-
-        {message ? (
-          <p className="rounded-xl bg-neutral-100 px-3 py-3 text-sm font-medium text-neutral-800">
-            {message}
-          </p>
         ) : null}
-      </div>
-    </OnboardingTaskShell>
+
+        {ocr_flow_state === "failed" ? (
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={retry_scan}
+              className="rounded-full bg-neutral-900 px-3 py-2.5 text-sm font-semibold text-white"
+            >
+              もう一度スキャン
+            </button>
+            <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-neutral-300 px-3 py-2.5 text-sm font-semibold text-neutral-800">
+              画像を選択
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) => void handle_failed_image_select(event)}
+                className="sr-only"
+              />
+            </label>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-neutral-900">確認フォーム</h2>
+        <label className="grid gap-1 text-sm text-neutral-700">
+          氏名
+          <input
+            value={form.license_name}
+            disabled={!image_url.trim() || ocr_loading}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                license_name: event.target.value,
+              }))
+            }
+            className="h-11 rounded-xl border border-neutral-200 px-3 text-neutral-900 disabled:bg-neutral-50 disabled:text-neutral-400"
+          />
+        </label>
+        <label className="grid gap-1 text-sm text-neutral-700">
+          住所
+          <input
+            value={form.license_address}
+            disabled={!image_url.trim() || ocr_loading}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                license_address: event.target.value,
+              }))
+            }
+            className="h-11 rounded-xl border border-neutral-200 px-3 text-neutral-900 disabled:bg-neutral-50 disabled:text-neutral-400"
+          />
+        </label>
+        <label className="grid gap-1 text-sm text-neutral-700">
+          生年月日
+          <input
+            type="date"
+            value={form.license_birth_date}
+            disabled={!image_url.trim() || ocr_loading}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                license_birth_date: event.target.value,
+              }))
+            }
+            className="h-11 rounded-xl border border-neutral-200 px-3 text-neutral-900 disabled:bg-neutral-50 disabled:text-neutral-400"
+          />
+        </label>
+        <label className="grid gap-1 text-sm text-neutral-700">
+          免許証番号
+          <input
+            value={form.license_number}
+            disabled={!image_url.trim() || ocr_loading}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                license_number: event.target.value,
+              }))
+            }
+            className="h-11 rounded-xl border border-neutral-200 px-3 text-neutral-900 disabled:bg-neutral-50 disabled:text-neutral-400"
+          />
+        </label>
+        <label className="grid gap-1 text-sm text-neutral-700">
+          有効期限
+          <input
+            type="date"
+            value={form.license_expiration_date}
+            disabled={!image_url.trim() || ocr_loading}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                license_expiration_date: event.target.value,
+              }))
+            }
+            className="h-11 rounded-xl border border-neutral-200 px-3 text-neutral-900 disabled:bg-neutral-50 disabled:text-neutral-400"
+          />
+        </label>
+      </section>
+
+      <button
+        type="button"
+        disabled={!can_save}
+        onClick={() => void save_driver_readiness_answer({
+          next_image_url: image_url,
+          next_form: form,
+        })}
+        className="h-12 w-full rounded-full bg-neutral-900 text-sm font-bold text-white disabled:opacity-60"
+      >
+        {isSubmitting ? "保存中..." : "保存する"}
+      </button>
+
+      {message ? (
+        <p className="rounded-xl bg-neutral-100 px-3 py-3 text-sm font-medium text-neutral-800">
+          {message}
+        </p>
+      ) : null}
+    </div>
   )
-}
+})
+
+export default DriverLicenseTaskModalContent

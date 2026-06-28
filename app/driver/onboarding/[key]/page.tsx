@@ -1,5 +1,5 @@
-import DriverOnboardingTaskRoute from "@/components/driver/onboarding_task_route"
+import { redirect } from "next/navigation"
 
-export default function DriverOnboardingTaskPage() {
-  return <DriverOnboardingTaskRoute />
+export default function DriverOnboardingTaskRedirectPage() {
+  redirect("/driver")
 }
