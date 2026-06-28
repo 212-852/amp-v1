@@ -1,11 +1,9 @@
 "use client"
 
 import { X } from "lucide-react"
-import { useCallback, useRef } from "react"
+import { useCallback } from "react"
 
-import DriverLicenseTaskModalContent, {
-  type DriverLicenseTaskModalContentHandle,
-} from "@/components/driver/license_task_modal_content"
+import DriverLicenseTaskModalContent from "@/components/driver/license_task_modal_content"
 import { use_driver_preparation } from "@/components/driver/preparation_provider"
 import DriverTaskPlaceholderModalContent from "@/components/driver/task_placeholder_modal_content"
 import {
@@ -22,10 +20,7 @@ export default function DriverTaskModal({
     get_item,
     request_close_modal,
     close_modal,
-    force_close_modal,
-    modal_locked,
   } = use_driver_preparation()
-  const license_ref = useRef<DriverLicenseTaskModalContentHandle>(null)
 
   const item = get_item(task_key)
   const title = item?.label ?? DRIVER_PROGRESS_LABELS[task_key]
@@ -35,25 +30,8 @@ export default function DriverTaskModal({
   }, [request_close_modal])
 
   const handle_cancel = useCallback(() => {
-    if (task_key === "driver_license") {
-      license_ref.current?.prepare_modal_close()
-      force_close_modal("user_cancel")
-      return
-    }
-
-    if (modal_locked) {
-      request_close_modal("user_cancel")
-      return
-    }
-
-    close_modal("user_cancel")
-  }, [
-    close_modal,
-    force_close_modal,
-    modal_locked,
-    request_close_modal,
-    task_key,
-  ])
+    request_close_modal("user_cancel")
+  }, [request_close_modal])
 
   const handle_save_success = useCallback(() => {
     close_modal("save_completed")
@@ -92,7 +70,6 @@ export default function DriverTaskModal({
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {task_key === "driver_license" ? (
             <DriverLicenseTaskModalContent
-              ref={license_ref}
               initial_entry={item?.latest_entry ?? null}
               on_save_success={handle_save_success}
             />

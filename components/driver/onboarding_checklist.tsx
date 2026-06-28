@@ -18,20 +18,13 @@ export default function DriverOnboardingChecklist() {
     request_driver_refresh,
   } = use_driver_preparation()
 
-  const open_task_card = useCallback(
-    (key: DriverOnboardingTaskKey) => {
-      open_task(key)
-    },
-    [open_task],
-  )
-
-  const start_work = useCallback(() => {
+  function start_work() {
     if (!request_driver_refresh("start_work")) {
       return
     }
 
     router.refresh()
-  }, [request_driver_refresh, router])
+  }
 
   return (
     <>
@@ -50,7 +43,7 @@ export default function DriverOnboardingChecklist() {
             <MemoizedTaskCard
               key={item.key}
               item={item}
-              on_open={() => open_task_card(item.key)}
+              open_task={open_task}
             />
           ))}
         </section>
@@ -74,10 +67,14 @@ export default function DriverOnboardingChecklist() {
 
 const MemoizedTaskCard = memo(function MemoizedTaskCard({
   item,
-  on_open,
+  open_task,
 }: Readonly<{
   item: Parameters<typeof OnboardingTaskCard>[0]["item"]
-  on_open: () => void
+  open_task: (key: DriverOnboardingTaskKey) => void
 }>) {
+  const on_open = useCallback(() => {
+    open_task(item.key)
+  }, [item.key, open_task])
+
   return <OnboardingTaskCard item={item} on_open={on_open} />
 })

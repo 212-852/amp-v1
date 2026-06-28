@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react"
@@ -20,7 +21,6 @@ type DriverPreparationContextValue = {
   all_complete: boolean
   can_operate: boolean
   open_task_key: DriverOnboardingTaskKey | null
-  modal_locked: boolean
   get_item: (key: DriverOnboardingTaskKey) => DriverChecklistItem | null
   replace_items: (items: DriverChecklistItem[]) => void
   update_item: (
@@ -29,9 +29,9 @@ type DriverPreparationContextValue = {
   ) => void
   open_task: (key: DriverOnboardingTaskKey) => void
   set_modal_locked: (locked: boolean) => void
+  set_modal_ocr_state: (scan_state: string, camera_state: string) => void
   request_close_modal: (reason: string) => boolean
   close_modal: (reason: string) => void
-  force_close_modal: (reason: string) => void
   request_driver_refresh: (reason: string) => boolean
 }
 
@@ -68,9 +68,14 @@ export function DriverPreparationProvider({
   children: ReactNode
 }>) {
   const [items, setItems] = useState(initial_items)
-  const [open_task_key, setOpenTaskKey] =
+  const [active_task, set_active_task] =
     useState<DriverOnboardingTaskKey | null>(null)
-  const [modal_locked, setModalLocked] = useState(false)
+  const active_task_ref = useRef<DriverOnboardingTaskKey | null>(null)
+  const modal_locked_ref = useRef(false)
+  const modal_ocr_state_ref = useRef({
+    scan_state: "idle",
+    camera_state: "idle",
+  })
 
   const replace_items = useCallback((next_items: DriverChecklistItem[]) => {
     setItems(next_items)
@@ -109,42 +114,65 @@ export function DriverPreparationProvider({
       from: "/driver",
       to: "/driver",
     })
-    setOpenTaskKey(key)
+    active_task_ref.current = key
+    modal_ocr_state_ref.current = {
+      scan_state: "idle",
+      camera_state: "idle",
+    }
+    set_active_task(key)
   }, [])
 
   const set_modal_locked = useCallback((locked: boolean) => {
-    setModalLocked(locked)
+    modal_locked_ref.current = locked
+  }, [])
+
+  const set_modal_ocr_state = useCallback((
+    scan_state: string,
+    camera_state: string,
+  ) => {
+    modal_ocr_state_ref.current = { scan_state, camera_state }
+  }, [])
+
+  const commit_close_modal = useCallback((reason: string) => {
+    const active_task = active_task_ref.current
+    void send_ocr_debug("DRIVER_TASK_MODAL_CLOSED", {
+      active_task,
+      task_key: active_task,
+      reason,
+      ...modal_ocr_state_ref.current,
+    })
+    active_task_ref.current = null
+    modal_locked_ref.current = false
+    set_active_task(null)
   }, [])
 
   const close_modal = useCallback((reason: string) => {
-    void send_ocr_debug("DRIVER_TASK_MODAL_CLOSED", {
-      task_key: open_task_key,
+    const active_task = active_task_ref.current
+    void send_ocr_debug("DRIVER_TASK_MODAL_CLOSE_REQUESTED", {
+      active_task,
+      task_key: active_task,
       reason,
+      ...modal_ocr_state_ref.current,
     })
-    setOpenTaskKey(null)
-    setModalLocked(false)
-  }, [open_task_key])
-
-  const force_close_modal = useCallback((reason: string) => {
-    void send_ocr_debug("DRIVER_TASK_MODAL_CLOSED", {
-      task_key: open_task_key,
-      reason,
-      forced: true,
-    })
-    setOpenTaskKey(null)
-    setModalLocked(false)
-  }, [open_task_key])
+    commit_close_modal(reason)
+  }, [commit_close_modal])
 
   const request_close_modal = useCallback((reason: string) => {
+    const active_task = active_task_ref.current
+    const runtime_state = modal_ocr_state_ref.current
     void send_ocr_debug("DRIVER_TASK_MODAL_CLOSE_REQUESTED", {
-      task_key: open_task_key,
+      active_task,
+      task_key: active_task,
       reason,
+      ...runtime_state,
     })
 
-    if (modal_locked) {
+    if (modal_locked_ref.current) {
       void send_ocr_debug("DRIVER_TASK_MODAL_CLOSE_BLOCKED", {
-        task_key: open_task_key,
+        active_task,
+        task_key: active_task,
         reason,
+        ...runtime_state,
       })
       log_navigation_blocked({
         action: "push",
@@ -155,12 +183,12 @@ export function DriverPreparationProvider({
       return false
     }
 
-    close_modal(reason)
+    commit_close_modal(reason)
     return true
-  }, [close_modal, modal_locked, open_task_key])
+  }, [commit_close_modal])
 
   const request_driver_refresh = useCallback((reason: string) => {
-    if (modal_locked || open_task_key) {
+    if (modal_locked_ref.current || active_task_ref.current) {
       log_navigation_blocked({
         action: "refresh",
         from: "/driver",
@@ -177,39 +205,37 @@ export function DriverPreparationProvider({
       reason,
     })
     return true
-  }, [modal_locked, open_task_key])
+  }, [])
 
   const value = useMemo(
     () => ({
       items,
       all_complete,
       can_operate,
-      open_task_key,
-      modal_locked,
+      open_task_key: active_task,
       get_item,
       replace_items,
       update_item,
       open_task,
       set_modal_locked,
+      set_modal_ocr_state,
       request_close_modal,
       close_modal,
-      force_close_modal,
       request_driver_refresh,
     }),
     [
       all_complete,
       can_operate,
       close_modal,
-      force_close_modal,
       get_item,
       items,
-      modal_locked,
       open_task,
-      open_task_key,
+      active_task,
       replace_items,
       request_close_modal,
       request_driver_refresh,
       set_modal_locked,
+      set_modal_ocr_state,
       update_item,
     ],
   )

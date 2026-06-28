@@ -1,11 +1,9 @@
 "use client"
 
 import {
-  forwardRef,
   type ChangeEvent,
   useCallback,
   useEffect,
-  useImperativeHandle,
   useMemo,
   useReducer,
   useRef,
@@ -75,21 +73,19 @@ function form_is_complete(form: LicenseFormFields) {
   )
 }
 
-export type DriverLicenseTaskModalContentHandle = {
-  prepare_modal_close: () => void
-}
-
-const DriverLicenseTaskModalContent = forwardRef<
-  DriverLicenseTaskModalContentHandle,
-  Readonly<{
-    initial_entry: DriverProgressEntry | null
-    on_save_success: (state?: unknown) => void
-  }>
->(function DriverLicenseTaskModalContent(
-  { initial_entry, on_save_success },
-  ref,
-) {
-  const { update_item, get_item, set_modal_locked } = use_driver_preparation()
+export default function DriverLicenseTaskModalContent({
+  initial_entry,
+  on_save_success,
+}: Readonly<{
+  initial_entry: DriverProgressEntry | null
+  on_save_success: (state?: unknown) => void
+}>) {
+  const {
+    update_item,
+    get_item,
+    set_modal_locked,
+    set_modal_ocr_state,
+  } = use_driver_preparation()
   const scanner_ref = useRef<DocumentScannerHandle>(null)
   const camera_started_ref = useRef(false)
   const [ocr_flow_state, dispatch_ocr_flow] = useReducer(
@@ -97,7 +93,6 @@ const DriverLicenseTaskModalContent = forwardRef<
     "idle",
   )
   const ocr_flow_state_ref = useRef<OcrFlowState>(ocr_flow_state)
-  ocr_flow_state_ref.current = ocr_flow_state
   const [image_url, setImageUrl] = useState(initial_entry?.image_url ?? "")
   const [captured_preview_url, setCapturedPreviewUrl] = useState("")
   const [ocr_failure_type, setOcrFailureType] =
@@ -112,6 +107,7 @@ const DriverLicenseTaskModalContent = forwardRef<
   )
 
   useEffect(() => {
+    const scanner = scanner_ref.current
     void send_ocr_debug("OCR_LICENSE_PAGE_MOUNT", {
       document_type: "driver_license_front",
     })
@@ -121,13 +117,20 @@ const DriverLicenseTaskModalContent = forwardRef<
         document_type: "driver_license_front",
         scan_state: ocr_flow_state_ref.current,
       })
-      scanner_ref.current?.stop_camera("component_unmount")
+      scanner?.stop_camera("component_unmount")
     }
   }, [])
 
   useEffect(() => {
+    const camera_state = scanner_running ? "running" : ocr_flow_state
+    set_modal_ocr_state(ocr_flow_state, camera_state)
     set_modal_locked(is_ocr_accordion_locked(ocr_flow_state))
-  }, [ocr_flow_state, set_modal_locked])
+  }, [
+    ocr_flow_state,
+    scanner_running,
+    set_modal_locked,
+    set_modal_ocr_state,
+  ])
 
   set_ocr_debug_context({
     document_type: "driver_license_front",
@@ -388,6 +391,8 @@ const DriverLicenseTaskModalContent = forwardRef<
     }
 
     camera_started_ref.current = true
+    set_modal_ocr_state("camera_starting", "camera_starting")
+    set_modal_locked(true)
     setShowCameraStart(false)
     mark_license_in_progress()
     void scanner_ref.current?.open_from_user_gesture()
@@ -400,18 +405,6 @@ const DriverLicenseTaskModalContent = forwardRef<
       mark_license_in_progress()
     }
   }, [get_item, mark_license_in_progress])
-
-  useImperativeHandle(ref, () => ({
-    prepare_modal_close: () => {
-      scanner_ref.current?.stop_camera("user_close")
-      set_modal_locked(false)
-      handle_ocr_flow_event("flow_reset")
-      setOcrFailureType(null)
-      setOcrLoading(false)
-      setShowCameraStart(true)
-      camera_started_ref.current = false
-    },
-  }), [handle_ocr_flow_event, set_modal_locked])
 
   const can_save =
     Boolean(image_url.trim()) && form_is_complete(form) && !isSubmitting && !ocr_loading
@@ -437,7 +430,6 @@ const DriverLicenseTaskModalContent = forwardRef<
 
         <div className={show_completed_preview ? "hidden" : undefined}>
           <DocumentScanner
-            key="driver_license_front"
             ref={scanner_ref}
             document_type="driver_license_front"
             is_open
@@ -589,6 +581,4 @@ const DriverLicenseTaskModalContent = forwardRef<
       ) : null}
     </div>
   )
-})
-
-export default DriverLicenseTaskModalContent
+}
