@@ -1,6 +1,7 @@
 import {
   PWA_LOGIN_PENDING_KEY,
 } from "@/components/pwa/login_pending"
+import { get_active_driver_task_modal } from "@/components/driver/task_modal_runtime"
 import { send_chat_realtime_debug } from "@/components/chat/realtime_debug"
 import { create_browser_supabase_client } from "@/src/lib/supabase/client"
 
@@ -220,6 +221,15 @@ export function completePwaLogin(input: {
       },
     }),
   )
+
+  if (get_active_driver_task_modal()) {
+    input.on_debug?.("pwa_login_navigation_blocked", {
+      bridge_uuid: input.bridge_uuid ?? null,
+      route_path: destination,
+      reason: "driver_task_modal_open",
+    })
+    return
+  }
 
   if (input.navigate) {
     input.navigate(destination)

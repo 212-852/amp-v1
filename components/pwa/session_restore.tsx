@@ -8,12 +8,10 @@ import { get_active_driver_task_modal } from "@/components/driver/task_modal_run
 import {
   dispatchPwaOffline,
   dispatchPwaOnline,
-  PWA_OFFLINE_EVENT,
   PWA_ONLINE_EVENT,
 } from "@/components/pwa/events"
 import {
   clearPwaLoginPending,
-  completePwaLogin,
   isPwaLoginPending,
   pollPwaAuthSession,
   resolvePwaLoginDestination,
@@ -57,12 +55,6 @@ export function PwaSessionRestore() {
       if (result.user_uuid) {
         clearPwaLoginPending()
         const destination = resolvePwaLoginDestination(result.route_path)
-
-        if (window.location.pathname !== destination) {
-          window.location.replace(destination)
-          return
-        }
-
         const active_driver_task = get_active_driver_task_modal()
 
         if (active_driver_task) {
@@ -72,12 +64,17 @@ export function PwaSessionRestore() {
             document_type: "driver_license_front",
             scan_state: "active",
             camera_state: "unknown",
-            action: "refresh",
+            action: window.location.pathname !== destination ? "replace" : "refresh",
             from: window.location.pathname,
-            to: window.location.pathname,
+            to: destination,
             reason: "pwa_session_restore_driver_task_open",
             task_key: active_driver_task,
           })
+          return
+        }
+
+        if (window.location.pathname !== destination) {
+          window.location.replace(destination)
           return
         }
 

@@ -16,6 +16,7 @@ function render_task_body(input: {
   request_id: string
   component_instance_id: string
   on_saved: () => void
+  on_runtime_state: (state: { scan_state: string; camera_state: string }) => void
 }) {
   if (input.active_task === "driver_license") {
     return (
@@ -23,6 +24,7 @@ function render_task_body(input: {
         request_id={input.request_id}
         component_instance_id={input.component_instance_id}
         on_saved={input.on_saved}
+        on_runtime_state={input.on_runtime_state}
       />
     )
   }
@@ -40,11 +42,13 @@ export default function DriverTaskModal({
   request_id,
   component_instance_id,
   on_close,
+  on_runtime_state,
 }: Readonly<{
   active_task: DriverOnboardingTaskKey | null
   request_id: string
   component_instance_id: string
   on_close: (reason: string) => void
+  on_runtime_state: (state: { scan_state: string; camera_state: string }) => void
 }>) {
   const { get_item } = useDriverPreparation()
   const handle_saved = useCallback(() => {
@@ -63,7 +67,7 @@ export default function DriverTaskModal({
             <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">稼働準備</p>
             <h2 id="driver-task-modal-title" className="mt-1 text-lg font-bold leading-7 text-neutral-950">{title}</h2>
           </div>
-          <button type="button" aria-label="閉じる" onClick={() => on_close("user_close")} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-neutral-200 text-neutral-600 transition hover:bg-neutral-50">
+          <button type="button" aria-label="閉じる" onClick={() => on_close("explicit_close")} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-neutral-200 text-neutral-600 transition hover:bg-neutral-50">
             <X aria-hidden="true" className="h-5 w-5" strokeWidth={2.25} />
           </button>
         </header>
@@ -74,12 +78,13 @@ export default function DriverTaskModal({
             request_id,
             component_instance_id,
             on_saved: handle_saved,
+            on_runtime_state,
           })}
         </div>
 
         <footer className="border-t border-neutral-200 px-5 py-4">
-          <button type="button" onClick={() => on_close("user_cancel")} className="h-11 w-full rounded-full border border-neutral-300 text-sm font-semibold text-neutral-800">
-            {active_task === "driver_license" ? "キャンセル" : "閉じる"}
+          <button type="button" onClick={() => on_close("explicit_close")} className="h-11 w-full rounded-full border border-neutral-300 text-sm font-semibold text-neutral-800">
+            閉じる
           </button>
         </footer>
       </div>

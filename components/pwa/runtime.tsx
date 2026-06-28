@@ -13,6 +13,7 @@ import {
   PWA_LOGIN_POLL_TIMEOUT_MS,
 } from "@/components/pwa/login_pending"
 import { is_pwa_display_mode } from "@/src/pwa/display_mode"
+import { get_active_driver_task_modal } from "@/components/driver/task_modal_runtime"
 
 const CHUNK_RELOAD_KEY = "amp_chunk_reload_done"
 const SW_RELOAD_KEY = "amp_sw_update_reload_done"
@@ -38,6 +39,10 @@ function reloadOnce(storage_key: string) {
   }
 
   if (sessionStorage.getItem(storage_key)) {
+    return
+  }
+
+  if (get_active_driver_task_modal()) {
     return
   }
 

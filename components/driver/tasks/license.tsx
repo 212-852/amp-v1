@@ -47,10 +47,12 @@ export default function DriverLicenseTask({
   request_id,
   component_instance_id,
   on_saved,
+  on_runtime_state,
 }: Readonly<{
   request_id: string
   component_instance_id: string
   on_saved: () => void
+  on_runtime_state: (state: { scan_state: string; camera_state: string }) => void
 }>) {
   const { get_item, update_item } = useDriverPreparation()
   const scanner_ref = useRef<OcrScannerHandle>(null)
@@ -102,7 +104,14 @@ export default function DriverLicenseTask({
   const update_scan_state = useCallback((state: ScannerState) => {
     scan_state_ref.current = state
     set_scan_state(state)
-  }, [])
+    on_runtime_state({
+      scan_state: state,
+      camera_state:
+        state === "camera_starting" ? "starting" :
+        state === "camera_ready" || state === "detecting" ? "playing" :
+        state === "failed" ? "failed" : "captured",
+    })
+  }, [on_runtime_state])
 
   const apply_progress_state = useCallback((state: unknown) => {
     const progress = state as DriverProgressState | undefined

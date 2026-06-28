@@ -31,6 +31,7 @@ export default function DriverOnboardingChecklist() {
   const { items, all_complete } = useDriverPreparation()
   const [active_task, set_active_task] = useState<DriverOnboardingTaskKey | null>(null)
   const active_task_ref = useRef<DriverOnboardingTaskKey | null>(null)
+  const modal_runtime_ref = useRef({ scan_state: "idle", camera_state: "idle" })
   const [request_id, set_request_id] = useState("")
   const [component_instance_id, set_component_instance_id] = useState("")
 
@@ -51,6 +52,7 @@ export default function DriverOnboardingChecklist() {
     })
     mark_driver_task_modal_open(task_key)
     active_task_ref.current = task_key
+    modal_runtime_ref.current = { scan_state: "idle", camera_state: "idle" }
     set_active_task(task_key)
   }, [])
 
@@ -61,17 +63,29 @@ export default function DriverOnboardingChecklist() {
       request_id,
       component_instance_id,
       document_type,
-      scan_state: "closing",
-      camera_state: "stopping",
+      ...modal_runtime_ref.current,
       task_key: active_task,
       reason,
     }
     void send_ocr_debug("DRIVER_TASK_MODAL_CLOSE_REQUESTED", payload)
+
+    if (reason !== "explicit_close" && reason !== "save_completed") {
+      void send_ocr_debug("DRIVER_TASK_MODAL_CLOSE_BLOCKED", payload)
+      return
+    }
+
     mark_driver_task_modal_closed()
     active_task_ref.current = null
     set_active_task(null)
     void send_ocr_debug("DRIVER_TASK_MODAL_CLOSED", payload)
   }, [active_task, component_instance_id, request_id])
+
+  const update_modal_runtime = useCallback((state: {
+    scan_state: string
+    camera_state: string
+  }) => {
+    modal_runtime_ref.current = state
+  }, [])
 
   return (
     <>
@@ -106,6 +120,7 @@ export default function DriverOnboardingChecklist() {
         request_id={request_id}
         component_instance_id={component_instance_id}
         on_close={close_driver_task}
+        on_runtime_state={update_modal_runtime}
       />
     </>
   )
