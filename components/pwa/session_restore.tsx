@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef } from "react"
 
 import { useOverlay } from "@/components/overlay"
+import { get_active_driver_task_modal } from "@/components/driver/task_modal_runtime"
 import {
   dispatchPwaOffline,
   dispatchPwaOnline,
@@ -18,6 +19,7 @@ import {
   resolvePwaLoginDestination,
 } from "@/components/pwa/login_completion"
 import { isStandalonePwa } from "@/components/pwa/runtime"
+import { send_ocr_debug } from "@/core/ocr/debug"
 
 function isNetworkFailure(error: unknown) {
   return (
@@ -58,6 +60,19 @@ export function PwaSessionRestore() {
 
         if (window.location.pathname !== destination) {
           window.location.replace(destination)
+          return
+        }
+
+        const active_driver_task = get_active_driver_task_modal()
+
+        if (active_driver_task) {
+          void send_ocr_debug("OCR_NAVIGATION_BLOCKED_DURING_OCR", {
+            action: "refresh",
+            from: window.location.pathname,
+            to: window.location.pathname,
+            reason: "pwa_session_restore_driver_task_open",
+            task_key: active_driver_task,
+          })
           return
         }
 

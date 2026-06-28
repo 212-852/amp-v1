@@ -12,9 +12,9 @@ import {
 } from "@/core/driver/progress/rules"
 
 export default function DriverTaskModal({
-  task_key,
+  active_task,
 }: Readonly<{
-  task_key: DriverOnboardingTaskKey
+  active_task: DriverOnboardingTaskKey | null
 }>) {
   const {
     get_item,
@@ -22,8 +22,10 @@ export default function DriverTaskModal({
     close_modal,
   } = use_driver_preparation()
 
-  const item = get_item(task_key)
-  const title = item?.label ?? DRIVER_PROGRESS_LABELS[task_key]
+  const item = active_task ? get_item(active_task) : null
+  const title = active_task
+    ? item?.label ?? DRIVER_PROGRESS_LABELS[active_task]
+    : ""
 
   const handle_close = useCallback(() => {
     request_close_modal("user_close")
@@ -36,6 +38,10 @@ export default function DriverTaskModal({
   const handle_save_success = useCallback(() => {
     close_modal("save_completed")
   }, [close_modal])
+
+  if (!active_task) {
+    return null
+  }
 
   return (
     <div
@@ -68,13 +74,14 @@ export default function DriverTaskModal({
         </header>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
-          {task_key === "driver_license" ? (
+          {active_task === "driver_license" ? (
             <DriverLicenseTaskModalContent
+              key="driver_license_front"
               initial_entry={item?.latest_entry ?? null}
               on_save_success={handle_save_success}
             />
           ) : (
-            <DriverTaskPlaceholderModalContent task_key={task_key} />
+            <DriverTaskPlaceholderModalContent task_key={active_task} />
           )}
         </div>
 
@@ -84,7 +91,7 @@ export default function DriverTaskModal({
             onClick={handle_cancel}
             className="h-11 w-full rounded-full border border-neutral-300 text-sm font-semibold text-neutral-800"
           >
-            {task_key === "driver_license" ? "キャンセル" : "閉じる"}
+            {active_task === "driver_license" ? "キャンセル" : "閉じる"}
           </button>
         </footer>
       </div>
