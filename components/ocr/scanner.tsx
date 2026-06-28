@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useInsertionEffect,
   useRef,
   useState,
 } from "react"
@@ -36,6 +37,7 @@ export type OcrScannerHandle = {
 }
 
 type ScannerProps = {
+  is_active: boolean
   request_id: string
   component_instance_id: string
   document_type: OcrDocumentType
@@ -47,7 +49,7 @@ type ScannerProps = {
 
 const EMPTY_FRAME: FrameRect = { x: 0, y: 0, width: 0, height: 0 }
 
-const Scanner = forwardRef<OcrScannerHandle, ScannerProps>(function Scanner(
+const ActiveScanner = forwardRef<OcrScannerHandle, ScannerProps>(function ActiveScanner(
   {
     request_id,
     component_instance_id,
@@ -77,7 +79,7 @@ const Scanner = forwardRef<OcrScannerHandle, ScannerProps>(function Scanner(
   })
   const [frame, set_frame] = useState<FrameRect>(EMPTY_FRAME)
   const [camera_ready, set_camera_ready] = useState(false)
-  const [status, set_status] = useState("免許証を枠内に合わせてください")
+  const [status, set_status] = useState("カメラを起動しています")
 
   const debug = useCallback((event: Parameters<typeof send_ocr_debug>[0], extra: Record<string, unknown> = {}) => {
     void send_ocr_debug(event, {
@@ -132,6 +134,7 @@ const Scanner = forwardRef<OcrScannerHandle, ScannerProps>(function Scanner(
     camera_started_ref.current = true
     capture_started_ref.current = false
     camera_state_ref.current = "starting"
+    set_status("カメラを起動しています")
     update_state("camera_starting")
     debug("OCR_CAMERA_START_REQUESTED")
     const attempt = ++attempt_ref.current
@@ -140,6 +143,7 @@ const Scanner = forwardRef<OcrScannerHandle, ScannerProps>(function Scanner(
       if (!navigator.mediaDevices?.getUserMedia) {
         throw new Error("カメラを使用できません。")
       }
+      debug("OCR_CAMERA_PERMISSION_REQUESTED")
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
         video: {
@@ -201,9 +205,14 @@ const Scanner = forwardRef<OcrScannerHandle, ScannerProps>(function Scanner(
       set_frame(resolve_scanner_frame(document_type, rect.width, rect.height))
     }
     update()
-    const observer = new ResizeObserver(update)
-    observer.observe(node)
-    return () => observer.disconnect()
+    if (typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(update)
+      observer.observe(node)
+      return () => observer.disconnect()
+    }
+
+    window.addEventListener("resize", update)
+    return () => window.removeEventListener("resize", update)
   }, [document_type])
 
   useEffect(() => {
@@ -302,6 +311,47 @@ const Scanner = forwardRef<OcrScannerHandle, ScannerProps>(function Scanner(
       </div>
     </div>
   )
+})
+
+const Scanner = forwardRef<OcrScannerHandle, ScannerProps>(function Scanner(
+  props,
+  ref,
+) {
+  useInsertionEffect(() => {
+    const camera_state = props.scan_state === "camera_starting"
+      ? "starting"
+      : props.scan_state === "failed"
+        ? "failed"
+        : "active"
+    void send_ocr_debug("OCR_SCANNER_RENDER", {
+      request_id: props.request_id,
+      component_instance_id: props.component_instance_id,
+      document_type: props.document_type,
+      is_active: props.is_active,
+      scan_state: props.scan_state,
+      camera_state,
+    })
+
+    if (!props.is_active) {
+      void send_ocr_debug("OCR_RENDER_BLOCKED_INACTIVE", {
+        request_id: props.request_id,
+        component_instance_id: props.component_instance_id,
+        document_type: props.document_type,
+        is_active: false,
+        scan_state: props.scan_state,
+        camera_state,
+      })
+    }
+  }, [
+    props.component_instance_id,
+    props.document_type,
+    props.is_active,
+    props.request_id,
+  ])
+
+  if (!props.is_active) return null
+
+  return <ActiveScanner ref={ref} {...props} />
 })
 
 export default Scanner

@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 import FormField from "@/components/form/field"
 import Scanner, {
@@ -60,6 +60,19 @@ export default function DriverLicenseTask({
   const [form, set_form] = useState<LicenseForm>(EMPTY_FORM)
   const [errors, set_errors] = useState<Record<string, string>>({})
   const [message, set_message] = useState<string | null>(null)
+  useState(() => {
+    if (typeof window !== "undefined") {
+      void send_ocr_debug("DRIVER_TASK_MODAL_BODY_RENDER", {
+        request_id,
+        component_instance_id,
+        document_type: "driver_license_front",
+        scan_state: "camera_starting",
+        camera_state: "starting",
+        task_key: "driver_license",
+      })
+    }
+    return true
+  })
 
   const debug = useCallback((event: Parameters<typeof send_ocr_debug>[0], extra: Record<string, unknown> = {}) => {
     void send_ocr_debug(event, {
@@ -72,17 +85,6 @@ export default function DriverLicenseTask({
         scan_state_ref.current === "camera_ready" || scan_state_ref.current === "detecting" ? "playing" :
         scan_state_ref.current === "failed" ? "failed" : "captured",
       ...extra,
-    })
-  }, [component_instance_id, request_id])
-
-  useLayoutEffect(() => {
-    void send_ocr_debug("DRIVER_TASK_MODAL_BODY_RENDER", {
-      request_id,
-      component_instance_id,
-      document_type: "driver_license_front",
-      scan_state: "camera_starting",
-      camera_state: "starting",
-      task_key: "driver_license",
     })
   }, [component_instance_id, request_id])
 
@@ -224,6 +226,7 @@ export default function DriverLicenseTask({
     <div className="space-y-6">
       <Scanner
         ref={scanner_ref}
+        is_active={true}
         request_id={request_id}
         component_instance_id={component_instance_id}
         document_type="driver_license_front"
