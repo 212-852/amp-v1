@@ -2,6 +2,8 @@ export type DriverStatus = "provisional" | "active" | "suspended" | "retired"
 
 export type {
   DriverChecklistItem,
+  DriverOnboardingTaskKey,
+  DriverOnboardingTaskStatus,
   DriverProgress,
   DriverProgressEntry,
   DriverProgressKey,

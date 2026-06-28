@@ -1,4 +1,4 @@
-import DriverOnboardingModal from "@/components/driver/onboarding_modal"
+import DriverOnboardingChecklist from "@/components/driver/onboarding_checklist"
 import DriverProgressErrorCard from "@/components/driver/progress_error"
 import OpsComingSoon from "@/components/ops/coming-soon"
 import OpsShell from "@/components/ops/shell"
@@ -71,11 +71,11 @@ export default async function DriverPage() {
         interaction_locked={onboarding_locked}
       >
         {onboarding_locked ? (
-          <DriverOnboardingModal
-            initial_items={driver.items ?? []}
-            initial_status={driver.status}
+          <DriverOnboardingChecklist
+            items={driver.items ?? []}
             completed_count={driver.completed_count}
             total_count={driver.total_count}
+            all_complete={driver.all_complete}
           />
         ) : null}
 

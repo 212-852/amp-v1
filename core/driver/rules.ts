@@ -5,9 +5,12 @@ export {
   can_show_driver_onboarding,
   can_update_driver_progress,
   count_completed_items,
+  DRIVER_ONBOARDING_TASK_KEYS,
+  DRIVER_ONBOARDING_TASK_DESCRIPTIONS,
   DRIVER_PROGRESS_KEYS,
   DRIVER_PROGRESS_LABELS,
   empty_driver_progress,
+  is_onboarding_task_key,
   normalize_driver_progress,
   normalize_driver_progress_value,
   normalize_driver_status,
@@ -20,6 +23,8 @@ export {
 
 export type {
   DriverChecklistItem,
+  DriverOnboardingTaskKey,
+  DriverOnboardingTaskStatus,
   DriverProgress,
   DriverProgressEntry,
   DriverProgressKey,

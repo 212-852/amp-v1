@@ -35,9 +35,19 @@ export type DriverProgressRow = {
   application_reason?: string | null
 }
 
+export type DriverOnboardingTaskKey =
+  | "driver_license"
+  | "vehicle"
+  | "freight_operator"
+  | "safety_manager"
+
+export type DriverOnboardingTaskStatus = "pending" | "in_progress" | "complete"
+
 export type DriverChecklistItem = {
-  key: DriverProgressKey
+  key: DriverOnboardingTaskKey
   label: string
+  description: string
+  task_status: DriverOnboardingTaskStatus
   complete: boolean
   latest_status: string | null
   current_answer: string | null
@@ -58,6 +68,23 @@ export type DriverProgressState = {
 export type DriverProgressValidationResult = {
   ok: boolean
   errors: Record<string, string>
+}
+
+export const DRIVER_ONBOARDING_TASK_KEYS: DriverOnboardingTaskKey[] = [
+  "driver_license",
+  "vehicle",
+  "freight_operator",
+  "safety_manager",
+]
+
+export const DRIVER_ONBOARDING_TASK_DESCRIPTIONS: Record<
+  DriverOnboardingTaskKey,
+  string
+> = {
+  driver_license: "AIで自動読み取り",
+  vehicle: "車両情報・写真を登録",
+  freight_operator: "許可証・黒ナンバーを登録",
+  safety_manager: "修了証を登録",
 }
 
 export const DRIVER_PROGRESS_KEYS: DriverProgressKey[] = [
@@ -270,26 +297,98 @@ export function is_progress_item_complete(
   return COMPLETE_STATUSES[key].has(latest)
 }
 
+export function is_onboarding_task_key(
+  value: string,
+): value is DriverOnboardingTaskKey {
+  return DRIVER_ONBOARDING_TASK_KEYS.includes(value as DriverOnboardingTaskKey)
+}
+
+export function is_freight_operator_task_complete(progress: DriverProgress) {
+  return (
+    is_progress_item_complete(progress, "freight_operator") &&
+    is_progress_item_complete(progress, "black_plate")
+  )
+}
+
+export function is_onboarding_task_complete(
+  progress: DriverProgress,
+  key: DriverOnboardingTaskKey,
+) {
+  if (key === "freight_operator") {
+    return is_freight_operator_task_complete(progress)
+  }
+
+  return is_progress_item_complete(progress, key)
+}
+
+export function resolve_onboarding_task_status(
+  progress: DriverProgress,
+  key: DriverOnboardingTaskKey,
+): DriverOnboardingTaskStatus {
+  if (is_onboarding_task_complete(progress, key)) {
+    return "complete"
+  }
+
+  if (key === "freight_operator") {
+    if (progress.freight_operator.length > 0 || progress.black_plate.length > 0) {
+      return "in_progress"
+    }
+
+    return "pending"
+  }
+
+  if (progress[key].length > 0) {
+    return "in_progress"
+  }
+
+  return "pending"
+}
+
+export function build_onboarding_task_items(
+  progress: DriverProgress,
+  options?: { legacy_has_driver_license?: boolean | null },
+): DriverChecklistItem[] {
+  return DRIVER_ONBOARDING_TASK_KEYS.map((key) => ({
+    key,
+    label: DRIVER_PROGRESS_LABELS[key],
+    description: DRIVER_ONBOARDING_TASK_DESCRIPTIONS[key],
+    task_status: resolve_onboarding_task_status(progress, key),
+    complete: is_onboarding_task_complete(progress, key),
+    latest_status:
+      key === "freight_operator"
+        ? get_latest_progress_status(progress, "freight_operator") ??
+          get_latest_progress_status(progress, "black_plate")
+        : get_latest_progress_status(progress, key),
+    current_answer: get_checklist_current_answer(progress, key, options),
+    latest_entry:
+      key === "driver_license"
+        ? get_latest_progress_entry(progress, "driver_license")
+        : key === "freight_operator"
+          ? get_latest_progress_entry(progress, "freight_operator") ??
+            get_latest_progress_entry(progress, "black_plate")
+          : get_latest_progress_entry(progress, key),
+  }))
+}
+
 export function build_checklist_items(
   progress: DriverProgress,
   options?: { legacy_has_driver_license?: boolean | null },
 ): DriverChecklistItem[] {
-  return DRIVER_PROGRESS_KEYS.map((key) => ({
-    key,
-    label: DRIVER_PROGRESS_LABELS[key],
-    complete: is_progress_item_complete(progress, key),
-    latest_status: get_latest_progress_status(progress, key),
-    current_answer: get_checklist_current_answer(progress, key, options),
-    latest_entry: get_latest_progress_entry(progress, key),
-  }))
+  return build_onboarding_task_items(progress, options)
 }
 
 export function count_completed_items(items: DriverChecklistItem[]) {
   return items.filter((item) => item.complete).length
 }
 
+export function is_all_onboarding_complete(progress: DriverProgress) {
+  return DRIVER_ONBOARDING_TASK_KEYS.every((key) =>
+    is_onboarding_task_complete(progress, key),
+  )
+}
+
 export function is_all_progress_complete(progress: DriverProgress) {
-  return DRIVER_PROGRESS_KEYS.every((key) => is_progress_item_complete(progress, key))
+  return is_all_onboarding_complete(progress)
 }
 
 export function append_progress_entry(
@@ -353,7 +452,7 @@ export function build_driver_progress_state(row: DriverProgressRow | null): Driv
       items,
       progress,
       completed_count: count_completed_items(items),
-      total_count: DRIVER_PROGRESS_KEYS.length,
+      total_count: DRIVER_ONBOARDING_TASK_KEYS.length,
       all_complete: is_all_progress_complete(progress),
       legacy_has_driver_license,
     }
@@ -367,7 +466,7 @@ export function build_driver_progress_state(row: DriverProgressRow | null): Driv
       items,
       progress,
       completed_count: 0,
-      total_count: DRIVER_PROGRESS_KEYS.length,
+      total_count: DRIVER_ONBOARDING_TASK_KEYS.length,
       all_complete: false,
       legacy_has_driver_license,
     }
