@@ -1,41 +1,52 @@
 "use client"
 
 import { X } from "lucide-react"
-import { useCallback, useInsertionEffect, useRef, type ReactNode } from "react"
+import { useCallback, useRef, type RefObject } from "react"
 
-import DriverLicenseTaskModalContent, {
-  type DriverLicenseTaskModalContentHandle,
-} from "@/components/driver/license_task_modal_content"
+import DriverLicenseTask, {
+  type DriverLicenseTaskHandle,
+} from "@/components/driver/tasks/license"
+import DriverTaskPlaceholder from "@/components/driver/tasks/placeholder"
 import { use_driver_preparation } from "@/components/driver/preparation_provider"
-import DriverTaskPlaceholderModalContent from "@/components/driver/task_placeholder_modal_content"
+import type { DriverChecklistItem, DriverOnboardingTaskKey } from "@/core/driver/context"
 import {
   DRIVER_PROGRESS_LABELS,
-  type DriverOnboardingTaskKey,
 } from "@/core/driver/progress/rules"
-import { send_ocr_debug } from "@/core/ocr/debug"
 
-function DriverLicenseTaskBody({ children }: Readonly<{ children: ReactNode }>) {
-  useInsertionEffect(() => {
-    void send_ocr_debug("DRIVER_TASK_MODAL_BODY_RENDER", {
-      task_key: "driver_license",
-    })
-  }, [])
+function render_task_body(
+  active_task: DriverOnboardingTaskKey,
+  input: {
+    license_ref: RefObject<DriverLicenseTaskHandle | null>
+    initial_entry: DriverChecklistItem | null
+    on_save_success: () => void
+  },
+) {
+  if (active_task === "driver_license") {
+    return (
+      <DriverLicenseTask
+        ref={input.license_ref}
+        initial_entry={input.initial_entry?.latest_entry ?? null}
+        on_save_success={input.on_save_success}
+      />
+    )
+  }
 
-  return children
+  return <DriverTaskPlaceholder task_key={active_task} />
 }
 
 export default function DriverTaskModal({
   active_task,
+  on_close,
+  on_force_close,
+  on_save_success,
 }: Readonly<{
   active_task: DriverOnboardingTaskKey | null
+  on_close: (reason: string) => boolean
+  on_force_close: (reason: string) => void
+  on_save_success: () => void
 }>) {
-  const {
-    get_item,
-    request_close_modal,
-    close_modal,
-    force_close_modal,
-  } = use_driver_preparation()
-  const license_ref = useRef<DriverLicenseTaskModalContentHandle>(null)
+  const { get_item, is_modal_locked } = use_driver_preparation()
+  const license_ref = useRef<DriverLicenseTaskHandle>(null)
 
   const item = active_task ? get_item(active_task) : null
   const title = active_task
@@ -43,22 +54,27 @@ export default function DriverTaskModal({
     : ""
 
   const handle_close = useCallback(() => {
-    request_close_modal("user_close")
-  }, [request_close_modal])
+    on_close("user_close")
+  }, [on_close])
 
   const handle_cancel = useCallback(() => {
     if (active_task === "driver_license") {
       license_ref.current?.prepare_modal_close()
-      force_close_modal("user_cancel")
+      on_force_close("user_cancel")
       return
     }
 
-    close_modal("user_cancel")
-  }, [active_task, close_modal, force_close_modal])
+    if (is_modal_locked()) {
+      on_close("user_cancel")
+      return
+    }
+
+    on_force_close("user_cancel")
+  }, [active_task, is_modal_locked, on_close, on_force_close])
 
   const handle_save_success = useCallback(() => {
-    close_modal("save_completed")
-  }, [close_modal])
+    on_save_success()
+  }, [on_save_success])
 
   if (!active_task) {
     return null
@@ -95,19 +111,11 @@ export default function DriverTaskModal({
         </header>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
-          {active_task === "driver_license" ? (
-            <DriverLicenseTaskBody>
-              <DriverLicenseTaskModalContent
-                key="driver_license_front"
-                ref={license_ref}
-                is_active={active_task === "driver_license"}
-                initial_entry={item?.latest_entry ?? null}
-                on_save_success={handle_save_success}
-              />
-            </DriverLicenseTaskBody>
-          ) : (
-            <DriverTaskPlaceholderModalContent task_key={active_task} />
-          )}
+          {render_task_body(active_task, {
+            license_ref,
+            initial_entry: item,
+            on_save_success: handle_save_success,
+          })}
         </div>
 
         <footer className="border-t border-neutral-200 px-5 py-4">

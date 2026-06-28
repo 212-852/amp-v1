@@ -6,7 +6,7 @@ import {
   type DriverOnboardingTaskKey,
 } from "@/core/driver/progress/rules"
 
-export default function DriverTaskPlaceholderModalContent({
+export default function DriverTaskPlaceholder({
   task_key,
 }: Readonly<{
   task_key: DriverOnboardingTaskKey

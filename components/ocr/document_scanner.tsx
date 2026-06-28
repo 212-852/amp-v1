@@ -71,7 +71,8 @@ export type DocumentScannerHandle = {
 
 type DocumentScannerProps = {
   document_type: OcrDocumentType
-  is_active: boolean
+  component_instance_id?: string
+  is_active?: boolean
   is_open?: boolean
   accordion_locked?: boolean
   is_locked?: boolean
@@ -123,6 +124,7 @@ const ActiveDocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerP
   function DocumentScanner(
     {
       document_type,
+      component_instance_id,
       is_open = true,
       accordion_locked = false,
       is_locked = false,
@@ -140,7 +142,9 @@ const ActiveDocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerP
     ref,
   ) {
     const container_ref = useRef<HTMLDivElement>(null)
-    const component_instance_id_ref = useRef(create_component_instance_id())
+    const component_instance_id_ref = useRef(
+      component_instance_id ?? create_component_instance_id(),
+    )
     const document_type_ref = useRef(document_type)
     const video_ref = useRef<HTMLVideoElement | null>(null)
     const stream_ref = useRef<MediaStream | null>(null)
@@ -707,12 +711,12 @@ const ActiveDocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerP
         if (mount_document_type === "driver_license_front") {
           const mount_result = record_driver_license_mount(
             component_instance_id,
-            "document_scanner",
+            "license_task",
           )
 
           if (mount_result.duplicate_detected) {
             void send_ocr_debug("REACT_STRICT_MODE_DUPLICATE_MOUNT_DETECTED", {
-              mount_surface: "document_scanner",
+              mount_surface: "license_task",
               document_type: mount_document_type,
               component_instance_id,
               previous_component_instance_id:
@@ -1067,12 +1071,12 @@ function InactiveDocumentScanner({
 }
 
 const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
-  function DocumentScanner({ is_active, ...props }, ref) {
+  function DocumentScanner({ is_active = true, ...props }, ref) {
     if (!is_active) {
       return <InactiveDocumentScanner document_type={props.document_type} />
     }
 
-    return <ActiveDocumentScanner ref={ref} is_active {...props} />
+    return <ActiveDocumentScanner ref={ref} is_active={is_active} {...props} />
   },
 )
 

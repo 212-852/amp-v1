@@ -15,7 +15,7 @@ let last_modal_open_log: {
   logged_at: number
 } | null = null
 const recent_license_mounts = new Map<
-  "license_page" | "document_scanner",
+  "license_task",
   Array<{
     component_instance_id: string
     logged_at: number
@@ -134,7 +134,7 @@ export function resolve_driver_task_unmount_reason(
 
 export function record_driver_license_mount(
   component_instance_id: string,
-  mount_surface: "license_page" | "document_scanner",
+  mount_surface: "license_task",
 ) {
   const now = Date.now()
   const recent = (recent_license_mounts.get(mount_surface) ?? []).filter(

@@ -13,10 +13,7 @@ import {
   useState,
 } from "react"
 
-import {
-  get_driver_task_unmount_reason,
-  record_driver_license_mount,
-} from "@/components/driver/task_modal_runtime"
+import { use_driver_preparation } from "@/components/driver/preparation_provider"
 import DocumentScanner, {
   type DocumentScannerHandle,
 } from "@/components/ocr/document_scanner"
@@ -37,14 +34,12 @@ import {
   type OcrFlowState,
 } from "@/core/ocr/flow"
 
-import { use_driver_preparation } from "@/components/driver/preparation_provider"
-
-function create_page_instance_id() {
+function create_task_instance_id() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID()
   }
 
-  return `license-page-${Date.now()}`
+  return `driver-license-task-${Date.now()}`
 }
 
 type LicenseFormFields = {
@@ -89,32 +84,26 @@ function form_is_complete(form: LicenseFormFields) {
   )
 }
 
-export type DriverLicenseTaskModalContentHandle = {
+export type DriverLicenseTaskHandle = {
   prepare_modal_close: () => void
 }
 
-const DriverLicenseTaskModalContent = forwardRef<
-  DriverLicenseTaskModalContentHandle,
+const DriverLicenseTask = forwardRef<
+  DriverLicenseTaskHandle,
   Readonly<{
-    is_active: boolean
     initial_entry: DriverProgressEntry | null
     on_save_success: (state?: unknown) => void
   }>
->(function DriverLicenseTaskModalContent(
-  { is_active, initial_entry, on_save_success },
-  ref,
-) {
+>(function DriverLicenseTask({ initial_entry, on_save_success }, ref) {
   const {
     update_item,
     get_item,
     set_modal_locked,
     set_modal_ocr_state,
   } = use_driver_preparation()
+  const component_instance_id_ref = useRef(create_task_instance_id())
   const scanner_ref = useRef<DocumentScannerHandle>(null)
   const camera_started_ref = useRef(false)
-  const lifecycle_generation_ref = useRef(0)
-  const lifecycle_mount_logged_ref = useRef(false)
-  const page_instance_id_ref = useRef(create_page_instance_id())
   const [ocr_flow_state, dispatch_ocr_flow] = useReducer(
     reduce_ocr_flow,
     "idle",
@@ -135,44 +124,10 @@ const DriverLicenseTaskModalContent = forwardRef<
   )
 
   useLayoutEffect(() => {
-    const lifecycle_generation = ++lifecycle_generation_ref.current
-    const scanner = scanner_ref.current
-    const page_instance_id = page_instance_id_ref.current
-    const mount_result = record_driver_license_mount(page_instance_id, "license_page")
-
-    if (mount_result.duplicate_detected) {
-      void send_ocr_debug("REACT_STRICT_MODE_DUPLICATE_MOUNT_DETECTED", {
-        mount_surface: "license_page",
-        document_type: "driver_license_front",
-        component_instance_id: page_instance_id,
-        previous_component_instance_id:
-          mount_result.previous_component_instance_id,
-      })
-    }
-
-    if (!lifecycle_mount_logged_ref.current) {
-      lifecycle_mount_logged_ref.current = true
-      void send_ocr_debug("OCR_LICENSE_PAGE_MOUNT", {
-        document_type: "driver_license_front",
-        component_instance_id: page_instance_id,
-      })
-    }
-
-    return () => {
-      queueMicrotask(() => {
-        if (lifecycle_generation_ref.current !== lifecycle_generation) {
-          return
-        }
-
-        void send_ocr_debug("OCR_LICENSE_PAGE_UNMOUNT", {
-          document_type: "driver_license_front",
-          component_instance_id: page_instance_id,
-          scan_state: ocr_flow_state_ref.current,
-          reason: get_driver_task_unmount_reason(),
-        })
-        scanner?.stop_camera("component_unmount")
-      })
-    }
+    void send_ocr_debug("DRIVER_TASK_MODAL_BODY_RENDER", {
+      task_key: "driver_license",
+      component_instance_id: component_instance_id_ref.current,
+    })
   }, [])
 
   useEffect(() => {
@@ -187,6 +142,7 @@ const DriverLicenseTaskModalContent = forwardRef<
   ])
 
   set_ocr_debug_context({
+    component_instance_id: component_instance_id_ref.current,
     document_type: "driver_license_front",
     scan_state: ocr_flow_state,
     camera_state: scanner_running ? "running" : ocr_flow_state,
@@ -218,6 +174,7 @@ const DriverLicenseTaskModalContent = forwardRef<
 
     void send_ocr_debug("OCR_SCAN_STATE_CHANGED", {
       document_type: "driver_license_front",
+      component_instance_id: component_instance_id_ref.current,
       previous_state,
       next_state,
       event,
@@ -269,6 +226,7 @@ const DriverLicenseTaskModalContent = forwardRef<
 
     const payload = {
       document_type: "driver_license_front",
+      component_instance_id: component_instance_id_ref.current,
       failure_type,
       ...details,
     }
@@ -323,6 +281,7 @@ const DriverLicenseTaskModalContent = forwardRef<
 
       void send_ocr_debug("OCR_SAVE_COMPLETED", {
         document_type: "driver_license_front",
+        component_instance_id: component_instance_id_ref.current,
       })
       finish_save(result.state)
       return true
@@ -372,6 +331,7 @@ const DriverLicenseTaskModalContent = forwardRef<
       setMessage(result.message ?? "運転免許証を登録しました。")
       void send_ocr_debug("OCR_FORM_FILL_COMPLETED", {
         document_type: "driver_license_front",
+        component_instance_id: component_instance_id_ref.current,
       })
       finish_save(result.state)
     } catch (error) {
@@ -394,6 +354,7 @@ const DriverLicenseTaskModalContent = forwardRef<
   function begin_retry(source: "camera" | "image_upload") {
     void send_ocr_debug("OCR_RETRY_REQUESTED", {
       document_type: "driver_license_front",
+      component_instance_id: component_instance_id_ref.current,
       failure_type: ocr_failure_type,
       source,
     })
@@ -497,12 +458,12 @@ const DriverLicenseTaskModalContent = forwardRef<
           </button>
         ) : null}
 
-        {!show_completed_preview ? (
+        <div className={show_completed_preview ? "hidden" : undefined}>
           <DocumentScanner
-            key="driver_license_front"
             ref={scanner_ref}
+            component_instance_id={component_instance_id_ref.current}
             document_type="driver_license_front"
-            is_active={is_active}
+            is_active
             is_open
             accordion_locked={is_ocr_accordion_locked(ocr_flow_state)}
             is_locked={is_ocr_accordion_locked(ocr_flow_state)}
@@ -515,7 +476,7 @@ const DriverLicenseTaskModalContent = forwardRef<
             disabled={isSubmitting || ocr_loading}
             frozen_preview_url={captured_preview_url}
           />
-        ) : null}
+        </div>
 
         {show_completed_preview ? (
           <div className="relative flex aspect-[3/4] w-full items-center justify-center overflow-hidden rounded-2xl bg-black text-sm text-white/80">
@@ -654,4 +615,4 @@ const DriverLicenseTaskModalContent = forwardRef<
   )
 })
 
-export default DriverLicenseTaskModalContent
+export default DriverLicenseTask
