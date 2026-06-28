@@ -1,7 +1,7 @@
 "use client"
 
 import { X } from "lucide-react"
-import { useCallback, useRef } from "react"
+import { useCallback, useInsertionEffect, useRef, type ReactNode } from "react"
 
 import DriverLicenseTaskModalContent, {
   type DriverLicenseTaskModalContentHandle,
@@ -12,6 +12,17 @@ import {
   DRIVER_PROGRESS_LABELS,
   type DriverOnboardingTaskKey,
 } from "@/core/driver/progress/rules"
+import { send_ocr_debug } from "@/core/ocr/debug"
+
+function DriverLicenseTaskBody({ children }: Readonly<{ children: ReactNode }>) {
+  useInsertionEffect(() => {
+    void send_ocr_debug("DRIVER_TASK_MODAL_BODY_RENDER", {
+      task_key: "driver_license",
+    })
+  }, [])
+
+  return children
+}
 
 export default function DriverTaskModal({
   active_task,
@@ -85,11 +96,15 @@ export default function DriverTaskModal({
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {active_task === "driver_license" ? (
-            <DriverLicenseTaskModalContent
-              ref={license_ref}
-              initial_entry={item?.latest_entry ?? null}
-              on_save_success={handle_save_success}
-            />
+            <DriverLicenseTaskBody>
+              <DriverLicenseTaskModalContent
+                key="driver_license_front"
+                ref={license_ref}
+                is_active={active_task === "driver_license"}
+                initial_entry={item?.latest_entry ?? null}
+                on_save_success={handle_save_success}
+              />
+            </DriverLicenseTaskBody>
           ) : (
             <DriverTaskPlaceholderModalContent task_key={active_task} />
           )}

@@ -13,6 +13,7 @@ export type OcrDebugEvent =
   | "OCR_COMPONENT_UNMOUNT"
   | "OCR_COMPONENT_UNMOUNT_BLOCKED"
   | "OCR_COMPONENT_RENDER"
+  | "OCR_RENDER_BLOCKED_INACTIVE"
   | "OCR_CAMERA_START_REQUESTED"
   | "OCR_CAMERA_START_SKIPPED"
   | "OCR_CAMERA_PERMISSION_REQUESTED"
@@ -83,6 +84,7 @@ export type OcrDebugEvent =
   | "OCR_NAVIGATION_BLOCKED_DURING_OCR"
   | "DRIVER_TASK_MODAL_OPEN"
   | "DRIVER_TASK_MODAL_OPEN_SKIPPED"
+  | "DRIVER_TASK_MODAL_BODY_RENDER"
   | "DRIVER_TASK_MODAL_CLOSE_REQUESTED"
   | "DRIVER_TASK_MODAL_CLOSE_BLOCKED"
   | "DRIVER_TASK_MODAL_CLOSED"
@@ -107,6 +109,7 @@ const OCR_DEBUG_ENABLED = process.env.NEXT_PUBLIC_OCR_DEBUG === "true"
 const OCR_DEBUG_VERBOSE =
   process.env.NEXT_PUBLIC_OCR_DEBUG_VERBOSE === "true"
 const last_debug_at = new Map<string, number>()
+let debug_delivery_chain: Promise<void> = Promise.resolve()
 let active_debug_context: OcrDebugContext = {
   component_instance_id: "unscoped",
   document_type: "unknown",
@@ -131,6 +134,7 @@ const VERBOSE_DEBUG_EVENTS = new Set<OcrDebugEvent>([
 const REQUIRED_OCR_LIFECYCLE_EVENTS = new Set<OcrDebugEvent>([
   "DRIVER_TASK_MODAL_OPEN",
   "DRIVER_TASK_MODAL_OPEN_SKIPPED",
+  "DRIVER_TASK_MODAL_BODY_RENDER",
   "DRIVER_TASK_MODAL_CLOSE_REQUESTED",
   "DRIVER_TASK_MODAL_CLOSE_BLOCKED",
   "DRIVER_TASK_MODAL_CLOSED",
@@ -139,6 +143,7 @@ const REQUIRED_OCR_LIFECYCLE_EVENTS = new Set<OcrDebugEvent>([
   "OCR_LICENSE_PAGE_UNMOUNT",
   "OCR_COMPONENT_MOUNT",
   "OCR_COMPONENT_UNMOUNT",
+  "OCR_RENDER_BLOCKED_INACTIVE",
   "OCR_CAMERA_START_REQUESTED",
   "OCR_CAMERA_PERMISSION_REQUESTED",
   "OCR_CAMERA_PLAYING",
@@ -308,20 +313,26 @@ export async function send_ocr_debug(
 
   last_debug_at.set(key, now)
 
-  try {
-    await fetch("/api/debug/client", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        event,
-        ...enriched_payload,
-      }),
+  debug_delivery_chain = debug_delivery_chain
+    .catch(() => undefined)
+    .then(async () => {
+      try {
+        await fetch("/api/debug/client", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            event,
+            ...enriched_payload,
+          }),
+        })
+      } catch {
+        // Client-side debug must never block OCR flow.
+      }
     })
-  } catch {
-    // Client-side debug must never block OCR flow.
-  }
+
+  await debug_delivery_chain
 }
 
 export function debug_ocr_once_per_interval(

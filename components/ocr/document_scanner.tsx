@@ -71,6 +71,7 @@ export type DocumentScannerHandle = {
 
 type DocumentScannerProps = {
   document_type: OcrDocumentType
+  is_active: boolean
   is_open?: boolean
   accordion_locked?: boolean
   is_locked?: boolean
@@ -118,7 +119,7 @@ function create_component_instance_id() {
   return `ocr-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
-const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
+const ActiveDocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
   function DocumentScanner(
     {
       document_type,
@@ -1049,6 +1050,29 @@ const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
         ) : null}
       </div>
     )
+  },
+)
+
+function InactiveDocumentScanner({
+  document_type,
+}: Readonly<{ document_type: OcrDocumentType }>) {
+  useEffect(() => {
+    void send_ocr_debug("OCR_RENDER_BLOCKED_INACTIVE", {
+      document_type,
+      reason: "is_active_false",
+    })
+  }, [document_type])
+
+  return null
+}
+
+const DocumentScanner = forwardRef<DocumentScannerHandle, DocumentScannerProps>(
+  function DocumentScanner({ is_active, ...props }, ref) {
+    if (!is_active) {
+      return <InactiveDocumentScanner document_type={props.document_type} />
+    }
+
+    return <ActiveDocumentScanner ref={ref} is_active {...props} />
   },
 )
 

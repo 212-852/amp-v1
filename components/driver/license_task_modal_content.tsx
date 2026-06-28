@@ -6,6 +6,7 @@ import {
   type ChangeEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useReducer,
   useRef,
@@ -95,11 +96,12 @@ export type DriverLicenseTaskModalContentHandle = {
 const DriverLicenseTaskModalContent = forwardRef<
   DriverLicenseTaskModalContentHandle,
   Readonly<{
+    is_active: boolean
     initial_entry: DriverProgressEntry | null
     on_save_success: (state?: unknown) => void
   }>
 >(function DriverLicenseTaskModalContent(
-  { initial_entry, on_save_success },
+  { is_active, initial_entry, on_save_success },
   ref,
 ) {
   const {
@@ -132,7 +134,7 @@ const DriverLicenseTaskModalContent = forwardRef<
     () => !initial_entry?.image_url?.trim(),
   )
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const lifecycle_generation = ++lifecycle_generation_ref.current
     const scanner = scanner_ref.current
     const page_instance_id = page_instance_id_ref.current
@@ -495,11 +497,12 @@ const DriverLicenseTaskModalContent = forwardRef<
           </button>
         ) : null}
 
-        <div className={show_completed_preview ? "hidden" : undefined}>
+        {!show_completed_preview ? (
           <DocumentScanner
             key="driver_license_front"
             ref={scanner_ref}
             document_type="driver_license_front"
+            is_active={is_active}
             is_open
             accordion_locked={is_ocr_accordion_locked(ocr_flow_state)}
             is_locked={is_ocr_accordion_locked(ocr_flow_state)}
@@ -512,7 +515,7 @@ const DriverLicenseTaskModalContent = forwardRef<
             disabled={isSubmitting || ocr_loading}
             frozen_preview_url={captured_preview_url}
           />
-        </div>
+        ) : null}
 
         {show_completed_preview ? (
           <div className="relative flex aspect-[3/4] w-full items-center justify-center overflow-hidden rounded-2xl bg-black text-sm text-white/80">
