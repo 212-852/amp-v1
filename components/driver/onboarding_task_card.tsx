@@ -1,7 +1,7 @@
 "use client"
 
+import { memo } from "react"
 import { CheckCircle2, ChevronRight, Clock3, XCircle } from "lucide-react"
-import Link from "next/link"
 
 import type {
   DriverChecklistItem,
@@ -40,15 +40,18 @@ function TaskStatusIcon({
   )
 }
 
-export default function OnboardingTaskCard({
+function OnboardingTaskCard({
   item,
+  on_open,
 }: Readonly<{
   item: DriverChecklistItem
+  on_open: () => void
 }>) {
   return (
-    <Link
-      href={`/driver/onboarding/${item.key}`}
-      className="group flex items-center gap-4 rounded-2xl border border-neutral-200 bg-white px-4 py-4 shadow-sm transition hover:border-neutral-300 hover:shadow-md"
+    <button
+      type="button"
+      onClick={on_open}
+      className="group flex w-full items-center gap-4 rounded-2xl border border-neutral-200 bg-white px-4 py-4 text-left shadow-sm transition hover:border-neutral-300 hover:shadow-md"
     >
       <TaskStatusIcon status={item.task_status} />
 
@@ -66,6 +69,8 @@ export default function OnboardingTaskCard({
         className="h-5 w-5 shrink-0 text-neutral-400 transition group-hover:text-neutral-600"
         strokeWidth={2.25}
       />
-    </Link>
+    </button>
   )
 }
+
+export default memo(OnboardingTaskCard)

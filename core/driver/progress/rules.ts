@@ -72,16 +72,16 @@ export type DriverProgressValidationResult = {
 
 export const DRIVER_ONBOARDING_TASK_KEYS: DriverOnboardingTaskKey[] = [
   "driver_license",
-  "vehicle",
   "freight_operator",
   "safety_manager",
+  "vehicle",
 ]
 
 export const DRIVER_ONBOARDING_TASK_DESCRIPTIONS: Record<
   DriverOnboardingTaskKey,
   string
 > = {
-  driver_license: "AIで自動読み取り",
+  driver_license: "自動読み取り",
   vehicle: "車両情報・写真を登録",
   freight_operator: "許可証・黒ナンバーを登録",
   safety_manager: "修了証を登録",

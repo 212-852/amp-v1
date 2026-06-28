@@ -3,6 +3,7 @@
 import {
   type ChangeEvent,
   useCallback,
+  useEffect,
   useMemo,
   useReducer,
   useRef,
@@ -11,12 +12,14 @@ import {
 import { useRouter } from "next/navigation"
 
 import OnboardingTaskShell from "@/components/driver/onboarding_task_shell"
+import { use_driver_preparation } from "@/components/driver/preparation_provider"
 import DocumentScanner, {
   type DocumentScannerHandle,
 } from "@/components/ocr/document_scanner"
 import OcrFlowStatus from "@/components/ocr/flow_status"
 import { read_file_as_data_url } from "@/core/ocr/camera"
 import type { DriverProgressEntry } from "@/core/driver/context"
+import type { DriverProgressState } from "@/core/driver/progress/rules"
 import {
   run_driver_license_ocr_pipeline,
   type OcrImageSource,
@@ -77,6 +80,7 @@ export default function DriverLicenseTaskPage({
   initial_entry: DriverProgressEntry | null
 }>) {
   const router = useRouter()
+  const { update_item, get_item } = use_driver_preparation()
   const scanner_ref = useRef<DocumentScannerHandle>(null)
   const camera_started_ref = useRef(false)
   const [ocr_flow_state, dispatch_ocr_flow] = useReducer(
@@ -134,9 +138,36 @@ export default function DriverLicenseTaskPage({
     })
   }, [])
 
-  const return_to_checklist = useCallback(() => {
+  const apply_saved_license_state = useCallback((state: unknown) => {
+    const progress_state = state as DriverProgressState | undefined
+    const saved_item = progress_state?.items?.find(
+      (item) => item.key === "driver_license",
+    )
+
+    if (saved_item) {
+      update_item("driver_license", saved_item)
+      return
+    }
+
+    update_item("driver_license", {
+      complete: true,
+      task_status: "complete",
+    })
+  }, [update_item])
+
+  const return_to_checklist = useCallback((state?: unknown) => {
+    if (state) {
+      apply_saved_license_state(state)
+    }
+
     router.push("/driver")
-  }, [router])
+  }, [apply_saved_license_state, router])
+
+  const mark_license_in_progress = useCallback(() => {
+    update_item("driver_license", {
+      task_status: "in_progress",
+    })
+  }, [update_item])
 
   const report_scan_failure = useCallback((
     failure_type: OcrFailureType,
@@ -192,7 +223,7 @@ export default function DriverLicenseTaskPage({
         }),
       })
       const result = (await response.json().catch(() => null)) as
-        | { ok?: boolean; message?: string }
+        | { ok?: boolean; message?: string; state?: unknown }
         | null
 
       if (!response.ok || result?.ok !== true) {
@@ -203,7 +234,7 @@ export default function DriverLicenseTaskPage({
         return false
       }
 
-      return_to_checklist()
+      return_to_checklist(result.state)
       return true
     } catch (error) {
       setMessage("保存できませんでした。")
@@ -249,7 +280,7 @@ export default function DriverLicenseTaskPage({
       handle_ocr_flow_event("flow_completed")
       setOcrFailureType(null)
       setMessage(result.message ?? "運転免許証を登録しました。")
-      return_to_checklist()
+      return_to_checklist(result.state)
     } catch (error) {
       report_scan_failure("ocr_unreadable", {
         message: error instanceof Error ? error.message : "ocr_failed",
@@ -331,8 +362,17 @@ export default function DriverLicenseTaskPage({
 
     camera_started_ref.current = true
     setShowCameraStart(false)
+    mark_license_in_progress()
     void scanner_ref.current?.open_from_user_gesture()
   }
+
+  useEffect(() => {
+    const item = get_item("driver_license")
+
+    if (item && !item.complete && item.task_status === "pending") {
+      mark_license_in_progress()
+    }
+  }, [get_item, mark_license_in_progress])
 
   const can_save =
     Boolean(image_url.trim()) && form_is_complete(form) && !isSubmitting && !ocr_loading
